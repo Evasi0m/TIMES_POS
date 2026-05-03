@@ -57,61 +57,371 @@
   };
 </script>
 <style>
+  /* ==========  TOKENS  ========== */
+  :root {
+    --glass-bg: rgba(250, 249, 245, 0.62);
+    --glass-bg-strong: rgba(250, 249, 245, 0.86);
+    --glass-bg-soft: rgba(250, 249, 245, 0.42);
+    --glass-cream: rgba(239, 233, 222, 0.65);
+    --glass-dark: rgba(24, 23, 21, 0.82);
+    --glass-border: rgba(255, 255, 255, 0.55);
+    --glass-border-cream: rgba(255, 255, 255, 0.42);
+    --glass-border-dark: rgba(255, 255, 255, 0.08);
+    --shadow-low:  0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 -1px 0 rgba(20, 20, 19, 0.04) inset, 0 4px 14px -4px rgba(20, 20, 19, 0.06);
+    --shadow-mid:  0 1px 0 rgba(255, 255, 255, 0.85) inset, 0 -1px 0 rgba(20, 20, 19, 0.05) inset, 0 10px 28px -6px rgba(20, 20, 19, 0.12);
+    --shadow-high: 0 1px 0 rgba(255, 255, 255, 0.95) inset, 0 -1px 0 rgba(20, 20, 19, 0.06) inset, 0 18px 44px -10px rgba(20, 20, 19, 0.18);
+    --ease-out: cubic-bezier(.2,.7,.2,1);
+  }
+
   html, body, #root { height: 100%; }
-  body { background: #faf9f5; color: #141413; font-family: 'Taviraj', serif; font-weight: 400; -webkit-tap-highlight-color: transparent; font-feature-settings: "kern", "liga"; }
-  /* Typography hierarchy — single Taviraj family, weight + style differentiation */
-  .font-display { font-family: 'Taviraj', serif; font-weight: 600; letter-spacing: -0.015em; }
-  .font-display-light { font-family: 'Taviraj', serif; font-weight: 500; letter-spacing: -0.01em; }
+  body {
+    background:
+      radial-gradient(ellipse 60% 55% at 100% 0%, rgba(204, 120, 92, 0.10), transparent 65%),
+      radial-gradient(ellipse 60% 55% at 0% 100%, rgba(232, 165, 90, 0.07), transparent 65%),
+      radial-gradient(ellipse 50% 45% at 50% 50%, rgba(204, 120, 92, 0.025), transparent 70%),
+      #faf9f5;
+    background-attachment: fixed;
+    color: #141413;
+    font-family: 'Taviraj', serif;
+    font-weight: 400;
+    -webkit-tap-highlight-color: transparent;
+    font-feature-settings: "kern", "liga";
+  }
+
+  /* ==========  TYPOGRAPHY  ========== */
+  .font-display { font-family: 'Taviraj', serif; font-weight: 600; letter-spacing: -0.015em; line-height: 1.1; }
+  .font-display-light { font-family: 'Taviraj', serif; font-weight: 500; letter-spacing: -0.01em; line-height: 1.1; }
   .font-italic { font-style: italic; }
-  /* Body / running text uses 400 by default. Buttons + nav + labels = 500. Numbers/headlines = 600. */
   input, select, textarea, button { font-family: 'Taviraj', serif; }
-  /* Tighten line-height on display sizes */
-  .font-display, .font-display-light { line-height: 1.1; }
-  /* Eyebrow / uppercase labels read clearer at weight 500 in a serif family */
   .uppercase { font-weight: 500; }
-  /* Numeric tabular alignment for prices and stock counts */
   .tabular-nums { font-variant-numeric: tabular-nums; }
-  /* Mono never inherits Taviraj */
   .font-mono { font-family: 'JetBrains Mono', ui-monospace, monospace !important; font-weight: 400; }
+
+  /* ==========  SPIKE LOGO  ========== */
   .spike { display:inline-block; width:14px; height:14px; position:relative; flex-shrink: 0; }
   .spike::before, .spike::after { content:''; position:absolute; background:#141413; }
   .spike::before { top:0; left:50%; width:2px; height:100%; transform:translateX(-50%); }
   .spike::after { left:0; top:50%; width:100%; height:2px; transform:translateY(-50%); }
   .spike.lg { width:18px; height:18px; }
   .spike.dark::before, .spike.dark::after { background:#faf9f5; }
+
+  /* ==========  SCROLLBAR  ========== */
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #e6dfd8; border-radius: 8px; }
-  ::-webkit-scrollbar-thumb:hover { background: #c6bdb0; }
-  input:focus, select:focus, textarea:focus { outline: 3px solid rgba(204, 120, 92, 0.18); outline-offset: 0; border-color: #cc785c !important; }
-  .btn-primary { background: #cc785c; color: #fff; padding: 11px 20px; border-radius: 8px; font-weight: 500; font-size: 14px; letter-spacing: 0.01em; transition: background .15s; display:inline-flex; align-items:center; justify-content:center; gap: 8px; }
-  .btn-primary:hover { background: #a9583e; }
-  .btn-primary:active { background: #a9583e; }
-  .btn-primary:disabled { background: #e6dfd8; color: #6c6a64; cursor: not-allowed; }
-  .btn-secondary { background: #faf9f5; color: #141413; padding: 11px 20px; border-radius: 8px; font-weight: 500; font-size: 14px; letter-spacing: 0.01em; border: 1px solid #e6dfd8; transition: background .15s; display:inline-flex; align-items:center; justify-content:center; gap: 8px; }
-  .btn-secondary:hover { background: #f5f0e8; }
-  .btn-ghost { background: transparent; color: #141413; padding: 8px 12px; border-radius: 8px; font-weight: 500; font-size: 14px; display:inline-flex; align-items:center; justify-content:center; gap: 8px; }
-  .btn-ghost:hover { background: #efe9de; }
-  .input { background: #faf9f5; border: 1px solid #e6dfd8; border-radius: 8px; padding: 11px 14px; font-size: 15px; font-weight: 400; color: #141413; width: 100%; }
-  .card-cream { background: #efe9de; border-radius: 12px; }
-  .card-canvas { background: #faf9f5; border: 1px solid #e6dfd8; border-radius: 12px; }
-  .card-dark { background: #181715; color: #faf9f5; border-radius: 12px; }
-  .badge-pill { background: #efe9de; color: #141413; font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 9999px; display:inline-block; white-space:nowrap; }
-  .badge-coral { background: #cc785c; color: #fff; font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 9999px; letter-spacing: 1.5px; text-transform: uppercase; }
-  .nav-item { display:flex; align-items:center; gap:12px; padding: 10px 14px; border-radius: 8px; color: #6c6a64; font-weight: 500; font-size: 14px; cursor: pointer; transition: background .15s; }
-  .nav-item:hover { background: #efe9de; color: #141413; }
-  .nav-item.active { background: #efe9de; color: #141413; }
-  .hairline { border-color: #e6dfd8; }
-  .modal-overlay { background: rgba(20,20,19,0.45); }
-  /* mobile bottom tab */
-  .tab-btn { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; padding: 8px 4px; color: #8e8b82; font-size: 11px; font-weight: 500; }
+  ::-webkit-scrollbar-thumb { background: rgba(230, 223, 216, 0.7); border-radius: 8px; backdrop-filter: blur(4px); }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(198, 189, 176, 0.9); }
+
+  /* ==========  LIQUID GLASS PRIMITIVES  ========== */
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-low);
+  }
+  .glass-strong {
+    background: var(--glass-bg-strong);
+    backdrop-filter: blur(28px) saturate(160%);
+    -webkit-backdrop-filter: blur(28px) saturate(160%);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-mid);
+  }
+  .glass-soft {
+    background: var(--glass-bg-soft);
+    backdrop-filter: blur(14px) saturate(130%);
+    -webkit-backdrop-filter: blur(14px) saturate(130%);
+    border: 1px solid rgba(230, 223, 216, 0.6);
+  }
+
+  /* Specular highlight overlay for glass surfaces */
+  .specular { position: relative; overflow: hidden; }
+  .specular::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.42) 0%, rgba(255,255,255,0) 100%);
+    pointer-events: none;
+    border-radius: inherit;
+    opacity: 0.55;
+    transition: opacity .35s var(--ease-out);
+  }
+  .specular:hover::before { opacity: 0.9; }
+
+  /* ==========  HOVER / PRESS UTILITIES  ========== */
+  .hover-lift {
+    transition: transform .25s var(--ease-out), box-shadow .25s var(--ease-out), background-color .18s, border-color .18s, filter .18s;
+    will-change: transform;
+  }
+  .hover-lift:hover { transform: translateY(-1px); box-shadow: var(--shadow-mid); }
+  .hover-lift:active { transform: translateY(0) scale(0.997); transition-duration: .08s; }
+
+  .pressable {
+    transition: transform .2s var(--ease-out), box-shadow .2s var(--ease-out), background-color .15s, border-color .15s;
+    will-change: transform;
+    cursor: pointer;
+  }
+  .pressable:hover { transform: translateY(-1px); box-shadow: var(--shadow-mid); }
+  .pressable:active { transform: scale(0.992); transition-duration: .08s; }
+
+  /* ==========  BUTTONS  ========== */
+  input:focus, select:focus, textarea:focus {
+    outline: 3px solid rgba(204, 120, 92, 0.22);
+    outline-offset: 0;
+    border-color: #cc785c !important;
+    box-shadow: 0 0 0 3px rgba(204, 120, 92, 0.08);
+  }
+
+  .btn-primary {
+    background: linear-gradient(180deg, #d18467 0%, #cc785c 50%, #c06c50 100%);
+    color: #fff;
+    padding: 12px 22px;
+    min-height: 44px;
+    border-radius: 11px;
+    font-weight: 500;
+    font-size: 15px;
+    letter-spacing: 0.01em;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.38) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.10) inset,
+      0 6px 16px -4px rgba(204, 120, 92, 0.5);
+    display:inline-flex; align-items:center; justify-content:center; gap: 8px;
+    transition: transform .15s var(--ease-out), box-shadow .2s var(--ease-out), filter .15s;
+    cursor: pointer;
+    position: relative; overflow: hidden;
+  }
+  .btn-primary::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.22), transparent);
+    pointer-events: none; border-radius: inherit; transition: opacity .2s;
+  }
+  .btn-primary:hover {
+    filter: brightness(1.05);
+    transform: translateY(-1px);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.5) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.10) inset,
+      0 12px 28px -6px rgba(204, 120, 92, 0.55);
+  }
+  .btn-primary:active { transform: translateY(0) scale(0.98); filter: brightness(0.95); transition-duration: .08s; }
+  .btn-primary:disabled { background: #e6dfd8; color: #6c6a64; cursor: not-allowed; box-shadow: none; transform: none; filter: none; }
+  .btn-primary:disabled::before { display: none; }
+
+  .btn-secondary {
+    background: var(--glass-bg-strong);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    color: #141413;
+    padding: 12px 22px;
+    min-height: 44px;
+    border-radius: 11px;
+    font-weight: 500;
+    font-size: 15px;
+    letter-spacing: 0.01em;
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-low);
+    display:inline-flex; align-items:center; justify-content:center; gap: 8px;
+    transition: transform .15s var(--ease-out), box-shadow .2s var(--ease-out), background-color .15s;
+    cursor: pointer;
+  }
+  .btn-secondary:hover { background: rgba(250, 249, 245, 0.96); transform: translateY(-1px); box-shadow: var(--shadow-mid); }
+  .btn-secondary:active { transform: translateY(0) scale(0.98); transition-duration: .08s; }
+
+  .btn-ghost {
+    background: transparent;
+    color: #141413;
+    padding: 8px 14px;
+    min-height: 38px;
+    border-radius: 9px;
+    font-weight: 500;
+    font-size: 14px;
+    display:inline-flex; align-items:center; justify-content:center; gap: 8px;
+    transition: background-color .15s, transform .15s var(--ease-out), backdrop-filter .15s;
+    cursor: pointer;
+  }
+  .btn-ghost:hover { background: rgba(239, 233, 222, 0.7); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+  .btn-ghost:active { transform: scale(0.96); }
+
+  /* ==========  INPUTS  ========== */
+  .input {
+    background: rgba(250, 249, 245, 0.65);
+    backdrop-filter: blur(12px) saturate(130%);
+    -webkit-backdrop-filter: blur(12px) saturate(130%);
+    border: 1px solid rgba(230, 223, 216, 0.85);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 15px;
+    font-weight: 400;
+    color: #141413;
+    width: 100%;
+    transition: border-color .15s, background-color .15s, box-shadow .15s, transform .15s var(--ease-out);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.5) inset;
+  }
+  .input:hover { background: rgba(250, 249, 245, 0.85); border-color: rgba(180, 170, 155, 0.6); }
+
+  /* ==========  CARDS (glass)  ========== */
+  .card-canvas {
+    background: rgba(250, 249, 245, 0.65);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid var(--glass-border);
+    border-radius: 14px;
+    box-shadow: var(--shadow-low);
+  }
+  .card-cream {
+    background: rgba(239, 233, 222, 0.66);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid var(--glass-border-cream);
+    border-radius: 14px;
+    box-shadow: var(--shadow-low);
+  }
+  .card-dark {
+    background: rgba(24, 23, 21, 0.85);
+    backdrop-filter: blur(24px) saturate(120%);
+    -webkit-backdrop-filter: blur(24px) saturate(120%);
+    color: #faf9f5;
+    border: 1px solid var(--glass-border-dark);
+    border-radius: 14px;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, 0 18px 44px -12px rgba(0,0,0,0.45);
+  }
+
+  /* ==========  BADGES  ========== */
+  .badge-pill {
+    background: rgba(239, 233, 222, 0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: #141413;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    display:inline-block;
+    white-space:nowrap;
+    border: 1px solid rgba(255,255,255,0.45);
+  }
+  .badge-coral {
+    background: linear-gradient(180deg, #d18467, #c06c50);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    box-shadow: 0 2px 8px -2px rgba(204, 120, 92, 0.4), 0 1px 0 rgba(255,255,255,0.25) inset;
+  }
+
+  /* ==========  NAV ITEMS (sidebar)  ========== */
+  .nav-item {
+    display:flex; align-items:center; gap:12px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    color: #6c6a64;
+    font-weight: 500;
+    font-size: 15px;
+    cursor: pointer;
+    transition: all .2s var(--ease-out);
+    position: relative; overflow: hidden;
+    border: 1px solid transparent;
+  }
+  .nav-item::before {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.4), rgba(255,255,255,0));
+    opacity: 0; transition: opacity .2s;
+    pointer-events: none; border-radius: inherit;
+  }
+  .nav-item:hover {
+    background: rgba(239, 233, 222, 0.55);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: #141413;
+    transform: translateX(2px);
+    border-color: rgba(255,255,255,0.4);
+  }
+  .nav-item:hover::before { opacity: 1; }
+  .nav-item.active {
+    background: rgba(239, 233, 222, 0.88);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    color: #141413;
+    border-color: var(--glass-border-cream);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.65) inset, 0 4px 12px -4px rgba(20, 20, 19, 0.08);
+  }
+
+  /* ==========  MOBILE TOPBAR / TABBAR (glass)  ========== */
+  .mobile-topbar {
+    background: rgba(250, 249, 245, 0.78);
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    border-bottom: 1px solid rgba(230, 223, 216, 0.6);
+    box-shadow: 0 -1px 0 rgba(255,255,255,0.6) inset;
+  }
+  .mobile-tabbar {
+    background: rgba(250, 249, 245, 0.82);
+    backdrop-filter: blur(26px) saturate(140%);
+    -webkit-backdrop-filter: blur(26px) saturate(140%);
+    border-top: 1px solid rgba(230, 223, 216, 0.6);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.55) inset;
+  }
+  .tab-btn {
+    flex:1; display:flex; flex-direction:column; align-items:center; gap:5px;
+    padding: 10px 4px 10px;
+    color: #8e8b82;
+    font-size: 11px;
+    font-weight: 500;
+    min-height: 60px;
+    position: relative;
+    transition: all .2s var(--ease-out);
+    cursor: pointer;
+  }
+  .tab-btn::before {
+    content: '';
+    position: absolute;
+    top: 6px; left: 50%;
+    width: 0; height: 36px;
+    border-radius: 999px;
+    background: rgba(204, 120, 92, 0.14);
+    transform: translateX(-50%);
+    transition: width .28s var(--ease-out);
+    pointer-events: none;
+  }
   .tab-btn.active { color: #cc785c; }
-  /* sheet animation */
-  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-  .sheet-anim { animation: slideUp .22s ease-out; }
-  /* safe area */
+  .tab-btn.active::before { width: 60px; }
+  .tab-btn:active { transform: scale(0.94); }
+
+  /* ==========  STEPPER (qty - / +)  ========== */
+  .stepper-btn {
+    width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    transition: background-color .15s, transform .15s var(--ease-out);
+    cursor: pointer;
+  }
+  .stepper-btn:hover { background: rgba(232, 224, 210, 0.85); }
+  .stepper-btn:active { transform: scale(0.88); }
+
+  /* ==========  MODAL / SHEET  ========== */
+  .modal-overlay {
+    background: rgba(20, 20, 19, 0.42);
+    backdrop-filter: blur(8px) saturate(110%);
+    -webkit-backdrop-filter: blur(8px) saturate(110%);
+  }
+
+  /* ==========  ANIMATIONS  ========== */
+  @keyframes slideUp { from { transform: translateY(100%); opacity: 0.7; } to { transform: translateY(0); opacity: 1; } }
+  .sheet-anim { animation: slideUp .28s var(--ease-out); }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  .fade-in { animation: fadeIn .3s var(--ease-out); }
+
+  /* ==========  HAIRLINE  ========== */
+  .hairline { border-color: rgba(230, 223, 216, 0.6); }
+
+  /* ==========  SAFE AREA  ========== */
   .pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 8px); }
   .pt-safe { padding-top: max(env(safe-area-inset-top), 0px); }
+
+  /* Reduce motion preference */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration: .05s !important; animation-duration: .05s !important; }
+  }
 </style>
 </head>
 <body>
@@ -382,7 +692,7 @@ function MobileTopBar({ title, userEmail, onLogout }) {
   const [openMenu, setOpenMenu] = useState(false);
   return (
     <>
-    <header className="lg:hidden sticky top-0 z-40 bg-canvas border-b hairline pt-safe">
+    <header className="lg:hidden sticky top-0 z-40 mobile-topbar pt-safe">
       <div className="flex items-center justify-between px-4 h-14">
         <div className="flex items-center gap-2">
           <span className="spike" />
@@ -418,11 +728,11 @@ function MobileTopBar({ title, userEmail, onLogout }) {
 
 function MobileTabBar({ view, setView }) {
   return (
-    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-canvas border-t hairline pb-safe">
+    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 mobile-tabbar pb-safe">
       <div className="flex">
         {NAV.map(it => (
           <button key={it.k} className={"tab-btn " + (view===it.k?"active":"")} onClick={()=>setView(it.k)}>
-            <Icon name={it.icon} size={22}/>
+            <Icon name={it.icon} size={24}/>
             <span>{it.label}</span>
           </button>
         ))}
@@ -550,16 +860,16 @@ function POSView() {
 
   const SearchInput = (
     <div className="relative">
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"><Icon name="search" size={18}/></span>
+      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted"><Icon name="search" size={20}/></span>
       <input
         ref={searchRef}
-        className="input !pl-10 !py-3 !text-base"
+        className="input !pl-12 !py-4 !text-base lg:!text-lg"
         placeholder="สแกนบาร์โค้ด หรือพิมพ์ชื่อรุ่น"
         value={search}
         onChange={e=>setSearch(e.target.value)}
         autoFocus
       />
-      {search && <button className="absolute right-2 top-1/2 -translate-y-1/2 btn-ghost !p-1.5" onClick={()=>{setSearch("");setResults([]);searchRef.current?.focus();}}><Icon name="x" size={16}/></button>}
+      {search && <button className="absolute right-3 top-1/2 -translate-y-1/2 btn-ghost !p-2 !min-h-0" onClick={()=>{setSearch("");setResults([]);searchRef.current?.focus();}}><Icon name="x" size={18}/></button>}
     </div>
   );
 
@@ -577,20 +887,20 @@ function POSView() {
       {search && searching && <div className="p-6 text-muted text-sm">กำลังค้นหา...</div>}
       {search && !searching && results.length===0 && <div className="p-6 text-muted text-sm">ไม่พบสินค้า "{search}"</div>}
       {results.map(p => (
-        <div key={p.id} className="px-4 lg:px-5 py-3 border-b hairline-soft last:border-0 hover:bg-surface-card cursor-pointer flex items-center gap-3" onClick={()=>addToCart(p)}>
+        <div key={p.id} className="px-4 lg:px-5 py-3.5 border-b hairline last:border-0 hover:bg-white/40 cursor-pointer flex items-center gap-3 transition-colors" onClick={()=>addToCart(p)}>
           <div className="flex-1 min-w-0">
-            <div className="font-medium text-ink truncate text-sm lg:text-base">{p.name}</div>
+            <div className="font-medium text-ink truncate text-base">{p.name}</div>
             <div className="text-xs text-muted mt-0.5 font-mono truncate">{p.barcode || '— ไม่มีบาร์โค้ด —'}</div>
           </div>
           <div className="text-right flex-shrink-0">
-            <div className="font-display text-lg lg:text-xl text-ink leading-tight">{fmtTHB(p.retail_price)}</div>
+            <div className="font-display text-xl lg:text-2xl text-ink leading-tight tabular-nums">{fmtTHB(p.retail_price)}</div>
             <div className="mt-1">
               <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':p.current_stock<5?'!bg-warning/15 !text-[#8a6500]':'')}>
                 คงเหลือ {p.current_stock}
               </span>
             </div>
           </div>
-          <button className="btn-primary !py-2 !px-3 flex-shrink-0" aria-label="เพิ่ม"><Icon name="plus" size={16}/></button>
+          <button className="btn-primary !py-2 !px-3 !min-h-[40px] flex-shrink-0" aria-label="เพิ่ม"><Icon name="plus" size={18}/></button>
         </div>
       ))}
     </div>
@@ -608,7 +918,7 @@ function POSView() {
         {cart.map((l, idx) => {
           const expanded = expandedDisc[idx];
           return (
-            <div key={idx} className="bg-canvas rounded-md p-3 mb-2 border hairline">
+            <div key={idx} className="glass-soft rounded-lg p-3 mb-2 hover-lift fade-in">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm truncate">{l.product_name}</div>
@@ -617,13 +927,13 @@ function POSView() {
                 <button className="text-muted-soft hover:text-error p-1" onClick={()=>removeLine(idx)} aria-label="ลบ"><Icon name="trash" size={16}/></button>
               </div>
               <div className="flex items-center gap-2 mt-2">
-                <div className="flex items-center bg-surface-card rounded-md">
-                  <button className="px-2 py-1.5 text-ink hover:bg-surface-cream-strong rounded-l-md" onClick={()=>updateLine(idx,{quantity:Math.max(1,l.quantity-1)})}><Icon name="minus" size={14}/></button>
-                  <input type="number" min="1" inputMode="numeric" className="w-10 text-center bg-transparent text-sm font-medium border-0 focus:!outline-none" value={l.quantity} onChange={e=>updateLine(idx,{quantity:Math.max(1,Number(e.target.value)||1)})}/>
-                  <button className="px-2 py-1.5 text-ink hover:bg-surface-cream-strong rounded-r-md" onClick={()=>updateLine(idx,{quantity:l.quantity+1})}><Icon name="plus" size={14}/></button>
+                <div className="flex items-center bg-white/60 backdrop-blur rounded-lg border border-white/50 shadow-sm overflow-hidden">
+                  <button className="stepper-btn rounded-l-lg text-ink" onClick={()=>updateLine(idx,{quantity:Math.max(1,l.quantity-1)})}><Icon name="minus" size={16}/></button>
+                  <input type="number" min="1" inputMode="numeric" className="w-12 text-center bg-transparent text-base font-medium border-0 focus:!outline-none focus:!shadow-none py-1" value={l.quantity} onChange={e=>updateLine(idx,{quantity:Math.max(1,Number(e.target.value)||1)})}/>
+                  <button className="stepper-btn rounded-r-lg text-ink" onClick={()=>updateLine(idx,{quantity:l.quantity+1})}><Icon name="plus" size={16}/></button>
                 </div>
-                <div className="text-xs text-muted flex-1">@ {fmtTHB(l.unit_price)}</div>
-                <div className="text-right font-medium text-sm">{fmtTHB(lineNet(l))}</div>
+                <div className="text-xs text-muted flex-1 tabular-nums">@ {fmtTHB(l.unit_price)}</div>
+                <div className="text-right font-medium text-sm tabular-nums">{fmtTHB(lineNet(l))}</div>
               </div>
               <button className="mt-2 text-xs text-muted hover:text-primary inline-flex items-center gap-1" onClick={()=>setExpandedDisc(s=>({...s,[idx]:!expanded}))}>
                 <Icon name="tag" size={12}/> ส่วนลดต่อชิ้น <Icon name={expanded?"chevron-d":"chevron-r"} size={12}/>
@@ -745,15 +1055,15 @@ function POSView() {
 
       {/* MOBILE FLOATING CART BUTTON */}
       {cart.length>0 && !cartOpen && (
-        <button className="lg:hidden fixed bottom-20 left-4 right-4 z-30 bg-primary text-on-primary rounded-lg shadow-xl px-5 py-3 flex items-center justify-between" onClick={()=>setCartOpen(true)}>
+        <button className="lg:hidden fixed bottom-20 left-4 right-4 z-30 btn-primary !rounded-xl !py-4 !px-5 flex items-center justify-between fade-in" onClick={()=>setCartOpen(true)}>
           <div className="flex items-center gap-3">
             <div className="relative">
-              <Icon name="cart" size={22}/>
-              <span className="absolute -top-2 -right-2 bg-canvas text-ink text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">{totalQty}</span>
+              <Icon name="cart" size={24}/>
+              <span className="absolute -top-2 -right-2 bg-canvas text-ink text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-md">{totalQty}</span>
             </div>
-            <span className="font-medium text-sm">ดูตะกร้า</span>
+            <span className="font-medium text-base">ดูตะกร้า</span>
           </div>
-          <span className="font-display text-xl">{fmtTHB(grand)}</span>
+          <span className="font-display text-2xl tabular-nums">{fmtTHB(grand)}</span>
         </button>
       )}
 
@@ -901,11 +1211,11 @@ function ProductsView() {
         {loading && <div className="p-6 text-muted text-sm">กำลังโหลด...</div>}
         {!loading && rows.length===0 && <div className="p-6 text-muted text-sm">ไม่พบสินค้า</div>}
         {rows.map(p => (
-          <div key={p.id} className="grid grid-cols-12 px-4 py-3 items-center border-b hairline-soft hover:bg-surface-soft cursor-pointer" onClick={()=>setEditing(p)}>
+          <div key={p.id} className="grid grid-cols-12 px-4 py-3.5 items-center border-b hairline last:border-0 hover:bg-white/40 cursor-pointer transition-colors" onClick={()=>setEditing(p)}>
             <div className="col-span-4 font-medium truncate">{p.name}</div>
             <div className="col-span-3 font-mono text-sm text-muted truncate">{p.barcode||'—'}</div>
-            <div className="col-span-2 text-right text-muted">{fmtTHB(p.cost_price)}</div>
-            <div className="col-span-2 text-right font-medium">{fmtTHB(p.retail_price)}</div>
+            <div className="col-span-2 text-right text-muted tabular-nums">{fmtTHB(p.cost_price)}</div>
+            <div className="col-span-2 text-right font-medium tabular-nums">{fmtTHB(p.retail_price)}</div>
             <div className="col-span-1 text-right">
               <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':p.current_stock<5?'!bg-warning/15 !text-[#8a6500]':'')}>{p.current_stock}</span>
             </div>
@@ -918,7 +1228,7 @@ function ProductsView() {
         {loading && <div className="p-4 text-muted text-sm">กำลังโหลด...</div>}
         {!loading && rows.length===0 && <div className="p-4 text-muted text-sm">ไม่พบสินค้า</div>}
         {rows.map(p => (
-          <div key={p.id} className="card-canvas p-3 flex items-center gap-3 cursor-pointer active:bg-surface-soft" onClick={()=>setEditing(p)}>
+          <div key={p.id} className="card-canvas pressable p-3.5 flex items-center gap-3" onClick={()=>setEditing(p)}>
             <div className="flex-1 min-w-0">
               <div className="font-medium truncate">{p.name}</div>
               <div className="font-mono text-xs text-muted truncate mt-0.5">{p.barcode||'—'}</div>
@@ -1192,7 +1502,7 @@ function SalesView() {
         {loading && <div className="p-6 text-muted text-sm">กำลังโหลด...</div>}
         {!loading && orders.length===0 && <div className="p-6 text-muted text-sm">ไม่พบบิลในช่วงเวลานี้</div>}
         {orders.map(o => (
-          <div key={o.id} className={"grid grid-cols-12 px-4 py-3 items-center border-b hairline-soft hover:bg-surface-soft cursor-pointer " + (o.status==='voided'?'opacity-60':'')} onClick={()=>openDetail(o)}>
+          <div key={o.id} className={"grid grid-cols-12 px-4 py-3.5 items-center border-b hairline last:border-0 hover:bg-white/40 cursor-pointer transition-colors " + (o.status==='voided'?'opacity-60':'')} onClick={()=>openDetail(o)}>
             <div className="col-span-2 font-mono text-sm flex items-center gap-2">#{o.id}{o.status==='voided' && <span className="badge-pill !bg-error/10 !text-error !text-[10px]">VOIDED</span>}</div>
             <div className="col-span-3 text-sm">{fmtDateTime(o.sale_date)}</div>
             <div className="col-span-2"><span className="badge-pill">{CHANNELS.find(c=>c.v===o.channel)?.label || '—'}</span></div>
@@ -1207,7 +1517,7 @@ function SalesView() {
         {loading && <div className="p-4 text-muted text-sm">กำลังโหลด...</div>}
         {!loading && orders.length===0 && <div className="p-4 text-muted text-sm">ไม่พบบิลในช่วงเวลานี้</div>}
         {orders.map(o => (
-          <div key={o.id} className={"card-canvas p-3 flex items-center gap-3 cursor-pointer active:bg-surface-soft " + (o.status==='voided'?'opacity-60':'')} onClick={()=>openDetail(o)}>
+          <div key={o.id} className={"card-canvas pressable p-3.5 flex items-center gap-3 " + (o.status==='voided'?'opacity-60':'')} onClick={()=>openDetail(o)}>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="font-mono text-xs text-muted">#{o.id}</span>
@@ -1484,16 +1794,16 @@ function StockMovementForm({ kind }) {
           </div>
           <div className="max-h-72 overflow-y-auto">
             {results.map(p => (
-              <div key={p.id} className="px-4 py-3 border-b hairline-soft last:border-0 hover:bg-surface-card cursor-pointer flex items-center gap-3" onClick={()=>addItem(p)}>
+              <div key={p.id} className="px-4 py-3 border-b hairline last:border-0 hover:bg-white/40 cursor-pointer flex items-center gap-3 transition-colors" onClick={()=>addItem(p)}>
                 <div className="min-w-0 flex-1">
                   <div className="font-medium truncate text-sm">{p.name}</div>
                   <div className="text-xs text-muted font-mono truncate">{p.barcode||'—'}</div>
                 </div>
-                <div className="text-right text-xs flex-shrink-0">
+                <div className="text-right text-xs flex-shrink-0 tabular-nums">
                   <div className="text-muted">ทุน {fmtTHB(p.cost_price)}</div>
                   <div>ขาย {fmtTHB(p.retail_price)}</div>
                 </div>
-                <button className="btn-primary !py-1.5 !px-2.5 flex-shrink-0"><Icon name="plus" size={14}/></button>
+                <button className="btn-primary !py-2 !px-3 !min-h-[40px] flex-shrink-0"><Icon name="plus" size={16}/></button>
               </div>
             ))}
             {!search && <div className="p-6 text-muted text-sm">พิมพ์เพื่อค้นหาแล้วแตะเพื่อเพิ่มในรายการ</div>}
@@ -1512,7 +1822,7 @@ function StockMovementForm({ kind }) {
           <div className="max-h-[50vh] lg:max-h-[55vh] overflow-y-auto p-3">
             {!items.length && <div className="p-6 text-center text-muted text-sm">ยังไม่มีรายการ</div>}
             {items.map((l, i) => (
-              <div key={i} className="bg-canvas rounded-md p-3 mb-2 border hairline">
+              <div key={i} className="glass-soft rounded-lg p-3 mb-2 hover-lift fade-in">
                 <div className="flex items-start justify-between gap-2">
                   <div className="font-medium text-sm flex-1 truncate">{l.product_name}</div>
                   <button className="text-muted-soft hover:text-error p-1" onClick={()=>rm(i)}><Icon name="trash" size={14}/></button>
