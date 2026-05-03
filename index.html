@@ -7,7 +7,7 @@
 <title>TIMES POS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Sarabun:wght@400;500;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Taviraj:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -45,9 +45,9 @@
           error: "#c64545",
         },
         fontFamily: {
-          serif: ['"Cormorant Garamond"', 'Tiempos Headline', 'Garamond', 'serif'],
-          sans: ['Inter', 'Sarabun', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
-          mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+          serif: ['Taviraj', 'Cormorant Garamond', 'Garamond', 'serif'],
+          sans:  ['Taviraj', 'Cormorant Garamond', 'serif'],
+          mono:  ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
         },
         borderRadius: {
           xs: '4px', sm: '6px', md: '8px', lg: '12px', xl: '16px', pill: '9999px'
@@ -58,8 +58,21 @@
 </script>
 <style>
   html, body, #root { height: 100%; }
-  body { background: #faf9f5; color: #141413; font-family: Inter, Sarabun, sans-serif; -webkit-tap-highlight-color: transparent; }
-  .font-display { font-family: 'Cormorant Garamond', 'Tiempos Headline', serif; font-weight: 500; letter-spacing: -0.01em; }
+  body { background: #faf9f5; color: #141413; font-family: 'Taviraj', serif; font-weight: 400; -webkit-tap-highlight-color: transparent; font-feature-settings: "kern", "liga"; }
+  /* Typography hierarchy — single Taviraj family, weight + style differentiation */
+  .font-display { font-family: 'Taviraj', serif; font-weight: 600; letter-spacing: -0.015em; }
+  .font-display-light { font-family: 'Taviraj', serif; font-weight: 500; letter-spacing: -0.01em; }
+  .font-italic { font-style: italic; }
+  /* Body / running text uses 400 by default. Buttons + nav + labels = 500. Numbers/headlines = 600. */
+  input, select, textarea, button { font-family: 'Taviraj', serif; }
+  /* Tighten line-height on display sizes */
+  .font-display, .font-display-light { line-height: 1.1; }
+  /* Eyebrow / uppercase labels read clearer at weight 500 in a serif family */
+  .uppercase { font-weight: 500; }
+  /* Numeric tabular alignment for prices and stock counts */
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+  /* Mono never inherits Taviraj */
+  .font-mono { font-family: 'JetBrains Mono', ui-monospace, monospace !important; font-weight: 400; }
   .spike { display:inline-block; width:14px; height:14px; position:relative; flex-shrink: 0; }
   .spike::before, .spike::after { content:''; position:absolute; background:#141413; }
   .spike::before { top:0; left:50%; width:2px; height:100%; transform:translateX(-50%); }
@@ -71,15 +84,15 @@
   ::-webkit-scrollbar-thumb { background: #e6dfd8; border-radius: 8px; }
   ::-webkit-scrollbar-thumb:hover { background: #c6bdb0; }
   input:focus, select:focus, textarea:focus { outline: 3px solid rgba(204, 120, 92, 0.18); outline-offset: 0; border-color: #cc785c !important; }
-  .btn-primary { background: #cc785c; color: #fff; padding: 11px 20px; border-radius: 8px; font-weight: 500; font-size: 14px; transition: background .15s; display:inline-flex; align-items:center; justify-content:center; gap: 8px; }
+  .btn-primary { background: #cc785c; color: #fff; padding: 11px 20px; border-radius: 8px; font-weight: 500; font-size: 14px; letter-spacing: 0.01em; transition: background .15s; display:inline-flex; align-items:center; justify-content:center; gap: 8px; }
   .btn-primary:hover { background: #a9583e; }
   .btn-primary:active { background: #a9583e; }
   .btn-primary:disabled { background: #e6dfd8; color: #6c6a64; cursor: not-allowed; }
-  .btn-secondary { background: #faf9f5; color: #141413; padding: 11px 20px; border-radius: 8px; font-weight: 500; font-size: 14px; border: 1px solid #e6dfd8; transition: background .15s; display:inline-flex; align-items:center; justify-content:center; gap: 8px; }
+  .btn-secondary { background: #faf9f5; color: #141413; padding: 11px 20px; border-radius: 8px; font-weight: 500; font-size: 14px; letter-spacing: 0.01em; border: 1px solid #e6dfd8; transition: background .15s; display:inline-flex; align-items:center; justify-content:center; gap: 8px; }
   .btn-secondary:hover { background: #f5f0e8; }
   .btn-ghost { background: transparent; color: #141413; padding: 8px 12px; border-radius: 8px; font-weight: 500; font-size: 14px; display:inline-flex; align-items:center; justify-content:center; gap: 8px; }
   .btn-ghost:hover { background: #efe9de; }
-  .input { background: #faf9f5; border: 1px solid #e6dfd8; border-radius: 8px; padding: 11px 14px; font-size: 14px; color: #141413; width: 100%; }
+  .input { background: #faf9f5; border: 1px solid #e6dfd8; border-radius: 8px; padding: 11px 14px; font-size: 15px; font-weight: 400; color: #141413; width: 100%; }
   .card-cream { background: #efe9de; border-radius: 12px; }
   .card-canvas { background: #faf9f5; border: 1px solid #e6dfd8; border-radius: 12px; }
   .card-dark { background: #181715; color: #faf9f5; border-radius: 12px; }
@@ -108,8 +121,23 @@
 
 const SUPABASE_URL = "https://zrymhhkqdcttqsdczfcr.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpyeW1oaGtxZGN0dHFzZGN6ZmNyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3MjYzNDUsImV4cCI6MjA5MzMwMjM0NX0.M414TfDx_nxJRa3hEWMiY7FAsevj5f0HIGQAp-H-8jM";
+
+// Custom storage adapter — chooses localStorage (remember me) vs sessionStorage (clear on browser close)
+// based on the `pos.remember` flag set when the user logs in.
+// Default = remember (localStorage). Reads from both stores so existing sessions survive a flag flip.
+const REMEMBER_KEY = "pos.remember";
+const isRemember = () => localStorage.getItem(REMEMBER_KEY) !== "false";
+const authStorage = {
+  getItem: (k) => localStorage.getItem(k) ?? sessionStorage.getItem(k),
+  setItem: (k, v) => {
+    if (isRemember()) { localStorage.setItem(k, v); sessionStorage.removeItem(k); }
+    else              { sessionStorage.setItem(k, v); localStorage.removeItem(k); }
+  },
+  removeItem: (k) => { localStorage.removeItem(k); sessionStorage.removeItem(k); },
+};
+
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
-  auth: { persistSession: true, autoRefreshToken: true, storage: window.localStorage }
+  auth: { persistSession: true, autoRefreshToken: true, storage: authStorage }
 });
 
 const { useState, useEffect, useMemo, useCallback, useRef } = React;
@@ -234,14 +262,20 @@ function Modal({ open, onClose, title, children, footer, wide }) {
 /* =========================================================
    LOGIN
 ========================================================= */
+const LAST_EMAIL_KEY = "pos.lastEmail";
 function LoginScreen() {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => localStorage.getItem(LAST_EMAIL_KEY) || "");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(() => localStorage.getItem(REMEMBER_KEY) !== "false");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const submit = async (e) => {
     e.preventDefault();
     setErr(""); setBusy(true);
+    // Persist remember-me flag BEFORE signing in so authStorage routes tokens correctly
+    localStorage.setItem(REMEMBER_KEY, remember ? "true" : "false");
+    if (remember) localStorage.setItem(LAST_EMAIL_KEY, email);
+    else          localStorage.removeItem(LAST_EMAIL_KEY);
     const { error } = await sb.auth.signInWithPassword({ email, password });
     setBusy(false);
     if (error) setErr(error.message || "เข้าสู่ระบบไม่สำเร็จ");
@@ -254,24 +288,34 @@ function LoginScreen() {
           <div className="font-display text-3xl lg:text-4xl">TIMES</div>
         </div>
         <div className="card-canvas p-6 lg:p-8">
-          <div className="text-xs uppercase tracking-[1.5px] text-muted">POS · ร้านนาฬิกา</div>
-          <h1 className="font-display text-3xl lg:text-4xl mt-2 mb-6 text-ink">เข้าสู่ระบบ</h1>
+          <div className="text-xs uppercase tracking-[1.5px] text-muted font-medium">POS · ร้านนาฬิกา</div>
+          <h1 className="font-display text-4xl lg:text-5xl mt-2 mb-6 text-ink">เข้าสู่ระบบ</h1>
           <form onSubmit={submit} className="space-y-4">
             <div>
-              <label className="text-xs uppercase tracking-wider text-muted">อีเมล</label>
+              <label className="text-xs uppercase tracking-wider text-muted font-medium">อีเมล</label>
               <input type="email" autoFocus inputMode="email" autoComplete="email" className="input mt-1" value={email} onChange={e=>setEmail(e.target.value)} required />
             </div>
             <div>
-              <label className="text-xs uppercase tracking-wider text-muted">รหัสผ่าน</label>
+              <label className="text-xs uppercase tracking-wider text-muted font-medium">รหัสผ่าน</label>
               <input type="password" autoComplete="current-password" className="input mt-1" value={password} onChange={e=>setPassword(e.target.value)} required />
             </div>
+
+            <label className="flex items-center gap-3 cursor-pointer select-none py-1">
+              <span className={"relative flex items-center justify-center w-5 h-5 rounded border transition-colors " + (remember?"bg-primary border-primary":"bg-canvas border-hairline hover:border-muted")}>
+                <input type="checkbox" className="sr-only" checked={remember} onChange={e=>setRemember(e.target.checked)} />
+                {remember && <Icon name="check" size={14} className="text-white" strokeWidth={2.5}/>}
+              </span>
+              <span className="text-sm text-ink">จดจำการเข้าสู่ระบบ</span>
+              <span className="text-xs text-muted-soft ml-auto">{remember? "ค้างไว้":"ออกเมื่อปิดเบราว์เซอร์"}</span>
+            </label>
+
             {err && <div className="text-sm text-error bg-error/10 px-3 py-2 rounded-md flex items-center gap-2"><Icon name="alert" size={16}/>{err}</div>}
             <button className="btn-primary w-full !py-3" disabled={busy}>
               {busy ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
             </button>
           </form>
         </div>
-        <div className="text-center text-xs text-muted-soft mt-6 font-display italic">"ทุกเรือนมีเรื่องราว"</div>
+        <div className="text-center text-sm text-muted-soft mt-6 font-italic">"ทุกเรือนมีเรื่องราว"</div>
       </div>
     </div>
   );
