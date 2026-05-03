@@ -585,6 +585,206 @@ function Modal({ open, onClose, title, children, footer, wide }) {
    LOGIN
 ========================================================= */
 const LAST_EMAIL_KEY = "pos.lastEmail";
+/* =========================================================
+   DATE PICKER (single date + range — replaces native date input)
+========================================================= */
+const TH_MONTHS       = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
+const TH_MONTHS_SHORT = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+const TH_WEEKDAYS     = ["อา","จ","อ","พ","พฤ","ศ","ส"];
+
+const isoOfDate = (d) => {
+  if (!d) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+};
+const dateOfIso = (iso) => iso ? new Date(iso+"T00:00:00") : null;
+
+const fmtThaiDateShort = (iso) => {
+  if (!iso) return "";
+  const d = dateOfIso(iso);
+  return `${d.getDate()} ${TH_MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()+543}`;
+};
+const fmtThaiRange = (from, to) => {
+  if (!from && !to) return "";
+  if (from === to) return fmtThaiDateShort(from);
+  const f = dateOfIso(from), t = dateOfIso(to);
+  if (f.getFullYear() === t.getFullYear() && f.getMonth() === t.getMonth())
+    return `${f.getDate()} – ${t.getDate()} ${TH_MONTHS_SHORT[t.getMonth()]} ${t.getFullYear()+543}`;
+  if (f.getFullYear() === t.getFullYear())
+    return `${f.getDate()} ${TH_MONTHS_SHORT[f.getMonth()]} – ${t.getDate()} ${TH_MONTHS_SHORT[t.getMonth()]} ${t.getFullYear()+543}`;
+  return `${fmtThaiDateShort(from)} – ${fmtThaiDateShort(to)}`;
+};
+
+function DatePicker({ value, onChange, mode = 'single', placeholder = 'เลือกวันที่', className = '' }) {
+  const [open, setOpen] = useState(false);
+  const initIso = mode === 'single' ? value : (value?.from || isoOfDate(new Date()));
+  const initDate = dateOfIso(initIso) || new Date();
+  const [viewMonth, setViewMonth] = useState(() => new Date(initDate.getFullYear(), initDate.getMonth(), 1));
+  const [pendingStart, setPendingStart] = useState(null);
+  const [hoverIso, setHoverIso] = useState(null);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  // Whenever the picker opens, jump to the month of the current value
+  useEffect(() => {
+    if (!open) return;
+    const iso = mode === 'single' ? value : value?.from;
+    const d = dateOfIso(iso) || new Date();
+    setViewMonth(new Date(d.getFullYear(), d.getMonth(), 1));
+    setPendingStart(null);
+    setHoverIso(null);
+  }, [open]);
+
+  const today = new Date();
+  const todayIso = isoOfDate(today);
+
+  // 6×7 grid starting from the Sunday on/before the 1st
+  const firstDay = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1);
+  const gridStart = new Date(firstDay);
+  gridStart.setDate(gridStart.getDate() - firstDay.getDay());
+  const grid = [];
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(gridStart);
+    d.setDate(gridStart.getDate() + i);
+    grid.push(d);
+  }
+
+  const isInRange = (d) => {
+    if (mode !== 'range') return false;
+    let lo, hi;
+    if (pendingStart) {
+      const a = pendingStart, b = hoverIso || pendingStart;
+      lo = a < b ? a : b; hi = a < b ? b : a;
+    } else if (value?.from && value?.to) {
+      lo = value.from; hi = value.to;
+    } else return false;
+    const dIso = isoOfDate(d);
+    return dIso >= lo && dIso <= hi;
+  };
+
+  const isEdge = (d) => {
+    const dIso = isoOfDate(d);
+    if (mode === 'single') return dIso === value;
+    if (pendingStart) return dIso === pendingStart;
+    return dIso === value?.from || dIso === value?.to;
+  };
+
+  const handlePick = (d) => {
+    const iso = isoOfDate(d);
+    if (mode === 'single') {
+      onChange(iso); setOpen(false);
+    } else {
+      if (!pendingStart) {
+        setPendingStart(iso);
+      } else {
+        const lo = pendingStart < iso ? pendingStart : iso;
+        const hi = pendingStart < iso ? iso : pendingStart;
+        onChange({ from: lo, to: hi });
+        setPendingStart(null); setHoverIso(null); setOpen(false);
+      }
+    }
+  };
+
+  const presets = [
+    { label: "วันนี้",        get: () => ({ from: todayIso, to: todayIso }) },
+    { label: "เมื่อวาน",      get: () => { const d=new Date(); d.setDate(d.getDate()-1); const iso=isoOfDate(d); return { from: iso, to: iso }; } },
+    { label: "7 วันล่าสุด",   get: () => { const d=new Date(); d.setDate(d.getDate()-6); return { from: isoOfDate(d), to: todayIso }; } },
+    { label: "30 วันล่าสุด",  get: () => { const d=new Date(); d.setDate(d.getDate()-29); return { from: isoOfDate(d), to: todayIso }; } },
+    { label: "เดือนนี้",      get: () => { const d=new Date(); return { from: isoOfDate(new Date(d.getFullYear(), d.getMonth(), 1)), to: todayIso }; } },
+    { label: "เดือนก่อน",     get: () => { const d=new Date(); const lm=d.getMonth()-1; const y= lm<0 ? d.getFullYear()-1 : d.getFullYear(); const m=(lm+12)%12; const last=new Date(y, m+1, 0); return { from: isoOfDate(new Date(y,m,1)), to: isoOfDate(last) }; } },
+  ];
+
+  const display = mode === 'single'
+    ? (value ? fmtThaiDateShort(value) : placeholder)
+    : (value?.from ? fmtThaiRange(value.from, value.to) : placeholder);
+
+  return (
+    <div className={"relative " + className} ref={ref}>
+      <button type="button" onClick={()=>setOpen(o=>!o)} className="input flex items-center gap-2.5 text-left hover:bg-white/85 transition-colors">
+        <Icon name="calendar" size={18} className="text-muted flex-shrink-0"/>
+        <span className={(mode==='single'?value:value?.from) ? "text-ink truncate" : "text-muted-soft truncate"}>{display}</span>
+        <Icon name="chevron-d" size={16} className={"ml-auto text-muted flex-shrink-0 transition-transform " + (open?"rotate-180":"")}/>
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-2 left-0 w-[320px] max-w-[calc(100vw-32px)] glass-strong rounded-xl p-3 fade-in" style={{boxShadow:'var(--shadow-high)'}}>
+          {mode === 'range' && (
+            <div className="flex flex-wrap gap-1.5 mb-3 pb-3 border-b hairline">
+              {presets.map(p => (
+                <button key={p.label} type="button"
+                  className="text-xs px-3 py-1.5 rounded-full glass-soft hover:bg-white/80 hover-lift transition font-medium"
+                  onClick={()=>{ onChange(p.get()); setPendingStart(null); setOpen(false); }}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center justify-between mb-2">
+            <button type="button" className="btn-ghost !p-2 !min-h-0" onClick={()=>setViewMonth(m=>new Date(m.getFullYear(), m.getMonth()-1, 1))} aria-label="เดือนก่อน">
+              <Icon name="chevron-l" size={18}/>
+            </button>
+            <button type="button" className="font-display text-lg btn-ghost !min-h-0 !py-1" onClick={()=>setViewMonth(new Date(today.getFullYear(), today.getMonth(), 1))}>
+              {TH_MONTHS[viewMonth.getMonth()]} {viewMonth.getFullYear()+543}
+            </button>
+            <button type="button" className="btn-ghost !p-2 !min-h-0" onClick={()=>setViewMonth(m=>new Date(m.getFullYear(), m.getMonth()+1, 1))} aria-label="เดือนถัดไป">
+              <Icon name="chevron-r" size={18}/>
+            </button>
+          </div>
+          <div className="grid grid-cols-7 gap-0.5 mb-1">
+            {TH_WEEKDAYS.map((w,i) => (
+              <div key={i} className={"text-center text-[11px] py-1 font-medium " + ((i===0||i===6)?"text-primary/70":"text-muted")}>{w}</div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-0.5" onMouseLeave={()=>setHoverIso(null)}>
+            {grid.map((d, i) => {
+              const dIso = isoOfDate(d);
+              const inMonth = d.getMonth() === viewMonth.getMonth();
+              const isToday = dIso === todayIso;
+              const inRange = isInRange(d);
+              const edge = isEdge(d);
+              const cls =
+                "h-9 rounded-md text-sm transition-all relative tabular-nums " +
+                (edge
+                  ? "bg-primary text-white font-semibold shadow-md hover:brightness-110 "
+                  : inRange
+                  ? "bg-primary/15 text-ink hover:bg-primary/25 "
+                  : inMonth
+                  ? "text-ink hover:bg-white/70 hover:scale-105 "
+                  : "text-muted-soft hover:bg-white/40 ") +
+                (isToday && !edge ? "ring-2 ring-primary/40 " : "");
+              return (
+                <button key={i} type="button"
+                  onClick={()=>handlePick(d)}
+                  onMouseEnter={()=>setHoverIso(dIso)}
+                  className={cls}>
+                  {d.getDate()}
+                </button>
+              );
+            })}
+          </div>
+          {mode === 'range' && pendingStart && (
+            <div className="text-xs text-muted mt-3 pt-2 border-t hairline text-center">
+              <Icon name="check" size={12} className="inline mr-1"/> เริ่ม {fmtThaiDateShort(pendingStart)} · กดวันที่สิ้นสุด
+            </div>
+          )}
+          {mode === 'single' && (
+            <div className="flex justify-end mt-2 pt-2 border-t hairline">
+              <button type="button" className="text-xs btn-ghost !min-h-0" onClick={()=>{ onChange(todayIso); setOpen(false); }}>วันนี้</button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LoginScreen() {
   const [email, setEmail] = useState(() => localStorage.getItem(LAST_EMAIL_KEY) || "");
   const [password, setPassword] = useState("");
@@ -1398,8 +1598,8 @@ function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand,
 ========================================================= */
 function SalesView() {
   const toast = useToast();
-  const [from, setFrom] = useState(todayISO());
-  const [to, setTo] = useState(todayISO());
+  const [range, setRange] = useState({ from: todayISO(), to: todayISO() });
+  const from = range.from, to = range.to;
   const [channel, setChannel] = useState("");
   const [excludeVoided, setExcludeVoided] = useState(true);
   const [orders, setOrders] = useState([]);
@@ -1449,14 +1649,10 @@ function SalesView() {
 
   const FilterControls = (
     <div className="space-y-3">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label className="text-xs uppercase tracking-wider text-muted">ตั้งแต่</label>
-          <input type="date" className="input mt-1" value={from} onChange={e=>setFrom(e.target.value)} />
-        </div>
-        <div>
-          <label className="text-xs uppercase tracking-wider text-muted">ถึง</label>
-          <input type="date" className="input mt-1" value={to} onChange={e=>setTo(e.target.value)} />
+          <label className="text-xs uppercase tracking-wider text-muted">ช่วงวันที่</label>
+          <DatePicker mode="range" value={range} onChange={setRange} placeholder="เลือกช่วงวันที่" className="mt-1"/>
         </div>
         <div>
           <label className="text-xs uppercase tracking-wider text-muted">ช่องทาง</label>
@@ -1761,7 +1957,7 @@ function StockMovementForm({ kind }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs uppercase tracking-wider text-muted">วันที่</label>
-              <input type="date" className="input mt-1" value={date} onChange={e=>setDate(e.target.value)} />
+              <DatePicker mode="single" value={date} onChange={setDate} placeholder="เลือกวันที่" className="mt-1"/>
             </div>
             {kind==='return' && (
               <div>
