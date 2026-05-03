@@ -160,6 +160,18 @@ const PAYMENTS = [
   { v: "card",     label: "บัตร" },
 ];
 const UNITS = ["เรือน", "เส้น", "ก้อน", "ใบ"];
+const RETURN_REASONS = ["ชำรุด", "ผิดรุ่น/ผิดสี", "ลูกค้าเปลี่ยนใจ", "ขายผิดราคา", "อื่นๆ"];
+const VAT_RATE_DEFAULT = 7;
+
+// VAT-inclusive pricing (retail standard in Thailand): the displayed grand_total already includes VAT.
+// Returns { vat, exVat } where vat + exVat == grand.
+function vatBreakdown(grandTotal, vatRate = VAT_RATE_DEFAULT) {
+  const r = (Number(vatRate) || 0) / 100;
+  if (r <= 0) return { vat: 0, exVat: Number(grandTotal) || 0 };
+  const exVat = (Number(grandTotal) || 0) / (1 + r);
+  const vat = (Number(grandTotal) || 0) - exVat;
+  return { vat, exVat };
+}
 
 function applyDiscounts(unitPrice, qty, d1v, d1t, d2v, d2t) {
   let s1 = Number(unitPrice) || 0;
@@ -449,6 +461,10 @@ function POSView() {
   const [submitting, setSubmitting] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [expandedDisc, setExpandedDisc] = useState({});
+  const [notes, setNotes] = useState("");
+  const [showNotes, setShowNotes] = useState(false);
+  const [taxInvoice, setTaxInvoice] = useState(false);
+  const [buyer, setBuyer] = useState({ name: "", taxId: "", address: "", invoiceNo: "" });
   const searchRef = useRef(null);
 
   useEffect(() => {
@@ -494,12 +510,20 @@ function POSView() {
 
   const submit = async () => {
     if (!cart.length) { toast.push("ไม่มีสินค้าในตะกร้า", "error"); return; }
+    if (taxInvoice && !buyer.name.trim()) { toast.push("กรุณากรอกชื่อผู้ซื้อสำหรับใบกำกับภาษี", 'error'); return; }
     setSubmitting(true);
     try {
+      const { vat } = vatBreakdown(grand, VAT_RATE_DEFAULT);
       const { data: order, error: e1 } = await sb.from('sale_orders').insert({
         sale_date: new Date().toISOString(), channel, payment_method: payment,
         discount_value: orderDiscount.value || 0, discount_type: orderDiscount.type,
         subtotal, total_after_discount: grand, grand_total: grand,
+        vat_rate: VAT_RATE_DEFAULT, vat_amount: vat, price_includes_vat: true,
+        tax_invoice_no: taxInvoice ? (buyer.invoiceNo.trim() || null) : null,
+        buyer_name:    taxInvoice ? (buyer.name.trim()    || null) : null,
+        buyer_tax_id:  taxInvoice ? (buyer.taxId.trim()   || null) : null,
+        buyer_address: taxInvoice ? (buyer.address.trim() || null) : null,
+        notes: notes.trim() || null,
       }).select().single();
       if (e1) throw e1;
       const items = cart.map(l => ({
@@ -512,11 +536,13 @@ function POSView() {
       if (e2) throw e2;
       for (const l of cart) {
         if (!l.product_id) continue;
-        await sb.rpc('adjust_stock', { p_id: l.product_id, qty_delta: -l.quantity });
+        await sb.rpc('adjust_stock', { p_id: l.product_id, qty_delta: -l.quantity, p_reason: 'sale', p_ref_table: 'sale_orders', p_ref_id: order.id });
       }
       toast.push(`บันทึกบิล #${order.id} · ${fmtTHB(grand)}`, 'success');
       setCart([]); setOrderDiscount({ value: 0, type: null });
       setChannel("store"); setPayment("cash"); setCartOpen(false);
+      setNotes(""); setShowNotes(false);
+      setTaxInvoice(false); setBuyer({ name: "", taxId: "", address: "", invoiceNo: "" });
     } catch (err) {
       toast.push("บันทึกไม่สำเร็จ: " + (err.message || err), 'error');
     } finally { setSubmitting(false); }
@@ -649,8 +675,38 @@ function POSView() {
           </div>
         </div>
 
-        <div className="flex justify-between text-sm text-muted mb-1"><span>รวมก่อนลด</span><span>{fmtTHB(subtotal)}</span></div>
-        <div className="flex justify-between font-display text-3xl mb-3"><span>รวม</span><span>{fmtTHB(grand)}</span></div>
+        {/* Tax invoice + Notes toggles */}
+        <div className="flex gap-2 mb-3">
+          <button type="button" onClick={()=>setTaxInvoice(v=>!v)}
+            className={"flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-xs font-medium border transition " + (taxInvoice?"bg-primary text-on-primary border-primary":"bg-canvas text-muted border-hairline hover:text-ink")}>
+            <Icon name={taxInvoice?"check":"plus"} size={13}/> ใบกำกับภาษี
+          </button>
+          <button type="button" onClick={()=>setShowNotes(v=>!v)}
+            className={"flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-xs font-medium border transition " + (showNotes||notes?"bg-surface-card text-ink border-hairline":"bg-canvas text-muted border-hairline hover:text-ink")}>
+            <Icon name="edit" size={13}/> หมายเหตุ {notes && <span className="w-1.5 h-1.5 bg-primary rounded-full"/>}
+          </button>
+        </div>
+
+        {taxInvoice && (
+          <div className="bg-canvas border hairline rounded-md p-3 mb-3 space-y-2">
+            <div className="text-[10px] uppercase tracking-wider text-muted">ข้อมูลผู้ซื้อ (ใบกำกับภาษี)</div>
+            <input className="input !py-2 !text-sm" placeholder="ชื่อผู้ซื้อ / บริษัท *" value={buyer.name} onChange={e=>setBuyer(b=>({...b,name:e.target.value}))}/>
+            <div className="grid grid-cols-2 gap-2">
+              <input className="input !py-2 !text-sm font-mono" placeholder="เลขผู้เสียภาษี 13 หลัก" inputMode="numeric" value={buyer.taxId} onChange={e=>setBuyer(b=>({...b,taxId:e.target.value}))}/>
+              <input className="input !py-2 !text-sm" placeholder="เลขใบกำกับ" value={buyer.invoiceNo} onChange={e=>setBuyer(b=>({...b,invoiceNo:e.target.value}))}/>
+            </div>
+            <textarea className="input !py-2 !text-sm" rows="2" placeholder="ที่อยู่" value={buyer.address} onChange={e=>setBuyer(b=>({...b,address:e.target.value}))}/>
+          </div>
+        )}
+
+        {showNotes && (
+          <textarea className="input !py-2 !text-sm mb-3" rows="2" placeholder="หมายเหตุบนบิล (เช่น ลูกค้ามีรอยขีดข่วน, รอของลอตต่อ)" value={notes} onChange={e=>setNotes(e.target.value)}/>
+        )}
+
+        <div className="flex justify-between text-sm text-muted mb-1"><span>รวมก่อนลด</span><span className="tabular-nums">{fmtTHB(subtotal)}</span></div>
+        <div className="flex justify-between text-xs text-muted-soft mb-1"><span>ก่อนหัก VAT 7%</span><span className="tabular-nums">{fmtTHB(vatBreakdown(grand).exVat)}</span></div>
+        <div className="flex justify-between text-xs text-muted-soft mb-2"><span>VAT 7%</span><span className="tabular-nums">{fmtTHB(vatBreakdown(grand).vat)}</span></div>
+        <div className="flex justify-between font-display text-3xl mb-3"><span>รวม</span><span className="tabular-nums">{fmtTHB(grand)}</span></div>
 
         <button className="btn-primary w-full !py-3 !text-base" disabled={submitting||!cart.length} onClick={submit}>
           {submitting? 'กำลังบันทึก...' : `ชำระเงิน ${fmtTHB(grand)}`}
@@ -729,40 +785,58 @@ function ProductsView() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
+  const [brands, setBrands] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [filterBrand, setFilterBrand] = useState("");
+  const [filterCategory, setFilterCategory] = useState("");
+
+  const loadTaxonomy = useCallback(async () => {
+    const [b, c] = await Promise.all([
+      sb.from('brands').select('*').order('name'),
+      sb.from('categories').select('*').order('name'),
+    ]);
+    setBrands(b.data || []);
+    setCategories(c.data || []);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
-    let query;
+    let query = sb.from('products').select('*').limit(100);
     if (q.trim()) {
       const term = q.trim();
-      query = sb.from('products').select('*').or(`name.ilike.%${term}%,barcode.eq.${term}`).limit(100);
+      query = query.or(`name.ilike.%${term}%,barcode.eq.${term}`);
     } else {
-      query = sb.from('products').select('*').order('updated_at', { ascending: false }).limit(100);
+      query = query.order('updated_at', { ascending: false });
     }
+    if (filterBrand)    query = query.eq('brand_id', filterBrand);
+    if (filterCategory) query = query.eq('category_id', filterCategory);
     const { data, error } = await query;
     if (error) toast.push("โหลดสินค้าไม่ได้", "error");
     setRows(data || []);
     setLoading(false);
-  }, [q]);
+  }, [q, filterBrand, filterCategory]);
 
+  useEffect(()=>{ loadTaxonomy(); }, [loadTaxonomy]);
   useEffect(()=>{ const t = setTimeout(load, 200); return ()=>clearTimeout(t); }, [load]);
+
+  const brandName = (id) => brands.find(b=>b.id===id)?.name;
+  const catName   = (id) => categories.find(c=>c.id===id)?.name;
 
   const save = async (p) => {
     try {
+      const payload = {
+        name: p.name, barcode: p.barcode||null,
+        cost_price: p.cost_price||0, retail_price: p.retail_price||0,
+        current_stock: p.current_stock||0,
+        brand_id: p.brand_id || null,
+        category_id: p.category_id || null,
+      };
       if (p.id) {
-        const { error } = await sb.from('products').update({
-          name: p.name, barcode: p.barcode||null,
-          cost_price: p.cost_price||0, retail_price: p.retail_price||0,
-          current_stock: p.current_stock||0,
-          updated_at: new Date().toISOString(),
-        }).eq('id', p.id);
+        payload.updated_at = new Date().toISOString();
+        const { error } = await sb.from('products').update(payload).eq('id', p.id);
         if (error) throw error;
       } else {
-        const { error } = await sb.from('products').insert({
-          name: p.name, barcode: p.barcode||null,
-          cost_price: p.cost_price||0, retail_price: p.retail_price||0,
-          current_stock: p.current_stock||0,
-        });
+        const { error } = await sb.from('products').insert(payload);
         if (error) throw error;
       }
       toast.push("บันทึกสินค้าสำเร็จ", "success");
@@ -773,9 +847,24 @@ function ProductsView() {
     }
   };
 
+  const addBrand = async (name) => {
+    const t = (name||"").trim(); if (!t) return null;
+    const { data, error } = await sb.from('brands').insert({ name: t }).select().single();
+    if (error) { toast.push("เพิ่มแบรนด์ไม่ได้: "+error.message, 'error'); return null; }
+    setBrands(b => [...b, data].sort((a,b)=>a.name.localeCompare(b.name)));
+    return data.id;
+  };
+  const addCategory = async (name) => {
+    const t = (name||"").trim(); if (!t) return null;
+    const { data, error } = await sb.from('categories').insert({ name: t }).select().single();
+    if (error) { toast.push("เพิ่มหมวดไม่ได้: "+error.message, 'error'); return null; }
+    setCategories(c => [...c, data].sort((a,b)=>a.name.localeCompare(b.name)));
+    return data.id;
+  };
+
   return (
     <div className="px-4 py-4 lg:px-10 lg:py-8">
-      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-5">
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-3">
         <div className="relative flex-1">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"><Icon name="search" size={18}/></span>
           <input className="input !pl-10" placeholder="ชื่อรุ่น หรือ บาร์โค้ด" value={q} onChange={e=>setQ(e.target.value)} />
@@ -783,6 +872,21 @@ function ProductsView() {
         <button className="btn-primary" onClick={()=>setEditing({ name: '', barcode: '', cost_price: 0, retail_price: 0, current_stock: 0 })}>
           <Icon name="plus" size={16}/> เพิ่มสินค้า
         </button>
+      </div>
+      <div className="flex flex-wrap gap-2 mb-5">
+        <select className="input !py-2 !text-sm !w-auto" value={filterBrand} onChange={e=>setFilterBrand(e.target.value)}>
+          <option value="">ทุกแบรนด์</option>
+          {brands.map(b=> <option key={b.id} value={b.id}>{b.name}</option>)}
+        </select>
+        <select className="input !py-2 !text-sm !w-auto" value={filterCategory} onChange={e=>setFilterCategory(e.target.value)}>
+          <option value="">ทุกหมวด</option>
+          {categories.map(c=> <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        {(filterBrand||filterCategory) && (
+          <button className="btn-ghost !py-2 !text-sm text-muted" onClick={()=>{setFilterBrand("");setFilterCategory("");}}>
+            <Icon name="x" size={14}/> ล้างตัวกรอง
+          </button>
+        )}
       </div>
 
       {/* Desktop table */}
@@ -818,8 +922,13 @@ function ProductsView() {
             <div className="flex-1 min-w-0">
               <div className="font-medium truncate">{p.name}</div>
               <div className="font-mono text-xs text-muted truncate mt-0.5">{p.barcode||'—'}</div>
+              {(brandName(p.brand_id) || catName(p.category_id)) && (
+                <div className="text-xs text-muted-soft mt-0.5 truncate">
+                  {[brandName(p.brand_id), catName(p.category_id)].filter(Boolean).join(' · ')}
+                </div>
+              )}
               <div className="flex items-center gap-2 mt-1.5">
-                <span className="font-display text-lg leading-none">{fmtTHB(p.retail_price)}</span>
+                <span className="font-display text-lg leading-none tabular-nums">{fmtTHB(p.retail_price)}</span>
                 <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':p.current_stock<5?'!bg-warning/15 !text-[#8a6500]':'')}>คงเหลือ {p.current_stock}</span>
               </div>
             </div>
@@ -828,16 +937,29 @@ function ProductsView() {
         ))}
       </div>
 
-      <ProductEditor editing={editing} onClose={()=>setEditing(null)} onSave={save} />
+      <ProductEditor editing={editing} onClose={()=>setEditing(null)} onSave={save}
+        brands={brands} categories={categories} addBrand={addBrand} addCategory={addCategory} />
     </div>
   );
 }
 
-function ProductEditor({ editing, onClose, onSave }) {
+function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand, addCategory }) {
   const [draft, setDraft] = useState(null);
   useEffect(()=>{ setDraft(editing? {...editing} : null); }, [editing]);
   if (!draft) return null;
   const set = (k,v)=> setDraft(d=>({...d,[k]:v}));
+  const onBrandChange = async (val) => {
+    if (val === "__new__") {
+      const name = window.prompt("ชื่อแบรนด์ใหม่:", "");
+      if (name) { const id = await addBrand(name); if (id) set('brand_id', id); }
+    } else set('brand_id', val? Number(val): null);
+  };
+  const onCatChange = async (val) => {
+    if (val === "__new__") {
+      const name = window.prompt("ชื่อหมวดใหม่:", "");
+      if (name) { const id = await addCategory(name); if (id) set('category_id', id); }
+    } else set('category_id', val? Number(val): null);
+  };
   return (
     <Modal open={!!draft} onClose={onClose} title={draft.id?"แก้ไขสินค้า":"เพิ่มสินค้าใหม่"}
       footer={<>
@@ -852,6 +974,24 @@ function ProductEditor({ editing, onClose, onSave }) {
         <div>
           <label className="text-xs uppercase tracking-wider text-muted">บาร์โค้ด</label>
           <input className="input mt-1 font-mono" value={draft.barcode||""} onChange={e=>set('barcode', e.target.value)} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs uppercase tracking-wider text-muted">แบรนด์</label>
+            <select className="input mt-1" value={draft.brand_id||""} onChange={e=>onBrandChange(e.target.value)}>
+              <option value="">— ไม่ระบุ —</option>
+              {brands.map(b=> <option key={b.id} value={b.id}>{b.name}</option>)}
+              <option value="__new__">+ เพิ่มแบรนด์ใหม่...</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs uppercase tracking-wider text-muted">หมวดหมู่</label>
+            <select className="input mt-1" value={draft.category_id||""} onChange={e=>onCatChange(e.target.value)}>
+              <option value="">— ไม่ระบุ —</option>
+              {categories.map(c=> <option key={c.id} value={c.id}>{c.name}</option>)}
+              <option value="__new__">+ เพิ่มหมวดใหม่...</option>
+            </select>
+          </div>
         </div>
         <div className="grid grid-cols-3 gap-3">
           <div>
@@ -880,10 +1020,12 @@ function SalesView() {
   const [from, setFrom] = useState(todayISO());
   const [to, setTo] = useState(todayISO());
   const [channel, setChannel] = useState("");
+  const [excludeVoided, setExcludeVoided] = useState(true);
   const [orders, setOrders] = useState([]);
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [voiding, setVoiding] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -892,11 +1034,12 @@ function SalesView() {
       .lte('sale_date', to + 'T23:59:59')
       .order('sale_date', { ascending: false }).limit(200);
     if (channel) q = q.eq('channel', channel);
+    if (excludeVoided) q = q.eq('status', 'active');
     const { data, error } = await q;
     if (error) toast.push("โหลดไม่ได้", "error");
     setOrders(data || []);
     setLoading(false);
-  }, [from, to, channel]);
+  }, [from, to, channel, excludeVoided]);
 
   useEffect(()=>{ load(); }, [load]);
 
@@ -905,25 +1048,50 @@ function SalesView() {
     setDetail({ order, items: data || [] });
   };
 
+  const voidSale = async () => {
+    if (!detail) return;
+    const reason = window.prompt("เหตุผลในการยกเลิกบิล (ไม่บังคับ):", "");
+    if (reason === null) return; // user cancelled the prompt
+    setVoiding(true);
+    try {
+      const { error } = await sb.rpc('void_sale_order', { p_sale_order_id: detail.order.id, p_reason: reason || null });
+      if (error) throw error;
+      toast.push(`ยกเลิกบิล #${detail.order.id} แล้ว · สต็อกถูกบวกคืน`, 'success');
+      setDetail(null);
+      load();
+    } catch (e) {
+      toast.push("ยกเลิกบิลไม่ได้: " + e.message, 'error');
+    } finally { setVoiding(false); }
+  };
+
   const total = useMemo(()=> orders.reduce((s,o)=> s + Number(o.grand_total||0), 0), [orders]);
 
   const FilterControls = (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-      <div>
-        <label className="text-xs uppercase tracking-wider text-muted">ตั้งแต่</label>
-        <input type="date" className="input mt-1" value={from} onChange={e=>setFrom(e.target.value)} />
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label className="text-xs uppercase tracking-wider text-muted">ตั้งแต่</label>
+          <input type="date" className="input mt-1" value={from} onChange={e=>setFrom(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs uppercase tracking-wider text-muted">ถึง</label>
+          <input type="date" className="input mt-1" value={to} onChange={e=>setTo(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs uppercase tracking-wider text-muted">ช่องทาง</label>
+          <select className="input mt-1" value={channel} onChange={e=>setChannel(e.target.value)}>
+            <option value="">ทุกช่องทาง</option>
+            {CHANNELS.map(c=> <option key={c.v} value={c.v}>{c.label}</option>)}
+          </select>
+        </div>
       </div>
-      <div>
-        <label className="text-xs uppercase tracking-wider text-muted">ถึง</label>
-        <input type="date" className="input mt-1" value={to} onChange={e=>setTo(e.target.value)} />
-      </div>
-      <div>
-        <label className="text-xs uppercase tracking-wider text-muted">ช่องทาง</label>
-        <select className="input mt-1" value={channel} onChange={e=>setChannel(e.target.value)}>
-          <option value="">ทุกช่องทาง</option>
-          {CHANNELS.map(c=> <option key={c.v} value={c.v}>{c.label}</option>)}
-        </select>
-      </div>
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <span className={"relative flex items-center justify-center w-5 h-5 rounded border transition-colors " + (excludeVoided?"bg-primary border-primary":"bg-canvas border-hairline")}>
+          <input type="checkbox" className="sr-only" checked={excludeVoided} onChange={e=>setExcludeVoided(e.target.checked)} />
+          {excludeVoided && <Icon name="check" size={13} className="text-white" strokeWidth={2.5}/>}
+        </span>
+        <span className="text-sm">ไม่รวมบิลที่ยกเลิก (voided)</span>
+      </label>
     </div>
   );
 
@@ -956,12 +1124,12 @@ function SalesView() {
         {loading && <div className="p-6 text-muted text-sm">กำลังโหลด...</div>}
         {!loading && orders.length===0 && <div className="p-6 text-muted text-sm">ไม่พบบิลในช่วงเวลานี้</div>}
         {orders.map(o => (
-          <div key={o.id} className="grid grid-cols-12 px-4 py-3 items-center border-b hairline-soft hover:bg-surface-soft cursor-pointer" onClick={()=>openDetail(o)}>
-            <div className="col-span-2 font-mono text-sm">#{o.id}</div>
+          <div key={o.id} className={"grid grid-cols-12 px-4 py-3 items-center border-b hairline-soft hover:bg-surface-soft cursor-pointer " + (o.status==='voided'?'opacity-60':'')} onClick={()=>openDetail(o)}>
+            <div className="col-span-2 font-mono text-sm flex items-center gap-2">#{o.id}{o.status==='voided' && <span className="badge-pill !bg-error/10 !text-error !text-[10px]">VOIDED</span>}</div>
             <div className="col-span-3 text-sm">{fmtDateTime(o.sale_date)}</div>
             <div className="col-span-2"><span className="badge-pill">{CHANNELS.find(c=>c.v===o.channel)?.label || '—'}</span></div>
             <div className="col-span-2 text-sm text-muted">{PAYMENTS.find(p=>p.v===o.payment_method)?.label || '—'}</div>
-            <div className="col-span-3 text-right font-medium">{fmtTHB(o.grand_total)}</div>
+            <div className={"col-span-3 text-right font-medium tabular-nums " + (o.status==='voided'?'line-through':'')}>{fmtTHB(o.grand_total)}</div>
           </div>
         ))}
       </div>
@@ -971,16 +1139,17 @@ function SalesView() {
         {loading && <div className="p-4 text-muted text-sm">กำลังโหลด...</div>}
         {!loading && orders.length===0 && <div className="p-4 text-muted text-sm">ไม่พบบิลในช่วงเวลานี้</div>}
         {orders.map(o => (
-          <div key={o.id} className="card-canvas p-3 flex items-center gap-3 cursor-pointer active:bg-surface-soft" onClick={()=>openDetail(o)}>
+          <div key={o.id} className={"card-canvas p-3 flex items-center gap-3 cursor-pointer active:bg-surface-soft " + (o.status==='voided'?'opacity-60':'')} onClick={()=>openDetail(o)}>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="font-mono text-xs text-muted">#{o.id}</span>
                 <span className="badge-pill">{CHANNELS.find(c=>c.v===o.channel)?.label || '—'}</span>
+                {o.status==='voided' && <span className="badge-pill !bg-error/10 !text-error !text-[10px]">VOIDED</span>}
               </div>
               <div className="text-xs text-muted mt-1">{fmtDateTime(o.sale_date)}</div>
             </div>
             <div className="text-right flex-shrink-0">
-              <div className="font-display text-lg leading-none">{fmtTHB(o.grand_total)}</div>
+              <div className={"font-display text-lg leading-none tabular-nums " + (o.status==='voided'?'line-through':'')}>{fmtTHB(o.grand_total)}</div>
               <div className="text-xs text-muted mt-1">{PAYMENTS.find(p=>p.v===o.payment_method)?.label || '—'}</div>
             </div>
             <Icon name="chevron-r" size={16} className="text-muted-soft"/>
@@ -988,15 +1157,43 @@ function SalesView() {
         ))}
       </div>
 
-      <Modal open={!!detail} onClose={()=>setDetail(null)} wide title={detail?`บิล #${detail.order.id}`:""}
-        footer={<button className="btn-secondary" onClick={()=>setDetail(null)}>ปิด</button>}>
+      <Modal open={!!detail} onClose={()=>setDetail(null)} wide
+        title={detail?`บิล #${detail.order.id}${detail.order.status==='voided'?' · ยกเลิกแล้ว':''}`:""}
+        footer={<>
+          {detail?.order.status==='active' && (
+            <button className="btn-secondary !text-error hover:!bg-error/10" onClick={voidSale} disabled={voiding}>
+              <Icon name="trash" size={16}/>{voiding?'กำลังยกเลิก...':'ยกเลิกบิล'}
+            </button>
+          )}
+          <button className="btn-secondary" onClick={()=>setDetail(null)}>ปิด</button>
+        </>}>
         {detail && (
           <div>
-            <div className="grid grid-cols-3 gap-3 mb-4 text-sm">
+            {detail.order.status==='voided' && (
+              <div className="mb-4 p-3 rounded-md bg-error/10 text-error text-sm flex items-start gap-2">
+                <Icon name="alert" size={16} className="mt-0.5 flex-shrink-0"/>
+                <div>
+                  <div className="font-medium">บิลนี้ถูกยกเลิกแล้ว</div>
+                  <div className="text-xs mt-1">{fmtDateTime(detail.order.voided_at)}{detail.order.void_reason? ` · ${detail.order.void_reason}`:''}</div>
+                </div>
+              </div>
+            )}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4 text-sm">
               <div><div className="text-muted text-xs uppercase">วันที่</div><div className="mt-0.5">{fmtDateTime(detail.order.sale_date)}</div></div>
               <div><div className="text-muted text-xs uppercase">ช่องทาง</div><div className="mt-0.5">{CHANNELS.find(c=>c.v===detail.order.channel)?.label||'—'}</div></div>
               <div><div className="text-muted text-xs uppercase">ชำระ</div><div className="mt-0.5">{PAYMENTS.find(p=>p.v===detail.order.payment_method)?.label||'—'}</div></div>
             </div>
+
+            {(detail.order.tax_invoice_no || detail.order.buyer_name) && (
+              <div className="mb-4 p-3 rounded-md bg-surface-card text-sm">
+                <div className="text-muted text-xs uppercase tracking-wider mb-1">ใบกำกับภาษี</div>
+                {detail.order.tax_invoice_no && <div className="font-mono text-xs">เลขที่ {detail.order.tax_invoice_no}</div>}
+                {detail.order.buyer_name && <div>{detail.order.buyer_name}</div>}
+                {detail.order.buyer_tax_id && <div className="font-mono text-xs text-muted">TAX ID {detail.order.buyer_tax_id}</div>}
+                {detail.order.buyer_address && <div className="text-xs text-muted mt-1">{detail.order.buyer_address}</div>}
+              </div>
+            )}
+
             <div className="border-t hairline">
               {detail.items.map(it => (
                 <div key={it.id} className="py-2 border-b hairline-soft flex justify-between gap-3">
@@ -1007,12 +1204,26 @@ function SalesView() {
                       {it.discount2_value? ` − ${it.discount2_value}${it.discount2_type==='percent'?'%':'฿'}`:''}
                     </div>
                   </div>
-                  <div className="font-medium flex-shrink-0">{fmtTHB(applyDiscounts(it.unit_price, it.quantity, it.discount1_value, it.discount1_type, it.discount2_value, it.discount2_type))}</div>
+                  <div className="font-medium flex-shrink-0 tabular-nums">{fmtTHB(applyDiscounts(it.unit_price, it.quantity, it.discount1_value, it.discount1_type, it.discount2_value, it.discount2_type))}</div>
                 </div>
               ))}
             </div>
-            <div className="mt-4 flex justify-between text-sm text-muted"><span>รวมก่อนลด</span><span>{fmtTHB(detail.order.subtotal)}</span></div>
-            <div className="flex justify-between font-display text-2xl mt-2"><span>ยอดสุทธิ</span><span>{fmtTHB(detail.order.grand_total)}</span></div>
+
+            {detail.order.notes && (
+              <div className="mt-3 text-sm text-body bg-surface-soft rounded-md p-3">
+                <div className="text-xs uppercase tracking-wider text-muted mb-1">หมายเหตุ</div>
+                {detail.order.notes}
+              </div>
+            )}
+
+            <div className="mt-4 space-y-1 text-sm">
+              <div className="flex justify-between text-muted"><span>รวมก่อนลด</span><span className="tabular-nums">{fmtTHB(detail.order.subtotal)}</span></div>
+              {Number(detail.order.vat_amount)>0 && (<>
+                <div className="flex justify-between text-muted-soft text-xs"><span>ก่อนหัก VAT {detail.order.vat_rate}%</span><span className="tabular-nums">{fmtTHB(Number(detail.order.grand_total)-Number(detail.order.vat_amount))}</span></div>
+                <div className="flex justify-between text-muted-soft text-xs"><span>VAT {detail.order.vat_rate}%</span><span className="tabular-nums">{fmtTHB(detail.order.vat_amount)}</span></div>
+              </>)}
+              <div className="flex justify-between font-display text-2xl pt-2"><span>ยอดสุทธิ</span><span className="tabular-nums">{fmtTHB(detail.order.grand_total)}</span></div>
+            </div>
           </div>
         )}
       </Modal>
@@ -1048,6 +1259,15 @@ function StockMovementForm({ kind }) {
   const [search, setSearch] = useState("");
   const [results, setResults] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  // Receive-specific
+  const [supplierName, setSupplierName] = useState("");
+  const [supplierInvoiceNo, setSupplierInvoiceNo] = useState("");
+  const [hasVat, setHasVat] = useState(true);
+  // Return-specific
+  const [origSaleId, setOrigSaleId] = useState("");
+  const [returnReason, setReturnReason] = useState("");
+  // Shared
+  const [notes, setNotes] = useState("");
 
   useEffect(()=>{
     if (!search.trim()) { setResults([]); return; }
@@ -1087,8 +1307,19 @@ function StockMovementForm({ kind }) {
       const headerTable = kind==='receive' ? 'receive_orders' : 'return_orders';
       const itemTable   = kind==='receive' ? 'receive_order_items' : 'return_order_items';
       const dateField   = kind==='receive' ? 'receive_date' : 'return_date';
-      const headerPayload = { [dateField]: new Date(date+'T00:00:00').toISOString(), total_value: total };
-      if (kind==='return') headerPayload.channel = channel;
+      const headerPayload = { [dateField]: new Date(date+'T00:00:00').toISOString(), total_value: total, notes: notes.trim()||null };
+      if (kind==='receive') {
+        const { vat } = vatBreakdown(total, hasVat?VAT_RATE_DEFAULT:0);
+        headerPayload.vat_rate = hasVat?VAT_RATE_DEFAULT:0;
+        headerPayload.vat_amount = vat;
+        headerPayload.supplier_name = supplierName.trim()||null;
+        headerPayload.supplier_invoice_no = supplierInvoiceNo.trim()||null;
+      } else {
+        headerPayload.channel = channel;
+        headerPayload.return_reason = returnReason||null;
+        const sid = parseInt(origSaleId,10);
+        headerPayload.original_sale_order_id = Number.isFinite(sid) && sid>0 ? sid : null;
+      }
       const { data: head, error: e1 } = await sb.from(headerTable).insert(headerPayload).select().single();
       if (e1) throw e1;
       const fk = kind==='receive' ? 'receive_order_id' : 'return_order_id';
@@ -1100,12 +1331,13 @@ function StockMovementForm({ kind }) {
       }));
       const { error: e2 } = await sb.from(itemTable).insert(payload);
       if (e2) throw e2;
+      const stockReason = kind==='receive' ? 'receive' : 'return_in';
       for (const l of items) {
         if (!l.product_id) continue;
-        await sb.rpc('adjust_stock', { p_id: l.product_id, qty_delta: l.quantity });
+        await sb.rpc('adjust_stock', { p_id: l.product_id, qty_delta: l.quantity, p_reason: stockReason, p_ref_table: headerTable, p_ref_id: head.id });
       }
       toast.push(`บันทึก${kind==='receive'?'การรับ':'การคืน'} #${head.id} สำเร็จ`, 'success');
-      setItems([]);
+      setItems([]); setNotes(""); setSupplierName(""); setSupplierInvoiceNo(""); setOrigSaleId(""); setReturnReason("");
     } catch (e) {
       toast.push("บันทึกไม่ได้: " + e.message, 'error');
     } finally { setSubmitting(false); }
@@ -1115,7 +1347,7 @@ function StockMovementForm({ kind }) {
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
       {/* LEFT: Header + Search */}
       <div className="lg:col-span-7 space-y-4">
-        <div className="card-canvas p-4 lg:p-5">
+        <div className="card-canvas p-4 lg:p-5 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs uppercase tracking-wider text-muted">วันที่</label>
@@ -1129,6 +1361,49 @@ function StockMovementForm({ kind }) {
                 </select>
               </div>
             )}
+          </div>
+
+          {kind==='receive' && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs uppercase tracking-wider text-muted">ผู้ขาย / Supplier</label>
+                  <input className="input mt-1" placeholder="ชื่อบริษัท / ตัวแทนจำหน่าย" value={supplierName} onChange={e=>setSupplierName(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-xs uppercase tracking-wider text-muted">เลข Invoice ผู้ขาย</label>
+                  <input className="input mt-1 font-mono" placeholder="INV-XXXX" value={supplierInvoiceNo} onChange={e=>setSupplierInvoiceNo(e.target.value)} />
+                </div>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer select-none pt-1">
+                <span className={"relative flex items-center justify-center w-5 h-5 rounded border transition-colors " + (hasVat?"bg-primary border-primary":"bg-canvas border-hairline")}>
+                  <input type="checkbox" className="sr-only" checked={hasVat} onChange={e=>setHasVat(e.target.checked)} />
+                  {hasVat && <Icon name="check" size={13} className="text-white" strokeWidth={2.5}/>}
+                </span>
+                <span className="text-sm">รวม VAT 7% (มี input VAT เคลมได้)</span>
+              </label>
+            </>
+          )}
+
+          {kind==='return' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs uppercase tracking-wider text-muted">บิลขายต้นฉบับ (ไม่บังคับ)</label>
+                <input className="input mt-1 font-mono" placeholder="เช่น 60590" inputMode="numeric" value={origSaleId} onChange={e=>setOrigSaleId(e.target.value.replace(/\D/g,''))} />
+              </div>
+              <div>
+                <label className="text-xs uppercase tracking-wider text-muted">เหตุผลการคืน</label>
+                <select className="input mt-1" value={returnReason} onChange={e=>setReturnReason(e.target.value)}>
+                  <option value="">— เลือก —</option>
+                  {RETURN_REASONS.map(r=><option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="text-xs uppercase tracking-wider text-muted">หมายเหตุ</label>
+            <textarea className="input mt-1" rows="2" placeholder="เช่น เลขล็อต / ตำหนิ / ข้อตกลงพิเศษ" value={notes} onChange={e=>setNotes(e.target.value)} />
           </div>
         </div>
 
@@ -1211,8 +1486,8 @@ function DashboardView() {
     const startMonth = today.slice(0,7) + '-01';
 
     const [todayQ, monthQ, lowQ] = await Promise.all([
-      sb.from('sale_orders').select('grand_total, channel').gte('sale_date', today + 'T00:00:00').lte('sale_date', today + 'T23:59:59'),
-      sb.from('sale_orders').select('grand_total').gte('sale_date', startMonth + 'T00:00:00'),
+      sb.from('sale_orders').select('grand_total, channel').eq('status','active').gte('sale_date', today + 'T00:00:00').lte('sale_date', today + 'T23:59:59'),
+      sb.from('sale_orders').select('grand_total').eq('status','active').gte('sale_date', startMonth + 'T00:00:00'),
       sb.from('products').select('id,name,current_stock').lt('current_stock', 5).gt('current_stock', -1).order('current_stock', { ascending: true }).limit(8),
     ]);
 
@@ -1228,7 +1503,7 @@ function DashboardView() {
     setStats({ todayCount: todayRows.length, todayTotal, monthCount: monthRows.length, monthTotal });
     setLowStock(lowQ.data || []);
 
-    const { data: monthIds } = await sb.from('sale_orders').select('id').gte('sale_date', startMonth + 'T00:00:00');
+    const { data: monthIds } = await sb.from('sale_orders').select('id').eq('status','active').gte('sale_date', startMonth + 'T00:00:00');
     const ids = (monthIds||[]).map(x=>x.id);
     if (ids.length) {
       const { data: items } = await sb.from('sale_order_items').select('product_name,quantity').in('sale_order_id', ids);
