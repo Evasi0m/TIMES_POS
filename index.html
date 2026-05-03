@@ -406,10 +406,37 @@
   }
 
   /* ==========  ANIMATIONS  ========== */
-  @keyframes slideUp { from { transform: translateY(100%); opacity: 0.7; } to { transform: translateY(0); opacity: 1; } }
-  .sheet-anim { animation: slideUp .28s var(--ease-out); }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-  .fade-in { animation: fadeIn .3s var(--ease-out); }
+
+  /* Generic fade in/out (for popovers, inline expansions) */
+  @keyframes fadeIn  { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes fadeOut { from { opacity: 1; transform: translateY(0); }    to { opacity: 0; transform: translateY(4px); } }
+  .fade-in  { animation: fadeIn  .25s var(--ease-out); }
+  .fade-out { animation: fadeOut .2s var(--ease-out) forwards; }
+
+  /* Modal backdrop fade */
+  @keyframes overlayIn  { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes overlayOut { from { opacity: 1; } to { opacity: 0; } }
+  .overlay-in  { animation: overlayIn  .22s var(--ease-out); }
+  .overlay-out { animation: overlayOut .2s var(--ease-out) forwards; }
+
+  /* Modal inner: bottom-sheet on mobile, scale-fade on desktop */
+  @keyframes sheetUp   { from { transform: translateY(100%); opacity: 0.6; } to { transform: translateY(0); opacity: 1; } }
+  @keyframes sheetDown { from { transform: translateY(0); opacity: 1; }     to { transform: translateY(100%); opacity: 0.3; } }
+  @keyframes scaleIn   { from { transform: scale(0.94); opacity: 0; }       to { transform: scale(1); opacity: 1; } }
+  @keyframes scaleOut  { from { transform: scale(1); opacity: 1; }          to { transform: scale(0.96); opacity: 0; } }
+
+  .sheet-anim { animation: sheetUp   .28s var(--ease-out); }
+  .sheet-out  { animation: sheetDown .22s var(--ease-out) forwards; }
+  @media (min-width: 1024px) {
+    .sheet-anim { animation: scaleIn  .24s var(--ease-out); }
+    .sheet-out  { animation: scaleOut .2s  var(--ease-out) forwards; }
+  }
+
+  /* Side drawer (mobile menu) */
+  @keyframes drawerIn  { from { transform: translateX(100%); } to { transform: translateX(0); } }
+  @keyframes drawerOut { from { transform: translateX(0); }    to { transform: translateX(100%); } }
+  .drawer-in  { animation: drawerIn  .26s var(--ease-out); }
+  .drawer-out { animation: drawerOut .22s var(--ease-out) forwards; }
 
   /* ==========  HAIRLINE  ========== */
   .hairline { border-color: rgba(230, 223, 216, 0.6); }
@@ -565,11 +592,28 @@ const useToast = () => React.useContext(ToastCtx);
 /* =========================================================
    MODAL / SHEET
 ========================================================= */
+/* Hook: keep a component mounted briefly after `open` flips false so an exit animation can run.
+   Returns { render, closing } — render the element while `render`, apply close-animation classes when `closing`. */
+function useMountedToggle(open, exitMs = 220) {
+  const [render, setRender]   = useState(open);
+  const [closing, setClosing] = useState(false);
+  useEffect(() => {
+    if (open) { setRender(true); setClosing(false); }
+    else if (render) {
+      setClosing(true);
+      const t = setTimeout(() => { setRender(false); setClosing(false); }, exitMs);
+      return () => clearTimeout(t);
+    }
+  }, [open]);
+  return { render, closing };
+}
+
 function Modal({ open, onClose, title, children, footer, wide }) {
-  if (!open) return null;
+  const { render, closing } = useMountedToggle(open, 220);
+  if (!render) return null;
   return (
-    <div className="fixed inset-0 modal-overlay z-[100] flex items-end lg:items-center justify-center lg:p-6" onClick={onClose}>
-      <div className={"bg-canvas rounded-t-2xl lg:rounded-lg shadow-xl w-full sheet-anim lg:animate-none " + (wide?"lg:max-w-3xl":"lg:max-w-lg") + " max-h-[92vh] flex flex-col"} onClick={e=>e.stopPropagation()}>
+    <div className={"fixed inset-0 modal-overlay z-[100] flex items-end lg:items-center justify-center lg:p-6 " + (closing ? "overlay-out" : "overlay-in")} onClick={onClose}>
+      <div className={"bg-canvas rounded-t-2xl lg:rounded-lg shadow-xl w-full " + (wide?"lg:max-w-3xl":"lg:max-w-lg") + " max-h-[92vh] flex flex-col " + (closing ? "sheet-out" : "sheet-anim")} onClick={e=>e.stopPropagation()}>
         <div className="px-5 py-4 border-b hairline flex items-center justify-between flex-shrink-0">
           <div className="font-display text-xl lg:text-2xl">{title}</div>
           <button className="btn-ghost !p-2" onClick={onClose}><Icon name="x" size={20}/></button>
@@ -619,6 +663,7 @@ const fmtThaiRange = (from, to) => {
 
 function DatePicker({ value, onChange, mode = 'single', placeholder = 'เลือกวันที่', className = '' }) {
   const [open, setOpen] = useState(false);
+  const { render: renderPanel, closing: panelClosing } = useMountedToggle(open, 200);
   const initIso = mode === 'single' ? value : (value?.from || isoOfDate(new Date()));
   const initDate = dateOfIso(initIso) || new Date();
   const [viewMonth, setViewMonth] = useState(() => new Date(initDate.getFullYear(), initDate.getMonth(), 1));
@@ -713,8 +758,8 @@ function DatePicker({ value, onChange, mode = 'single', placeholder = 'เลื
         <span className={(mode==='single'?value:value?.from) ? "text-ink truncate" : "text-muted-soft truncate"}>{display}</span>
         <Icon name="chevron-d" size={16} className={"ml-auto text-muted flex-shrink-0 transition-transform " + (open?"rotate-180":"")}/>
       </button>
-      {open && (
-        <div className="absolute z-50 mt-2 left-0 w-[320px] max-w-[calc(100vw-32px)] glass-strong rounded-xl p-3 fade-in" style={{boxShadow:'var(--shadow-high)'}}>
+      {renderPanel && (
+        <div className={"absolute z-50 mt-2 left-0 w-[320px] max-w-[calc(100vw-32px)] glass-strong rounded-xl p-3 " + (panelClosing?"fade-out":"fade-in")} style={{boxShadow:'var(--shadow-high)'}}>
           {mode === 'range' && (
             <div className="flex flex-wrap gap-1.5 mb-3 pb-3 border-b hairline">
               {presets.map(p => (
@@ -893,6 +938,7 @@ function Sidebar({ view, setView, userEmail }) {
 ========================================================= */
 function MobileTopBar({ title, userEmail, onLogout }) {
   const [openMenu, setOpenMenu] = useState(false);
+  const { render: drawerRender, closing: drawerClosing } = useMountedToggle(openMenu, 220);
   return (
     <>
     <header className="lg:hidden sticky top-0 z-40 mobile-topbar pt-safe">
@@ -908,9 +954,9 @@ function MobileTopBar({ title, userEmail, onLogout }) {
         </button>
       </div>
     </header>
-    {openMenu && (
-      <div className="lg:hidden fixed inset-0 z-[110] modal-overlay" onClick={()=>setOpenMenu(false)}>
-        <div className="absolute right-0 top-0 bottom-0 w-72 bg-canvas shadow-xl pt-safe" onClick={e=>e.stopPropagation()}>
+    {drawerRender && (
+      <div className={"lg:hidden fixed inset-0 z-[110] modal-overlay " + (drawerClosing?"overlay-out":"overlay-in")} onClick={()=>setOpenMenu(false)}>
+        <div className={"absolute right-0 top-0 bottom-0 w-72 bg-canvas shadow-xl pt-safe " + (drawerClosing?"drawer-out":"drawer-in")} onClick={e=>e.stopPropagation()}>
           <div className="px-5 py-4 border-b hairline flex items-center justify-between">
             <div className="font-display text-xl">เมนู</div>
             <button className="btn-ghost !p-2" onClick={()=>setOpenMenu(false)}><Icon name="x" size={20}/></button>
@@ -973,6 +1019,7 @@ function POSView() {
   const [orderDiscount, setOrderDiscount] = useState({ value: 0, type: null });
   const [submitting, setSubmitting] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
+  const { render: cartSheetRender, closing: cartSheetClosing } = useMountedToggle(cartOpen, 220);
   const [expandedDisc, setExpandedDisc] = useState({});
   const [notes, setNotes] = useState("");
   const [showNotes, setShowNotes] = useState(false);
@@ -1142,7 +1189,7 @@ function POSView() {
                 <Icon name="tag" size={12}/> ส่วนลดต่อชิ้น <Icon name={expanded?"chevron-d":"chevron-r"} size={12}/>
               </button>
               {expanded && (
-                <div className="grid grid-cols-12 gap-1 mt-2">
+                <div className="grid grid-cols-12 gap-1 mt-2 fade-in">
                   <input type="number" inputMode="numeric" className="input !py-1 !text-xs col-span-4" placeholder="ลด 1" value={l.discount1_value||""} onChange={e=>updateLine(idx,{discount1_value:Number(e.target.value)||0, discount1_type: l.discount1_type||'baht'})}/>
                   <select className="input !py-1 !text-xs col-span-2" value={l.discount1_type||""} onChange={e=>updateLine(idx,{discount1_type:e.target.value||null})}>
                     <option value="">—</option><option value="baht">฿</option><option value="percent">%</option>
@@ -1201,7 +1248,7 @@ function POSView() {
         </div>
 
         {taxInvoice && (
-          <div className="bg-canvas border hairline rounded-md p-3 mb-3 space-y-2">
+          <div className="bg-canvas border hairline rounded-md p-3 mb-3 space-y-2 fade-in">
             <div className="text-[10px] uppercase tracking-wider text-muted">ข้อมูลผู้ซื้อ (ใบกำกับภาษี)</div>
             <input className="input !py-2 !text-sm" placeholder="ชื่อผู้ซื้อ / บริษัท *" value={buyer.name} onChange={e=>setBuyer(b=>({...b,name:e.target.value}))}/>
             <div className="grid grid-cols-2 gap-2">
@@ -1213,7 +1260,7 @@ function POSView() {
         )}
 
         {showNotes && (
-          <textarea className="input !py-2 !text-sm mb-3" rows="2" placeholder="หมายเหตุบนบิล (เช่น ลูกค้ามีรอยขีดข่วน, รอของลอตต่อ)" value={notes} onChange={e=>setNotes(e.target.value)}/>
+          <textarea className="input !py-2 !text-sm mb-3 fade-in" rows="2" placeholder="หมายเหตุบนบิล (เช่น ลูกค้ามีรอยขีดข่วน, รอของลอตต่อ)" value={notes} onChange={e=>setNotes(e.target.value)}/>
         )}
 
         <div className="flex justify-between text-sm text-muted mb-1"><span>รวมก่อนลด</span><span className="tabular-nums">{fmtTHB(subtotal)}</span></div>
@@ -1271,9 +1318,9 @@ function POSView() {
       )}
 
       {/* MOBILE CART SHEET */}
-      {cartOpen && (
-        <div className="lg:hidden fixed inset-0 modal-overlay z-[100] flex items-end" onClick={()=>setCartOpen(false)}>
-          <div className="w-full max-h-[92vh] rounded-t-2xl flex flex-col sheet-anim card-cream" onClick={e=>e.stopPropagation()}>
+      {cartSheetRender && (
+        <div className={"lg:hidden fixed inset-0 modal-overlay z-[100] flex items-end " + (cartSheetClosing?"overlay-out":"overlay-in")} onClick={()=>setCartOpen(false)}>
+          <div className={"w-full max-h-[92vh] rounded-t-2xl flex flex-col card-cream " + (cartSheetClosing?"sheet-out":"sheet-anim")} onClick={e=>e.stopPropagation()}>
             <div className="px-5 py-4 border-b hairline flex items-center justify-between flex-shrink-0">
               <div>
                 <div className="font-display text-2xl">ตะกร้า</div>
@@ -1495,7 +1542,7 @@ function StockHistoryPanel({ productId }) {
         <Icon name={open?"chevron-d":"chevron-r"} size={16} className="text-muted"/>
       </button>
       {open && (
-        <div className="border-t hairline p-3 max-h-72 overflow-y-auto">
+        <div className="border-t hairline p-3 max-h-72 overflow-y-auto fade-in">
           {loading && <div className="text-muted text-sm p-2">กำลังโหลด...</div>}
           {!loading && rows && rows.length===0 && <div className="text-muted text-sm p-2">ยังไม่มีประวัติ</div>}
           {!loading && rows && rows.map(m => {
@@ -1610,10 +1657,12 @@ function SalesView() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    // .limit(200) ทำให้บิลในช่วงเวลาที่กว้าง (เช่น 1-30 เม.ย. ที่มีบิลเกิน 200) โดน truncate
+    // เปลี่ยนเป็น 5000 ครอบคลุมเดือนยาวสุดของร้านนี้ (~500 บิล/เดือน × 10 เดือน)
     let q = sb.from('sale_orders').select('*')
       .gte('sale_date', from + 'T00:00:00')
       .lte('sale_date', to + 'T23:59:59')
-      .order('sale_date', { ascending: false }).limit(200);
+      .order('sale_date', { ascending: false }).limit(5000);
     if (channel) q = q.eq('channel', channel);
     if (excludeVoided) q = q.eq('status', 'active');
     const { data, error } = await q;
@@ -1621,6 +1670,21 @@ function SalesView() {
     setOrders(data || []);
     setLoading(false);
   }, [from, to, channel, excludeVoided]);
+
+  // Group orders by sale-date (YYYY-MM-DD) preserving DESC order
+  const groupedByDay = useMemo(() => {
+    const map = new Map();
+    for (const o of orders) {
+      const key = (o.sale_date || '').slice(0, 10);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(o);
+    }
+    return Array.from(map.entries()).map(([day, list]) => ({
+      day, list,
+      count: list.length,
+      total: list.filter(o=>o.status==='active').reduce((s,o)=>s+Number(o.grand_total||0),0),
+    }));
+  }, [orders]);
 
   useEffect(()=>{ load(); }, [load]);
 
@@ -1689,47 +1753,79 @@ function SalesView() {
       {/* Filters */}
       <div className={"mb-5 " + (filterOpen?"block":"hidden lg:block")}>{FilterControls}</div>
 
-      {/* Desktop table */}
-      <div className="hidden lg:block card-canvas overflow-hidden">
-        <div className="grid grid-cols-12 px-4 py-3 text-xs uppercase tracking-wider text-muted border-b hairline bg-surface-soft">
-          <div className="col-span-2">เลขที่บิล</div>
-          <div className="col-span-3">วันที่</div>
-          <div className="col-span-2">ช่องทาง</div>
-          <div className="col-span-2">ชำระ</div>
-          <div className="col-span-3 text-right">ยอดสุทธิ</div>
-        </div>
-        {loading && <div className="p-6 text-muted text-sm">กำลังโหลด...</div>}
-        {!loading && orders.length===0 && <div className="p-6 text-muted text-sm">ไม่พบบิลในช่วงเวลานี้</div>}
-        {orders.map(o => (
-          <div key={o.id} className={"grid grid-cols-12 px-4 py-3.5 items-center border-b hairline last:border-0 hover:bg-white/40 cursor-pointer transition-colors " + (o.status==='voided'?'opacity-60':'')} onClick={()=>openDetail(o)}>
-            <div className="col-span-2 font-mono text-sm flex items-center gap-2">#{o.id}{o.status==='voided' && <span className="badge-pill !bg-error/10 !text-error !text-[10px]">VOIDED</span>}</div>
-            <div className="col-span-3 text-sm">{fmtDateTime(o.sale_date)}</div>
-            <div className="col-span-2"><span className="badge-pill">{CHANNELS.find(c=>c.v===o.channel)?.label || '—'}</span></div>
-            <div className="col-span-2 text-sm text-muted">{PAYMENTS.find(p=>p.v===o.payment_method)?.label || '—'}</div>
-            <div className={"col-span-3 text-right font-medium tabular-nums " + (o.status==='voided'?'line-through':'')}>{fmtTHB(o.grand_total)}</div>
+      {/* Desktop — grouped by day */}
+      <div className="hidden lg:block space-y-4">
+        {loading && <div className="card-canvas p-6 text-muted text-sm">กำลังโหลด...</div>}
+        {!loading && orders.length===0 && <div className="card-canvas p-6 text-muted text-sm">ไม่พบบิลในช่วงเวลานี้</div>}
+        {!loading && groupedByDay.map(g => (
+          <div key={g.day} className="card-canvas overflow-hidden">
+            {/* Day header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b hairline bg-surface-cream-strong/50">
+              <div className="flex items-center gap-3">
+                <Icon name="calendar" size={16} className="text-primary"/>
+                <span className="font-display text-lg">{fmtThaiDateShort(g.day)}</span>
+                <span className="badge-pill">{g.count} บิล</span>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] uppercase tracking-wider text-muted">รวมวันนี้</div>
+                <div className="font-display text-xl tabular-nums">{fmtTHB(g.total)}</div>
+              </div>
+            </div>
+            {/* Column header */}
+            <div className="grid grid-cols-12 px-4 py-2 text-[10px] uppercase tracking-wider text-muted-soft border-b hairline">
+              <div className="col-span-2">เลขที่บิล</div>
+              <div className="col-span-2">เวลา</div>
+              <div className="col-span-2">ช่องทาง</div>
+              <div className="col-span-3">ชำระ</div>
+              <div className="col-span-3 text-right">ยอดสุทธิ</div>
+            </div>
+            {/* Rows */}
+            {g.list.map(o => (
+              <div key={o.id} className={"grid grid-cols-12 px-4 py-3 items-center border-b hairline last:border-0 hover:bg-white/40 cursor-pointer transition-colors " + (o.status==='voided'?'opacity-60':'')} onClick={()=>openDetail(o)}>
+                <div className="col-span-2 font-mono text-sm flex items-center gap-2">#{o.id}{o.status==='voided' && <span className="badge-pill !bg-error/10 !text-error !text-[10px]">VOIDED</span>}</div>
+                <div className="col-span-2 text-sm tabular-nums">{new Date(o.sale_date).toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"})} น.</div>
+                <div className="col-span-2"><span className="badge-pill">{CHANNELS.find(c=>c.v===o.channel)?.label || '—'}</span></div>
+                <div className="col-span-3 text-sm text-muted">{PAYMENTS.find(p=>p.v===o.payment_method)?.label || '—'}</div>
+                <div className={"col-span-3 text-right font-medium tabular-nums " + (o.status==='voided'?'line-through':'')}>{fmtTHB(o.grand_total)}</div>
+              </div>
+            ))}
           </div>
         ))}
       </div>
 
-      {/* Mobile cards */}
-      <div className="lg:hidden space-y-2">
+      {/* Mobile — grouped by day */}
+      <div className="lg:hidden space-y-4">
         {loading && <div className="p-4 text-muted text-sm">กำลังโหลด...</div>}
         {!loading && orders.length===0 && <div className="p-4 text-muted text-sm">ไม่พบบิลในช่วงเวลานี้</div>}
-        {orders.map(o => (
-          <div key={o.id} className={"card-canvas pressable p-3.5 flex items-center gap-3 " + (o.status==='voided'?'opacity-60':'')} onClick={()=>openDetail(o)}>
-            <div className="flex-1 min-w-0">
+        {!loading && groupedByDay.map(g => (
+          <div key={g.day}>
+            {/* Sticky day header */}
+            <div className="sticky top-14 z-20 -mx-4 px-4 py-2.5 mb-2 mobile-topbar flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="font-mono text-xs text-muted">#{o.id}</span>
-                <span className="badge-pill">{CHANNELS.find(c=>c.v===o.channel)?.label || '—'}</span>
-                {o.status==='voided' && <span className="badge-pill !bg-error/10 !text-error !text-[10px]">VOIDED</span>}
+                <Icon name="calendar" size={14} className="text-primary"/>
+                <span className="font-display text-base">{fmtThaiDateShort(g.day)}</span>
+                <span className="text-xs text-muted">· {g.count} บิล</span>
               </div>
-              <div className="text-xs text-muted mt-1">{fmtDateTime(o.sale_date)}</div>
+              <span className="font-display text-base tabular-nums">{fmtTHB(g.total)}</span>
             </div>
-            <div className="text-right flex-shrink-0">
-              <div className={"font-display text-lg leading-none tabular-nums " + (o.status==='voided'?'line-through':'')}>{fmtTHB(o.grand_total)}</div>
-              <div className="text-xs text-muted mt-1">{PAYMENTS.find(p=>p.v===o.payment_method)?.label || '—'}</div>
+            <div className="space-y-2">
+              {g.list.map(o => (
+                <div key={o.id} className={"card-canvas pressable p-3.5 flex items-center gap-3 " + (o.status==='voided'?'opacity-60':'')} onClick={()=>openDetail(o)}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-xs text-muted">#{o.id}</span>
+                      <span className="badge-pill">{CHANNELS.find(c=>c.v===o.channel)?.label || '—'}</span>
+                      {o.status==='voided' && <span className="badge-pill !bg-error/10 !text-error !text-[10px]">VOIDED</span>}
+                    </div>
+                    <div className="text-xs text-muted mt-1 tabular-nums">{new Date(o.sale_date).toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"})} น. · {PAYMENTS.find(p=>p.v===o.payment_method)?.label || '—'}</div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className={"font-display text-lg leading-none tabular-nums " + (o.status==='voided'?'line-through':'')}>{fmtTHB(o.grand_total)}</div>
+                  </div>
+                  <Icon name="chevron-r" size={16} className="text-muted-soft"/>
+                </div>
+              ))}
             </div>
-            <Icon name="chevron-r" size={16} className="text-muted-soft"/>
           </div>
         ))}
       </div>
