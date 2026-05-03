@@ -2,11 +2,12 @@
 <html lang="th">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<meta name="theme-color" content="#faf9f5" />
 <title>TIMES POS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Sarabun:wght@400;500;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Sarabun:wght@400;500;600&display=swap" rel="stylesheet" />
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -57,41 +58,47 @@
 </script>
 <style>
   html, body, #root { height: 100%; }
-  body { background: #faf9f5; color: #141413; font-family: Inter, Sarabun, sans-serif; }
+  body { background: #faf9f5; color: #141413; font-family: Inter, Sarabun, sans-serif; -webkit-tap-highlight-color: transparent; }
   .font-display { font-family: 'Cormorant Garamond', 'Tiempos Headline', serif; font-weight: 500; letter-spacing: -0.01em; }
-  .nav-spike::before { content: ''; display: inline-block; width: 12px; height: 12px; margin-right: 10px; background-image: radial-gradient(circle at center, #141413 2px, transparent 2.5px), linear-gradient(#141413, #141413), linear-gradient(#141413, #141413); background-size: 100% 100%, 2px 100%, 100% 2px; background-position: center, center, center; background-repeat: no-repeat; transform: rotate(45deg); }
-  .spike { display:inline-block; width:14px; height:14px; position:relative; }
+  .spike { display:inline-block; width:14px; height:14px; position:relative; flex-shrink: 0; }
   .spike::before, .spike::after { content:''; position:absolute; background:#141413; }
   .spike::before { top:0; left:50%; width:2px; height:100%; transform:translateX(-50%); }
   .spike::after { left:0; top:50%; width:100%; height:2px; transform:translateY(-50%); }
-  .spike.lg { width:20px; height:20px; }
-  .spike.lg::before, .spike.lg::after { background:#141413; }
+  .spike.lg { width:18px; height:18px; }
   .spike.dark::before, .spike.dark::after { background:#faf9f5; }
-  /* scrollbar */
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #e6dfd8; border-radius: 8px; }
   ::-webkit-scrollbar-thumb:hover { background: #c6bdb0; }
   input:focus, select:focus, textarea:focus { outline: 3px solid rgba(204, 120, 92, 0.18); outline-offset: 0; border-color: #cc785c !important; }
-  .btn-primary { background: #cc785c; color: #fff; padding: 10px 18px; border-radius: 8px; font-weight: 500; font-size: 14px; transition: background .15s; }
+  .btn-primary { background: #cc785c; color: #fff; padding: 11px 20px; border-radius: 8px; font-weight: 500; font-size: 14px; transition: background .15s; display:inline-flex; align-items:center; justify-content:center; gap: 8px; }
   .btn-primary:hover { background: #a9583e; }
+  .btn-primary:active { background: #a9583e; }
   .btn-primary:disabled { background: #e6dfd8; color: #6c6a64; cursor: not-allowed; }
-  .btn-secondary { background: #faf9f5; color: #141413; padding: 10px 18px; border-radius: 8px; font-weight: 500; font-size: 14px; border: 1px solid #e6dfd8; transition: background .15s; }
+  .btn-secondary { background: #faf9f5; color: #141413; padding: 11px 20px; border-radius: 8px; font-weight: 500; font-size: 14px; border: 1px solid #e6dfd8; transition: background .15s; display:inline-flex; align-items:center; justify-content:center; gap: 8px; }
   .btn-secondary:hover { background: #f5f0e8; }
-  .btn-ghost { background: transparent; color: #141413; padding: 8px 14px; border-radius: 8px; font-weight: 500; font-size: 14px; }
+  .btn-ghost { background: transparent; color: #141413; padding: 8px 12px; border-radius: 8px; font-weight: 500; font-size: 14px; display:inline-flex; align-items:center; justify-content:center; gap: 8px; }
   .btn-ghost:hover { background: #efe9de; }
-  .input { background: #faf9f5; border: 1px solid #e6dfd8; border-radius: 8px; padding: 10px 14px; font-size: 14px; color: #141413; width: 100%; }
-  .card-cream { background: #efe9de; border-radius: 12px; padding: 24px; }
-  .card-canvas { background: #faf9f5; border: 1px solid #e6dfd8; border-radius: 12px; padding: 24px; }
-  .card-dark { background: #181715; color: #faf9f5; border-radius: 12px; padding: 24px; }
-  .badge-pill { background: #efe9de; color: #141413; font-size: 13px; font-weight: 500; padding: 3px 10px; border-radius: 9999px; }
+  .input { background: #faf9f5; border: 1px solid #e6dfd8; border-radius: 8px; padding: 11px 14px; font-size: 14px; color: #141413; width: 100%; }
+  .card-cream { background: #efe9de; border-radius: 12px; }
+  .card-canvas { background: #faf9f5; border: 1px solid #e6dfd8; border-radius: 12px; }
+  .card-dark { background: #181715; color: #faf9f5; border-radius: 12px; }
+  .badge-pill { background: #efe9de; color: #141413; font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 9999px; display:inline-block; white-space:nowrap; }
   .badge-coral { background: #cc785c; color: #fff; font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 9999px; letter-spacing: 1.5px; text-transform: uppercase; }
-  .nav-item { display:flex; align-items:center; gap:10px; padding: 10px 14px; border-radius: 8px; color: #6c6a64; font-weight: 500; font-size: 14px; cursor: pointer; transition: background .15s; }
+  .nav-item { display:flex; align-items:center; gap:12px; padding: 10px 14px; border-radius: 8px; color: #6c6a64; font-weight: 500; font-size: 14px; cursor: pointer; transition: background .15s; }
   .nav-item:hover { background: #efe9de; color: #141413; }
   .nav-item.active { background: #efe9de; color: #141413; }
-  .table-row { display:grid; align-items:center; padding: 12px 16px; border-bottom: 1px solid #ebe6df; }
   .hairline { border-color: #e6dfd8; }
   .modal-overlay { background: rgba(20,20,19,0.45); }
+  /* mobile bottom tab */
+  .tab-btn { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; padding: 8px 4px; color: #8e8b82; font-size: 11px; font-weight: 500; }
+  .tab-btn.active { color: #cc785c; }
+  /* sheet animation */
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .sheet-anim { animation: slideUp .22s ease-out; }
+  /* safe area */
+  .pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 8px); }
+  .pt-safe { padding-top: max(env(safe-area-inset-top), 0px); }
 </style>
 </head>
 <body>
@@ -135,63 +142,52 @@ function applyDiscounts(unitPrice, qty, d1v, d1t, d2v, d2t) {
   else if (d2t === 'baht') s2 = s2 - (Number(d2v)||0);
   return Math.max(0, s2) * (Number(qty) || 0);
 }
-
 function applyOrderDiscount(subtotal, value, type) {
   if (type === 'percent') return Math.max(0, subtotal * (1 - (Number(value)||0)/100));
   if (type === 'baht') return Math.max(0, subtotal - (Number(value)||0));
   return subtotal;
 }
 
-/* ---------- Layout ---------- */
+/* =========================================================
+   SVG ICONS (Lucide-inspired, stroke=currentColor)
+========================================================= */
+const Icon = ({ name, size = 20, className = "", strokeWidth = 1.75 }) => {
+  const p = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth, strokeLinecap: "round", strokeLinejoin: "round", className };
+  switch (name) {
+    case "cart":      return <svg {...p}><circle cx="8" cy="21" r="1.25"/><circle cx="19" cy="21" r="1.25"/><path d="M2.5 3h2.4l2.7 12.4a1.8 1.8 0 0 0 1.8 1.4h9.6a1.8 1.8 0 0 0 1.8-1.4L21 7H6"/></svg>;
+    case "watch":     return <svg {...p}><circle cx="12" cy="12" r="6"/><polyline points="12,9.5 12,12 13.8,13"/><path d="m9 4 .9-1.5A1.5 1.5 0 0 1 11.2 2h1.6a1.5 1.5 0 0 1 1.3.5L15 4"/><path d="m9 20 .9 1.5A1.5 1.5 0 0 0 11.2 22h1.6a1.5 1.5 0 0 0 1.3-.5L15 20"/></svg>;
+    case "receipt":   return <svg {...p}><path d="M4 2v20l2.5-1.5L9 22l2.5-1.5L14 22l2.5-1.5L19 22l1-1V2H4z"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>;
+    case "package":   return <svg {...p}><path d="m7.5 4.27 9 5.15"/><path d="M21 8 12 13 3 8"/><path d="M3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8z"/><path d="M12 22V13"/></svg>;
+    case "package-in":  return <svg {...p}><path d="M12 22V13"/><path d="M21 8 12 13 3 8"/><path d="M3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8z"/><path d="m9 5 3 3 3-3"/><path d="M12 8V2"/></svg>;
+    case "package-out": return <svg {...p}><path d="M12 22V13"/><path d="M21 8 12 13 3 8"/><path d="M3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8z"/><path d="m9 4 3-3 3 3"/><path d="M12 1v6"/></svg>;
+    case "dashboard": return <svg {...p}><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>;
+    case "search":    return <svg {...p}><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>;
+    case "plus":      return <svg {...p}><path d="M12 5v14M5 12h14"/></svg>;
+    case "minus":     return <svg {...p}><path d="M5 12h14"/></svg>;
+    case "x":         return <svg {...p}><path d="M18 6 6 18M6 6l12 12"/></svg>;
+    case "trash":     return <svg {...p}><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6M14 11v6"/></svg>;
+    case "logout":    return <svg {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
+    case "calendar":  return <svg {...p}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
+    case "tag":       return <svg {...p}><path d="M20 12 12 20l-9-9V3h8z"/><circle cx="7.5" cy="7.5" r="1.2"/></svg>;
+    case "edit":      return <svg {...p}><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>;
+    case "chevron-r": return <svg {...p}><polyline points="9,6 15,12 9,18"/></svg>;
+    case "chevron-d": return <svg {...p}><polyline points="6,9 12,15 18,9"/></svg>;
+    case "chevron-l": return <svg {...p}><polyline points="15,6 9,12 15,18"/></svg>;
+    case "menu":      return <svg {...p}><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>;
+    case "filter":    return <svg {...p}><polygon points="22,3 2,3 10,12.5 10,19 14,21 14,12.5 22,3"/></svg>;
+    case "check":     return <svg {...p}><polyline points="20,6 9,17 4,12"/></svg>;
+    case "alert":     return <svg {...p}><path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12" y2="17.01"/></svg>;
+    case "barcode":   return <svg {...p}><path d="M3 5v14M6 5v14M9 5v14M13 5v14M16 5v14M19 5v14M22 5v14"/></svg>;
+    case "credit-card":return <svg {...p}><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>;
+    case "trend-up":  return <svg {...p}><polyline points="22,7 13.5,15.5 8.5,10.5 2,17"/><polyline points="16,7 22,7 22,13"/></svg>;
+    case "store":     return <svg {...p}><path d="m2 7 2-4h16l2 4"/><path d="M4 7v13a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V7"/><path d="M2 7h20"/><path d="M8 7v3a2 2 0 0 1-4 0V7M16 7v3a2 2 0 0 1-4 0V7M12 7v3a2 2 0 0 1-4 0V7M20 7v3a2 2 0 0 1-4 0V7"/></svg>;
+    default: return null;
+  }
+};
 
-function Sidebar({ view, setView, userEmail }) {
-  const items = [
-    { k: "pos", label: "ขายสินค้า", icon: "🛒" },
-    { k: "products", label: "สินค้า", icon: "⌚" },
-    { k: "sales", label: "ประวัติการขาย", icon: "📃" },
-    { k: "receive", label: "รับสินค้า", icon: "📦" },
-    { k: "return", label: "คืนสินค้า", icon: "↩" },
-    { k: "dashboard", label: "แดชบอร์ด", icon: "📊" },
-  ];
-  return (
-    <aside className="w-64 bg-canvas border-r hairline flex flex-col h-screen sticky top-0">
-      <div className="px-6 py-6 flex items-center gap-3 border-b hairline">
-        <span className="spike lg" />
-        <div>
-          <div className="font-display text-2xl leading-none">TIMES</div>
-          <div className="text-xs text-muted tracking-widest mt-1">POS · ร้านนาฬิกา</div>
-        </div>
-      </div>
-      <nav className="p-3 flex-1 overflow-y-auto">
-        {items.map(it => (
-          <div key={it.k} className={"nav-item " + (view===it.k?"active":"")} onClick={()=>setView(it.k)}>
-            <span className="text-base">{it.icon}</span>
-            <span>{it.label}</span>
-          </div>
-        ))}
-      </nav>
-      <div className="p-4 border-t hairline">
-        <div className="text-xs text-muted-soft truncate mb-2">{userEmail}</div>
-        <button className="btn-secondary w-full !py-2 !text-sm" onClick={()=>sb.auth.signOut()}>ออกจากระบบ</button>
-        <div className="text-xs text-muted-soft mt-3">© TIMES POS</div>
-      </div>
-    </aside>
-  );
-}
-
-function Topbar({ title, subtitle, right }) {
-  return (
-    <header className="px-10 pt-10 pb-6 flex items-end justify-between border-b hairline">
-      <div>
-        <div className="text-xs uppercase tracking-[1.5px] text-muted">{subtitle}</div>
-        <h1 className="font-display text-5xl mt-2 leading-tight text-ink">{title}</h1>
-      </div>
-      <div>{right}</div>
-    </header>
-  );
-}
-
-/* ---------- Toast ---------- */
+/* =========================================================
+   TOAST
+========================================================= */
 const ToastCtx = React.createContext({ push: ()=>{} });
 function ToastProvider({ children }) {
   const [list, setList] = useState([]);
@@ -203,10 +199,11 @@ function ToastProvider({ children }) {
   return (
     <ToastCtx.Provider value={{ push }}>
       {children}
-      <div className="fixed bottom-6 right-6 z-[100] space-y-2">
+      <div className="fixed bottom-20 lg:bottom-6 right-4 lg:right-6 z-[120] space-y-2 max-w-[calc(100vw-32px)]">
         {list.map(t => (
-          <div key={t.id} className={"px-4 py-3 rounded-lg shadow-md text-sm card-dark " + (t.type==='error'?'!bg-error':t.type==='success'?'!bg-[#1f3d27]':'')}>
-            {t.msg}
+          <div key={t.id} className={"px-4 py-3 rounded-lg shadow-lg text-sm flex items-center gap-2 " + (t.type==='error'?'bg-error text-white':t.type==='success'?'bg-[#1f3d27] text-white':'bg-surface-dark text-on-dark')}>
+            <Icon name={t.type==='error'?'alert':t.type==='success'?'check':'alert'} size={16}/>
+            <span>{t.msg}</span>
           </div>
         ))}
       </div>
@@ -215,26 +212,187 @@ function ToastProvider({ children }) {
 }
 const useToast = () => React.useContext(ToastCtx);
 
-/* ---------- Modal ---------- */
+/* =========================================================
+   MODAL / SHEET
+========================================================= */
 function Modal({ open, onClose, title, children, footer, wide }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 modal-overlay z-50 flex items-center justify-center p-6" onClick={onClose}>
-      <div className={"bg-canvas rounded-lg shadow-xl " + (wide?"w-full max-w-3xl":"w-full max-w-lg")} onClick={e=>e.stopPropagation()}>
-        <div className="px-6 py-5 border-b hairline flex items-center justify-between">
-          <div className="font-display text-2xl">{title}</div>
-          <button className="btn-ghost" onClick={onClose}>✕</button>
+    <div className="fixed inset-0 modal-overlay z-[100] flex items-end lg:items-center justify-center lg:p-6" onClick={onClose}>
+      <div className={"bg-canvas rounded-t-2xl lg:rounded-lg shadow-xl w-full sheet-anim lg:animate-none " + (wide?"lg:max-w-3xl":"lg:max-w-lg") + " max-h-[92vh] flex flex-col"} onClick={e=>e.stopPropagation()}>
+        <div className="px-5 py-4 border-b hairline flex items-center justify-between flex-shrink-0">
+          <div className="font-display text-xl lg:text-2xl">{title}</div>
+          <button className="btn-ghost !p-2" onClick={onClose}><Icon name="x" size={20}/></button>
         </div>
-        <div className="p-6 max-h-[70vh] overflow-y-auto">{children}</div>
-        {footer && <div className="px-6 py-4 border-t hairline flex justify-end gap-2">{footer}</div>}
+        <div className="p-5 overflow-y-auto flex-1">{children}</div>
+        {footer && <div className="px-5 py-4 border-t hairline flex justify-end gap-2 flex-shrink-0 pb-safe">{footer}</div>}
       </div>
     </div>
   );
 }
 
-/* ===================================================================
+/* =========================================================
+   LOGIN
+========================================================= */
+function LoginScreen() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const submit = async (e) => {
+    e.preventDefault();
+    setErr(""); setBusy(true);
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    setBusy(false);
+    if (error) setErr(error.message || "เข้าสู่ระบบไม่สำเร็จ");
+  };
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-canvas px-5">
+      <div className="w-full max-w-md">
+        <div className="flex items-center gap-3 mb-8 lg:mb-10 justify-center">
+          <span className="spike lg" />
+          <div className="font-display text-3xl lg:text-4xl">TIMES</div>
+        </div>
+        <div className="card-canvas p-6 lg:p-8">
+          <div className="text-xs uppercase tracking-[1.5px] text-muted">POS · ร้านนาฬิกา</div>
+          <h1 className="font-display text-3xl lg:text-4xl mt-2 mb-6 text-ink">เข้าสู่ระบบ</h1>
+          <form onSubmit={submit} className="space-y-4">
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted">อีเมล</label>
+              <input type="email" autoFocus inputMode="email" autoComplete="email" className="input mt-1" value={email} onChange={e=>setEmail(e.target.value)} required />
+            </div>
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted">รหัสผ่าน</label>
+              <input type="password" autoComplete="current-password" className="input mt-1" value={password} onChange={e=>setPassword(e.target.value)} required />
+            </div>
+            {err && <div className="text-sm text-error bg-error/10 px-3 py-2 rounded-md flex items-center gap-2"><Icon name="alert" size={16}/>{err}</div>}
+            <button className="btn-primary w-full !py-3" disabled={busy}>
+              {busy ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
+            </button>
+          </form>
+        </div>
+        <div className="text-center text-xs text-muted-soft mt-6 font-display italic">"ทุกเรือนมีเรื่องราว"</div>
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
+   NAV CONFIG
+========================================================= */
+const NAV = [
+  { k: "pos",       label: "ขาย",         labelLong: "ขายสินค้า",      icon: "cart" },
+  { k: "products",  label: "สินค้า",       labelLong: "สินค้า",          icon: "watch" },
+  { k: "sales",     label: "ประวัติ",       labelLong: "ประวัติการขาย",   icon: "receipt" },
+  { k: "stock",     label: "สต็อก",        labelLong: "รับ/คืนสินค้า",    icon: "package" },
+  { k: "dashboard", label: "ภาพรวม",       labelLong: "แดชบอร์ด",        icon: "dashboard" },
+];
+
+/* =========================================================
+   DESKTOP SIDEBAR
+========================================================= */
+function Sidebar({ view, setView, userEmail }) {
+  return (
+    <aside className="hidden lg:flex w-64 bg-canvas border-r hairline flex-col h-screen sticky top-0">
+      <div className="px-6 py-6 flex items-center gap-3 border-b hairline">
+        <span className="spike lg" />
+        <div>
+          <div className="font-display text-2xl leading-none">TIMES</div>
+          <div className="text-[10px] text-muted tracking-[2px] mt-1 uppercase">POS · ร้านนาฬิกา</div>
+        </div>
+      </div>
+      <nav className="p-3 flex-1 overflow-y-auto">
+        {NAV.map(it => (
+          <div key={it.k} className={"nav-item " + (view===it.k?"active":"")} onClick={()=>setView(it.k)}>
+            <Icon name={it.icon} size={18}/>
+            <span>{it.labelLong}</span>
+          </div>
+        ))}
+      </nav>
+      <div className="p-4 border-t hairline">
+        <div className="text-xs text-muted-soft truncate mb-2">{userEmail}</div>
+        <button className="btn-secondary w-full !py-2 !text-sm" onClick={()=>sb.auth.signOut()}>
+          <Icon name="logout" size={16}/> ออกจากระบบ
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+/* =========================================================
+   MOBILE TOP BAR + BOTTOM TABS
+========================================================= */
+function MobileTopBar({ title, userEmail, onLogout }) {
+  const [openMenu, setOpenMenu] = useState(false);
+  return (
+    <>
+    <header className="lg:hidden sticky top-0 z-40 bg-canvas border-b hairline pt-safe">
+      <div className="flex items-center justify-between px-4 h-14">
+        <div className="flex items-center gap-2">
+          <span className="spike" />
+          <div className="font-display text-xl leading-none">TIMES</div>
+          <div className="text-muted-soft mx-1">·</div>
+          <div className="text-sm text-muted">{title}</div>
+        </div>
+        <button className="btn-ghost !p-2" onClick={()=>setOpenMenu(true)} aria-label="menu">
+          <Icon name="menu" size={22}/>
+        </button>
+      </div>
+    </header>
+    {openMenu && (
+      <div className="lg:hidden fixed inset-0 z-[110] modal-overlay" onClick={()=>setOpenMenu(false)}>
+        <div className="absolute right-0 top-0 bottom-0 w-72 bg-canvas shadow-xl pt-safe" onClick={e=>e.stopPropagation()}>
+          <div className="px-5 py-4 border-b hairline flex items-center justify-between">
+            <div className="font-display text-xl">เมนู</div>
+            <button className="btn-ghost !p-2" onClick={()=>setOpenMenu(false)}><Icon name="x" size={20}/></button>
+          </div>
+          <div className="p-4">
+            <div className="text-xs uppercase tracking-wider text-muted mb-2">บัญชี</div>
+            <div className="text-sm text-ink truncate mb-4">{userEmail}</div>
+            <button className="btn-secondary w-full" onClick={onLogout}>
+              <Icon name="logout" size={16}/> ออกจากระบบ
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
+  );
+}
+
+function MobileTabBar({ view, setView }) {
+  return (
+    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-canvas border-t hairline pb-safe">
+      <div className="flex">
+        {NAV.map(it => (
+          <button key={it.k} className={"tab-btn " + (view===it.k?"active":"")} onClick={()=>setView(it.k)}>
+            <Icon name={it.icon} size={22}/>
+            <span>{it.label}</span>
+          </button>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
+/* =========================================================
+   PAGE HEADER (desktop)
+========================================================= */
+function PageHeader({ title, subtitle, right }) {
+  return (
+    <header className="hidden lg:flex px-10 pt-10 pb-6 items-end justify-between border-b hairline">
+      <div>
+        <div className="text-xs uppercase tracking-[1.5px] text-muted">{subtitle}</div>
+        <h1 className="font-display text-5xl mt-2 leading-tight text-ink">{title}</h1>
+      </div>
+      <div>{right}</div>
+    </header>
+  );
+}
+
+/* =========================================================
    POS VIEW
-=================================================================== */
+========================================================= */
 function POSView() {
   const toast = useToast();
   const [search, setSearch] = useState("");
@@ -245,18 +403,16 @@ function POSView() {
   const [payment, setPayment] = useState("cash");
   const [orderDiscount, setOrderDiscount] = useState({ value: 0, type: null });
   const [submitting, setSubmitting] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [expandedDisc, setExpandedDisc] = useState({});
   const searchRef = useRef(null);
 
-  useEffect(() => { searchRef.current?.focus(); }, []);
-
-  // search products: barcode exact OR name fuzzy
   useEffect(() => {
     if (!search.trim()) { setResults([]); return; }
     let cancelled = false;
     setSearching(true);
     const t = setTimeout(async () => {
       const q = search.trim();
-      // try barcode exact first
       const { data: barcodeHit } = await sb.from('products').select('*').eq('barcode', q).limit(1);
       let rows = [];
       if (barcodeHit && barcodeHit.length) rows = barcodeHit;
@@ -285,199 +441,244 @@ function POSView() {
     });
     setSearch(""); setResults([]); searchRef.current?.focus();
   };
-
   const updateLine = (idx, patch) => setCart(c => c.map((l,i)=> i===idx?{...l,...patch}:l));
   const removeLine = (idx) => setCart(c => c.filter((_,i)=>i!==idx));
-
   const lineNet = (l) => applyDiscounts(l.unit_price, l.quantity, l.discount1_value, l.discount1_type, l.discount2_value, l.discount2_type);
   const subtotal = useMemo(()=> cart.reduce((s,l)=> s + lineNet(l), 0), [cart]);
   const grand = useMemo(()=> applyOrderDiscount(subtotal, orderDiscount.value, orderDiscount.type), [subtotal, orderDiscount]);
+  const totalQty = useMemo(()=> cart.reduce((s,l)=> s+l.quantity, 0), [cart]);
 
-  // submit
   const submit = async () => {
     if (!cart.length) { toast.push("ไม่มีสินค้าในตะกร้า", "error"); return; }
     setSubmitting(true);
     try {
       const { data: order, error: e1 } = await sb.from('sale_orders').insert({
-        sale_date: new Date().toISOString(),
-        channel, payment_method: payment,
-        discount_value: orderDiscount.value || 0,
-        discount_type: orderDiscount.type,
-        subtotal,
-        total_after_discount: grand,
-        grand_total: grand,
+        sale_date: new Date().toISOString(), channel, payment_method: payment,
+        discount_value: orderDiscount.value || 0, discount_type: orderDiscount.type,
+        subtotal, total_after_discount: grand, grand_total: grand,
       }).select().single();
       if (e1) throw e1;
-
       const items = cart.map(l => ({
-        sale_order_id: order.id,
-        product_id: l.product_id,
-        product_name: l.product_name,
-        quantity: l.quantity,
-        unit_price: l.unit_price,
-        discount1_value: l.discount1_value || 0,
-        discount1_type: l.discount1_type,
-        discount2_value: l.discount2_value || 0,
-        discount2_type: l.discount2_type,
+        sale_order_id: order.id, product_id: l.product_id, product_name: l.product_name,
+        quantity: l.quantity, unit_price: l.unit_price,
+        discount1_value: l.discount1_value || 0, discount1_type: l.discount1_type,
+        discount2_value: l.discount2_value || 0, discount2_type: l.discount2_type,
       }));
       const { error: e2 } = await sb.from('sale_order_items').insert(items);
       if (e2) throw e2;
-
-      // decrement stock atomically per line (safe across multiple devices)
       for (const l of cart) {
         if (!l.product_id) continue;
         await sb.rpc('adjust_stock', { p_id: l.product_id, qty_delta: -l.quantity });
       }
-
-      toast.push(`บันทึกบิล #${order.id} สำเร็จ — ${fmtTHB(grand)}`, 'success');
+      toast.push(`บันทึกบิล #${order.id} · ${fmtTHB(grand)}`, 'success');
       setCart([]); setOrderDiscount({ value: 0, type: null });
-      setChannel("store"); setPayment("cash");
+      setChannel("store"); setPayment("cash"); setCartOpen(false);
     } catch (err) {
-      console.error(err);
       toast.push("บันทึกไม่สำเร็จ: " + (err.message || err), 'error');
-    } finally {
-      setSubmitting(false);
-    }
+    } finally { setSubmitting(false); }
   };
 
-  return (
-    <div className="grid grid-cols-12 gap-6 px-10 py-8 h-[calc(100vh-140px)]">
-      {/* Left: search + results */}
-      <div className="col-span-7 flex flex-col">
-        <div className="card-canvas !p-4 mb-4">
-          <input
-            ref={searchRef}
-            className="input !text-lg !py-3"
-            placeholder="🔍 สแกนบาร์โค้ดหรือพิมพ์ชื่อรุ่น (เช่น GA-110)..."
-            value={search}
-            onChange={e=>setSearch(e.target.value)}
-          />
-        </div>
-
-        <div className="flex-1 overflow-y-auto card-canvas !p-0">
-          {!search && (
-            <div className="p-12 text-center">
-              <div className="font-display text-3xl text-ink mb-2">เริ่มสแกนสินค้า</div>
-              <p className="text-muted">วางเคอร์เซอร์ในช่องค้นหาด้านบน แล้วยิงบาร์โค้ดหรือพิมพ์ชื่อรุ่น</p>
-            </div>
-          )}
-          {search && searching && <div className="p-6 text-muted">กำลังค้นหา...</div>}
-          {search && !searching && results.length===0 && (
-            <div className="p-6 text-muted">ไม่พบสินค้า "{search}"</div>
-          )}
-          {results.map(p => (
-            <div key={p.id} className="px-5 py-4 border-b hairline-soft hover:bg-surface-card cursor-pointer flex items-center gap-4" onClick={()=>addToCart(p)}>
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-ink truncate">{p.name}</div>
-                <div className="text-xs text-muted mt-1 font-mono">{p.barcode || '— ไม่มีบาร์โค้ด —'}</div>
-              </div>
-              <div className="text-right">
-                <div className="font-display text-xl text-ink">{fmtTHB(p.retail_price)}</div>
-                <div className="text-xs mt-1">
-                  <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':p.current_stock<5?'!bg-warning/15 !text-[#8a6500]':'')}>
-                    คงเหลือ {p.current_stock}
-                  </span>
-                </div>
-              </div>
-              <button className="btn-primary !py-2 !px-3 text-sm">+ เพิ่ม</button>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Right: cart */}
-      <div className="col-span-5 flex flex-col">
-        <div className="card-cream flex-1 flex flex-col !p-0 overflow-hidden">
-          <div className="p-5 border-b hairline">
-            <div className="font-display text-2xl">ตะกร้า</div>
-            <div className="text-xs text-muted mt-1">{cart.length} รายการ</div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-3">
-            {!cart.length && <div className="p-8 text-center text-muted">ยังไม่มีสินค้า</div>}
-            {cart.map((l, idx) => (
-              <div key={idx} className="bg-canvas rounded-md p-3 mb-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm truncate">{l.product_name}</div>
-                    <div className="text-xs text-muted font-mono">{l.barcode||''}</div>
-                  </div>
-                  <button className="text-muted hover:text-error text-sm" onClick={()=>removeLine(idx)}>✕</button>
-                </div>
-                <div className="grid grid-cols-12 gap-2 mt-2 items-center">
-                  <div className="col-span-3">
-                    <input type="number" min="1" className="input !py-1.5 !text-sm text-center"
-                      value={l.quantity} onChange={e=>updateLine(idx,{quantity:Math.max(1,Number(e.target.value)||1)})}/>
-                  </div>
-                  <div className="col-span-5 text-xs text-muted">@ {fmtTHB(l.unit_price)}</div>
-                  <div className="col-span-4 text-right font-medium">{fmtTHB(lineNet(l))}</div>
-                </div>
-                <div className="grid grid-cols-12 gap-1 mt-2">
-                  <input type="number" className="input !py-1 !text-xs col-span-4" placeholder="ลด"
-                    value={l.discount1_value||""} onChange={e=>updateLine(idx,{discount1_value:Number(e.target.value)||0, discount1_type: l.discount1_type||'baht'})}/>
-                  <select className="input !py-1 !text-xs col-span-3" value={l.discount1_type||""} onChange={e=>updateLine(idx,{discount1_type:e.target.value||null})}>
-                    <option value="">—</option>
-                    <option value="baht">฿</option>
-                    <option value="percent">%</option>
-                  </select>
-                  <input type="number" className="input !py-1 !text-xs col-span-3" placeholder="ลด2"
-                    value={l.discount2_value||""} onChange={e=>updateLine(idx,{discount2_value:Number(e.target.value)||0, discount2_type: l.discount2_type||'baht'})}/>
-                  <select className="input !py-1 !text-xs col-span-2" value={l.discount2_type||""} onChange={e=>updateLine(idx,{discount2_type:e.target.value||null})}>
-                    <option value="">—</option>
-                    <option value="baht">฿</option>
-                    <option value="percent">%</option>
-                  </select>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="p-5 border-t hairline bg-surface-cream-strong">
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <div>
-                <label className="text-xs uppercase tracking-wider text-muted">ช่องทาง</label>
-                <select className="input mt-1" value={channel} onChange={e=>setChannel(e.target.value)}>
-                  {CHANNELS.map(c=> <option key={c.v} value={c.v}>{c.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs uppercase tracking-wider text-muted">ชำระโดย</label>
-                <select className="input mt-1" value={payment} onChange={e=>setPayment(e.target.value)}>
-                  {PAYMENTS.map(p=> <option key={p.v} value={p.v}>{p.label}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-12 gap-2 mb-3 items-end">
-              <div className="col-span-6">
-                <label className="text-xs uppercase tracking-wider text-muted">ส่วนลดรวมบิล</label>
-                <input type="number" className="input mt-1" value={orderDiscount.value||""} onChange={e=>setOrderDiscount(d=>({...d, value: Number(e.target.value)||0, type: d.type||'baht'}))}/>
-              </div>
-              <div className="col-span-6">
-                <select className="input" value={orderDiscount.type||""} onChange={e=>setOrderDiscount(d=>({...d, type:e.target.value||null}))}>
-                  <option value="">— ไม่ลด —</option>
-                  <option value="baht">บาท</option>
-                  <option value="percent">เปอร์เซ็นต์</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex justify-between text-sm text-muted mb-1"><span>รวมก่อนลด</span><span>{fmtTHB(subtotal)}</span></div>
-            <div className="flex justify-between font-display text-3xl mb-4"><span>รวม</span><span>{fmtTHB(grand)}</span></div>
-
-            <button className="btn-primary w-full !py-3 !text-base" disabled={submitting||!cart.length} onClick={submit}>
-              {submitting? 'กำลังบันทึก...' : `ชำระเงิน ${fmtTHB(grand)}`}
-            </button>
-          </div>
-        </div>
-      </div>
+  const SearchInput = (
+    <div className="relative">
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"><Icon name="search" size={18}/></span>
+      <input
+        ref={searchRef}
+        className="input !pl-10 !py-3 !text-base"
+        placeholder="สแกนบาร์โค้ด หรือพิมพ์ชื่อรุ่น"
+        value={search}
+        onChange={e=>setSearch(e.target.value)}
+        autoFocus
+      />
+      {search && <button className="absolute right-2 top-1/2 -translate-y-1/2 btn-ghost !p-1.5" onClick={()=>{setSearch("");setResults([]);searchRef.current?.focus();}}><Icon name="x" size={16}/></button>}
     </div>
+  );
+
+  const ResultsList = (
+    <div className="card-canvas overflow-hidden">
+      {!search && (
+        <div className="p-8 lg:p-12 text-center">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-surface-card text-muted mb-4">
+            <Icon name="barcode" size={28}/>
+          </div>
+          <div className="font-display text-2xl lg:text-3xl text-ink mb-1">เริ่มสแกนสินค้า</div>
+          <p className="text-muted text-sm">พิมพ์ชื่อรุ่นหรือยิงบาร์โค้ดในช่องด้านบน</p>
+        </div>
+      )}
+      {search && searching && <div className="p-6 text-muted text-sm">กำลังค้นหา...</div>}
+      {search && !searching && results.length===0 && <div className="p-6 text-muted text-sm">ไม่พบสินค้า "{search}"</div>}
+      {results.map(p => (
+        <div key={p.id} className="px-4 lg:px-5 py-3 border-b hairline-soft last:border-0 hover:bg-surface-card cursor-pointer flex items-center gap-3" onClick={()=>addToCart(p)}>
+          <div className="flex-1 min-w-0">
+            <div className="font-medium text-ink truncate text-sm lg:text-base">{p.name}</div>
+            <div className="text-xs text-muted mt-0.5 font-mono truncate">{p.barcode || '— ไม่มีบาร์โค้ด —'}</div>
+          </div>
+          <div className="text-right flex-shrink-0">
+            <div className="font-display text-lg lg:text-xl text-ink leading-tight">{fmtTHB(p.retail_price)}</div>
+            <div className="mt-1">
+              <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':p.current_stock<5?'!bg-warning/15 !text-[#8a6500]':'')}>
+                คงเหลือ {p.current_stock}
+              </span>
+            </div>
+          </div>
+          <button className="btn-primary !py-2 !px-3 flex-shrink-0" aria-label="เพิ่ม"><Icon name="plus" size={16}/></button>
+        </div>
+      ))}
+    </div>
+  );
+
+  const CartContent = (close) => (
+    <>
+      <div className="flex-1 overflow-y-auto p-3">
+        {!cart.length && (
+          <div className="p-8 text-center">
+            <div className="inline-flex w-12 h-12 items-center justify-center rounded-full bg-surface-card text-muted mb-3"><Icon name="cart" size={24}/></div>
+            <div className="text-muted text-sm">ยังไม่มีสินค้า</div>
+          </div>
+        )}
+        {cart.map((l, idx) => {
+          const expanded = expandedDisc[idx];
+          return (
+            <div key={idx} className="bg-canvas rounded-md p-3 mb-2 border hairline">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-sm truncate">{l.product_name}</div>
+                  <div className="text-xs text-muted font-mono truncate">{l.barcode||''}</div>
+                </div>
+                <button className="text-muted-soft hover:text-error p-1" onClick={()=>removeLine(idx)} aria-label="ลบ"><Icon name="trash" size={16}/></button>
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                <div className="flex items-center bg-surface-card rounded-md">
+                  <button className="px-2 py-1.5 text-ink hover:bg-surface-cream-strong rounded-l-md" onClick={()=>updateLine(idx,{quantity:Math.max(1,l.quantity-1)})}><Icon name="minus" size={14}/></button>
+                  <input type="number" min="1" inputMode="numeric" className="w-10 text-center bg-transparent text-sm font-medium border-0 focus:!outline-none" value={l.quantity} onChange={e=>updateLine(idx,{quantity:Math.max(1,Number(e.target.value)||1)})}/>
+                  <button className="px-2 py-1.5 text-ink hover:bg-surface-cream-strong rounded-r-md" onClick={()=>updateLine(idx,{quantity:l.quantity+1})}><Icon name="plus" size={14}/></button>
+                </div>
+                <div className="text-xs text-muted flex-1">@ {fmtTHB(l.unit_price)}</div>
+                <div className="text-right font-medium text-sm">{fmtTHB(lineNet(l))}</div>
+              </div>
+              <button className="mt-2 text-xs text-muted hover:text-primary inline-flex items-center gap-1" onClick={()=>setExpandedDisc(s=>({...s,[idx]:!expanded}))}>
+                <Icon name="tag" size={12}/> ส่วนลดต่อชิ้น <Icon name={expanded?"chevron-d":"chevron-r"} size={12}/>
+              </button>
+              {expanded && (
+                <div className="grid grid-cols-12 gap-1 mt-2">
+                  <input type="number" inputMode="numeric" className="input !py-1 !text-xs col-span-4" placeholder="ลด 1" value={l.discount1_value||""} onChange={e=>updateLine(idx,{discount1_value:Number(e.target.value)||0, discount1_type: l.discount1_type||'baht'})}/>
+                  <select className="input !py-1 !text-xs col-span-2" value={l.discount1_type||""} onChange={e=>updateLine(idx,{discount1_type:e.target.value||null})}>
+                    <option value="">—</option><option value="baht">฿</option><option value="percent">%</option>
+                  </select>
+                  <input type="number" inputMode="numeric" className="input !py-1 !text-xs col-span-4" placeholder="ลด 2" value={l.discount2_value||""} onChange={e=>updateLine(idx,{discount2_value:Number(e.target.value)||0, discount2_type: l.discount2_type||'baht'})}/>
+                  <select className="input !py-1 !text-xs col-span-2" value={l.discount2_type||""} onChange={e=>updateLine(idx,{discount2_type:e.target.value||null})}>
+                    <option value="">—</option><option value="baht">฿</option><option value="percent">%</option>
+                  </select>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="p-4 lg:p-5 border-t hairline bg-surface-cream-strong flex-shrink-0">
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div>
+            <label className="text-[10px] uppercase tracking-wider text-muted">ช่องทาง</label>
+            <select className="input mt-1 !py-2 !text-sm" value={channel} onChange={e=>setChannel(e.target.value)}>
+              {CHANNELS.map(c=> <option key={c.v} value={c.v}>{c.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-wider text-muted">ชำระโดย</label>
+            <select className="input mt-1 !py-2 !text-sm" value={payment} onChange={e=>setPayment(e.target.value)}>
+              {PAYMENTS.map(p=> <option key={p.v} value={p.v}>{p.label}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-12 gap-2 mb-3 items-end">
+          <div className="col-span-7">
+            <label className="text-[10px] uppercase tracking-wider text-muted">ส่วนลดท้ายบิล</label>
+            <input type="number" inputMode="numeric" className="input mt-1 !py-2 !text-sm" placeholder="0" value={orderDiscount.value||""} onChange={e=>setOrderDiscount(d=>({...d, value: Number(e.target.value)||0, type: d.type||'baht'}))}/>
+          </div>
+          <div className="col-span-5">
+            <select className="input !py-2 !text-sm" value={orderDiscount.type||""} onChange={e=>setOrderDiscount(d=>({...d, type:e.target.value||null}))}>
+              <option value="">— ไม่ลด —</option>
+              <option value="baht">บาท</option>
+              <option value="percent">เปอร์เซ็นต์</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="flex justify-between text-sm text-muted mb-1"><span>รวมก่อนลด</span><span>{fmtTHB(subtotal)}</span></div>
+        <div className="flex justify-between font-display text-3xl mb-3"><span>รวม</span><span>{fmtTHB(grand)}</span></div>
+
+        <button className="btn-primary w-full !py-3 !text-base" disabled={submitting||!cart.length} onClick={submit}>
+          {submitting? 'กำลังบันทึก...' : `ชำระเงิน ${fmtTHB(grand)}`}
+        </button>
+      </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* DESKTOP LAYOUT */}
+      <div className="hidden lg:grid grid-cols-12 gap-6 px-10 py-8 h-[calc(100vh-180px)]">
+        <div className="col-span-7 flex flex-col">
+          <div className="card-canvas p-3 mb-4">{SearchInput}</div>
+          <div className="flex-1 overflow-y-auto">{ResultsList}</div>
+        </div>
+        <div className="col-span-5 flex flex-col">
+          <div className="card-cream flex flex-col flex-1 overflow-hidden">
+            <div className="p-5 border-b hairline flex items-center justify-between flex-shrink-0">
+              <div>
+                <div className="font-display text-2xl">ตะกร้า</div>
+                <div className="text-xs text-muted mt-0.5">{cart.length} รายการ · {totalQty} ชิ้น</div>
+              </div>
+              {cart.length>0 && <button className="btn-ghost !text-xs text-muted hover:text-error" onClick={()=>setCart([])}>ล้างตะกร้า</button>}
+            </div>
+            {CartContent()}
+          </div>
+        </div>
+      </div>
+
+      {/* MOBILE LAYOUT */}
+      <div className="lg:hidden px-4 py-4 pb-24">
+        <div className="mb-3">{SearchInput}</div>
+        {ResultsList}
+      </div>
+
+      {/* MOBILE FLOATING CART BUTTON */}
+      {cart.length>0 && !cartOpen && (
+        <button className="lg:hidden fixed bottom-20 left-4 right-4 z-30 bg-primary text-on-primary rounded-lg shadow-xl px-5 py-3 flex items-center justify-between" onClick={()=>setCartOpen(true)}>
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Icon name="cart" size={22}/>
+              <span className="absolute -top-2 -right-2 bg-canvas text-ink text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">{totalQty}</span>
+            </div>
+            <span className="font-medium text-sm">ดูตะกร้า</span>
+          </div>
+          <span className="font-display text-xl">{fmtTHB(grand)}</span>
+        </button>
+      )}
+
+      {/* MOBILE CART SHEET */}
+      {cartOpen && (
+        <div className="lg:hidden fixed inset-0 modal-overlay z-[100] flex items-end" onClick={()=>setCartOpen(false)}>
+          <div className="bg-cream w-full max-h-[92vh] rounded-t-2xl flex flex-col sheet-anim card-cream" onClick={e=>e.stopPropagation()}>
+            <div className="px-5 py-4 border-b hairline flex items-center justify-between flex-shrink-0">
+              <div>
+                <div className="font-display text-2xl">ตะกร้า</div>
+                <div className="text-xs text-muted mt-0.5">{cart.length} รายการ · {totalQty} ชิ้น</div>
+              </div>
+              <button className="btn-ghost !p-2" onClick={()=>setCartOpen(false)}><Icon name="x" size={20}/></button>
+            </div>
+            {CartContent(true)}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
-/* ===================================================================
+/* =========================================================
    PRODUCTS VIEW
-=================================================================== */
+========================================================= */
 function ProductsView() {
   const toast = useToast();
   const [q, setQ] = useState("");
@@ -487,10 +688,12 @@ function ProductsView() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    let query = sb.from('products').select('*').order('updated_at', { ascending: false }).limit(100);
+    let query;
     if (q.trim()) {
       const term = q.trim();
       query = sb.from('products').select('*').or(`name.ilike.%${term}%,barcode.eq.${term}`).limit(100);
+    } else {
+      query = sb.from('products').select('*').order('updated_at', { ascending: false }).limit(100);
     }
     const { data, error } = await query;
     if (error) toast.push("โหลดสินค้าไม่ได้", "error");
@@ -527,22 +730,28 @@ function ProductsView() {
   };
 
   return (
-    <div className="px-10 py-8">
-      <div className="flex gap-3 mb-6">
-        <input className="input flex-1" placeholder="ค้นหาด้วยชื่อรุ่นหรือบาร์โค้ด..." value={q} onChange={e=>setQ(e.target.value)} />
-        <button className="btn-primary" onClick={()=>setEditing({ name: '', barcode: '', cost_price: 0, retail_price: 0, current_stock: 0 })}>+ เพิ่มสินค้า</button>
+    <div className="px-4 py-4 lg:px-10 lg:py-8">
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-5">
+        <div className="relative flex-1">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"><Icon name="search" size={18}/></span>
+          <input className="input !pl-10" placeholder="ชื่อรุ่น หรือ บาร์โค้ด" value={q} onChange={e=>setQ(e.target.value)} />
+        </div>
+        <button className="btn-primary" onClick={()=>setEditing({ name: '', barcode: '', cost_price: 0, retail_price: 0, current_stock: 0 })}>
+          <Icon name="plus" size={16}/> เพิ่มสินค้า
+        </button>
       </div>
 
-      <div className="card-canvas !p-0 overflow-hidden">
+      {/* Desktop table */}
+      <div className="hidden lg:block card-canvas overflow-hidden">
         <div className="grid grid-cols-12 px-4 py-3 text-xs uppercase tracking-wider text-muted border-b hairline bg-surface-soft">
           <div className="col-span-4">ชื่อรุ่น</div>
-          <div className="col-span-3 font-mono">บาร์โค้ด</div>
+          <div className="col-span-3">บาร์โค้ด</div>
           <div className="col-span-2 text-right">ทุน</div>
           <div className="col-span-2 text-right">ราคาขาย</div>
           <div className="col-span-1 text-right">คงเหลือ</div>
         </div>
-        {loading && <div className="p-6 text-muted">กำลังโหลด...</div>}
-        {!loading && rows.length===0 && <div className="p-6 text-muted">ไม่พบสินค้า</div>}
+        {loading && <div className="p-6 text-muted text-sm">กำลังโหลด...</div>}
+        {!loading && rows.length===0 && <div className="p-6 text-muted text-sm">ไม่พบสินค้า</div>}
         {rows.map(p => (
           <div key={p.id} className="grid grid-cols-12 px-4 py-3 items-center border-b hairline-soft hover:bg-surface-soft cursor-pointer" onClick={()=>setEditing(p)}>
             <div className="col-span-4 font-medium truncate">{p.name}</div>
@@ -552,6 +761,25 @@ function ProductsView() {
             <div className="col-span-1 text-right">
               <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':p.current_stock<5?'!bg-warning/15 !text-[#8a6500]':'')}>{p.current_stock}</span>
             </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Mobile cards */}
+      <div className="lg:hidden space-y-2">
+        {loading && <div className="p-4 text-muted text-sm">กำลังโหลด...</div>}
+        {!loading && rows.length===0 && <div className="p-4 text-muted text-sm">ไม่พบสินค้า</div>}
+        {rows.map(p => (
+          <div key={p.id} className="card-canvas p-3 flex items-center gap-3 cursor-pointer active:bg-surface-soft" onClick={()=>setEditing(p)}>
+            <div className="flex-1 min-w-0">
+              <div className="font-medium truncate">{p.name}</div>
+              <div className="font-mono text-xs text-muted truncate mt-0.5">{p.barcode||'—'}</div>
+              <div className="flex items-center gap-2 mt-1.5">
+                <span className="font-display text-lg leading-none">{fmtTHB(p.retail_price)}</span>
+                <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':p.current_stock<5?'!bg-warning/15 !text-[#8a6500]':'')}>คงเหลือ {p.current_stock}</span>
+              </div>
+            </div>
+            <Icon name="chevron-r" size={18} className="text-muted-soft flex-shrink-0"/>
           </div>
         ))}
       </div>
@@ -570,7 +798,7 @@ function ProductEditor({ editing, onClose, onSave }) {
     <Modal open={!!draft} onClose={onClose} title={draft.id?"แก้ไขสินค้า":"เพิ่มสินค้าใหม่"}
       footer={<>
         <button className="btn-secondary" onClick={onClose}>ยกเลิก</button>
-        <button className="btn-primary" onClick={()=>onSave(draft)}>บันทึก</button>
+        <button className="btn-primary" onClick={()=>onSave(draft)}><Icon name="check" size={16}/>บันทึก</button>
       </>}>
       <div className="space-y-4">
         <div>
@@ -584,15 +812,15 @@ function ProductEditor({ editing, onClose, onSave }) {
         <div className="grid grid-cols-3 gap-3">
           <div>
             <label className="text-xs uppercase tracking-wider text-muted">ราคาทุน</label>
-            <input type="number" className="input mt-1" value={draft.cost_price||0} onChange={e=>set('cost_price', Number(e.target.value))} />
+            <input type="number" inputMode="decimal" className="input mt-1" value={draft.cost_price||0} onChange={e=>set('cost_price', Number(e.target.value))} />
           </div>
           <div>
             <label className="text-xs uppercase tracking-wider text-muted">ราคาขาย</label>
-            <input type="number" className="input mt-1" value={draft.retail_price||0} onChange={e=>set('retail_price', Number(e.target.value))} />
+            <input type="number" inputMode="decimal" className="input mt-1" value={draft.retail_price||0} onChange={e=>set('retail_price', Number(e.target.value))} />
           </div>
           <div>
             <label className="text-xs uppercase tracking-wider text-muted">คงเหลือ</label>
-            <input type="number" className="input mt-1" value={draft.current_stock||0} onChange={e=>set('current_stock', Number(e.target.value))} />
+            <input type="number" inputMode="numeric" className="input mt-1" value={draft.current_stock||0} onChange={e=>set('current_stock', Number(e.target.value))} />
           </div>
         </div>
       </div>
@@ -600,9 +828,9 @@ function ProductEditor({ editing, onClose, onSave }) {
   );
 }
 
-/* ===================================================================
-   SALES HISTORY
-=================================================================== */
+/* =========================================================
+   SALES HISTORY VIEW
+========================================================= */
 function SalesView() {
   const toast = useToast();
   const [from, setFrom] = useState(todayISO());
@@ -611,6 +839,7 @@ function SalesView() {
   const [orders, setOrders] = useState([]);
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -634,33 +863,45 @@ function SalesView() {
 
   const total = useMemo(()=> orders.reduce((s,o)=> s + Number(o.grand_total||0), 0), [orders]);
 
+  const FilterControls = (
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div>
+        <label className="text-xs uppercase tracking-wider text-muted">ตั้งแต่</label>
+        <input type="date" className="input mt-1" value={from} onChange={e=>setFrom(e.target.value)} />
+      </div>
+      <div>
+        <label className="text-xs uppercase tracking-wider text-muted">ถึง</label>
+        <input type="date" className="input mt-1" value={to} onChange={e=>setTo(e.target.value)} />
+      </div>
+      <div>
+        <label className="text-xs uppercase tracking-wider text-muted">ช่องทาง</label>
+        <select className="input mt-1" value={channel} onChange={e=>setChannel(e.target.value)}>
+          <option value="">ทุกช่องทาง</option>
+          {CHANNELS.map(c=> <option key={c.v} value={c.v}>{c.label}</option>)}
+        </select>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="px-10 py-8">
-      <div className="grid grid-cols-12 gap-3 mb-6">
-        <div className="col-span-3">
-          <label className="text-xs uppercase tracking-wider text-muted">ตั้งแต่</label>
-          <input type="date" className="input mt-1" value={from} onChange={e=>setFrom(e.target.value)} />
+    <div className="px-4 py-4 lg:px-10 lg:py-8">
+      {/* Summary card */}
+      <div className="card-cream p-4 lg:p-5 mb-4 flex items-center justify-between">
+        <div>
+          <div className="text-xs uppercase tracking-wider text-muted">รวมทั้งหมด</div>
+          <div className="font-display text-3xl lg:text-4xl mt-1">{fmtTHB(total)}</div>
+          <div className="text-xs text-muted mt-1">{orders.length} บิล</div>
         </div>
-        <div className="col-span-3">
-          <label className="text-xs uppercase tracking-wider text-muted">ถึง</label>
-          <input type="date" className="input mt-1" value={to} onChange={e=>setTo(e.target.value)} />
-        </div>
-        <div className="col-span-3">
-          <label className="text-xs uppercase tracking-wider text-muted">ช่องทาง</label>
-          <select className="input mt-1" value={channel} onChange={e=>setChannel(e.target.value)}>
-            <option value="">ทุกช่องทาง</option>
-            {CHANNELS.map(c=> <option key={c.v} value={c.v}>{c.label}</option>)}
-          </select>
-        </div>
-        <div className="col-span-3 flex items-end">
-          <div className="card-cream !py-3 !px-4 w-full">
-            <div className="text-xs uppercase tracking-wider text-muted">รวม {orders.length} บิล</div>
-            <div className="font-display text-2xl">{fmtTHB(total)}</div>
-          </div>
-        </div>
+        <button className="lg:hidden btn-secondary !py-2 !px-3" onClick={()=>setFilterOpen(o=>!o)}>
+          <Icon name="filter" size={16}/> ตัวกรอง
+        </button>
       </div>
 
-      <div className="card-canvas !p-0 overflow-hidden">
+      {/* Filters */}
+      <div className={"mb-5 " + (filterOpen?"block":"hidden lg:block")}>{FilterControls}</div>
+
+      {/* Desktop table */}
+      <div className="hidden lg:block card-canvas overflow-hidden">
         <div className="grid grid-cols-12 px-4 py-3 text-xs uppercase tracking-wider text-muted border-b hairline bg-surface-soft">
           <div className="col-span-2">เลขที่บิล</div>
           <div className="col-span-3">วันที่</div>
@@ -668,8 +909,8 @@ function SalesView() {
           <div className="col-span-2">ชำระ</div>
           <div className="col-span-3 text-right">ยอดสุทธิ</div>
         </div>
-        {loading && <div className="p-6 text-muted">กำลังโหลด...</div>}
-        {!loading && orders.length===0 && <div className="p-6 text-muted">ไม่พบบิลในช่วงเวลานี้</div>}
+        {loading && <div className="p-6 text-muted text-sm">กำลังโหลด...</div>}
+        {!loading && orders.length===0 && <div className="p-6 text-muted text-sm">ไม่พบบิลในช่วงเวลานี้</div>}
         {orders.map(o => (
           <div key={o.id} className="grid grid-cols-12 px-4 py-3 items-center border-b hairline-soft hover:bg-surface-soft cursor-pointer" onClick={()=>openDetail(o)}>
             <div className="col-span-2 font-mono text-sm">#{o.id}</div>
@@ -681,26 +922,48 @@ function SalesView() {
         ))}
       </div>
 
+      {/* Mobile cards */}
+      <div className="lg:hidden space-y-2">
+        {loading && <div className="p-4 text-muted text-sm">กำลังโหลด...</div>}
+        {!loading && orders.length===0 && <div className="p-4 text-muted text-sm">ไม่พบบิลในช่วงเวลานี้</div>}
+        {orders.map(o => (
+          <div key={o.id} className="card-canvas p-3 flex items-center gap-3 cursor-pointer active:bg-surface-soft" onClick={()=>openDetail(o)}>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs text-muted">#{o.id}</span>
+                <span className="badge-pill">{CHANNELS.find(c=>c.v===o.channel)?.label || '—'}</span>
+              </div>
+              <div className="text-xs text-muted mt-1">{fmtDateTime(o.sale_date)}</div>
+            </div>
+            <div className="text-right flex-shrink-0">
+              <div className="font-display text-lg leading-none">{fmtTHB(o.grand_total)}</div>
+              <div className="text-xs text-muted mt-1">{PAYMENTS.find(p=>p.v===o.payment_method)?.label || '—'}</div>
+            </div>
+            <Icon name="chevron-r" size={16} className="text-muted-soft"/>
+          </div>
+        ))}
+      </div>
+
       <Modal open={!!detail} onClose={()=>setDetail(null)} wide title={detail?`บิล #${detail.order.id}`:""}
         footer={<button className="btn-secondary" onClick={()=>setDetail(null)}>ปิด</button>}>
         {detail && (
           <div>
-            <div className="grid grid-cols-3 gap-4 mb-4 text-sm">
-              <div><div className="text-muted text-xs uppercase">วันที่</div><div>{fmtDateTime(detail.order.sale_date)}</div></div>
-              <div><div className="text-muted text-xs uppercase">ช่องทาง</div><div>{CHANNELS.find(c=>c.v===detail.order.channel)?.label||'—'}</div></div>
-              <div><div className="text-muted text-xs uppercase">ชำระ</div><div>{PAYMENTS.find(p=>p.v===detail.order.payment_method)?.label||'—'}</div></div>
+            <div className="grid grid-cols-3 gap-3 mb-4 text-sm">
+              <div><div className="text-muted text-xs uppercase">วันที่</div><div className="mt-0.5">{fmtDateTime(detail.order.sale_date)}</div></div>
+              <div><div className="text-muted text-xs uppercase">ช่องทาง</div><div className="mt-0.5">{CHANNELS.find(c=>c.v===detail.order.channel)?.label||'—'}</div></div>
+              <div><div className="text-muted text-xs uppercase">ชำระ</div><div className="mt-0.5">{PAYMENTS.find(p=>p.v===detail.order.payment_method)?.label||'—'}</div></div>
             </div>
             <div className="border-t hairline">
               {detail.items.map(it => (
-                <div key={it.id} className="py-2 border-b hairline-soft flex justify-between">
-                  <div>
-                    <div className="font-medium">{it.product_name}</div>
+                <div key={it.id} className="py-2 border-b hairline-soft flex justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-medium text-sm truncate">{it.product_name}</div>
                     <div className="text-xs text-muted">{it.quantity} × {fmtTHB(it.unit_price)}
                       {it.discount1_value? ` − ${it.discount1_value}${it.discount1_type==='percent'?'%':'฿'}`:''}
                       {it.discount2_value? ` − ${it.discount2_value}${it.discount2_type==='percent'?'%':'฿'}`:''}
                     </div>
                   </div>
-                  <div className="font-medium">{fmtTHB(applyDiscounts(it.unit_price, it.quantity, it.discount1_value, it.discount1_type, it.discount2_value, it.discount2_type))}</div>
+                  <div className="font-medium flex-shrink-0">{fmtTHB(applyDiscounts(it.unit_price, it.quantity, it.discount1_value, it.discount1_type, it.discount2_value, it.discount2_type))}</div>
                 </div>
               ))}
             </div>
@@ -713,13 +976,30 @@ function SalesView() {
   );
 }
 
-/* ===================================================================
-   RECEIVE / RETURN VIEW (shared form)
-=================================================================== */
-function StockMovementView({ kind /* 'receive' | 'return' */ }) {
+/* =========================================================
+   STOCK VIEW (Receive + Return tabs)
+========================================================= */
+function StockView() {
+  const [tab, setTab] = useState('receive');
+  return (
+    <div className="px-4 py-4 lg:px-10 lg:py-8">
+      <div className="inline-flex bg-surface-card rounded-lg p-1 mb-5">
+        <button className={"px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 " + (tab==='receive'?"bg-canvas text-ink shadow-sm":"text-muted")} onClick={()=>setTab('receive')}>
+          <Icon name="package-in" size={16}/> รับสินค้าเข้า
+        </button>
+        <button className={"px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 " + (tab==='return'?"bg-canvas text-ink shadow-sm":"text-muted")} onClick={()=>setTab('return')}>
+          <Icon name="package-out" size={16}/> คืนสินค้า
+        </button>
+      </div>
+      <StockMovementForm key={tab} kind={tab}/>
+    </div>
+  );
+}
+
+function StockMovementForm({ kind }) {
   const toast = useToast();
   const [date, setDate] = useState(todayISO());
-  const [channel, setChannel] = useState("store"); // returns only
+  const [channel, setChannel] = useState("store");
   const [items, setItems] = useState([]);
   const [search, setSearch] = useState("");
   const [results, setResults] = useState([]);
@@ -763,31 +1043,24 @@ function StockMovementView({ kind /* 'receive' | 'return' */ }) {
       const headerTable = kind==='receive' ? 'receive_orders' : 'return_orders';
       const itemTable   = kind==='receive' ? 'receive_order_items' : 'return_order_items';
       const dateField   = kind==='receive' ? 'receive_date' : 'return_date';
-
       const headerPayload = { [dateField]: new Date(date+'T00:00:00').toISOString(), total_value: total };
       if (kind==='return') headerPayload.channel = channel;
-
       const { data: head, error: e1 } = await sb.from(headerTable).insert(headerPayload).select().single();
       if (e1) throw e1;
-
       const fk = kind==='receive' ? 'receive_order_id' : 'return_order_id';
       const payload = items.map(l => ({
-        [fk]: head.id,
-        product_id: l.product_id, product_name: l.product_name,
+        [fk]: head.id, product_id: l.product_id, product_name: l.product_name,
         quantity: l.quantity, unit: l.unit, unit_price: l.unit_price,
         discount1_value: l.discount1_value||0, discount1_type: l.discount1_type,
         discount2_value: l.discount2_value||0, discount2_type: l.discount2_type,
       }));
       const { error: e2 } = await sb.from(itemTable).insert(payload);
       if (e2) throw e2;
-
-      // adjust stock atomically: receive +qty, return +qty (customer return adds stock back)
       for (const l of items) {
         if (!l.product_id) continue;
         await sb.rpc('adjust_stock', { p_id: l.product_id, qty_delta: l.quantity });
       }
-
-      toast.push(`บันทึก${kind==='receive'?'รับ':'คืน'}สินค้า #${head.id} สำเร็จ`, 'success');
+      toast.push(`บันทึก${kind==='receive'?'การรับ':'การคืน'} #${head.id} สำเร็จ`, 'success');
       setItems([]);
     } catch (e) {
       toast.push("บันทึกไม่ได้: " + e.message, 'error');
@@ -795,10 +1068,11 @@ function StockMovementView({ kind /* 'receive' | 'return' */ }) {
   };
 
   return (
-    <div className="px-10 py-8 grid grid-cols-12 gap-6">
-      <div className="col-span-7">
-        <div className="card-canvas mb-4">
-          <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
+      {/* LEFT: Header + Search */}
+      <div className="lg:col-span-7 space-y-4">
+        <div className="card-canvas p-4 lg:p-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs uppercase tracking-wider text-muted">วันที่</label>
               <input type="date" className="input mt-1" value={date} onChange={e=>setDate(e.target.value)} />
@@ -814,57 +1088,63 @@ function StockMovementView({ kind /* 'receive' | 'return' */ }) {
           </div>
         </div>
 
-        <div className="card-canvas !p-0 overflow-hidden">
-          <div className="p-4 border-b hairline">
-            <input className="input" placeholder="🔍 ค้นหาสินค้าเพื่อเพิ่ม..." value={search} onChange={e=>setSearch(e.target.value)} />
+        <div className="card-canvas overflow-hidden">
+          <div className="p-3 lg:p-4 border-b hairline">
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"><Icon name="search" size={18}/></span>
+              <input className="input !pl-10" placeholder="ค้นหาสินค้าเพื่อเพิ่ม" value={search} onChange={e=>setSearch(e.target.value)} />
+            </div>
           </div>
           <div className="max-h-72 overflow-y-auto">
             {results.map(p => (
-              <div key={p.id} className="px-4 py-3 border-b hairline-soft hover:bg-surface-card cursor-pointer flex items-center justify-between" onClick={()=>addItem(p)}>
-                <div className="min-w-0">
-                  <div className="font-medium truncate">{p.name}</div>
-                  <div className="text-xs text-muted font-mono">{p.barcode||'—'}</div>
+              <div key={p.id} className="px-4 py-3 border-b hairline-soft last:border-0 hover:bg-surface-card cursor-pointer flex items-center gap-3" onClick={()=>addItem(p)}>
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium truncate text-sm">{p.name}</div>
+                  <div className="text-xs text-muted font-mono truncate">{p.barcode||'—'}</div>
                 </div>
-                <div className="text-right text-sm">
+                <div className="text-right text-xs flex-shrink-0">
                   <div className="text-muted">ทุน {fmtTHB(p.cost_price)}</div>
                   <div>ขาย {fmtTHB(p.retail_price)}</div>
                 </div>
+                <button className="btn-primary !py-1.5 !px-2.5 flex-shrink-0"><Icon name="plus" size={14}/></button>
               </div>
             ))}
-            {!search && <div className="p-6 text-muted text-sm">พิมพ์เพื่อค้นหาแล้วคลิกเพื่อเพิ่มในรายการ</div>}
+            {!search && <div className="p-6 text-muted text-sm">พิมพ์เพื่อค้นหาแล้วแตะเพื่อเพิ่มในรายการ</div>}
+            {search && !results.length && <div className="p-6 text-muted text-sm">ไม่พบสินค้า</div>}
           </div>
         </div>
       </div>
 
-      <div className="col-span-5">
-        <div className="card-cream !p-0 overflow-hidden">
-          <div className="p-5 border-b hairline">
-            <div className="font-display text-2xl">{kind==='receive'?'รับสินค้าเข้า':'คืนสินค้า'}</div>
-            <div className="text-xs text-muted mt-1">{items.length} รายการ</div>
+      {/* RIGHT: List + total */}
+      <div className="lg:col-span-5">
+        <div className="card-cream overflow-hidden">
+          <div className="p-4 lg:p-5 border-b hairline">
+            <div className="font-display text-2xl">{kind==='receive'?'รายการรับเข้า':'รายการคืน'}</div>
+            <div className="text-xs text-muted mt-0.5">{items.length} รายการ</div>
           </div>
-          <div className="max-h-[50vh] overflow-y-auto p-3">
-            {!items.length && <div className="p-6 text-center text-muted">ยังไม่มีรายการ</div>}
+          <div className="max-h-[50vh] lg:max-h-[55vh] overflow-y-auto p-3">
+            {!items.length && <div className="p-6 text-center text-muted text-sm">ยังไม่มีรายการ</div>}
             {items.map((l, i) => (
-              <div key={i} className="bg-canvas rounded-md p-3 mb-2">
-                <div className="flex items-start justify-between">
+              <div key={i} className="bg-canvas rounded-md p-3 mb-2 border hairline">
+                <div className="flex items-start justify-between gap-2">
                   <div className="font-medium text-sm flex-1 truncate">{l.product_name}</div>
-                  <button className="text-muted hover:text-error text-sm" onClick={()=>rm(i)}>✕</button>
+                  <button className="text-muted-soft hover:text-error p-1" onClick={()=>rm(i)}><Icon name="trash" size={14}/></button>
                 </div>
                 <div className="grid grid-cols-12 gap-2 mt-2">
-                  <input type="number" min="1" className="input !py-1 !text-xs col-span-3" value={l.quantity} onChange={e=>upd(i,{quantity:Math.max(1,Number(e.target.value)||1)})}/>
-                  <select className="input !py-1 !text-xs col-span-3" value={l.unit} onChange={e=>upd(i,{unit:e.target.value})}>
+                  <input type="number" inputMode="numeric" min="1" className="input !py-1.5 !text-xs col-span-3" value={l.quantity} onChange={e=>upd(i,{quantity:Math.max(1,Number(e.target.value)||1)})}/>
+                  <select className="input !py-1.5 !text-xs col-span-3" value={l.unit} onChange={e=>upd(i,{unit:e.target.value})}>
                     {UNITS.map(u=><option key={u} value={u}>{u}</option>)}
                   </select>
-                  <input type="number" className="input !py-1 !text-xs col-span-6 text-right" value={l.unit_price} onChange={e=>upd(i,{unit_price:Number(e.target.value)||0})}/>
+                  <input type="number" inputMode="decimal" className="input !py-1.5 !text-xs col-span-6 text-right" value={l.unit_price} onChange={e=>upd(i,{unit_price:Number(e.target.value)||0})}/>
                 </div>
                 <div className="text-right text-sm font-medium mt-2">{fmtTHB(applyDiscounts(l.unit_price,l.quantity,l.discount1_value,l.discount1_type,l.discount2_value,l.discount2_type))}</div>
               </div>
             ))}
           </div>
-          <div className="p-5 border-t hairline bg-surface-cream-strong">
-            <div className="flex justify-between font-display text-2xl mb-4"><span>รวม</span><span>{fmtTHB(total)}</span></div>
+          <div className="p-4 lg:p-5 border-t hairline bg-surface-cream-strong">
+            <div className="flex justify-between font-display text-2xl mb-3"><span>รวม</span><span>{fmtTHB(total)}</span></div>
             <button className="btn-primary w-full !py-3" disabled={submitting||!items.length} onClick={submit}>
-              {submitting?'กำลังบันทึก...':`บันทึก${kind==='receive'?'การรับ':'การคืน'}`}
+              {submitting?'กำลังบันทึก...':<><Icon name="check" size={16}/>บันทึก{kind==='receive'?'การรับ':'การคืน'}</>}
             </button>
           </div>
         </div>
@@ -873,9 +1153,9 @@ function StockMovementView({ kind /* 'receive' | 'return' */ }) {
   );
 }
 
-/* ===================================================================
-   DASHBOARD
-=================================================================== */
+/* =========================================================
+   DASHBOARD VIEW
+========================================================= */
 function DashboardView() {
   const [stats, setStats] = useState(null);
   const [topProducts, setTopProducts] = useState([]);
@@ -887,7 +1167,7 @@ function DashboardView() {
     const startMonth = today.slice(0,7) + '-01';
 
     const [todayQ, monthQ, lowQ] = await Promise.all([
-      sb.from('sale_orders').select('grand_total, channel, payment_method').gte('sale_date', today + 'T00:00:00').lte('sale_date', today + 'T23:59:59'),
+      sb.from('sale_orders').select('grand_total, channel').gte('sale_date', today + 'T00:00:00').lte('sale_date', today + 'T23:59:59'),
       sb.from('sale_orders').select('grand_total').gte('sale_date', startMonth + 'T00:00:00'),
       sb.from('products').select('id,name,current_stock').lt('current_stock', 5).gt('current_stock', -1).order('current_stock', { ascending: true }).limit(8),
     ]);
@@ -904,7 +1184,6 @@ function DashboardView() {
     setStats({ todayCount: todayRows.length, todayTotal, monthCount: monthRows.length, monthTotal });
     setLowStock(lowQ.data || []);
 
-    // top products this month — fetch order ids of month, then aggregate items
     const { data: monthIds } = await sb.from('sale_orders').select('id').gte('sale_date', startMonth + 'T00:00:00');
     const ids = (monthIds||[]).map(x=>x.id);
     if (ids.length) {
@@ -913,55 +1192,54 @@ function DashboardView() {
       (items||[]).forEach(it => { map[it.product_name] = (map[it.product_name]||0) + (Number(it.quantity)||0); });
       const top = Object.entries(map).map(([name,q])=>({name,q})).sort((a,b)=>b.q-a.q).slice(0,8);
       setTopProducts(top);
-    } else {
-      setTopProducts([]);
-    }
+    } else setTopProducts([]);
   })(); }, []);
 
-  if (!stats) return <div className="px-10 py-8 text-muted">กำลังโหลดข้อมูล...</div>;
+  if (!stats) return <div className="px-4 lg:px-10 py-8 text-muted text-sm">กำลังโหลดข้อมูล...</div>;
+
+  const StatCard = ({ tone, label, value, sub, icon }) => (
+    <div className={
+      "rounded-lg p-4 lg:p-6 " +
+      (tone==='canvas' ? "card-canvas" :
+       tone==='cream'  ? "card-cream"  :
+       tone==='dark'   ? "card-dark"   :
+       "bg-primary text-on-primary")
+    }>
+      <div className="flex items-center justify-between">
+        <div className={"text-[10px] lg:text-xs uppercase tracking-[1.5px] " + (tone==='dark'?'text-on-dark-soft':tone==='coral'?'opacity-90':'text-muted')}>{label}</div>
+        <span className={tone==='dark'?'text-on-dark-soft':tone==='coral'?'opacity-80':'text-muted-soft'}><Icon name={icon} size={18}/></span>
+      </div>
+      <div className="font-display text-2xl lg:text-4xl mt-2">{value}</div>
+      {sub && <div className={"text-xs mt-1 " + (tone==='dark'?'text-on-dark-soft':tone==='coral'?'opacity-90':'text-muted')}>{sub}</div>}
+    </div>
+  );
 
   return (
-    <div className="px-10 py-8 space-y-8">
-      <div className="grid grid-cols-4 gap-4">
-        <div className="card-canvas">
-          <div className="text-xs uppercase tracking-wider text-muted">ยอดขายวันนี้</div>
-          <div className="font-display text-4xl mt-2">{fmtTHB(stats.todayTotal)}</div>
-          <div className="text-sm text-muted mt-2">{stats.todayCount} บิล</div>
-        </div>
-        <div className="card-cream">
-          <div className="text-xs uppercase tracking-wider text-muted">ยอดขายเดือนนี้</div>
-          <div className="font-display text-4xl mt-2">{fmtTHB(stats.monthTotal)}</div>
-          <div className="text-sm text-muted mt-2">{stats.monthCount} บิล</div>
-        </div>
-        <div className="card-dark">
-          <div className="text-xs uppercase tracking-wider text-on-dark-soft">เฉลี่ยต่อบิล (เดือน)</div>
-          <div className="font-display text-4xl mt-2">{stats.monthCount? fmtTHB(stats.monthTotal/stats.monthCount):'—'}</div>
-          <div className="text-sm text-on-dark-soft mt-2">เดือน {todayISO().slice(0,7)}</div>
-        </div>
-        <div className="bg-primary text-on-primary rounded-lg p-6">
-          <div className="text-xs uppercase tracking-[1.5px] opacity-90">สต็อกใกล้หมด</div>
-          <div className="font-display text-4xl mt-2">{lowStock.length}</div>
-          <div className="text-sm opacity-90 mt-2">รายการ (น้อยกว่า 5)</div>
-        </div>
+    <div className="px-4 py-4 lg:px-10 lg:py-8 space-y-4 lg:space-y-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+        <StatCard tone="canvas" label="ยอดขายวันนี้" value={fmtTHB(stats.todayTotal)} sub={`${stats.todayCount} บิล`} icon="trend-up"/>
+        <StatCard tone="cream"  label="ยอดขายเดือนนี้" value={fmtTHB(stats.monthTotal)} sub={`${stats.monthCount} บิล`} icon="receipt"/>
+        <StatCard tone="dark"   label="เฉลี่ยต่อบิล" value={stats.monthCount? fmtTHB(stats.monthTotal/stats.monthCount):'—'} sub={`เดือน ${todayISO().slice(0,7)}`} icon="credit-card"/>
+        <StatCard tone="coral"  label="สต็อกใกล้หมด" value={lowStock.length} sub="รายการ (น้อยกว่า 5)" icon="alert"/>
       </div>
 
-      <div className="grid grid-cols-12 gap-6">
-        <div className="col-span-7 card-canvas">
-          <div className="font-display text-2xl mb-4">สินค้าขายดีเดือนนี้</div>
-          {!topProducts.length && <div className="text-muted">ยังไม่มียอดขายในเดือนนี้</div>}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
+        <div className="lg:col-span-7 card-canvas p-4 lg:p-6">
+          <div className="font-display text-xl lg:text-2xl mb-3 lg:mb-4 flex items-center gap-2"><Icon name="trend-up" size={20}/> สินค้าขายดีเดือนนี้</div>
+          {!topProducts.length && <div className="text-muted text-sm">ยังไม่มียอดขายในเดือนนี้</div>}
           {topProducts.map((p,i)=>(
-            <div key={p.name} className="flex items-center gap-3 py-2 border-b hairline-soft">
-              <div className="font-display text-2xl w-8 text-muted-soft">{i+1}</div>
-              <div className="flex-1 truncate">{p.name}</div>
-              <div className="badge-pill">ขาย {p.q} ชิ้น</div>
+            <div key={p.name} className="flex items-center gap-3 py-2 border-b hairline-soft last:border-0">
+              <div className="font-display text-xl lg:text-2xl w-7 text-muted-soft">{i+1}</div>
+              <div className="flex-1 truncate text-sm">{p.name}</div>
+              <div className="badge-pill">{p.q} ชิ้น</div>
             </div>
           ))}
         </div>
-        <div className="col-span-5 card-canvas">
-          <div className="font-display text-2xl mb-4">สต็อกใกล้หมด</div>
-          {!lowStock.length && <div className="text-muted">สต็อกปลอดภัย</div>}
+        <div className="lg:col-span-5 card-canvas p-4 lg:p-6">
+          <div className="font-display text-xl lg:text-2xl mb-3 lg:mb-4 flex items-center gap-2"><Icon name="alert" size={20}/> สต็อกใกล้หมด</div>
+          {!lowStock.length && <div className="text-muted text-sm">สต็อกปลอดภัย</div>}
           {lowStock.map(p => (
-            <div key={p.id} className="flex items-center gap-3 py-2 border-b hairline-soft">
+            <div key={p.id} className="flex items-center gap-3 py-2 border-b hairline-soft last:border-0">
               <div className="flex-1 truncate text-sm">{p.name}</div>
               <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':'!bg-warning/15 !text-[#8a6500]')}>{p.current_stock}</span>
             </div>
@@ -969,79 +1247,32 @@ function DashboardView() {
         </div>
       </div>
 
-      <div className="card-dark">
-        <div className="font-display text-2xl mb-4">ยอดขายวันนี้แยกช่องทาง</div>
-        {!byChannel.length && <div className="text-on-dark-soft">ยังไม่มียอดขายวันนี้</div>}
-        <div className="grid grid-cols-5 gap-3">
-          {CHANNELS.map(c => {
-            const v = byChannel.find(x=>x.channel===c.v)?.total || 0;
-            return (
-              <div key={c.v} className="bg-surface-dark-elevated rounded-md p-4">
-                <div className="text-xs uppercase tracking-wider text-on-dark-soft">{c.label}</div>
-                <div className="font-display text-2xl mt-1">{fmtTHB(v)}</div>
-              </div>
-            );
-          })}
-        </div>
+      <div className="card-dark p-4 lg:p-6">
+        <div className="font-display text-xl lg:text-2xl mb-3 lg:mb-4 flex items-center gap-2"><Icon name="store" size={20}/> ยอดขายวันนี้แยกช่องทาง</div>
+        {!byChannel.length && <div className="text-on-dark-soft text-sm">ยังไม่มียอดขายวันนี้</div>}
+        {byChannel.length>0 && (
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 lg:gap-3">
+            {CHANNELS.map(c => {
+              const v = byChannel.find(x=>x.channel===c.v)?.total || 0;
+              return (
+                <div key={c.v} className="bg-surface-dark-elevated rounded-md p-3 lg:p-4">
+                  <div className="text-[10px] uppercase tracking-wider text-on-dark-soft">{c.label}</div>
+                  <div className="font-display text-lg lg:text-2xl mt-1">{fmtTHB(v)}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-/* ===================================================================
-   LOGIN SCREEN
-=================================================================== */
-function LoginScreen({ onSuccess }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-
-  const submit = async (e) => {
-    e.preventDefault();
-    setErr(""); setBusy(true);
-    const { error } = await sb.auth.signInWithPassword({ email, password });
-    setBusy(false);
-    if (error) setErr(error.message || "เข้าสู่ระบบไม่สำเร็จ");
-    else onSuccess();
-  };
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-canvas px-6">
-      <div className="w-full max-w-md">
-        <div className="flex items-center gap-3 mb-10 justify-center">
-          <span className="spike lg" />
-          <div className="font-display text-4xl">TIMES</div>
-        </div>
-        <div className="card-canvas">
-          <div className="text-xs uppercase tracking-[1.5px] text-muted">POS · ร้านนาฬิกา</div>
-          <h1 className="font-display text-4xl mt-2 mb-6 text-ink">เข้าสู่ระบบ</h1>
-          <form onSubmit={submit} className="space-y-4">
-            <div>
-              <label className="text-xs uppercase tracking-wider text-muted">อีเมล</label>
-              <input type="email" autoFocus className="input mt-1" value={email} onChange={e=>setEmail(e.target.value)} required />
-            </div>
-            <div>
-              <label className="text-xs uppercase tracking-wider text-muted">รหัสผ่าน</label>
-              <input type="password" className="input mt-1" value={password} onChange={e=>setPassword(e.target.value)} required />
-            </div>
-            {err && <div className="text-sm text-error bg-error/10 px-3 py-2 rounded-md">{err}</div>}
-            <button className="btn-primary w-full !py-3" disabled={busy}>
-              {busy ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
-            </button>
-          </form>
-        </div>
-        <div className="text-center text-xs text-muted-soft mt-6 font-display italic">"ทุกเรือนมีเรื่องราว"</div>
-      </div>
-    </div>
-  );
-}
-
-/* ===================================================================
+/* =========================================================
    APP SHELL
-=================================================================== */
+========================================================= */
 function App() {
-  const [session, setSession] = useState(undefined); // undefined = loading
+  const [session, setSession] = useState(undefined);
   const [view, setView] = useState("pos");
 
   useEffect(() => {
@@ -1051,32 +1282,31 @@ function App() {
   }, []);
 
   if (session === undefined) return <div className="min-h-screen flex items-center justify-center bg-canvas text-muted">กำลังโหลด...</div>;
-  if (!session) return <ToastProvider><LoginScreen onSuccess={()=>{}} /></ToastProvider>;
-
+  if (!session) return <ToastProvider><LoginScreen /></ToastProvider>;
 
   const titles = {
     pos:       { t: "ขายสินค้า",       s: "POS" },
     products:  { t: "สินค้า",           s: "Inventory" },
     sales:     { t: "ประวัติการขาย",     s: "Sales History" },
-    receive:   { t: "รับสินค้าเข้า",      s: "Stock In" },
-    return:    { t: "คืนสินค้า",         s: "Stock Return" },
+    stock:     { t: "รับ/คืนสินค้า",     s: "Stock" },
     dashboard: { t: "แดชบอร์ด",         s: "Dashboard" },
   };
 
   return (
     <ToastProvider>
-      <div className="flex">
+      <div className="lg:flex">
         <Sidebar view={view} setView={setView} userEmail={session.user?.email} />
-        <main className="flex-1 min-h-screen">
-          <Topbar title={titles[view].t} subtitle={titles[view].s} />
+        <main className="flex-1 min-h-screen pb-16 lg:pb-0">
+          <MobileTopBar title={titles[view].t} userEmail={session.user?.email} onLogout={()=>sb.auth.signOut()}/>
+          <PageHeader title={titles[view].t} subtitle={titles[view].s} />
           {view==='pos' && <POSView />}
           {view==='products' && <ProductsView />}
           {view==='sales' && <SalesView />}
-          {view==='receive' && <StockMovementView kind="receive" />}
-          {view==='return' && <StockMovementView kind="return" />}
+          {view==='stock' && <StockView />}
           {view==='dashboard' && <DashboardView />}
         </main>
       </div>
+      <MobileTabBar view={view} setView={setView} />
     </ToastProvider>
   );
 }
