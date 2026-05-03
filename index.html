@@ -1,0 +1,1089 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>TIMES POS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Sarabun:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          primary: "#cc785c",
+          "primary-active": "#a9583e",
+          "primary-disabled": "#e6dfd8",
+          ink: "#141413",
+          body: "#3d3d3a",
+          "body-strong": "#252523",
+          muted: "#6c6a64",
+          "muted-soft": "#8e8b82",
+          hairline: "#e6dfd8",
+          "hairline-soft": "#ebe6df",
+          canvas: "#faf9f5",
+          "surface-soft": "#f5f0e8",
+          "surface-card": "#efe9de",
+          "surface-cream-strong": "#e8e0d2",
+          "surface-dark": "#181715",
+          "surface-dark-elevated": "#252320",
+          "surface-dark-soft": "#1f1e1b",
+          "on-primary": "#ffffff",
+          "on-dark": "#faf9f5",
+          "on-dark-soft": "#a09d96",
+          "accent-teal": "#5db8a6",
+          "accent-amber": "#e8a55a",
+          success: "#5db872",
+          warning: "#d4a017",
+          error: "#c64545",
+        },
+        fontFamily: {
+          serif: ['"Cormorant Garamond"', 'Tiempos Headline', 'Garamond', 'serif'],
+          sans: ['Inter', 'Sarabun', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+          mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+        },
+        borderRadius: {
+          xs: '4px', sm: '6px', md: '8px', lg: '12px', xl: '16px', pill: '9999px'
+        },
+      },
+    },
+  };
+</script>
+<style>
+  html, body, #root { height: 100%; }
+  body { background: #faf9f5; color: #141413; font-family: Inter, Sarabun, sans-serif; }
+  .font-display { font-family: 'Cormorant Garamond', 'Tiempos Headline', serif; font-weight: 500; letter-spacing: -0.01em; }
+  .nav-spike::before { content: ''; display: inline-block; width: 12px; height: 12px; margin-right: 10px; background-image: radial-gradient(circle at center, #141413 2px, transparent 2.5px), linear-gradient(#141413, #141413), linear-gradient(#141413, #141413); background-size: 100% 100%, 2px 100%, 100% 2px; background-position: center, center, center; background-repeat: no-repeat; transform: rotate(45deg); }
+  .spike { display:inline-block; width:14px; height:14px; position:relative; }
+  .spike::before, .spike::after { content:''; position:absolute; background:#141413; }
+  .spike::before { top:0; left:50%; width:2px; height:100%; transform:translateX(-50%); }
+  .spike::after { left:0; top:50%; width:100%; height:2px; transform:translateY(-50%); }
+  .spike.lg { width:20px; height:20px; }
+  .spike.lg::before, .spike.lg::after { background:#141413; }
+  .spike.dark::before, .spike.dark::after { background:#faf9f5; }
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #e6dfd8; border-radius: 8px; }
+  ::-webkit-scrollbar-thumb:hover { background: #c6bdb0; }
+  input:focus, select:focus, textarea:focus { outline: 3px solid rgba(204, 120, 92, 0.18); outline-offset: 0; border-color: #cc785c !important; }
+  .btn-primary { background: #cc785c; color: #fff; padding: 10px 18px; border-radius: 8px; font-weight: 500; font-size: 14px; transition: background .15s; }
+  .btn-primary:hover { background: #a9583e; }
+  .btn-primary:disabled { background: #e6dfd8; color: #6c6a64; cursor: not-allowed; }
+  .btn-secondary { background: #faf9f5; color: #141413; padding: 10px 18px; border-radius: 8px; font-weight: 500; font-size: 14px; border: 1px solid #e6dfd8; transition: background .15s; }
+  .btn-secondary:hover { background: #f5f0e8; }
+  .btn-ghost { background: transparent; color: #141413; padding: 8px 14px; border-radius: 8px; font-weight: 500; font-size: 14px; }
+  .btn-ghost:hover { background: #efe9de; }
+  .input { background: #faf9f5; border: 1px solid #e6dfd8; border-radius: 8px; padding: 10px 14px; font-size: 14px; color: #141413; width: 100%; }
+  .card-cream { background: #efe9de; border-radius: 12px; padding: 24px; }
+  .card-canvas { background: #faf9f5; border: 1px solid #e6dfd8; border-radius: 12px; padding: 24px; }
+  .card-dark { background: #181715; color: #faf9f5; border-radius: 12px; padding: 24px; }
+  .badge-pill { background: #efe9de; color: #141413; font-size: 13px; font-weight: 500; padding: 3px 10px; border-radius: 9999px; }
+  .badge-coral { background: #cc785c; color: #fff; font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 9999px; letter-spacing: 1.5px; text-transform: uppercase; }
+  .nav-item { display:flex; align-items:center; gap:10px; padding: 10px 14px; border-radius: 8px; color: #6c6a64; font-weight: 500; font-size: 14px; cursor: pointer; transition: background .15s; }
+  .nav-item:hover { background: #efe9de; color: #141413; }
+  .nav-item.active { background: #efe9de; color: #141413; }
+  .table-row { display:grid; align-items:center; padding: 12px 16px; border-bottom: 1px solid #ebe6df; }
+  .hairline { border-color: #e6dfd8; }
+  .modal-overlay { background: rgba(20,20,19,0.45); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+
+const SUPABASE_URL = "https://zrymhhkqdcttqsdczfcr.supabase.co";
+const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpyeW1oaGtxZGN0dHFzZGN6ZmNyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3MjYzNDUsImV4cCI6MjA5MzMwMjM0NX0.M414TfDx_nxJRa3hEWMiY7FAsevj5f0HIGQAp-H-8jM";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+  auth: { persistSession: true, autoRefreshToken: true, storage: window.localStorage }
+});
+
+const { useState, useEffect, useMemo, useCallback, useRef } = React;
+
+const fmtTHB = (n) => "฿" + (Number(n) || 0).toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const fmtDate = (s) => s ? new Date(s).toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" }) : "-";
+const fmtDateTime = (s) => s ? new Date(s).toLocaleString("th-TH", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "-";
+const todayISO = () => new Date().toISOString().slice(0,10);
+
+const CHANNELS = [
+  { v: "store",    label: "หน้าร้าน" },
+  { v: "tiktok",   label: "TikTok" },
+  { v: "shopee",   label: "Shopee" },
+  { v: "lazada",   label: "Lazada" },
+  { v: "facebook", label: "Facebook" },
+];
+const PAYMENTS = [
+  { v: "cash",     label: "เงินสด" },
+  { v: "transfer", label: "โอนเงิน" },
+  { v: "card",     label: "บัตร" },
+];
+const UNITS = ["เรือน", "เส้น", "ก้อน", "ใบ"];
+
+function applyDiscounts(unitPrice, qty, d1v, d1t, d2v, d2t) {
+  let s1 = Number(unitPrice) || 0;
+  if (d1t === 'percent') s1 = s1 * (1 - (Number(d1v)||0) / 100);
+  else if (d1t === 'baht') s1 = s1 - (Number(d1v)||0);
+  let s2 = s1;
+  if (d2t === 'percent') s2 = s2 * (1 - (Number(d2v)||0) / 100);
+  else if (d2t === 'baht') s2 = s2 - (Number(d2v)||0);
+  return Math.max(0, s2) * (Number(qty) || 0);
+}
+
+function applyOrderDiscount(subtotal, value, type) {
+  if (type === 'percent') return Math.max(0, subtotal * (1 - (Number(value)||0)/100));
+  if (type === 'baht') return Math.max(0, subtotal - (Number(value)||0));
+  return subtotal;
+}
+
+/* ---------- Layout ---------- */
+
+function Sidebar({ view, setView, userEmail }) {
+  const items = [
+    { k: "pos", label: "ขายสินค้า", icon: "🛒" },
+    { k: "products", label: "สินค้า", icon: "⌚" },
+    { k: "sales", label: "ประวัติการขาย", icon: "📃" },
+    { k: "receive", label: "รับสินค้า", icon: "📦" },
+    { k: "return", label: "คืนสินค้า", icon: "↩" },
+    { k: "dashboard", label: "แดชบอร์ด", icon: "📊" },
+  ];
+  return (
+    <aside className="w-64 bg-canvas border-r hairline flex flex-col h-screen sticky top-0">
+      <div className="px-6 py-6 flex items-center gap-3 border-b hairline">
+        <span className="spike lg" />
+        <div>
+          <div className="font-display text-2xl leading-none">TIMES</div>
+          <div className="text-xs text-muted tracking-widest mt-1">POS · ร้านนาฬิกา</div>
+        </div>
+      </div>
+      <nav className="p-3 flex-1 overflow-y-auto">
+        {items.map(it => (
+          <div key={it.k} className={"nav-item " + (view===it.k?"active":"")} onClick={()=>setView(it.k)}>
+            <span className="text-base">{it.icon}</span>
+            <span>{it.label}</span>
+          </div>
+        ))}
+      </nav>
+      <div className="p-4 border-t hairline">
+        <div className="text-xs text-muted-soft truncate mb-2">{userEmail}</div>
+        <button className="btn-secondary w-full !py-2 !text-sm" onClick={()=>sb.auth.signOut()}>ออกจากระบบ</button>
+        <div className="text-xs text-muted-soft mt-3">© TIMES POS</div>
+      </div>
+    </aside>
+  );
+}
+
+function Topbar({ title, subtitle, right }) {
+  return (
+    <header className="px-10 pt-10 pb-6 flex items-end justify-between border-b hairline">
+      <div>
+        <div className="text-xs uppercase tracking-[1.5px] text-muted">{subtitle}</div>
+        <h1 className="font-display text-5xl mt-2 leading-tight text-ink">{title}</h1>
+      </div>
+      <div>{right}</div>
+    </header>
+  );
+}
+
+/* ---------- Toast ---------- */
+const ToastCtx = React.createContext({ push: ()=>{} });
+function ToastProvider({ children }) {
+  const [list, setList] = useState([]);
+  const push = useCallback((msg, type='info') => {
+    const id = Date.now()+Math.random();
+    setList(l => [...l, { id, msg, type }]);
+    setTimeout(() => setList(l => l.filter(t => t.id !== id)), 3500);
+  }, []);
+  return (
+    <ToastCtx.Provider value={{ push }}>
+      {children}
+      <div className="fixed bottom-6 right-6 z-[100] space-y-2">
+        {list.map(t => (
+          <div key={t.id} className={"px-4 py-3 rounded-lg shadow-md text-sm card-dark " + (t.type==='error'?'!bg-error':t.type==='success'?'!bg-[#1f3d27]':'')}>
+            {t.msg}
+          </div>
+        ))}
+      </div>
+    </ToastCtx.Provider>
+  );
+}
+const useToast = () => React.useContext(ToastCtx);
+
+/* ---------- Modal ---------- */
+function Modal({ open, onClose, title, children, footer, wide }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 modal-overlay z-50 flex items-center justify-center p-6" onClick={onClose}>
+      <div className={"bg-canvas rounded-lg shadow-xl " + (wide?"w-full max-w-3xl":"w-full max-w-lg")} onClick={e=>e.stopPropagation()}>
+        <div className="px-6 py-5 border-b hairline flex items-center justify-between">
+          <div className="font-display text-2xl">{title}</div>
+          <button className="btn-ghost" onClick={onClose}>✕</button>
+        </div>
+        <div className="p-6 max-h-[70vh] overflow-y-auto">{children}</div>
+        {footer && <div className="px-6 py-4 border-t hairline flex justify-end gap-2">{footer}</div>}
+      </div>
+    </div>
+  );
+}
+
+/* ===================================================================
+   POS VIEW
+=================================================================== */
+function POSView() {
+  const toast = useToast();
+  const [search, setSearch] = useState("");
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [cart, setCart] = useState([]);
+  const [channel, setChannel] = useState("store");
+  const [payment, setPayment] = useState("cash");
+  const [orderDiscount, setOrderDiscount] = useState({ value: 0, type: null });
+  const [submitting, setSubmitting] = useState(false);
+  const searchRef = useRef(null);
+
+  useEffect(() => { searchRef.current?.focus(); }, []);
+
+  // search products: barcode exact OR name fuzzy
+  useEffect(() => {
+    if (!search.trim()) { setResults([]); return; }
+    let cancelled = false;
+    setSearching(true);
+    const t = setTimeout(async () => {
+      const q = search.trim();
+      // try barcode exact first
+      const { data: barcodeHit } = await sb.from('products').select('*').eq('barcode', q).limit(1);
+      let rows = [];
+      if (barcodeHit && barcodeHit.length) rows = barcodeHit;
+      else {
+        const { data, error } = await sb.from('products').select('*').ilike('name', `%${q}%`).limit(20);
+        if (!error) rows = data || [];
+      }
+      if (!cancelled) { setResults(rows); setSearching(false); }
+    }, 200);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [search]);
+
+  const addToCart = (p) => {
+    setCart(c => {
+      const i = c.findIndex(x => x.product_id === p.id);
+      if (i >= 0) {
+        const n = [...c]; n[i] = { ...n[i], quantity: n[i].quantity + 1 }; return n;
+      }
+      return [...c, {
+        product_id: p.id, product_name: p.name, barcode: p.barcode,
+        quantity: 1, unit_price: Number(p.retail_price)||0,
+        discount1_value: 0, discount1_type: null,
+        discount2_value: 0, discount2_type: null,
+        current_stock: p.current_stock,
+      }];
+    });
+    setSearch(""); setResults([]); searchRef.current?.focus();
+  };
+
+  const updateLine = (idx, patch) => setCart(c => c.map((l,i)=> i===idx?{...l,...patch}:l));
+  const removeLine = (idx) => setCart(c => c.filter((_,i)=>i!==idx));
+
+  const lineNet = (l) => applyDiscounts(l.unit_price, l.quantity, l.discount1_value, l.discount1_type, l.discount2_value, l.discount2_type);
+  const subtotal = useMemo(()=> cart.reduce((s,l)=> s + lineNet(l), 0), [cart]);
+  const grand = useMemo(()=> applyOrderDiscount(subtotal, orderDiscount.value, orderDiscount.type), [subtotal, orderDiscount]);
+
+  // submit
+  const submit = async () => {
+    if (!cart.length) { toast.push("ไม่มีสินค้าในตะกร้า", "error"); return; }
+    setSubmitting(true);
+    try {
+      const { data: order, error: e1 } = await sb.from('sale_orders').insert({
+        sale_date: new Date().toISOString(),
+        channel, payment_method: payment,
+        discount_value: orderDiscount.value || 0,
+        discount_type: orderDiscount.type,
+        subtotal,
+        total_after_discount: grand,
+        grand_total: grand,
+      }).select().single();
+      if (e1) throw e1;
+
+      const items = cart.map(l => ({
+        sale_order_id: order.id,
+        product_id: l.product_id,
+        product_name: l.product_name,
+        quantity: l.quantity,
+        unit_price: l.unit_price,
+        discount1_value: l.discount1_value || 0,
+        discount1_type: l.discount1_type,
+        discount2_value: l.discount2_value || 0,
+        discount2_type: l.discount2_type,
+      }));
+      const { error: e2 } = await sb.from('sale_order_items').insert(items);
+      if (e2) throw e2;
+
+      // decrement stock atomically per line (safe across multiple devices)
+      for (const l of cart) {
+        if (!l.product_id) continue;
+        await sb.rpc('adjust_stock', { p_id: l.product_id, qty_delta: -l.quantity });
+      }
+
+      toast.push(`บันทึกบิล #${order.id} สำเร็จ — ${fmtTHB(grand)}`, 'success');
+      setCart([]); setOrderDiscount({ value: 0, type: null });
+      setChannel("store"); setPayment("cash");
+    } catch (err) {
+      console.error(err);
+      toast.push("บันทึกไม่สำเร็จ: " + (err.message || err), 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-12 gap-6 px-10 py-8 h-[calc(100vh-140px)]">
+      {/* Left: search + results */}
+      <div className="col-span-7 flex flex-col">
+        <div className="card-canvas !p-4 mb-4">
+          <input
+            ref={searchRef}
+            className="input !text-lg !py-3"
+            placeholder="🔍 สแกนบาร์โค้ดหรือพิมพ์ชื่อรุ่น (เช่น GA-110)..."
+            value={search}
+            onChange={e=>setSearch(e.target.value)}
+          />
+        </div>
+
+        <div className="flex-1 overflow-y-auto card-canvas !p-0">
+          {!search && (
+            <div className="p-12 text-center">
+              <div className="font-display text-3xl text-ink mb-2">เริ่มสแกนสินค้า</div>
+              <p className="text-muted">วางเคอร์เซอร์ในช่องค้นหาด้านบน แล้วยิงบาร์โค้ดหรือพิมพ์ชื่อรุ่น</p>
+            </div>
+          )}
+          {search && searching && <div className="p-6 text-muted">กำลังค้นหา...</div>}
+          {search && !searching && results.length===0 && (
+            <div className="p-6 text-muted">ไม่พบสินค้า "{search}"</div>
+          )}
+          {results.map(p => (
+            <div key={p.id} className="px-5 py-4 border-b hairline-soft hover:bg-surface-card cursor-pointer flex items-center gap-4" onClick={()=>addToCart(p)}>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-ink truncate">{p.name}</div>
+                <div className="text-xs text-muted mt-1 font-mono">{p.barcode || '— ไม่มีบาร์โค้ด —'}</div>
+              </div>
+              <div className="text-right">
+                <div className="font-display text-xl text-ink">{fmtTHB(p.retail_price)}</div>
+                <div className="text-xs mt-1">
+                  <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':p.current_stock<5?'!bg-warning/15 !text-[#8a6500]':'')}>
+                    คงเหลือ {p.current_stock}
+                  </span>
+                </div>
+              </div>
+              <button className="btn-primary !py-2 !px-3 text-sm">+ เพิ่ม</button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Right: cart */}
+      <div className="col-span-5 flex flex-col">
+        <div className="card-cream flex-1 flex flex-col !p-0 overflow-hidden">
+          <div className="p-5 border-b hairline">
+            <div className="font-display text-2xl">ตะกร้า</div>
+            <div className="text-xs text-muted mt-1">{cart.length} รายการ</div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-3">
+            {!cart.length && <div className="p-8 text-center text-muted">ยังไม่มีสินค้า</div>}
+            {cart.map((l, idx) => (
+              <div key={idx} className="bg-canvas rounded-md p-3 mb-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm truncate">{l.product_name}</div>
+                    <div className="text-xs text-muted font-mono">{l.barcode||''}</div>
+                  </div>
+                  <button className="text-muted hover:text-error text-sm" onClick={()=>removeLine(idx)}>✕</button>
+                </div>
+                <div className="grid grid-cols-12 gap-2 mt-2 items-center">
+                  <div className="col-span-3">
+                    <input type="number" min="1" className="input !py-1.5 !text-sm text-center"
+                      value={l.quantity} onChange={e=>updateLine(idx,{quantity:Math.max(1,Number(e.target.value)||1)})}/>
+                  </div>
+                  <div className="col-span-5 text-xs text-muted">@ {fmtTHB(l.unit_price)}</div>
+                  <div className="col-span-4 text-right font-medium">{fmtTHB(lineNet(l))}</div>
+                </div>
+                <div className="grid grid-cols-12 gap-1 mt-2">
+                  <input type="number" className="input !py-1 !text-xs col-span-4" placeholder="ลด"
+                    value={l.discount1_value||""} onChange={e=>updateLine(idx,{discount1_value:Number(e.target.value)||0, discount1_type: l.discount1_type||'baht'})}/>
+                  <select className="input !py-1 !text-xs col-span-3" value={l.discount1_type||""} onChange={e=>updateLine(idx,{discount1_type:e.target.value||null})}>
+                    <option value="">—</option>
+                    <option value="baht">฿</option>
+                    <option value="percent">%</option>
+                  </select>
+                  <input type="number" className="input !py-1 !text-xs col-span-3" placeholder="ลด2"
+                    value={l.discount2_value||""} onChange={e=>updateLine(idx,{discount2_value:Number(e.target.value)||0, discount2_type: l.discount2_type||'baht'})}/>
+                  <select className="input !py-1 !text-xs col-span-2" value={l.discount2_type||""} onChange={e=>updateLine(idx,{discount2_type:e.target.value||null})}>
+                    <option value="">—</option>
+                    <option value="baht">฿</option>
+                    <option value="percent">%</option>
+                  </select>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="p-5 border-t hairline bg-surface-cream-strong">
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <label className="text-xs uppercase tracking-wider text-muted">ช่องทาง</label>
+                <select className="input mt-1" value={channel} onChange={e=>setChannel(e.target.value)}>
+                  {CHANNELS.map(c=> <option key={c.v} value={c.v}>{c.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs uppercase tracking-wider text-muted">ชำระโดย</label>
+                <select className="input mt-1" value={payment} onChange={e=>setPayment(e.target.value)}>
+                  {PAYMENTS.map(p=> <option key={p.v} value={p.v}>{p.label}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-12 gap-2 mb-3 items-end">
+              <div className="col-span-6">
+                <label className="text-xs uppercase tracking-wider text-muted">ส่วนลดรวมบิล</label>
+                <input type="number" className="input mt-1" value={orderDiscount.value||""} onChange={e=>setOrderDiscount(d=>({...d, value: Number(e.target.value)||0, type: d.type||'baht'}))}/>
+              </div>
+              <div className="col-span-6">
+                <select className="input" value={orderDiscount.type||""} onChange={e=>setOrderDiscount(d=>({...d, type:e.target.value||null}))}>
+                  <option value="">— ไม่ลด —</option>
+                  <option value="baht">บาท</option>
+                  <option value="percent">เปอร์เซ็นต์</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-between text-sm text-muted mb-1"><span>รวมก่อนลด</span><span>{fmtTHB(subtotal)}</span></div>
+            <div className="flex justify-between font-display text-3xl mb-4"><span>รวม</span><span>{fmtTHB(grand)}</span></div>
+
+            <button className="btn-primary w-full !py-3 !text-base" disabled={submitting||!cart.length} onClick={submit}>
+              {submitting? 'กำลังบันทึก...' : `ชำระเงิน ${fmtTHB(grand)}`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ===================================================================
+   PRODUCTS VIEW
+=================================================================== */
+function ProductsView() {
+  const toast = useToast();
+  const [q, setQ] = useState("");
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    let query = sb.from('products').select('*').order('updated_at', { ascending: false }).limit(100);
+    if (q.trim()) {
+      const term = q.trim();
+      query = sb.from('products').select('*').or(`name.ilike.%${term}%,barcode.eq.${term}`).limit(100);
+    }
+    const { data, error } = await query;
+    if (error) toast.push("โหลดสินค้าไม่ได้", "error");
+    setRows(data || []);
+    setLoading(false);
+  }, [q]);
+
+  useEffect(()=>{ const t = setTimeout(load, 200); return ()=>clearTimeout(t); }, [load]);
+
+  const save = async (p) => {
+    try {
+      if (p.id) {
+        const { error } = await sb.from('products').update({
+          name: p.name, barcode: p.barcode||null,
+          cost_price: p.cost_price||0, retail_price: p.retail_price||0,
+          current_stock: p.current_stock||0,
+          updated_at: new Date().toISOString(),
+        }).eq('id', p.id);
+        if (error) throw error;
+      } else {
+        const { error } = await sb.from('products').insert({
+          name: p.name, barcode: p.barcode||null,
+          cost_price: p.cost_price||0, retail_price: p.retail_price||0,
+          current_stock: p.current_stock||0,
+        });
+        if (error) throw error;
+      }
+      toast.push("บันทึกสินค้าสำเร็จ", "success");
+      setEditing(null);
+      load();
+    } catch (e) {
+      toast.push("บันทึกไม่ได้: " + e.message, "error");
+    }
+  };
+
+  return (
+    <div className="px-10 py-8">
+      <div className="flex gap-3 mb-6">
+        <input className="input flex-1" placeholder="ค้นหาด้วยชื่อรุ่นหรือบาร์โค้ด..." value={q} onChange={e=>setQ(e.target.value)} />
+        <button className="btn-primary" onClick={()=>setEditing({ name: '', barcode: '', cost_price: 0, retail_price: 0, current_stock: 0 })}>+ เพิ่มสินค้า</button>
+      </div>
+
+      <div className="card-canvas !p-0 overflow-hidden">
+        <div className="grid grid-cols-12 px-4 py-3 text-xs uppercase tracking-wider text-muted border-b hairline bg-surface-soft">
+          <div className="col-span-4">ชื่อรุ่น</div>
+          <div className="col-span-3 font-mono">บาร์โค้ด</div>
+          <div className="col-span-2 text-right">ทุน</div>
+          <div className="col-span-2 text-right">ราคาขาย</div>
+          <div className="col-span-1 text-right">คงเหลือ</div>
+        </div>
+        {loading && <div className="p-6 text-muted">กำลังโหลด...</div>}
+        {!loading && rows.length===0 && <div className="p-6 text-muted">ไม่พบสินค้า</div>}
+        {rows.map(p => (
+          <div key={p.id} className="grid grid-cols-12 px-4 py-3 items-center border-b hairline-soft hover:bg-surface-soft cursor-pointer" onClick={()=>setEditing(p)}>
+            <div className="col-span-4 font-medium truncate">{p.name}</div>
+            <div className="col-span-3 font-mono text-sm text-muted truncate">{p.barcode||'—'}</div>
+            <div className="col-span-2 text-right text-muted">{fmtTHB(p.cost_price)}</div>
+            <div className="col-span-2 text-right font-medium">{fmtTHB(p.retail_price)}</div>
+            <div className="col-span-1 text-right">
+              <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':p.current_stock<5?'!bg-warning/15 !text-[#8a6500]':'')}>{p.current_stock}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <ProductEditor editing={editing} onClose={()=>setEditing(null)} onSave={save} />
+    </div>
+  );
+}
+
+function ProductEditor({ editing, onClose, onSave }) {
+  const [draft, setDraft] = useState(null);
+  useEffect(()=>{ setDraft(editing? {...editing} : null); }, [editing]);
+  if (!draft) return null;
+  const set = (k,v)=> setDraft(d=>({...d,[k]:v}));
+  return (
+    <Modal open={!!draft} onClose={onClose} title={draft.id?"แก้ไขสินค้า":"เพิ่มสินค้าใหม่"}
+      footer={<>
+        <button className="btn-secondary" onClick={onClose}>ยกเลิก</button>
+        <button className="btn-primary" onClick={()=>onSave(draft)}>บันทึก</button>
+      </>}>
+      <div className="space-y-4">
+        <div>
+          <label className="text-xs uppercase tracking-wider text-muted">ชื่อรุ่น</label>
+          <input className="input mt-1" value={draft.name||""} onChange={e=>set('name', e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs uppercase tracking-wider text-muted">บาร์โค้ด</label>
+          <input className="input mt-1 font-mono" value={draft.barcode||""} onChange={e=>set('barcode', e.target.value)} />
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs uppercase tracking-wider text-muted">ราคาทุน</label>
+            <input type="number" className="input mt-1" value={draft.cost_price||0} onChange={e=>set('cost_price', Number(e.target.value))} />
+          </div>
+          <div>
+            <label className="text-xs uppercase tracking-wider text-muted">ราคาขาย</label>
+            <input type="number" className="input mt-1" value={draft.retail_price||0} onChange={e=>set('retail_price', Number(e.target.value))} />
+          </div>
+          <div>
+            <label className="text-xs uppercase tracking-wider text-muted">คงเหลือ</label>
+            <input type="number" className="input mt-1" value={draft.current_stock||0} onChange={e=>set('current_stock', Number(e.target.value))} />
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/* ===================================================================
+   SALES HISTORY
+=================================================================== */
+function SalesView() {
+  const toast = useToast();
+  const [from, setFrom] = useState(todayISO());
+  const [to, setTo] = useState(todayISO());
+  const [channel, setChannel] = useState("");
+  const [orders, setOrders] = useState([]);
+  const [detail, setDetail] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    let q = sb.from('sale_orders').select('*')
+      .gte('sale_date', from + 'T00:00:00')
+      .lte('sale_date', to + 'T23:59:59')
+      .order('sale_date', { ascending: false }).limit(200);
+    if (channel) q = q.eq('channel', channel);
+    const { data, error } = await q;
+    if (error) toast.push("โหลดไม่ได้", "error");
+    setOrders(data || []);
+    setLoading(false);
+  }, [from, to, channel]);
+
+  useEffect(()=>{ load(); }, [load]);
+
+  const openDetail = async (order) => {
+    const { data } = await sb.from('sale_order_items').select('*').eq('sale_order_id', order.id);
+    setDetail({ order, items: data || [] });
+  };
+
+  const total = useMemo(()=> orders.reduce((s,o)=> s + Number(o.grand_total||0), 0), [orders]);
+
+  return (
+    <div className="px-10 py-8">
+      <div className="grid grid-cols-12 gap-3 mb-6">
+        <div className="col-span-3">
+          <label className="text-xs uppercase tracking-wider text-muted">ตั้งแต่</label>
+          <input type="date" className="input mt-1" value={from} onChange={e=>setFrom(e.target.value)} />
+        </div>
+        <div className="col-span-3">
+          <label className="text-xs uppercase tracking-wider text-muted">ถึง</label>
+          <input type="date" className="input mt-1" value={to} onChange={e=>setTo(e.target.value)} />
+        </div>
+        <div className="col-span-3">
+          <label className="text-xs uppercase tracking-wider text-muted">ช่องทาง</label>
+          <select className="input mt-1" value={channel} onChange={e=>setChannel(e.target.value)}>
+            <option value="">ทุกช่องทาง</option>
+            {CHANNELS.map(c=> <option key={c.v} value={c.v}>{c.label}</option>)}
+          </select>
+        </div>
+        <div className="col-span-3 flex items-end">
+          <div className="card-cream !py-3 !px-4 w-full">
+            <div className="text-xs uppercase tracking-wider text-muted">รวม {orders.length} บิล</div>
+            <div className="font-display text-2xl">{fmtTHB(total)}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="card-canvas !p-0 overflow-hidden">
+        <div className="grid grid-cols-12 px-4 py-3 text-xs uppercase tracking-wider text-muted border-b hairline bg-surface-soft">
+          <div className="col-span-2">เลขที่บิล</div>
+          <div className="col-span-3">วันที่</div>
+          <div className="col-span-2">ช่องทาง</div>
+          <div className="col-span-2">ชำระ</div>
+          <div className="col-span-3 text-right">ยอดสุทธิ</div>
+        </div>
+        {loading && <div className="p-6 text-muted">กำลังโหลด...</div>}
+        {!loading && orders.length===0 && <div className="p-6 text-muted">ไม่พบบิลในช่วงเวลานี้</div>}
+        {orders.map(o => (
+          <div key={o.id} className="grid grid-cols-12 px-4 py-3 items-center border-b hairline-soft hover:bg-surface-soft cursor-pointer" onClick={()=>openDetail(o)}>
+            <div className="col-span-2 font-mono text-sm">#{o.id}</div>
+            <div className="col-span-3 text-sm">{fmtDateTime(o.sale_date)}</div>
+            <div className="col-span-2"><span className="badge-pill">{CHANNELS.find(c=>c.v===o.channel)?.label || '—'}</span></div>
+            <div className="col-span-2 text-sm text-muted">{PAYMENTS.find(p=>p.v===o.payment_method)?.label || '—'}</div>
+            <div className="col-span-3 text-right font-medium">{fmtTHB(o.grand_total)}</div>
+          </div>
+        ))}
+      </div>
+
+      <Modal open={!!detail} onClose={()=>setDetail(null)} wide title={detail?`บิล #${detail.order.id}`:""}
+        footer={<button className="btn-secondary" onClick={()=>setDetail(null)}>ปิด</button>}>
+        {detail && (
+          <div>
+            <div className="grid grid-cols-3 gap-4 mb-4 text-sm">
+              <div><div className="text-muted text-xs uppercase">วันที่</div><div>{fmtDateTime(detail.order.sale_date)}</div></div>
+              <div><div className="text-muted text-xs uppercase">ช่องทาง</div><div>{CHANNELS.find(c=>c.v===detail.order.channel)?.label||'—'}</div></div>
+              <div><div className="text-muted text-xs uppercase">ชำระ</div><div>{PAYMENTS.find(p=>p.v===detail.order.payment_method)?.label||'—'}</div></div>
+            </div>
+            <div className="border-t hairline">
+              {detail.items.map(it => (
+                <div key={it.id} className="py-2 border-b hairline-soft flex justify-between">
+                  <div>
+                    <div className="font-medium">{it.product_name}</div>
+                    <div className="text-xs text-muted">{it.quantity} × {fmtTHB(it.unit_price)}
+                      {it.discount1_value? ` − ${it.discount1_value}${it.discount1_type==='percent'?'%':'฿'}`:''}
+                      {it.discount2_value? ` − ${it.discount2_value}${it.discount2_type==='percent'?'%':'฿'}`:''}
+                    </div>
+                  </div>
+                  <div className="font-medium">{fmtTHB(applyDiscounts(it.unit_price, it.quantity, it.discount1_value, it.discount1_type, it.discount2_value, it.discount2_type))}</div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex justify-between text-sm text-muted"><span>รวมก่อนลด</span><span>{fmtTHB(detail.order.subtotal)}</span></div>
+            <div className="flex justify-between font-display text-2xl mt-2"><span>ยอดสุทธิ</span><span>{fmtTHB(detail.order.grand_total)}</span></div>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+/* ===================================================================
+   RECEIVE / RETURN VIEW (shared form)
+=================================================================== */
+function StockMovementView({ kind /* 'receive' | 'return' */ }) {
+  const toast = useToast();
+  const [date, setDate] = useState(todayISO());
+  const [channel, setChannel] = useState("store"); // returns only
+  const [items, setItems] = useState([]);
+  const [search, setSearch] = useState("");
+  const [results, setResults] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(()=>{
+    if (!search.trim()) { setResults([]); return; }
+    let cancel=false;
+    const t = setTimeout(async ()=>{
+      const q = search.trim();
+      const { data: barcodeHit } = await sb.from('products').select('*').eq('barcode', q).limit(1);
+      let rows = barcodeHit?.length ? barcodeHit : [];
+      if (!rows.length) {
+        const { data } = await sb.from('products').select('*').ilike('name', `%${q}%`).limit(15);
+        rows = data || [];
+      }
+      if (!cancel) setResults(rows);
+    }, 200);
+    return ()=>{ cancel=true; clearTimeout(t); };
+  }, [search]);
+
+  const addItem = (p) => {
+    setItems(it => [...it, {
+      product_id: p.id, product_name: p.name,
+      quantity: 1, unit: 'เรือน',
+      unit_price: kind==='receive' ? Number(p.cost_price)||0 : Number(p.retail_price)||0,
+      discount1_value: 0, discount1_type: null,
+      discount2_value: 0, discount2_type: null,
+    }]);
+    setSearch(""); setResults([]);
+  };
+  const upd = (i, patch) => setItems(it => it.map((x,j)=>j===i?{...x,...patch}:x));
+  const rm = (i) => setItems(it => it.filter((_,j)=>j!==i));
+
+  const total = useMemo(()=> items.reduce((s,l)=> s + applyDiscounts(l.unit_price, l.quantity, l.discount1_value, l.discount1_type, l.discount2_value, l.discount2_type), 0), [items]);
+
+  const submit = async () => {
+    if (!items.length) { toast.push("ไม่มีรายการ", 'error'); return; }
+    setSubmitting(true);
+    try {
+      const headerTable = kind==='receive' ? 'receive_orders' : 'return_orders';
+      const itemTable   = kind==='receive' ? 'receive_order_items' : 'return_order_items';
+      const dateField   = kind==='receive' ? 'receive_date' : 'return_date';
+
+      const headerPayload = { [dateField]: new Date(date+'T00:00:00').toISOString(), total_value: total };
+      if (kind==='return') headerPayload.channel = channel;
+
+      const { data: head, error: e1 } = await sb.from(headerTable).insert(headerPayload).select().single();
+      if (e1) throw e1;
+
+      const fk = kind==='receive' ? 'receive_order_id' : 'return_order_id';
+      const payload = items.map(l => ({
+        [fk]: head.id,
+        product_id: l.product_id, product_name: l.product_name,
+        quantity: l.quantity, unit: l.unit, unit_price: l.unit_price,
+        discount1_value: l.discount1_value||0, discount1_type: l.discount1_type,
+        discount2_value: l.discount2_value||0, discount2_type: l.discount2_type,
+      }));
+      const { error: e2 } = await sb.from(itemTable).insert(payload);
+      if (e2) throw e2;
+
+      // adjust stock atomically: receive +qty, return +qty (customer return adds stock back)
+      for (const l of items) {
+        if (!l.product_id) continue;
+        await sb.rpc('adjust_stock', { p_id: l.product_id, qty_delta: l.quantity });
+      }
+
+      toast.push(`บันทึก${kind==='receive'?'รับ':'คืน'}สินค้า #${head.id} สำเร็จ`, 'success');
+      setItems([]);
+    } catch (e) {
+      toast.push("บันทึกไม่ได้: " + e.message, 'error');
+    } finally { setSubmitting(false); }
+  };
+
+  return (
+    <div className="px-10 py-8 grid grid-cols-12 gap-6">
+      <div className="col-span-7">
+        <div className="card-canvas mb-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted">วันที่</label>
+              <input type="date" className="input mt-1" value={date} onChange={e=>setDate(e.target.value)} />
+            </div>
+            {kind==='return' && (
+              <div>
+                <label className="text-xs uppercase tracking-wider text-muted">ช่องทางที่คืน</label>
+                <select className="input mt-1" value={channel} onChange={e=>setChannel(e.target.value)}>
+                  {CHANNELS.map(c=><option key={c.v} value={c.v}>{c.label}</option>)}
+                </select>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="card-canvas !p-0 overflow-hidden">
+          <div className="p-4 border-b hairline">
+            <input className="input" placeholder="🔍 ค้นหาสินค้าเพื่อเพิ่ม..." value={search} onChange={e=>setSearch(e.target.value)} />
+          </div>
+          <div className="max-h-72 overflow-y-auto">
+            {results.map(p => (
+              <div key={p.id} className="px-4 py-3 border-b hairline-soft hover:bg-surface-card cursor-pointer flex items-center justify-between" onClick={()=>addItem(p)}>
+                <div className="min-w-0">
+                  <div className="font-medium truncate">{p.name}</div>
+                  <div className="text-xs text-muted font-mono">{p.barcode||'—'}</div>
+                </div>
+                <div className="text-right text-sm">
+                  <div className="text-muted">ทุน {fmtTHB(p.cost_price)}</div>
+                  <div>ขาย {fmtTHB(p.retail_price)}</div>
+                </div>
+              </div>
+            ))}
+            {!search && <div className="p-6 text-muted text-sm">พิมพ์เพื่อค้นหาแล้วคลิกเพื่อเพิ่มในรายการ</div>}
+          </div>
+        </div>
+      </div>
+
+      <div className="col-span-5">
+        <div className="card-cream !p-0 overflow-hidden">
+          <div className="p-5 border-b hairline">
+            <div className="font-display text-2xl">{kind==='receive'?'รับสินค้าเข้า':'คืนสินค้า'}</div>
+            <div className="text-xs text-muted mt-1">{items.length} รายการ</div>
+          </div>
+          <div className="max-h-[50vh] overflow-y-auto p-3">
+            {!items.length && <div className="p-6 text-center text-muted">ยังไม่มีรายการ</div>}
+            {items.map((l, i) => (
+              <div key={i} className="bg-canvas rounded-md p-3 mb-2">
+                <div className="flex items-start justify-between">
+                  <div className="font-medium text-sm flex-1 truncate">{l.product_name}</div>
+                  <button className="text-muted hover:text-error text-sm" onClick={()=>rm(i)}>✕</button>
+                </div>
+                <div className="grid grid-cols-12 gap-2 mt-2">
+                  <input type="number" min="1" className="input !py-1 !text-xs col-span-3" value={l.quantity} onChange={e=>upd(i,{quantity:Math.max(1,Number(e.target.value)||1)})}/>
+                  <select className="input !py-1 !text-xs col-span-3" value={l.unit} onChange={e=>upd(i,{unit:e.target.value})}>
+                    {UNITS.map(u=><option key={u} value={u}>{u}</option>)}
+                  </select>
+                  <input type="number" className="input !py-1 !text-xs col-span-6 text-right" value={l.unit_price} onChange={e=>upd(i,{unit_price:Number(e.target.value)||0})}/>
+                </div>
+                <div className="text-right text-sm font-medium mt-2">{fmtTHB(applyDiscounts(l.unit_price,l.quantity,l.discount1_value,l.discount1_type,l.discount2_value,l.discount2_type))}</div>
+              </div>
+            ))}
+          </div>
+          <div className="p-5 border-t hairline bg-surface-cream-strong">
+            <div className="flex justify-between font-display text-2xl mb-4"><span>รวม</span><span>{fmtTHB(total)}</span></div>
+            <button className="btn-primary w-full !py-3" disabled={submitting||!items.length} onClick={submit}>
+              {submitting?'กำลังบันทึก...':`บันทึก${kind==='receive'?'การรับ':'การคืน'}`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ===================================================================
+   DASHBOARD
+=================================================================== */
+function DashboardView() {
+  const [stats, setStats] = useState(null);
+  const [topProducts, setTopProducts] = useState([]);
+  const [lowStock, setLowStock] = useState([]);
+  const [byChannel, setByChannel] = useState([]);
+
+  useEffect(()=>{ (async ()=>{
+    const today = todayISO();
+    const startMonth = today.slice(0,7) + '-01';
+
+    const [todayQ, monthQ, lowQ] = await Promise.all([
+      sb.from('sale_orders').select('grand_total, channel, payment_method').gte('sale_date', today + 'T00:00:00').lte('sale_date', today + 'T23:59:59'),
+      sb.from('sale_orders').select('grand_total').gte('sale_date', startMonth + 'T00:00:00'),
+      sb.from('products').select('id,name,current_stock').lt('current_stock', 5).gt('current_stock', -1).order('current_stock', { ascending: true }).limit(8),
+    ]);
+
+    const todayRows = todayQ.data || [];
+    const monthRows = monthQ.data || [];
+    const todayTotal = todayRows.reduce((s,r)=>s+Number(r.grand_total||0),0);
+    const monthTotal = monthRows.reduce((s,r)=>s+Number(r.grand_total||0),0);
+
+    const chMap = {};
+    todayRows.forEach(r=>{ const k = r.channel||'store'; chMap[k]=(chMap[k]||0)+Number(r.grand_total||0); });
+    setByChannel(Object.entries(chMap).map(([k,v])=>({ channel:k, total:v })));
+
+    setStats({ todayCount: todayRows.length, todayTotal, monthCount: monthRows.length, monthTotal });
+    setLowStock(lowQ.data || []);
+
+    // top products this month — fetch order ids of month, then aggregate items
+    const { data: monthIds } = await sb.from('sale_orders').select('id').gte('sale_date', startMonth + 'T00:00:00');
+    const ids = (monthIds||[]).map(x=>x.id);
+    if (ids.length) {
+      const { data: items } = await sb.from('sale_order_items').select('product_name,quantity').in('sale_order_id', ids);
+      const map = {};
+      (items||[]).forEach(it => { map[it.product_name] = (map[it.product_name]||0) + (Number(it.quantity)||0); });
+      const top = Object.entries(map).map(([name,q])=>({name,q})).sort((a,b)=>b.q-a.q).slice(0,8);
+      setTopProducts(top);
+    } else {
+      setTopProducts([]);
+    }
+  })(); }, []);
+
+  if (!stats) return <div className="px-10 py-8 text-muted">กำลังโหลดข้อมูล...</div>;
+
+  return (
+    <div className="px-10 py-8 space-y-8">
+      <div className="grid grid-cols-4 gap-4">
+        <div className="card-canvas">
+          <div className="text-xs uppercase tracking-wider text-muted">ยอดขายวันนี้</div>
+          <div className="font-display text-4xl mt-2">{fmtTHB(stats.todayTotal)}</div>
+          <div className="text-sm text-muted mt-2">{stats.todayCount} บิล</div>
+        </div>
+        <div className="card-cream">
+          <div className="text-xs uppercase tracking-wider text-muted">ยอดขายเดือนนี้</div>
+          <div className="font-display text-4xl mt-2">{fmtTHB(stats.monthTotal)}</div>
+          <div className="text-sm text-muted mt-2">{stats.monthCount} บิล</div>
+        </div>
+        <div className="card-dark">
+          <div className="text-xs uppercase tracking-wider text-on-dark-soft">เฉลี่ยต่อบิล (เดือน)</div>
+          <div className="font-display text-4xl mt-2">{stats.monthCount? fmtTHB(stats.monthTotal/stats.monthCount):'—'}</div>
+          <div className="text-sm text-on-dark-soft mt-2">เดือน {todayISO().slice(0,7)}</div>
+        </div>
+        <div className="bg-primary text-on-primary rounded-lg p-6">
+          <div className="text-xs uppercase tracking-[1.5px] opacity-90">สต็อกใกล้หมด</div>
+          <div className="font-display text-4xl mt-2">{lowStock.length}</div>
+          <div className="text-sm opacity-90 mt-2">รายการ (น้อยกว่า 5)</div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-12 gap-6">
+        <div className="col-span-7 card-canvas">
+          <div className="font-display text-2xl mb-4">สินค้าขายดีเดือนนี้</div>
+          {!topProducts.length && <div className="text-muted">ยังไม่มียอดขายในเดือนนี้</div>}
+          {topProducts.map((p,i)=>(
+            <div key={p.name} className="flex items-center gap-3 py-2 border-b hairline-soft">
+              <div className="font-display text-2xl w-8 text-muted-soft">{i+1}</div>
+              <div className="flex-1 truncate">{p.name}</div>
+              <div className="badge-pill">ขาย {p.q} ชิ้น</div>
+            </div>
+          ))}
+        </div>
+        <div className="col-span-5 card-canvas">
+          <div className="font-display text-2xl mb-4">สต็อกใกล้หมด</div>
+          {!lowStock.length && <div className="text-muted">สต็อกปลอดภัย</div>}
+          {lowStock.map(p => (
+            <div key={p.id} className="flex items-center gap-3 py-2 border-b hairline-soft">
+              <div className="flex-1 truncate text-sm">{p.name}</div>
+              <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':'!bg-warning/15 !text-[#8a6500]')}>{p.current_stock}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="card-dark">
+        <div className="font-display text-2xl mb-4">ยอดขายวันนี้แยกช่องทาง</div>
+        {!byChannel.length && <div className="text-on-dark-soft">ยังไม่มียอดขายวันนี้</div>}
+        <div className="grid grid-cols-5 gap-3">
+          {CHANNELS.map(c => {
+            const v = byChannel.find(x=>x.channel===c.v)?.total || 0;
+            return (
+              <div key={c.v} className="bg-surface-dark-elevated rounded-md p-4">
+                <div className="text-xs uppercase tracking-wider text-on-dark-soft">{c.label}</div>
+                <div className="font-display text-2xl mt-1">{fmtTHB(v)}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ===================================================================
+   LOGIN SCREEN
+=================================================================== */
+function LoginScreen({ onSuccess }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setErr(""); setBusy(true);
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    setBusy(false);
+    if (error) setErr(error.message || "เข้าสู่ระบบไม่สำเร็จ");
+    else onSuccess();
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-canvas px-6">
+      <div className="w-full max-w-md">
+        <div className="flex items-center gap-3 mb-10 justify-center">
+          <span className="spike lg" />
+          <div className="font-display text-4xl">TIMES</div>
+        </div>
+        <div className="card-canvas">
+          <div className="text-xs uppercase tracking-[1.5px] text-muted">POS · ร้านนาฬิกา</div>
+          <h1 className="font-display text-4xl mt-2 mb-6 text-ink">เข้าสู่ระบบ</h1>
+          <form onSubmit={submit} className="space-y-4">
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted">อีเมล</label>
+              <input type="email" autoFocus className="input mt-1" value={email} onChange={e=>setEmail(e.target.value)} required />
+            </div>
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted">รหัสผ่าน</label>
+              <input type="password" className="input mt-1" value={password} onChange={e=>setPassword(e.target.value)} required />
+            </div>
+            {err && <div className="text-sm text-error bg-error/10 px-3 py-2 rounded-md">{err}</div>}
+            <button className="btn-primary w-full !py-3" disabled={busy}>
+              {busy ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
+            </button>
+          </form>
+        </div>
+        <div className="text-center text-xs text-muted-soft mt-6 font-display italic">"ทุกเรือนมีเรื่องราว"</div>
+      </div>
+    </div>
+  );
+}
+
+/* ===================================================================
+   APP SHELL
+=================================================================== */
+function App() {
+  const [session, setSession] = useState(undefined); // undefined = loading
+  const [view, setView] = useState("pos");
+
+  useEffect(() => {
+    sb.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: sub } = sb.auth.onAuthStateChange((_e, s) => setSession(s));
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  if (session === undefined) return <div className="min-h-screen flex items-center justify-center bg-canvas text-muted">กำลังโหลด...</div>;
+  if (!session) return <ToastProvider><LoginScreen onSuccess={()=>{}} /></ToastProvider>;
+
+
+  const titles = {
+    pos:       { t: "ขายสินค้า",       s: "POS" },
+    products:  { t: "สินค้า",           s: "Inventory" },
+    sales:     { t: "ประวัติการขาย",     s: "Sales History" },
+    receive:   { t: "รับสินค้าเข้า",      s: "Stock In" },
+    return:    { t: "คืนสินค้า",         s: "Stock Return" },
+    dashboard: { t: "แดชบอร์ด",         s: "Dashboard" },
+  };
+
+  return (
+    <ToastProvider>
+      <div className="flex">
+        <Sidebar view={view} setView={setView} userEmail={session.user?.email} />
+        <main className="flex-1 min-h-screen">
+          <Topbar title={titles[view].t} subtitle={titles[view].s} />
+          {view==='pos' && <POSView />}
+          {view==='products' && <ProductsView />}
+          {view==='sales' && <SalesView />}
+          {view==='receive' && <StockMovementView kind="receive" />}
+          {view==='return' && <StockMovementView kind="return" />}
+          {view==='dashboard' && <DashboardView />}
+        </main>
+      </div>
+    </ToastProvider>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+
+</script>
+</body>
+</html>

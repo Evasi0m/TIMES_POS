@@ -1,0 +1,7 @@
+.DS_Store
+*.pyc
+__pycache__/
+.env
+
+# Internal reference + data — contains service_role key and source CSVs
+TIMES-POS-Architecture/
