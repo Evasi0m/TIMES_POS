@@ -2918,35 +2918,37 @@ function StockMovementForm({ kind }) {
    DASHBOARD VIEW
 ========================================================= */
 function DashboardView() {
+  const today = todayISO();
+  const startMonth = today.slice(0,7) + '-01';
+  const [dateRange, setDateRange] = useState({ from: startMonth, to: today });
   const [stats, setStats] = useState(null);
   const [topProducts, setTopProducts] = useState([]);
   const [lowStock, setLowStock] = useState([]);
   const [byChannel, setByChannel] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(()=>{ (async ()=>{
-    const today = todayISO();
-    const startMonth = today.slice(0,7) + '-01';
+    setLoading(true);
+    setStats(null);
+    const { from, to } = dateRange;
 
-    const [todayQ, monthQ, lowQ] = await Promise.all([
-      sb.from('sale_orders').select('grand_total, channel').eq('status','active').gte('sale_date', today + 'T00:00:00').lte('sale_date', today + 'T23:59:59'),
-      sb.from('sale_orders').select('grand_total').eq('status','active').gte('sale_date', startMonth + 'T00:00:00'),
+    const [rangeQ, lowQ] = await Promise.all([
+      sb.from('sale_orders').select('id, grand_total, channel').eq('status','active')
+        .gte('sale_date', from + 'T00:00:00').lte('sale_date', to + 'T23:59:59'),
       sb.from('products').select('id,name,current_stock').lt('current_stock', 5).gt('current_stock', -1).order('current_stock', { ascending: true }).limit(8),
     ]);
 
-    const todayRows = todayQ.data || [];
-    const monthRows = monthQ.data || [];
-    const todayTotal = todayRows.reduce((s,r)=>s+Number(r.grand_total||0),0);
-    const monthTotal = monthRows.reduce((s,r)=>s+Number(r.grand_total||0),0);
+    const rangeRows = rangeQ.data || [];
+    const rangeTotal = rangeRows.reduce((s,r)=>s+Number(r.grand_total||0),0);
 
     const chMap = {};
-    todayRows.forEach(r=>{ const k = r.channel||'store'; chMap[k]=(chMap[k]||0)+Number(r.grand_total||0); });
+    rangeRows.forEach(r=>{ const k = r.channel||'store'; chMap[k]=(chMap[k]||0)+Number(r.grand_total||0); });
     setByChannel(Object.entries(chMap).map(([k,v])=>({ channel:k, total:v })));
 
-    setStats({ todayCount: todayRows.length, todayTotal, monthCount: monthRows.length, monthTotal });
+    setStats({ rangeCount: rangeRows.length, rangeTotal });
     setLowStock(lowQ.data || []);
 
-    const { data: monthIds } = await sb.from('sale_orders').select('id').eq('status','active').gte('sale_date', startMonth + 'T00:00:00');
-    const ids = (monthIds||[]).map(x=>x.id);
+    const ids = rangeRows.map(x=>x.id);
     if (ids.length) {
       const { data: items } = await sb.from('sale_order_items').select('product_name,quantity').in('sale_order_id', ids);
       const map = {};
@@ -2954,9 +2956,8 @@ function DashboardView() {
       const top = Object.entries(map).map(([name,q])=>({name,q})).sort((a,b)=>b.q-a.q).slice(0,8);
       setTopProducts(top);
     } else setTopProducts([]);
-  })(); }, []);
-
-  if (!stats) return <div className="px-4 lg:px-10 py-8 text-muted text-sm flex items-center gap-3"><span className="spinner"/>กำลังโหลดข้อมูล...</div>;
+    setLoading(false);
+  })(); }, [dateRange.from, dateRange.to]);
 
   const StatCard = ({ tone, label, value, sub, icon }) => (
     <div className={
@@ -2975,56 +2976,78 @@ function DashboardView() {
     </div>
   );
 
+  const rangeLabel = dateRange.from === dateRange.to
+    ? fmtThaiDateShort(dateRange.from)
+    : fmtThaiRange(dateRange.from, dateRange.to);
+
   return (
     <div className="px-4 py-4 lg:px-10 lg:py-8 space-y-4 lg:space-y-8">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-        <StatCard tone="canvas" label="ยอดขายวันนี้" value={fmtTHB(stats.todayTotal)} sub={`${stats.todayCount} บิล`} icon="trend-up"/>
-        <StatCard tone="cream"  label="ยอดขายเดือนนี้" value={fmtTHB(stats.monthTotal)} sub={`${stats.monthCount} บิล`} icon="receipt"/>
-        <StatCard tone="dark"   label="เฉลี่ยต่อบิล" value={stats.monthCount? fmtTHB(stats.monthTotal/stats.monthCount):'—'} sub={`เดือน ${todayISO().slice(0,7)}`} icon="credit-card"/>
-        <StatCard tone="coral"  label="สต็อกใกล้หมด" value={lowStock.length} sub="รายการ (น้อยกว่า 5)" icon="alert"/>
+
+      {/* Date range picker */}
+      <div className="flex items-center gap-3">
+        <Icon name="calendar" size={18} className="text-muted flex-shrink-0"/>
+        <DatePicker
+          mode="range"
+          value={dateRange}
+          onChange={setDateRange}
+          placeholder="เลือกช่วงวันที่"
+          className="w-64"
+        />
+        {loading && <span className="spinner text-muted"/>}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
-        <div className="lg:col-span-7 card-canvas p-4 lg:p-6">
-          <div className="font-display text-xl lg:text-2xl mb-3 lg:mb-4 flex items-center gap-2"><Icon name="trend-up" size={20}/> สินค้าขายดีเดือนนี้</div>
-          {!topProducts.length && <div className="text-muted text-sm">ยังไม่มียอดขายในเดือนนี้</div>}
-          {topProducts.map((p,i)=>(
-            <div key={p.name} className="flex items-center gap-3 py-2 border-b hairline-soft last:border-0">
-              <div className="font-display text-xl lg:text-2xl w-7 text-muted-soft">{i+1}</div>
-              <div className="flex-1 truncate text-sm">{p.name}</div>
-              <div className="badge-pill">{p.q} ชิ้น</div>
-            </div>
-          ))}
+      {!stats ? (
+        <div className="text-muted text-sm flex items-center gap-3"><span className="spinner"/>กำลังโหลดข้อมูล...</div>
+      ) : (<>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+          <StatCard tone="canvas" label="ยอดขายรวม" value={fmtTHB(stats.rangeTotal)} sub={`${stats.rangeCount} บิล`} icon="trend-up"/>
+          <StatCard tone="cream"  label="จำนวนบิล" value={stats.rangeCount} sub={rangeLabel} icon="receipt"/>
+          <StatCard tone="dark"   label="เฉลี่ยต่อบิล" value={stats.rangeCount? fmtTHB(stats.rangeTotal/stats.rangeCount):'—'} sub={rangeLabel} icon="credit-card"/>
+          <StatCard tone="coral"  label="สต็อกใกล้หมด" value={lowStock.length} sub="รายการ (น้อยกว่า 5)" icon="alert"/>
         </div>
-        <div className="lg:col-span-5 card-canvas p-4 lg:p-6">
-          <div className="font-display text-xl lg:text-2xl mb-3 lg:mb-4 flex items-center gap-2"><Icon name="alert" size={20}/> สต็อกใกล้หมด</div>
-          {!lowStock.length && <div className="text-muted text-sm">สต็อกปลอดภัย</div>}
-          {lowStock.map(p => (
-            <div key={p.id} className="flex items-center gap-3 py-2 border-b hairline-soft last:border-0">
-              <div className="flex-1 truncate text-sm">{p.name}</div>
-              <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':'!bg-warning/15 !text-[#8a6500]')}>{p.current_stock}</span>
-            </div>
-          ))}
-        </div>
-      </div>
 
-      <div className="card-dark p-4 lg:p-6">
-        <div className="font-display text-xl lg:text-2xl mb-3 lg:mb-4 flex items-center gap-2"><Icon name="store" size={20}/> ยอดขายวันนี้แยกช่องทาง</div>
-        {!byChannel.length && <div className="text-on-dark-soft text-sm">ยังไม่มียอดขายวันนี้</div>}
-        {byChannel.length>0 && (
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 lg:gap-3">
-            {CHANNELS.map(c => {
-              const v = byChannel.find(x=>x.channel===c.v)?.total || 0;
-              return (
-                <div key={c.v} className="bg-surface-dark-elevated rounded-md p-3 lg:p-4">
-                  <div className="text-[10px] uppercase tracking-wider text-on-dark-soft">{c.label}</div>
-                  <div className="font-display text-lg lg:text-2xl mt-1">{fmtTHB(v)}</div>
-                </div>
-              );
-            })}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
+          <div className="lg:col-span-7 card-canvas p-4 lg:p-6">
+            <div className="font-display text-xl lg:text-2xl mb-3 lg:mb-4 flex items-center gap-2"><Icon name="trend-up" size={20}/> สินค้าขายดีในช่วงนี้</div>
+            {!topProducts.length && <div className="text-muted text-sm">ยังไม่มียอดขายในช่วงที่เลือก</div>}
+            {topProducts.map((p,i)=>(
+              <div key={p.name} className="flex items-center gap-3 py-2 border-b hairline-soft last:border-0">
+                <div className="font-display text-xl lg:text-2xl w-7 text-muted-soft">{i+1}</div>
+                <div className="flex-1 truncate text-sm">{p.name}</div>
+                <div className="badge-pill">{p.q} ชิ้น</div>
+              </div>
+            ))}
           </div>
-        )}
-      </div>
+          <div className="lg:col-span-5 card-canvas p-4 lg:p-6">
+            <div className="font-display text-xl lg:text-2xl mb-3 lg:mb-4 flex items-center gap-2"><Icon name="alert" size={20}/> สต็อกใกล้หมด</div>
+            {!lowStock.length && <div className="text-muted text-sm">สต็อกปลอดภัย</div>}
+            {lowStock.map(p => (
+              <div key={p.id} className="flex items-center gap-3 py-2 border-b hairline-soft last:border-0">
+                <div className="flex-1 truncate text-sm">{p.name}</div>
+                <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':'!bg-warning/15 !text-[#8a6500]')}>{p.current_stock}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card-dark p-4 lg:p-6">
+          <div className="font-display text-xl lg:text-2xl mb-3 lg:mb-4 flex items-center gap-2"><Icon name="store" size={20}/> ยอดขายแยกช่องทาง</div>
+          {!byChannel.length && <div className="text-on-dark-soft text-sm">ยังไม่มียอดขายในช่วงที่เลือก</div>}
+          {byChannel.length>0 && (
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 lg:gap-3">
+              {CHANNELS.map(c => {
+                const v = byChannel.find(x=>x.channel===c.v)?.total || 0;
+                return (
+                  <div key={c.v} className="bg-surface-dark-elevated rounded-md p-3 lg:p-4">
+                    <div className="text-[10px] uppercase tracking-wider text-on-dark-soft">{c.label}</div>
+                    <div className="font-display text-lg lg:text-2xl mt-1">{fmtTHB(v)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </>)}
     </div>
   );
 }
