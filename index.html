@@ -200,6 +200,44 @@
     box-shadow: 0 0 0 3px rgba(204, 120, 92, 0.08);
   }
 
+  .btn-add-product {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: linear-gradient(160deg, #e07a4a 0%, #cc6030 55%, #b85228 100%);
+    color: #faf0e6;
+    padding: 10px 18px;
+    min-height: 40px;
+    border-radius: 12px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border: 1px solid rgba(255, 180, 120, 0.35);
+    box-shadow:
+      0 0 0 3px rgba(204, 96, 48, 0.15),
+      0 0 14px rgba(204, 96, 48, 0.28),
+      0 2px 6px rgba(180, 72, 28, 0.30),
+      0 1px 0 rgba(255,255,255,0.18) inset;
+    cursor: pointer;
+    transition: all 0.18s var(--ease-out);
+    text-decoration: none;
+    letter-spacing: 0.01em;
+    animation: addProductGlow 2.4s ease-in-out infinite;
+  }
+  .btn-add-product:hover {
+    background: linear-gradient(160deg, #e88550 0%, #d46838 55%, #c25c30 100%);
+    box-shadow:
+      0 0 0 4px rgba(204, 96, 48, 0.22),
+      0 0 20px rgba(204, 96, 48, 0.40),
+      0 4px 10px rgba(180, 72, 28, 0.35),
+      0 1px 0 rgba(255,255,255,0.22) inset;
+    transform: translateY(-1px);
+  }
+  .btn-add-product:active { transform: translateY(0); }
+  @keyframes addProductGlow {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(204, 96, 48, 0.14), 0 0 12px rgba(204, 96, 48, 0.22), 0 2px 6px rgba(180, 72, 28, 0.25), 0 1px 0 rgba(255,255,255,0.18) inset; }
+    50%      { box-shadow: 0 0 0 4px rgba(204, 96, 48, 0.24), 0 0 20px rgba(204, 96, 48, 0.38), 0 4px 10px rgba(180, 72, 28, 0.32), 0 1px 0 rgba(255,255,255,0.22) inset; }
+  }
+
   .btn-primary {
     background: linear-gradient(180deg, #d18467 0%, #cc785c 50%, #c06c50 100%);
     color: #fff;
@@ -472,6 +510,108 @@
     color: #141413;
     border-color: var(--glass-border-cream);
     box-shadow: 0 1px 0 rgba(255,255,255,0.65) inset, 0 4px 12px -4px rgba(20, 20, 19, 0.08);
+  }
+
+  /* ==========  DARK SIDEBAR overrides  ========== */
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0;
+    z-index: 50;
+    height: 100vh;
+    background: rgba(8, 7, 6, 0.84);
+    backdrop-filter: blur(40px) saturate(160%) brightness(0.58);
+    -webkit-backdrop-filter: blur(40px) saturate(160%) brightness(0.58);
+    border-right: none;
+    box-shadow:
+      2px 0 18px rgba(0, 0, 0, 0.55),
+      4px 0 8px -4px rgba(0, 0, 0, 0.40);
+  }
+  .sidebar::after {
+    content: '';
+    position: absolute;
+    right: 0; top: 0; bottom: 0;
+    width: 1px;
+    background: linear-gradient(
+      180deg,
+      rgba(255,255,255,0.00)  0%,
+      rgba(255,255,255,0.07) 22%,
+      rgba(255,255,255,0.11) 50%,
+      rgba(255,255,255,0.07) 78%,
+      rgba(255,255,255,0.00) 100%
+    );
+    filter: blur(0.3px);
+    box-shadow: 0 0 4px 0px rgba(255, 255, 255, 0.04);
+    pointer-events: none;
+  }
+  .sidebar .sidebar-header {
+    border-bottom-color: rgba(255, 255, 255, 0.07);
+  }
+  .sidebar .nav-item {
+    color: rgba(250, 249, 245, 0.55);
+    border-color: transparent;
+  }
+  .sidebar .nav-item::before {
+    background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0));
+  }
+  .sidebar .nav-item:hover {
+    background: rgba(255, 255, 255, 0.07);
+    backdrop-filter: none;
+    color: #faf9f5;
+    border-color: rgba(255,255,255,0.08);
+    transform: translateX(2px);
+  }
+  .sidebar .nav-item.active {
+    background: rgba(255, 255, 255, 0.11);
+    backdrop-filter: none;
+    color: #faf9f5;
+    border-color: rgba(255,255,255,0.10);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, 0 4px 14px -4px rgba(0,0,0,0.35);
+  }
+  .sidebar .sidebar-footer {
+    border-top-color: rgba(255, 255, 255, 0.07);
+  }
+  .sidebar .sidebar-email {
+    color: rgba(250, 249, 245, 0.35);
+  }
+  .sidebar .btn-danger-sidebar {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%;
+    background: linear-gradient(180deg, #e53e3e 0%, #c53030 100%);
+    color: #fff;
+    padding: 8px 16px;
+    min-height: 38px;
+    border-radius: 10px;
+    font-weight: 500;
+    font-size: 14px;
+    border: 1px solid rgba(255,120,120,0.25);
+    box-shadow: 0 2px 8px rgba(197, 48, 48, 0.4), 0 1px 0 rgba(255,255,255,0.10) inset;
+    cursor: pointer;
+    transition: all .18s var(--ease-out);
+  }
+  .sidebar .btn-danger-sidebar:hover {
+    background: linear-gradient(180deg, #f05252 0%, #d63030 100%);
+    box-shadow: 0 4px 12px rgba(197, 48, 48, 0.55), 0 1px 0 rgba(255,255,255,0.14) inset;
+    transform: translateY(-1px);
+  }
+  .sidebar .btn-settings-sidebar {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%;
+    background: linear-gradient(180deg, #d4a017 0%, #b8860b 100%);
+    color: #fff;
+    padding: 8px 16px;
+    min-height: 38px;
+    border-radius: 10px;
+    font-weight: 500;
+    font-size: 14px;
+    border: 1px solid rgba(255,210,80,0.30);
+    box-shadow: 0 2px 8px rgba(180,130,10,0.40), 0 1px 0 rgba(255,255,255,0.12) inset;
+    cursor: pointer;
+    transition: all .18s var(--ease-out);
+  }
+  .sidebar .btn-settings-sidebar:hover {
+    background: linear-gradient(180deg, #e6b820 0%, #c8950d 100%);
+    box-shadow: 0 4px 12px rgba(180,130,10,0.55), 0 1px 0 rgba(255,255,255,0.16) inset;
+    transform: translateY(-1px);
   }
 
   /* ==========  MOBILE TOPBAR / TABBAR (glass)  ========== */
@@ -783,9 +923,10 @@ function applyOrderDiscount(subtotal, value, type) {
 const Icon = ({ name, size = 20, className = "", strokeWidth = 1.75, color }) => {
   const p = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color || "currentColor", strokeWidth, strokeLinecap: "round", strokeLinejoin: "round", className };
   switch (name) {
-    case "cart":      return <svg {...p}><path d="M6 8h12l-1 12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>;
+    case "cart":      return <svg {...p}><path d="M2 3h2.5l3 12h11l2.5-8H7"/><circle cx="10.5" cy="19.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="17.5" cy="19.5" r="1.5" fill="currentColor" stroke="none"/></svg>;
     case "watch":     return <svg {...p}><rect x="6" y="5" width="12" height="14" rx="3"/><path d="M9 5V3h6v2M9 19v2h6v-2"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg>;
-    case "receipt":   return <svg {...p}><path d="M3 3v6h6"/><path d="M3.5 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l3.5 2"/></svg>;
+    case "box":       return <svg {...p}><rect x="2" y="8" width="20" height="13" rx="1"/><path d="M2 8 4 3h16l2 5"/><path d="M9 13h6"/></svg>;
+    case "receipt":   return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>;
     case "package":   return <svg {...p}><path d="M12 3l9 5v10l-9 5-9-5V8l9-5z"/><path d="M12 12l9-5"/><path d="M12 12v10"/></svg>;
     case "package-in":  return <svg {...p}><path d="M12 3l9 5v10l-9 5-9-5V8l9-5z"/><path d="M12 8v10"/><path d="M8 12l4-4 4 4"/></svg>;
     case "package-out": return <svg {...p}><path d="M12 3l9 5v10l-9 5-9-5V8l9-5z"/><path d="M12 8v10"/><path d="M8 16l4 4 4-4"/></svg>;
@@ -808,7 +949,9 @@ const Icon = ({ name, size = 20, className = "", strokeWidth = 1.75, color }) =>
     case "alert":     return <svg {...p}><path d="M12 2 2 22h20L12 2z"/><path d="M12 9v6M12 17h.01"/></svg>;
     case "barcode":   return <svg {...p}><path d="M4 7v10M7 7v10M10 7v10M14 7v10M17 7v10M20 7v10"/></svg>;
     case "credit-card":return <svg {...p}><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 11h20"/></svg>;
-    case "trend-up":  return <svg {...p}><path d="M22 7h-6v6M2 17l6-6 4 4 8-8"/></svg>;
+    case "trend-up":  return <svg {...p}><polyline points="4 17 9 12 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg>;
+    case "arrow-up":  return <svg {...p}><path d="M12 20V4"/><path d="M5 11l7-7 7 7"/></svg>;
+    case "arrow-down":return <svg {...p}><path d="M12 4v16"/><path d="M19 13l-7 7-7-7"/></svg>;
     case "store":     return <svg {...p}><path d="M4 4h16l-2 4H6L4 4z"/><path d="M4 8v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/></svg>;
     default: return null;
   }
@@ -1229,6 +1372,9 @@ function Receipt({ order, items, shop, variant = 'receipt' }) {
         <div className="r-sm"><span className="r-bold">หมายเหตุ:</span> {order.notes}</div>
       </>)}
 
+      <hr className="r-hr"/>
+      <div className="r-center r-sm" style={{fontWeight:600}}>กรณี คืน/เคลมสินค้า</div>
+      <div className="r-center r-sm">กรุณาแนบใบเสร็จกลับมาด้วยค่ะ</div>
       <hr className="r-hr"/>
       <div className="r-center r-sm">{shop?.receipt_footer || 'ขอบคุณที่ใช้บริการ'}</div>
       <div className="r-center r-sm" style={{marginTop: '4mm', opacity: 0.6}}>พิมพ์ {fmtDateTime(new Date().toISOString())}</div>
@@ -1690,9 +1836,9 @@ function LoginScreen() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-canvas px-5">
       <div className="w-full max-w-md">
-        <div className="flex items-center gap-3 mb-8 lg:mb-10 justify-center">
-          <img src="icons/logo_web3_512.png" alt="TIMES logo" style={{width:41,height:41,objectFit:'contain'}} />
-          <div style={{fontFamily:"'Jost', sans-serif", fontWeight:600}} className="text-3xl lg:text-4xl leading-none self-center">TIMES</div>
+        <div className="flex flex-col items-center gap-3 mb-8 lg:mb-10">
+          <img src="icons/logo_web3_512.png" alt="TIMES logo" style={{width:49,height:49,objectFit:'contain'}} />
+          <div style={{fontFamily:"'Jost', sans-serif", fontWeight:600}} className="text-3xl lg:text-4xl leading-none">TIMES</div>
         </div>
         <div className="card-canvas p-6 lg:p-8">
           <div className="text-xs uppercase tracking-[1.5px] text-muted font-medium">POS · ร้านนาฬิกา</div>
@@ -1733,15 +1879,15 @@ function LoginScreen() {
 ========================================================= */
 const NAV = [
   { k: "pos",       label: "ขาย",        labelLong: "ขายสินค้า",          icon: "cart" },
-  { k: "products",  label: "สินค้า",      labelLong: "สินค้า",              icon: "watch" },
+  { k: "products",  label: "สินค้า",      labelLong: "สินค้า",              icon: "box" },
   { k: "sales",     label: "ประวัติ",     labelLong: "ประวัติการขาย",       icon: "receipt" },
-  { k: "receive",   label: "รับเข้า",     labelLong: "รับสินค้าจากบริษัท",  icon: "package-in" },
-  { k: "return",    label: "รับคืน",      labelLong: "รับคืนจากลูกค้า",     icon: "package-out" },
+  { k: "receive",   label: "รับเข้า",     labelLong: "รับสินค้าจากบริษัท",  icon: "arrow-up" },
+  { k: "return",    label: "รับคืน",      labelLong: "รับคืนจากลูกค้า",     icon: "arrow-down" },
   { k: "dashboard", label: "ภาพรวม",     labelLong: "แดชบอร์ด",           icon: "dashboard" },
   { k: "pnl",       label: "กำไร",       labelLong: "กำไร / ขาดทุน",       icon: "trend-up" },
 ];
 
-const SUPPLIERS = ["CMG", "SEIKO TH"];
+const SUPPLIERS = ["CMG", "SEIKO TH", "ถ่าน", "สาย"];
 const CLAIM_REASONS = ["ชำรุดจากโรงงาน", "ส่งผิดรุ่น", "ส่งผิดจำนวน", "ขายไม่ได้/คืนสต็อก", "อื่นๆ"];
 
 /* =========================================================
@@ -1749,10 +1895,10 @@ const CLAIM_REASONS = ["ชำรุดจากโรงงาน", "ส่ง�
 ========================================================= */
 function Sidebar({ view, setView, userEmail, onOpenSettings }) {
   return (
-    <aside className="hidden lg:flex w-64 bg-canvas border-r hairline flex-col h-screen sticky top-0">
-      <div className="px-6 py-6 flex items-center gap-3 border-b hairline">
+    <aside className="sidebar hidden lg:flex w-64 flex-col">
+      <div className="sidebar-header px-6 py-6 flex items-center gap-3 border-b">
         <img src="icons/logo_web3_512.png" alt="TIMES logo" style={{width:41,height:41,objectFit:'contain'}} />
-        <div style={{fontFamily:"'Jost', sans-serif", fontWeight:600}} className="text-2xl leading-none self-center">TIMES</div>
+        <div style={{fontFamily:"'Jost', sans-serif", fontWeight:600, color:'#faf9f5'}} className="text-2xl leading-none self-center">TIMES</div>
       </div>
       <nav className="p-3 flex-1 overflow-y-auto">
         {NAV.map(it => (
@@ -1762,13 +1908,12 @@ function Sidebar({ view, setView, userEmail, onOpenSettings }) {
           </div>
         ))}
       </nav>
-      <div className="p-4 border-t hairline space-y-2">
-        <button className="nav-item w-full !p-2.5 !gap-3 text-sm" onClick={onOpenSettings}>
-          <Icon name="edit" size={16}/>
-          <span>ตั้งค่าร้าน</span>
+      <div className="sidebar-footer p-4 border-t space-y-2">
+        <button className="btn-settings-sidebar" onClick={onOpenSettings}>
+          <Icon name="edit" size={16}/> ตั้งค่าบิล
         </button>
-        <div className="text-xs text-muted-soft truncate pt-1">{userEmail}</div>
-        <button className="btn-secondary w-full !py-2 !text-sm" onClick={()=>sb.auth.signOut()}>
+        <div className="sidebar-email text-xs truncate pt-1">{userEmail}</div>
+        <button className="btn-danger-sidebar" onClick={()=>sb.auth.signOut()}>
           <Icon name="logout" size={16}/> ออกจากระบบ
         </button>
       </div>
@@ -1951,10 +2096,9 @@ function POSView() {
       }));
       const { error: e2 } = await sb.from('sale_order_items').insert(items);
       if (e2) throw e2;
-      for (const l of cart) {
-        if (!l.product_id) continue;
-        await sb.rpc('adjust_stock', { p_id: l.product_id, qty_delta: -l.quantity, p_reason: 'sale', p_ref_table: 'sale_orders', p_ref_id: order.id });
-      }
+      await Promise.all(cart.filter(l => l.product_id).map(l =>
+        sb.rpc('adjust_stock', { p_id: l.product_id, qty_delta: -l.quantity, p_reason: 'sale', p_ref_table: 'sale_orders', p_ref_id: order.id })
+      ));
       toast.push(`บันทึกบิล #${order.id} · ${fmtTHB(grand)}`, 'success');
       setReceiptOrderId(order.id);  // open receipt modal for this new bill
       setCart([]); setNetPrice("");
@@ -1982,9 +2126,9 @@ function POSView() {
   );
 
   const ResultsList = (
-    <div className="card-canvas overflow-hidden">
+    <div className="card-canvas overflow-hidden flex-1 flex flex-col min-h-0">
       {!search && (
-        <div className="p-8 lg:p-12 text-center">
+        <div className="p-8 lg:p-12 text-center flex-shrink-0">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-surface-card text-muted mb-4">
             <Icon name="barcode" size={28}/>
           </div>
@@ -1992,25 +2136,27 @@ function POSView() {
           <p className="text-muted text-sm">พิมพ์ชื่อรุ่นหรือยิงบาร์โค้ดในช่องด้านบน</p>
         </div>
       )}
-      {search && searching && <div className="p-6 text-muted text-sm">กำลังค้นหา...</div>}
-      {search && !searching && results.length===0 && <div className="p-6 text-muted text-sm">ไม่พบสินค้า "{search}"</div>}
-      {results.map(p => (
-        <div key={p.id} className="px-4 lg:px-5 py-3.5 border-b hairline last:border-0 hover:bg-white/40 cursor-pointer flex items-center gap-3 transition-colors" onClick={()=>addToCart(p)}>
-          <div className="flex-1 min-w-0">
-            <div className="font-medium text-ink truncate text-base">{p.name}</div>
-            <div className="text-xs text-muted mt-0.5 font-mono truncate">{p.barcode || '— ไม่มีบาร์โค้ด —'}</div>
-          </div>
-          <div className="text-right flex-shrink-0">
-            <div className="font-display text-xl lg:text-2xl text-ink leading-tight tabular-nums">{fmtTHB(p.retail_price)}</div>
-            <div className="mt-1">
-              <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':p.current_stock<5?'!bg-warning/15 !text-[#8a6500]':'')}>
-                คงเหลือ {p.current_stock}
-              </span>
+      {search && searching && <div className="p-6 text-muted text-sm flex-shrink-0">กำลังค้นหา...</div>}
+      {search && !searching && results.length===0 && <div className="p-6 text-muted text-sm flex-shrink-0">ไม่พบสินค้า "{search}"</div>}
+      <div className="flex-1 overflow-y-auto min-h-0">
+        {results.map(p => (
+          <div key={p.id} className="px-4 lg:px-5 py-3.5 border-b hairline last:border-0 hover:bg-white/40 cursor-pointer flex items-center gap-3 transition-colors" onClick={()=>addToCart(p)}>
+            <div className="flex-1 min-w-0">
+              <div className="font-medium text-ink truncate text-base">{p.name}</div>
+              <div className="text-xs text-muted mt-0.5 font-mono truncate">{p.barcode || '— ไม่มีบาร์โค้ด —'}</div>
             </div>
+            <div className="text-right flex-shrink-0">
+              <div className="font-display text-xl lg:text-2xl text-ink leading-tight tabular-nums">{fmtTHB(p.retail_price)}</div>
+              <div className="mt-1">
+                <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':p.current_stock<5?'!bg-warning/15 !text-[#8a6500]':'')}>
+                  คงเหลือ {p.current_stock}
+                </span>
+              </div>
+            </div>
+            <button className="btn-primary !py-2 !px-3 !min-h-[40px] flex-shrink-0" aria-label="เพิ่ม"><Icon name="plus" size={18}/></button>
           </div>
-          <button className="btn-primary !py-2 !px-3 !min-h-[40px] flex-shrink-0" aria-label="เพิ่ม"><Icon name="plus" size={18}/></button>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 
@@ -2140,9 +2286,9 @@ function POSView() {
     <>
       {/* DESKTOP LAYOUT */}
       <div className="hidden lg:grid grid-cols-12 gap-6 px-10 py-8 h-[calc(100vh-180px)]">
-        <div className="col-span-7 flex flex-col">
-          <div className="card-canvas p-3 mb-4">{SearchInput}</div>
-          <div className="flex-1 overflow-y-auto">{ResultsList}</div>
+        <div className="col-span-7 flex flex-col overflow-hidden">
+          <div className="card-canvas p-3 mb-4 flex-shrink-0">{SearchInput}</div>
+          <div className="flex-1 flex flex-col min-h-0">{ResultsList}</div>
         </div>
         <div className="col-span-5 flex flex-col">
           <div className="card-cream flex flex-col flex-1 overflow-hidden">
@@ -2225,7 +2371,7 @@ function ProductsView() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    let query = sb.from('products').select('*').limit(100);
+    let query = sb.from('products').select('*').limit(50);
     if (q.trim()) {
       const term = q.trim();
       query = query.or(`name.ilike.%${term}%,barcode.eq.${term}`);
@@ -2287,17 +2433,14 @@ function ProductsView() {
   };
 
   return (
-    <div className="px-4 py-4 lg:px-10 lg:py-8">
-      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-3">
-        <div className="relative flex-1">
+    <div className="px-4 py-4 lg:px-10 lg:py-6 lg:h-[calc(100vh-180px)] lg:flex lg:flex-col">
+      <div className="mb-3 flex-shrink-0">
+        <div className="relative">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"><Icon name="search" size={18} strokeWidth={2.25} color="#6b3a26"/></span>
-          <input className="input !pl-10" placeholder="ชื่อรุ่น หรือ บาร์โค้ด" value={q} onChange={e=>setQ(e.target.value)} />
+          <input className="input !pl-10" placeholder="ชื่อรุ่น หรือ บาร์โค้ด" value={q} onChange={e=>setQ(e.target.value)} autoFocus />
         </div>
-        <button className="btn-primary" onClick={()=>setEditing({ name: '', barcode: '', cost_price: 0, retail_price: 0, current_stock: 0 })}>
-          <Icon name="plus" size={16}/> เพิ่มสินค้า
-        </button>
       </div>
-      <div className="flex flex-wrap gap-2 mb-5">
+      <div className="flex flex-wrap gap-2 mb-4 flex-shrink-0">
         <select className="input !py-2 !text-sm !w-auto" value={filterBrand} onChange={e=>setFilterBrand(e.target.value)}>
           <option value="">ทุกแบรนด์</option>
           {brands.map(b=> <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -2314,27 +2457,29 @@ function ProductsView() {
       </div>
 
       {/* Desktop table */}
-      <div className="hidden lg:block card-canvas overflow-hidden">
-        <div className="grid grid-cols-12 px-4 py-3 text-xs uppercase tracking-wider text-muted border-b hairline bg-surface-soft">
+      <div className="hidden lg:flex lg:flex-col lg:flex-1 lg:min-h-0 card-canvas overflow-hidden">
+        <div className="grid grid-cols-12 px-4 py-3 text-xs uppercase tracking-wider text-muted border-b hairline bg-surface-soft flex-shrink-0">
           <div className="col-span-4">ชื่อรุ่น</div>
           <div className="col-span-3">บาร์โค้ด</div>
           <div className="col-span-2 text-right">ทุน</div>
-          <div className="col-span-2 text-right">ราคาขาย</div>
+          <div className="col-span-2 text-right">ราคาป้าย</div>
           <div className="col-span-1 text-right">คงเหลือ</div>
         </div>
-        {loading && <div className="p-6 text-muted text-sm flex items-center gap-2"><span className="spinner"/>กำลังโหลด...</div>}
-        {!loading && rows.length===0 && <div className="p-6 text-muted text-sm">ไม่พบสินค้า</div>}
-        {rows.map(p => (
-          <div key={p.id} className="grid grid-cols-12 px-4 py-3.5 items-center border-b hairline last:border-0 hover:bg-white/40 cursor-pointer transition-colors" onClick={()=>setEditing(p)}>
-            <div className="col-span-4 font-medium truncate">{p.name}</div>
-            <div className="col-span-3 font-mono text-sm text-muted truncate">{p.barcode||'—'}</div>
-            <div className="col-span-2 text-right text-muted tabular-nums">{fmtTHB(p.cost_price)}</div>
-            <div className="col-span-2 text-right font-medium tabular-nums">{fmtTHB(p.retail_price)}</div>
-            <div className="col-span-1 text-right">
-              <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':p.current_stock<5?'!bg-warning/15 !text-[#8a6500]':'')}>{p.current_stock}</span>
+        <div className="flex-1 overflow-y-auto min-h-0">
+          {loading && <div className="p-6 text-muted text-sm flex items-center gap-2"><span className="spinner"/>กำลังโหลด...</div>}
+          {!loading && rows.length===0 && <div className="p-6 text-muted text-sm">ไม่พบสินค้า</div>}
+          {rows.map(p => (
+            <div key={p.id} className="grid grid-cols-12 px-4 py-3.5 items-center border-b hairline last:border-0 hover:bg-white/40 cursor-pointer transition-colors" onClick={()=>setEditing(p)}>
+              <div className="col-span-4 font-medium truncate">{p.name}</div>
+              <div className="col-span-3 font-mono text-sm text-muted truncate">{p.barcode||'—'}</div>
+              <div className="col-span-2 text-right text-muted tabular-nums">{fmtTHB(p.cost_price)}</div>
+              <div className="col-span-2 text-right font-medium tabular-nums">{fmtTHB(p.retail_price)}</div>
+              <div className="col-span-1 text-right">
+                <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':p.current_stock<5?'!bg-warning/15 !text-[#8a6500]':'')}>{p.current_stock}</span>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       {/* Mobile cards */}
@@ -2467,8 +2612,20 @@ function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand,
           <input className="input mt-1" value={draft.name||""} onChange={e=>set('name', e.target.value)} />
         </div>
         <div>
-          <label className="text-xs uppercase tracking-wider text-muted">บาร์โค้ด</label>
-          <input className="input mt-1 font-mono" value={draft.barcode||""} onChange={e=>set('barcode', e.target.value)} />
+          <label className="text-xs uppercase tracking-wider text-muted flex items-center gap-2">
+            บาร์โค้ด
+            <span className="inline-flex items-center gap-1 text-muted-soft normal-case tracking-normal font-normal">
+              <Icon name="barcode" size={12}/> สแกน หรือ พิมพ์
+            </span>
+          </label>
+          <input
+            className="input mt-1 font-mono"
+            placeholder="วางหัวอ่านแล้วสแกน หรือพิมพ์ตรงนี้..."
+            inputMode="text"
+            autoFocus={!draft.id}
+            value={draft.barcode||""}
+            onChange={e=>set('barcode', e.target.value)}
+          />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -2494,7 +2651,7 @@ function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand,
             <input type="number" inputMode="decimal" className="input mt-1" value={draft.cost_price||0} onChange={e=>set('cost_price', Number(e.target.value))} />
           </div>
           <div>
-            <label className="text-xs uppercase tracking-wider text-muted">ราคาขาย</label>
+            <label className="text-xs uppercase tracking-wider text-muted">ราคาป้าย</label>
             <input type="number" inputMode="decimal" className="input mt-1" value={draft.retail_price||0} onChange={e=>set('retail_price', Number(e.target.value))} />
           </div>
           <div>
@@ -2781,54 +2938,165 @@ function SalesView() {
 }
 
 /* =========================================================
+   ADD PRODUCT MODAL (self-contained, used from ReceiveView)
+========================================================= */
+function AddProductModal({ open, onClose, onAdded }) {
+  const toast = useToast();
+  const [brands, setBrands] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [editing, setEditing] = useState(null);
+
+  useEffect(() => {
+    if (!open) return;
+    Promise.all([
+      sb.from('brands').select('*').order('name'),
+      sb.from('categories').select('*').order('name'),
+    ]).then(([b, c]) => {
+      setBrands(b.data || []);
+      setCategories(c.data || []);
+      setEditing({ name: '', barcode: '', cost_price: 0, retail_price: 0, current_stock: 0 });
+    });
+  }, [open]);
+
+  const handleClose = () => { setEditing(null); onClose(); };
+
+  const save = async (p) => {
+    try {
+      const payload = {
+        name: p.name, barcode: p.barcode || null,
+        cost_price: p.cost_price || 0, retail_price: p.retail_price || 0,
+        current_stock: p.current_stock || 0,
+        brand_id: p.brand_id || null,
+        category_id: p.category_id || null,
+      };
+      const { error } = await sb.from('products').insert(payload);
+      if (error) throw error;
+      toast.push("เพิ่มสินค้าใหม่สำเร็จ", "success");
+      handleClose();
+      if (onAdded) onAdded();
+    } catch (e) {
+      toast.push("บันทึกไม่ได้: " + e.message, "error");
+    }
+  };
+
+  const addBrand = async (name) => {
+    const t = (name||"").trim(); if (!t) return null;
+    const { data, error } = await sb.from('brands').insert({ name: t }).select().single();
+    if (error) { toast.push("เพิ่มแบรนด์ไม่ได้: "+error.message, 'error'); return null; }
+    setBrands(b => [...b, data].sort((a,b)=>a.name.localeCompare(b.name)));
+    return data.id;
+  };
+  const addCategory = async (name) => {
+    const t = (name||"").trim(); if (!t) return null;
+    const { data, error } = await sb.from('categories').insert({ name: t }).select().single();
+    if (error) { toast.push("เพิ่มหมวดไม่ได้: "+error.message, 'error'); return null; }
+    setCategories(c => [...c, data].sort((a,b)=>a.name.localeCompare(b.name)));
+    return data.id;
+  };
+
+  return (
+    <ProductEditor
+      editing={editing}
+      onClose={handleClose}
+      onSave={save}
+      brands={brands}
+      categories={categories}
+      addBrand={addBrand}
+      addCategory={addCategory}
+    />
+  );
+}
+
+/* =========================================================
    STOCK VIEW (Receive + Return tabs)
 ========================================================= */
 function ReceiveView() {
   const [tab, setTab] = useState('receive');
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [addProductOpen, setAddProductOpen] = useState(false);
   const tabs = [
     { k: 'receive', label: 'รับเข้า',         icon: 'package-in',  hint: 'รับสินค้าจากบริษัท · เพิ่มสต็อก' },
     { k: 'claim',   label: 'ส่งเคลม / คืน',   icon: 'package-out', hint: 'ส่งสินค้าคืนบริษัท · หักสต็อก' },
   ];
-  return (
-    <div className="px-4 py-4 lg:px-10 lg:py-8">
-      <div className="flex items-center justify-between gap-3 mb-5">
-        <div className="inline-flex glass-soft rounded-xl p-1 shadow-sm">
-          {tabs.map(t => (
-            <button key={t.k}
-              className={"px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-all " + (tab===t.k?"bg-white text-ink shadow-md ring-1 ring-hairline":"text-muted hover:text-ink hover:bg-white/40")}
-              onClick={()=>setTab(t.k)}>
-              <Icon name={t.icon} size={16}/> {t.label}
-            </button>
-          ))}
-        </div>
-        <button className="btn-secondary !py-2 !text-sm" onClick={()=>setHistoryOpen(true)}>
-          <Icon name="receipt" size={16}/> ดูประวัติ
+  const TabGroup = (
+    <div className="inline-flex glass-soft rounded-xl p-1 shadow-sm">
+      {tabs.map(t => (
+        <button key={t.k}
+          className={"px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-all " + (tab===t.k?"bg-white text-ink shadow-md ring-1 ring-hairline":"text-muted hover:text-ink hover:bg-white/40")}
+          onClick={()=>setTab(t.k)}>
+          <Icon name={t.icon} size={16}/> {t.label}
         </button>
+      ))}
+    </div>
+  );
+  const ActionButtons = (
+    <div className="flex items-center gap-2">
+      <button className="btn-add-product !py-2 !text-sm" onClick={()=>setAddProductOpen(true)}>
+        <Icon name="plus" size={15}/> เพิ่มรุ่นสินค้า
+      </button>
+      <button className="btn-secondary !py-2 !text-sm" onClick={()=>setHistoryOpen(true)}>
+        <Icon name="receipt" size={16}/> ดูประวัติ
+      </button>
+    </div>
+  );
+  return (
+    <div>
+      {/* Desktop header */}
+      <header className="hidden lg:flex px-10 pt-10 pb-6 items-end justify-between border-b hairline gap-4">
+        <div>
+          <div className="text-xs uppercase tracking-[1.5px] text-muted">Stock In · From Supplier</div>
+          <h1 className="font-display text-5xl mt-2 leading-tight text-ink">รับสินค้าจากบริษัท</h1>
+        </div>
+        <div className="flex items-center gap-8 pb-1">
+          {TabGroup}
+          {ActionButtons}
+        </div>
+      </header>
+
+      <div className="px-4 py-4 lg:px-10 lg:py-8">
+        {/* Mobile controls */}
+        <div className="flex items-center justify-between gap-3 mb-5 lg:hidden">
+          {TabGroup}
+          {ActionButtons}
+        </div>
+        <div className="text-xs text-muted mb-4 ml-1">{tabs.find(t=>t.k===tab).hint}</div>
+        <StockMovementForm key={tab} kind={tab}/>
+        <MovementHistoryModal open={historyOpen} onClose={()=>setHistoryOpen(false)} kind={tab}/>
+        <AddProductModal open={addProductOpen} onClose={()=>setAddProductOpen(false)}/>
       </div>
-      <div className="text-xs text-muted mb-4 -mt-3 ml-1">{tabs.find(t=>t.k===tab).hint}</div>
-      <StockMovementForm key={tab} kind={tab}/>
-      <MovementHistoryModal open={historyOpen} onClose={()=>setHistoryOpen(false)} kind={tab}/>
     </div>
   );
 }
 function ReturnView()  {
   const [historyOpen, setHistoryOpen] = useState(false);
+  const HistoryBtn = (
+    <button className="btn-secondary !py-2 !text-sm" onClick={()=>setHistoryOpen(true)}>
+      <Icon name="receipt" size={16}/> ดูประวัติรับคืน
+    </button>
+  );
   return (
-    <div className="px-4 py-4 lg:px-10 lg:py-8">
-      <div className="flex justify-end mb-3">
-        <button className="btn-secondary !py-2 !text-sm" onClick={()=>setHistoryOpen(true)}>
-          <Icon name="receipt" size={16}/> ดูประวัติรับคืน
-        </button>
+    <div>
+      {/* Desktop header */}
+      <header className="hidden lg:flex px-10 pt-10 pb-6 items-end justify-between border-b hairline gap-4">
+        <div>
+          <div className="text-xs uppercase tracking-[1.5px] text-muted">Customer Return</div>
+          <h1 className="font-display text-5xl mt-2 leading-tight text-ink">รับคืนจากลูกค้า</h1>
+        </div>
+        <div className="pb-1">{HistoryBtn}</div>
+      </header>
+
+      <div className="px-4 py-4 lg:px-10 lg:py-8">
+        <div className="flex justify-end mb-3 lg:hidden">{HistoryBtn}</div>
+        <StockMovementForm kind="return"/>
+        <MovementHistoryModal open={historyOpen} onClose={()=>setHistoryOpen(false)} kind="return"/>
       </div>
-      <StockMovementForm kind="return"/>
-      <MovementHistoryModal open={historyOpen} onClose={()=>setHistoryOpen(false)} kind="return"/>
     </div>
   );
 }
 
 function StockMovementForm({ kind }) {
   const toast = useToast();
+  const productSearchRef = useRef(null);
   const [date, setDate] = useState(todayISO());
   const [channel, setChannel] = useState("store");
   const [items, setItems] = useState([]);
@@ -2847,11 +3115,56 @@ function StockMovementForm({ kind }) {
   // Return-specific
   const [origSaleId, setOrigSaleId] = useState("");
   const [returnReason, setReturnReason] = useState("");
+  const [origSaleMode, setOrigSaleMode] = useState('search'); // 'search' | 'manual'
+  const [saleSearch, setSaleSearch] = useState("");
+  const [recentSales, setRecentSales] = useState([]);
+  const [saleSearching, setSaleSearching] = useState(false);
+  const [selectedSale, setSelectedSale] = useState(null);
   // Shared
   const [notes, setNotes] = useState("");
   // Validation + confirm
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+
+  // Load recent sales when return + search mode is active
+  useEffect(()=>{
+    if (kind !== 'return' || origSaleMode !== 'search') return;
+    let cancel = false;
+    setSaleSearching(true);
+    (async()=>{
+      const { data } = await sb.from('sale_orders').select('id, sale_date, channel, grand_total').eq('status','active').order('sale_date',{ascending:false}).limit(50);
+      if (!cancel) { setRecentSales(data||[]); setSaleSearching(false); }
+    })();
+    return ()=>{ cancel=true; };
+  }, [kind, origSaleMode]);
+
+  const saleResults = React.useMemo(()=>{
+    const q = saleSearch.trim();
+    if (!q) return recentSales.slice(0,15);
+    return recentSales.filter(s => String(s.id).includes(q)).slice(0,15);
+  }, [recentSales, saleSearch]);
+
+  const selectSale = async (sale) => {
+    setSelectedSale(sale);
+    setOrigSaleId(String(sale.id));
+    if (sale.sale_date) setDate(sale.sale_date.slice(0,10));
+    if (sale.channel) setChannel(sale.channel);
+    const { data } = await sb.from('sale_order_items').select('*').eq('sale_order_id', sale.id);
+    if (data && data.length) {
+      setItems(data.map(l => ({
+        product_id: l.product_id,
+        product_name: l.product_name,
+        retail_price: l.unit_price,
+        cost_price: 0,
+        quantity: l.quantity,
+        unit: 'เรือน',
+        unit_price: l.unit_price,
+        manualPrice: true,
+        discount1_value: 0, discount1_type: null,
+        discount2_value: 0, discount2_type: null,
+      })));
+    }
+  };
 
   useEffect(()=>{
     if (!search.trim()) { setResults([]); return; }
@@ -2976,14 +3289,14 @@ function StockMovementForm({ kind }) {
       const { error: e2 } = await sb.from(m.itemTable).insert(payload);
       if (e2) throw e2;
 
-      for (const l of items) {
-        if (!l.product_id) continue;
-        await sb.rpc('adjust_stock', { p_id: l.product_id, qty_delta: m.stockSign * l.quantity, p_reason: m.stockReason, p_ref_table: m.headerTable, p_ref_id: head.id });
-      }
+      await Promise.all(items.filter(l => l.product_id).map(l =>
+        sb.rpc('adjust_stock', { p_id: l.product_id, qty_delta: m.stockSign * l.quantity, p_reason: m.stockReason, p_ref_table: m.headerTable, p_ref_id: head.id })
+      ));
 
       const verb = kind==='receive' ? 'การรับ' : kind==='claim' ? 'ส่งเคลม' : 'การคืน';
       toast.push(`บันทึก${verb} #${head.id} สำเร็จ`, 'success');
       setItems([]); setNotes(""); setSupplierName(""); setSupplierInvoiceNo(""); setOrigSaleId(""); setReturnReason("");
+      setSelectedSale(null); setSaleSearch(""); setOrigSaleMode('search');
       // Cost % toggle: 'once' resets after save, 'persist' stays on until leaving page
       if (costPctMode !== 'persist') { setCostPctEnabled(false); setCostPct(58); setCostPctMode('once'); }
       setAttemptedSubmit(false); setConfirmOpen(false);
@@ -2997,14 +3310,15 @@ function StockMovementForm({ kind }) {
   const verbLabel     = kind==='receive' ? 'การรับ' : kind==='claim' ? 'ส่งเคลม' : 'การคืน';
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 lg:items-start">
       {/* LEFT: Search only */}
-      <div className="lg:col-span-7 space-y-4">
-        <div className="card-canvas overflow-hidden">
+      <div className="lg:col-span-7 space-y-4 lg:space-y-0 lg:flex lg:flex-col lg:gap-4">
+        <div className="card-canvas overflow-hidden lg:flex lg:flex-col">
           <div className="p-3 lg:p-4 border-b hairline">
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"><Icon name="search" size={20} strokeWidth={2.25} color="#6b3a26"/></span>
               <input
+                ref={productSearchRef}
                 className="input !pl-12 !py-3 !text-base"
                 placeholder={
                   kind==='receive' ? "ค้นหาสินค้าที่จะรับเข้า (ชื่อรุ่น / บาร์โค้ด)" :
@@ -3013,6 +3327,7 @@ function StockMovementForm({ kind }) {
                 }
                 value={search}
                 onChange={e=>setSearch(e.target.value)}
+                autoFocus
               />
               {search && (
                 <button className="absolute right-3 top-1/2 -translate-y-1/2 btn-ghost !p-2 !min-h-0" onClick={()=>{setSearch("");setResults([]);}} aria-label="ล้างคำค้น">
@@ -3026,7 +3341,7 @@ function StockMovementForm({ kind }) {
           </div>
           {!search && <div className="p-6 text-muted text-sm">พิมพ์เพื่อค้นหา แล้วแตะเพื่อเพิ่มรายการ — สามารถเลือกหลายรุ่น/หลายสีติดต่อกันได้โดยไม่ต้องค้นหาใหม่</div>}
           {search && !results.length && <div className="p-6 text-muted text-sm">ไม่พบสินค้า "{search}"</div>}
-          <div className="max-h-[60vh] overflow-y-auto">
+          <div className="max-h-[50vh] lg:max-h-[calc(100vh-380px)] overflow-y-auto">
             {results.map(p => (
               <div key={p.id} className="px-4 py-3 border-b hairline last:border-0 hover:bg-white/40 cursor-pointer flex items-center gap-3 transition-colors" onClick={()=>addItem(p)}>
                 <div className="min-w-0 flex-1">
@@ -3045,7 +3360,7 @@ function StockMovementForm({ kind }) {
       </div>
 
       {/* RIGHT: Items list + Bill details + Submit */}
-      <div className="lg:col-span-5">
+      <div className="lg:col-span-5 lg:sticky lg:top-4">
         <div className="card-cream overflow-hidden">
           <div className="p-4 lg:p-5 border-b hairline flex items-center justify-between gap-3">
             <div>
@@ -3148,10 +3463,10 @@ function StockMovementForm({ kind }) {
               <>
                 <div className={"rounded-xl" + errCls('supplier')}>
                   <label className="text-xs uppercase tracking-wider text-muted">{supplierLabel}</label>
-                  <div className="flex gap-2 mt-1.5 flex-wrap">
+                  <div className="grid grid-cols-2 gap-2 mt-1.5">
                     {SUPPLIERS.map(s => (
                       <button key={s} type="button" onClick={()=>setSupplierName(s)}
-                        className={"flex-1 min-w-[80px] py-2.5 px-3 rounded-lg text-sm font-medium border transition-all " + (supplierName===s ? "bg-primary text-on-primary border-primary shadow-md" : "glass-soft text-ink hover:bg-white/60 hover-lift")}>
+                        className={"py-2.5 px-3 rounded-lg text-sm font-medium border transition-all text-center " + (supplierName===s ? "bg-primary text-on-primary border-primary shadow-md" : "glass-soft text-ink hover:bg-white/60 hover-lift")}>
                         {supplierName===s && <Icon name="check" size={14} className="inline mr-1.5" strokeWidth={2.5}/>}
                         {s}
                       </button>
@@ -3182,18 +3497,74 @@ function StockMovementForm({ kind }) {
             )}
 
             {kind==='return' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs uppercase tracking-wider text-muted">บิลขายต้นฉบับ (ไม่บังคับ)</label>
-                  <input className="input mt-1 !h-10 font-mono" placeholder="เช่น 60590" inputMode="numeric" value={origSaleId} onChange={e=>setOrigSaleId(e.target.value.replace(/\D/g,''))} />
+              <div>
+                <label className="text-xs uppercase tracking-wider text-muted mb-1.5 block">บิลขายต้นฉบับ</label>
+                <div className="flex gap-1 mb-2">
+                  <button type="button" onClick={()=>{setOrigSaleMode('search'); setSelectedSale(null); setOrigSaleId(""); setSaleSearch("");}}
+                    className={"flex-1 py-2 px-3 rounded-lg text-xs font-medium border transition-all " + (origSaleMode==='search' ? "bg-primary text-on-primary border-primary" : "glass-soft text-muted hover:text-ink")}>
+                    <Icon name="search" size={13} className="inline mr-1"/>ค้นหาบิล
+                  </button>
+                  <button type="button" onClick={()=>{
+                    if (items.length === 0) {
+                      toast.push("กรุณาเลือกสินค้าก่อน", 'error');
+                      productSearchRef.current?.focus();
+                      return;
+                    }
+                    setOrigSaleMode('manual'); setSelectedSale(null); setOrigSaleId(""); setSaleSearch("");
+                  }}
+                    className={"flex-1 py-2 px-3 rounded-lg text-xs font-medium border transition-all " + (origSaleMode==='manual' ? "bg-primary text-on-primary border-primary" : "glass-soft text-muted hover:text-ink")}>
+                    <Icon name="edit" size={13} className="inline mr-1"/>กรอกเองหรือไม่ทราบเลขบิล
+                  </button>
                 </div>
-                <div>
-                  <label className="text-xs uppercase tracking-wider text-muted">เหตุผลที่คืน</label>
-                  <select className="input mt-1 !h-10" value={returnReason} onChange={e=>setReturnReason(e.target.value)}>
-                    <option value="">— เลือก —</option>
-                    {RETURN_REASONS.map(r=><option key={r} value={r}>{r}</option>)}
-                  </select>
-                </div>
+
+                {origSaleMode==='search' && !selectedSale && (
+                  <div>
+                    <input className="input !h-10 font-mono" placeholder="พิมพ์เลขบิล เช่น 60590" value={saleSearch} onChange={e=>setSaleSearch(e.target.value)} autoFocus/>
+                    {saleSearching && <div className="p-3 text-sm text-muted flex gap-2"><span className="spinner"/>กำลังโหลด...</div>}
+                    {!saleSearching && (
+                      <div className="mt-1 card-canvas overflow-hidden max-h-52 overflow-y-auto">
+                        {saleResults.length===0 && <div className="p-4 text-sm text-muted text-center">ไม่พบบิล</div>}
+                        {saleResults.map(s => (
+                          <button key={s.id} type="button" onClick={()=>selectSale(s)}
+                            className="w-full text-left px-3 py-2.5 border-b hairline last:border-0 hover:bg-white/50 transition-colors flex items-center justify-between gap-2">
+                            <div>
+                              <div className="font-mono text-sm font-semibold">#{s.id}</div>
+                              <div className="text-xs text-muted mt-0.5">{CHANNEL_LABELS[s.channel]||s.channel}</div>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <div className="text-sm font-medium tabular-nums">{fmtTHB(s.grand_total)}</div>
+                              <div className="text-xs text-muted">{fmtThaiDateShort(s.sale_date?.slice(0,10))}</div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {origSaleMode==='search' && selectedSale && (
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1 card-canvas p-3 rounded-xl">
+                      <div className="flex justify-between items-center">
+                        <span className="font-mono text-sm font-semibold text-ink">บิล #{selectedSale.id}</span>
+                        <span className="text-xs text-muted">{fmtThaiDateShort(selectedSale.sale_date?.slice(0,10))}</span>
+                      </div>
+                      <div className="text-xs text-muted mt-0.5">{CHANNEL_LABELS[selectedSale.channel]||selectedSale.channel} · {fmtTHB(selectedSale.grand_total)}</div>
+                      <div className="text-[10px] text-primary mt-1 flex items-center gap-1"><Icon name="check" size={11}/>วันที่และช่องทางถูกกรอกอัตโนมัติแล้ว</div>
+                    </div>
+                    <button type="button" onClick={()=>{ setSelectedSale(null); setSaleSearch(""); setOrigSaleId(""); }}
+                      className="btn-ghost !p-2.5 !min-h-0 text-muted hover:text-error mt-0.5" title="ล้างบิลที่เลือก">
+                      <Icon name="x" size={16}/>
+                    </button>
+                  </div>
+                )}
+
+                {origSaleMode==='manual' && (
+                  <div className="flex items-center gap-2">
+                    <input className="input !h-10 font-mono flex-1" placeholder="เลขบิล (ไม่บังคับ)" inputMode="numeric" value={origSaleId} onChange={e=>setOrigSaleId(e.target.value.replace(/\D/g,''))}/>
+                    {origSaleId && <button type="button" onClick={()=>setOrigSaleId("")} className="btn-ghost !p-2.5 !min-h-0 text-muted"><Icon name="x" size={16}/></button>}
+                  </div>
+                )}
               </div>
             )}
 
@@ -3289,8 +3660,7 @@ function StockMovementForm({ kind }) {
 ========================================================= */
 function DashboardView() {
   const today = todayISO();
-  const startMonth = today.slice(0,7) + '-01';
-  const [dateRange, setDateRange] = useState({ from: startMonth, to: today });
+  const [dateRange, setDateRange] = useState({ from: today, to: today });
   const [stats, setStats] = useState(null);
   const [topProducts, setTopProducts] = useState([]);
   const [lowStock, setLowStock] = useState([]);
@@ -3355,22 +3725,38 @@ function DashboardView() {
     return { ...c, total, share };
   });
   const channelMax = Math.max(...channelRows.map(c=>c.total), 1);
+  const channelSorted = channelRows.filter(c=>c.total>0).sort((a,b)=>b.total-a.total);
+  const CH_META = {
+    store:    { bg:'#fef3c7', fg:'#78350f', border:'rgba(217,119,6,0.18)' },
+    tiktok:   { bg:'#09090b', fg:'#f4f4f5', border:'rgba(255,45,85,0.35)' },
+    shopee:   { bg:'#ea580c', fg:'#ffffff', border:'rgba(255,200,100,0.22)' },
+    lazada:   { bg:'#6d28d9', fg:'#ffffff', border:'rgba(196,181,253,0.28)' },
+    facebook: { bg:'#1d4ed8', fg:'#ffffff', border:'rgba(147,197,253,0.28)' },
+  };
 
   return (
-    <div className="px-4 py-4 lg:px-10 lg:py-8 space-y-4 lg:space-y-8">
+    <div className="space-y-4 lg:space-y-8">
 
-      {/* Date range picker */}
-      <div className="flex items-center gap-3">
+      {/* Custom page header with date picker */}
+      <header className="hidden lg:flex px-10 pt-10 pb-6 items-end justify-between border-b hairline">
+        <div>
+          <div className="text-xs uppercase tracking-[1.5px] text-muted">Dashboard</div>
+          <h1 className="font-display text-5xl mt-2 leading-tight text-ink">แดชบอร์ด</h1>
+        </div>
+        <div className="flex items-center gap-3 pb-1">
+          <DatePicker mode="range" value={dateRange} onChange={setDateRange} placeholder="เลือกช่วงวันที่" className="w-64"/>
+          {loading && <span className="spinner text-muted"/>}
+        </div>
+      </header>
+
+      {/* Mobile date picker */}
+      <div className="lg:hidden px-4 pt-4 flex items-center gap-3">
         <Icon name="calendar" size={18} className="text-muted flex-shrink-0"/>
-        <DatePicker
-          mode="range"
-          value={dateRange}
-          onChange={setDateRange}
-          placeholder="เลือกช่วงวันที่"
-          className="w-64"
-        />
+        <DatePicker mode="range" value={dateRange} onChange={setDateRange} placeholder="เลือกช่วงวันที่" className="flex-1"/>
         {loading && <span className="spinner text-muted"/>}
       </div>
+
+      <div className="px-4 lg:px-10 space-y-4 lg:space-y-8 pb-8">
 
       {!stats ? (
         <div className="text-muted text-sm flex items-center gap-3"><span className="spinner"/>กำลังโหลดข้อมูล...</div>
@@ -3414,30 +3800,43 @@ function DashboardView() {
               <div className="font-display text-lg tabular-nums">{fmtTHB(stats.rangeTotal)}</div>
             </div>
           </div>
-          {!byChannel.length && <div className="text-on-dark-soft text-sm">ยังไม่มียอดขายในช่วงที่เลือก</div>}
-          {byChannel.length>0 && (
-            <div className="channel-chart rounded-xl p-4 lg:p-5 overflow-hidden">
-              <div className="grid grid-cols-5 gap-2 lg:gap-4 items-end">
-                {channelRows.map(c => {
-                  const h = c.total ? Math.max(10, (c.total / channelMax) * 100) : 4;
-                  return (
-                    <div key={c.v} className="min-w-0 flex flex-col items-center">
-                      <div className="channel-bar-track rounded-2xl p-[3px] flex items-end justify-center overflow-hidden w-full max-w-[38px] sm:max-w-[46px] lg:max-w-[51px]">
-                        <div className="channel-bar w-full rounded-[13px] transition-all duration-500" style={{height:`${h}%`}}></div>
+          {!channelSorted.length && <div className="text-on-dark-soft text-sm">ยังไม่มียอดขายในช่วงที่เลือก</div>}
+          {channelSorted.length>0 && (
+            <div className="grid grid-cols-4 gap-2 lg:gap-3" style={{gridAutoRows:'110px'}}>
+              {channelSorted.map((ch, idx) => {
+                const big = idx === 0;
+                const m = CH_META[ch.v] || { bg:'#f3f4f6', fg:'#111827', border:'rgba(0,0,0,0.1)' };
+                const iconSize = big ? 34 : 20;
+                const sw = 1.5;
+                return (
+                  <div key={ch.v}
+                    className={"rounded-2xl p-3 lg:p-4 flex flex-col justify-between transition-all duration-200 hover:scale-[1.02] hover:shadow-xl " + (big ? "col-span-2 row-span-2" : "col-span-1 row-span-1")}
+                    style={{ background: m.bg, border: `1px solid ${m.border}`, gridRow: big ? 'span 2' : undefined }}
+                  >
+                    <div className="flex items-start justify-between gap-1">
+                      {ch.v==='store'    && <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke={m.fg} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d="M3 7h18v13a1 1 0 01-1 1H4a1 1 0 01-1-1V7z"/><path d="M3 7 5.5 3h13L21 7"/><path d="M9 21V13h6v8"/></svg>}
+                      {ch.v==='tiktok'   && <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill={m.fg}><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 00-.79-.05 6.34 6.34 0 000 12.68 6.34 6.34 0 006.33-6.34V7.83a8.16 8.16 0 004.77 1.52V5.9a4.85 4.85 0 01-1-.21z"/></svg>}
+                      {ch.v==='shopee'   && <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke={m.fg} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 01-8 0"/></svg>}
+                      {ch.v==='lazada'   && <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke={m.fg} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 8v7h7"/></svg>}
+                      {ch.v==='facebook' && <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill={m.fg}><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg>}
+                      <span className="text-[9px] lg:text-[10px] font-semibold uppercase tracking-wider leading-tight text-right" style={{color:m.fg, opacity:0.5}}>{ch.label}</span>
+                    </div>
+                    <div>
+                      <div className={"font-display leading-none tabular-nums " + (big ? "text-5xl lg:text-7xl" : "text-2xl lg:text-3xl")} style={{color:m.fg}}>
+                        {ch.share.toFixed(0)}<span className={"font-sans font-normal " + (big ? "text-xl lg:text-2xl" : "text-sm")} style={{opacity:0.45}}>%</span>
                       </div>
-                      <div className="mt-3 text-center w-full min-w-0">
-                        <div className="text-[10px] lg:text-xs text-on-dark-soft truncate">{c.label}</div>
-                        <div className="font-display text-sm lg:text-lg tabular-nums mt-0.5 truncate">{fmtTHB(c.total)}</div>
-                        <div className="text-[10px] text-on-dark-soft tabular-nums">{c.share.toFixed(0)}%</div>
+                      <div className={"mt-1 tabular-nums font-medium " + (big ? "text-xs lg:text-sm" : "text-[10px]")} style={{color:m.fg, opacity:0.6}}>
+                        {fmtTHB(ch.total)}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
       </>)}
+      </div>
     </div>
   );
 }
@@ -3447,8 +3846,7 @@ function DashboardView() {
 ========================================================= */
 function ProfitLossView() {
   const today = todayISO();
-  const startMonth = today.slice(0,7) + '-01';
-  const [dateRange, setDateRange] = useState({ from: startMonth, to: today });
+  const [dateRange, setDateRange] = useState({ from: today, to: today });
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState([]); // per-line: { sale_id, sale_date, channel, product_id, product_name, qty, unit_price, lineRevenue, unitCost, costTotal, profit, costSource }
   const [filterChannel, setFilterChannel] = useState('');
@@ -3627,25 +4025,34 @@ function ProfitLossView() {
     else if (preset === 'year')  { setDateRange({ from: t.getFullYear()+'-01-01', to: iso(t) }); }
   };
 
+  const DateControls = (
+    <>
+      <DatePicker mode="range" value={dateRange} onChange={setDateRange} placeholder="เลือกช่วงวันที่" className="w-64"/>
+      {loading && <span className="spinner text-muted ml-2"/>}
+    </>
+  );
   return (
-    <div className="px-4 py-4 lg:px-10 lg:py-8 space-y-4 lg:space-y-6">
+    <div>
+      {/* Desktop header */}
+      <header className="hidden lg:flex px-10 pt-10 pb-6 items-end justify-between border-b hairline gap-4">
+        <div>
+          <div className="text-xs uppercase tracking-[1.5px] text-muted">Profit & Loss</div>
+          <h1 className="font-display text-5xl mt-2 leading-tight text-ink">กำไร / ขาดทุน</h1>
+        </div>
+        <div className="flex items-center gap-3 pb-1">{DateControls}</div>
+      </header>
+
+      <div className="px-4 py-4 lg:px-10 lg:py-8 space-y-4 lg:space-y-6">
 
       {/* Disclaimer */}
       <div className="rounded-xl border-2 border-dashed border-red-300/70 bg-red-50/40 px-4 py-2.5 text-xs lg:text-sm text-red-700/80">
         # คำนวณกำไรแบบถูกต้อง ตั้งแต่ มิถุนายน 2026 เป็นต้นไป
       </div>
 
-      {/* Date controls */}
-      <div className="flex flex-wrap items-center gap-2 lg:gap-3">
+      {/* Mobile date controls */}
+      <div className="flex flex-wrap items-center gap-2 lg:hidden">
         <Icon name="calendar" size={18} className="text-muted flex-shrink-0"/>
-        <DatePicker mode="range" value={dateRange} onChange={setDateRange} placeholder="เลือกช่วงวันที่" className="w-64"/>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <button className="badge-pill hover:!bg-primary/15 cursor-pointer" onClick={()=>setPreset('today')}>วันนี้</button>
-          <button className="badge-pill hover:!bg-primary/15 cursor-pointer" onClick={()=>setPreset('7d')}>7 วัน</button>
-          <button className="badge-pill hover:!bg-primary/15 cursor-pointer" onClick={()=>setPreset('month')}>เดือนนี้</button>
-          <button className="badge-pill hover:!bg-primary/15 cursor-pointer" onClick={()=>setPreset('year')}>ปีนี้</button>
-        </div>
-        {loading && <span className="spinner text-muted ml-2"/>}
+        {DateControls}
       </div>
 
       {/* Stat cards */}
@@ -3789,6 +4196,7 @@ function ProfitLossView() {
           </div>
         )}
       </div>
+      </div>
     </div>
   );
 }
@@ -3825,9 +4233,9 @@ function App() {
       <ShopProvider>
         <div className="lg:flex">
           <Sidebar view={view} setView={setView} userEmail={session.user?.email} onOpenSettings={()=>setSettingsOpen(true)}/>
-          <main className="flex-1 min-h-screen pb-16 lg:pb-0">
+          <main className="flex-1 min-h-screen pb-16 lg:pb-0 lg:pl-64">
             <MobileTopBar title={titles[view].t} userEmail={session.user?.email} onLogout={()=>sb.auth.signOut()} onOpenSettings={()=>setSettingsOpen(true)}/>
-            <PageHeader title={titles[view].t} subtitle={titles[view].s} />
+            {!['dashboard','receive','return','pnl'].includes(view) && <PageHeader title={titles[view].t} subtitle={titles[view].s} />}
             <div key={view} className="view-fade">
               {view==='pos' && <POSView />}
               {view==='products' && <ProductsView />}
