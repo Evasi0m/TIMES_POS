@@ -462,6 +462,24 @@
   .drawer-in  { animation: drawerIn  .26s var(--ease-out); }
   .drawer-out { animation: drawerOut .22s var(--ease-out) forwards; }
 
+  /* Loading spinner — coral arc on light track */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid rgba(204, 120, 92, 0.18);
+    border-top-color: #cc785c;
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+    display: inline-block;
+    vertical-align: middle;
+    flex-shrink: 0;
+  }
+  .spinner.lg { width: 28px; height: 28px; border-width: 2.5px; }
+
+  /* View transition (fades when switching nav) */
+  @keyframes viewIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .view-fade { animation: viewIn .3s var(--ease-out); }
+
   /* ==========  HAIRLINE  ========== */
   .hairline { border-color: rgba(230, 223, 216, 0.6); }
 
@@ -602,8 +620,8 @@ function ToastProvider({ children }) {
       {children}
       <div className="fixed bottom-20 lg:bottom-6 right-4 lg:right-6 z-[120] space-y-2 max-w-[calc(100vw-32px)]">
         {list.map(t => (
-          <div key={t.id} className={"px-4 py-3 rounded-lg shadow-lg text-sm flex items-center gap-2 " + (t.type==='error'?'bg-error text-white':t.type==='success'?'bg-[#1f3d27] text-white':'bg-surface-dark text-on-dark')}>
-            <Icon name={t.type==='error'?'alert':t.type==='success'?'check':'alert'} size={16}/>
+          <div key={t.id} className={"px-4 py-3 rounded-lg shadow-2xl text-sm flex items-center gap-2 fade-in " + (t.type==='error'?'bg-error text-white':t.type==='success'?'bg-[#1f3d27] text-white':'bg-surface-dark text-on-dark')}>
+            <Icon name={t.type==='error'?'alert':t.type==='success'?'check':'alert'} size={16} strokeWidth={2.2}/>
             <span>{t.msg}</span>
           </div>
         ))}
@@ -777,8 +795,8 @@ function DatePicker({ value, onChange, mode = 'single', placeholder = 'เลื
 
   return (
     <div className={"relative " + className} ref={ref}>
-      <button type="button" onClick={()=>setOpen(o=>!o)} className="input flex items-center gap-2.5 text-left hover:bg-white/85 transition-colors">
-        <Icon name="calendar" size={18} className="text-muted flex-shrink-0"/>
+      <button type="button" onClick={()=>setOpen(o=>!o)} className="input flex items-center gap-2.5 text-left hover:bg-white/95 transition-colors">
+        <Icon name="calendar" size={18} className="text-body flex-shrink-0" strokeWidth={2}/>
         <span className={(mode==='single'?value:value?.from) ? "text-ink truncate" : "text-muted-soft truncate"}>{display}</span>
         <Icon name="chevron-d" size={16} className={"ml-auto text-muted flex-shrink-0 transition-transform " + (open?"rotate-180":"")}/>
       </button>
@@ -1132,7 +1150,7 @@ function POSView() {
 
   const SearchInput = (
     <div className="relative">
-      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted"><Icon name="search" size={20}/></span>
+      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-body pointer-events-none"><Icon name="search" size={20} strokeWidth={2}/></span>
       <input
         ref={searchRef}
         className="input !pl-12 !py-4 !text-base lg:!text-lg"
@@ -1448,7 +1466,7 @@ function ProductsView() {
     <div className="px-4 py-4 lg:px-10 lg:py-8">
       <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-3">
         <div className="relative flex-1">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"><Icon name="search" size={18}/></span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-body pointer-events-none"><Icon name="search" size={18} strokeWidth={2}/></span>
           <input className="input !pl-10" placeholder="ชื่อรุ่น หรือ บาร์โค้ด" value={q} onChange={e=>setQ(e.target.value)} />
         </div>
         <button className="btn-primary" onClick={()=>setEditing({ name: '', barcode: '', cost_price: 0, retail_price: 0, current_stock: 0 })}>
@@ -1480,7 +1498,7 @@ function ProductsView() {
           <div className="col-span-2 text-right">ราคาขาย</div>
           <div className="col-span-1 text-right">คงเหลือ</div>
         </div>
-        {loading && <div className="p-6 text-muted text-sm">กำลังโหลด...</div>}
+        {loading && <div className="p-6 text-muted text-sm flex items-center gap-2"><span className="spinner"/>กำลังโหลด...</div>}
         {!loading && rows.length===0 && <div className="p-6 text-muted text-sm">ไม่พบสินค้า</div>}
         {rows.map(p => (
           <div key={p.id} className="grid grid-cols-12 px-4 py-3.5 items-center border-b hairline last:border-0 hover:bg-white/40 cursor-pointer transition-colors" onClick={()=>setEditing(p)}>
@@ -1497,7 +1515,7 @@ function ProductsView() {
 
       {/* Mobile cards */}
       <div className="lg:hidden space-y-2">
-        {loading && <div className="p-4 text-muted text-sm">กำลังโหลด...</div>}
+        {loading && <div className="p-4 text-muted text-sm flex items-center gap-2"><span className="spinner"/>กำลังโหลด...</div>}
         {!loading && rows.length===0 && <div className="p-4 text-muted text-sm">ไม่พบสินค้า</div>}
         {rows.map(p => (
           <div key={p.id} className="card-canvas pressable p-3.5 flex items-center gap-3" onClick={()=>setEditing(p)}>
@@ -1566,7 +1584,7 @@ function StockHistoryPanel({ productId }) {
       </button>
       {open && (
         <div className="border-t hairline p-3 max-h-72 overflow-y-auto fade-in">
-          {loading && <div className="text-muted text-sm p-2">กำลังโหลด...</div>}
+          {loading && <div className="text-muted text-sm p-2 flex items-center gap-2"><span className="spinner"/>กำลังโหลด...</div>}
           {!loading && rows && rows.length===0 && <div className="text-muted text-sm p-2">ยังไม่มีประวัติ</div>}
           {!loading && rows && rows.map(m => {
             const meta = STOCK_REASON_LABELS[m.reason] || { label: m.reason, tone: "gray" };
@@ -1818,7 +1836,7 @@ function SalesView() {
 
       {/* Mobile — grouped by day */}
       <div className="lg:hidden space-y-4">
-        {loading && <div className="p-4 text-muted text-sm">กำลังโหลด...</div>}
+        {loading && <div className="p-4 text-muted text-sm flex items-center gap-2"><span className="spinner"/>กำลังโหลด...</div>}
         {!loading && orders.length===0 && <div className="p-4 text-muted text-sm">ไม่พบบิลในช่วงเวลานี้</div>}
         {!loading && groupedByDay.map(g => (
           <div key={g.day}>
@@ -2066,7 +2084,7 @@ function StockMovementForm({ kind }) {
         <div className="card-canvas overflow-hidden">
           <div className="p-3 lg:p-4 border-b hairline">
             <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted"><Icon name="search" size={20}/></span>
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-body pointer-events-none"><Icon name="search" size={20} strokeWidth={2}/></span>
               <input
                 className="input !pl-12 !py-3 !text-base"
                 placeholder={
@@ -2267,7 +2285,7 @@ function DashboardView() {
     } else setTopProducts([]);
   })(); }, []);
 
-  if (!stats) return <div className="px-4 lg:px-10 py-8 text-muted text-sm">กำลังโหลดข้อมูล...</div>;
+  if (!stats) return <div className="px-4 lg:px-10 py-8 text-muted text-sm flex items-center gap-3"><span className="spinner"/>กำลังโหลดข้อมูล...</div>;
 
   const StatCard = ({ tone, label, value, sub, icon }) => (
     <div className={
@@ -2353,7 +2371,7 @@ function App() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  if (session === undefined) return <div className="min-h-screen flex items-center justify-center bg-canvas text-muted">กำลังโหลด...</div>;
+  if (session === undefined) return <div className="min-h-screen flex items-center justify-center gap-3 text-muted"><span className="spinner lg"/>กำลังโหลด...</div>;
   if (!session) return <ToastProvider><LoginScreen /></ToastProvider>;
 
   const titles = {
@@ -2372,12 +2390,14 @@ function App() {
         <main className="flex-1 min-h-screen pb-16 lg:pb-0">
           <MobileTopBar title={titles[view].t} userEmail={session.user?.email} onLogout={()=>sb.auth.signOut()}/>
           <PageHeader title={titles[view].t} subtitle={titles[view].s} />
-          {view==='pos' && <POSView />}
-          {view==='products' && <ProductsView />}
-          {view==='sales' && <SalesView />}
-          {view==='receive' && <ReceiveView />}
-          {view==='return' && <ReturnView />}
-          {view==='dashboard' && <DashboardView />}
+          <div key={view} className="view-fade">
+            {view==='pos' && <POSView />}
+            {view==='products' && <ProductsView />}
+            {view==='sales' && <SalesView />}
+            {view==='receive' && <ReceiveView />}
+            {view==='return' && <ReturnView />}
+            {view==='dashboard' && <DashboardView />}
+          </div>
         </main>
       </div>
       <MobileTabBar view={view} setView={setView} />
