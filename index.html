@@ -8,15 +8,15 @@
 
 <!-- ===== Favicons (browser tab / bookmark) ===== -->
 <link rel="icon" href="favicon.ico" sizes="any" />
-<link rel="icon" href="logo_web3_64.png" type="image/png" sizes="64x64" />
-<link rel="icon" href="logo_web3_192.png" type="image/png" sizes="192x192" />
+<link rel="icon" href="icons/logo_web3_64.png" type="image/png" sizes="64x64" />
+<link rel="icon" href="icons/logo_web3_192.png" type="image/png" sizes="192x192" />
 
 <!-- ===== Apple Touch Icon (iOS home screen / Safari) ===== -->
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 
 <!-- ===== Android / PWA / Desktop app icon ===== -->
-<link rel="icon" href="logo_web_192.png" type="image/png" sizes="192x192" />
-<link rel="icon" href="logo_web_512.png" type="image/png" sizes="512x512" />
+<link rel="icon" href="icons/logo_web_192.png" type="image/png" sizes="192x192" />
+<link rel="icon" href="icons/logo_web_512.png" type="image/png" sizes="512x512" />
 
 <!-- ===== Web App Manifest (PWA) ===== -->
 <link rel="manifest" href="manifest.json" />
@@ -866,7 +866,7 @@ function LoginScreen() {
     <div className="min-h-screen flex items-center justify-center bg-canvas px-5">
       <div className="w-full max-w-md">
         <div className="flex items-center gap-3 mb-8 lg:mb-10 justify-center">
-          <img src="logo_web3_512.png" alt="TIMES logo" style={{width:41,height:41,objectFit:'contain'}} />
+          <img src="icons/logo_web3_512.png" alt="TIMES logo" style={{width:41,height:41,objectFit:'contain'}} />
           <div style={{fontFamily:"'Jost', sans-serif", fontWeight:600}} className="text-3xl lg:text-4xl leading-none self-center">TIMES</div>
         </div>
         <div className="card-canvas p-6 lg:p-8">
@@ -916,6 +916,7 @@ const NAV = [
 ];
 
 const SUPPLIERS = ["CMG", "SEIKO TH"];
+const CLAIM_REASONS = ["ชำรุดจากโรงงาน", "ส่งผิดรุ่น", "ส่งผิดจำนวน", "ขายไม่ได้/คืนสต็อก", "อื่นๆ"];
 
 /* =========================================================
    DESKTOP SIDEBAR
@@ -924,7 +925,7 @@ function Sidebar({ view, setView, userEmail }) {
   return (
     <aside className="hidden lg:flex w-64 bg-canvas border-r hairline flex-col h-screen sticky top-0">
       <div className="px-6 py-6 flex items-center gap-3 border-b hairline">
-        <img src="logo_web3_512.png" alt="TIMES logo" style={{width:41,height:41,objectFit:'contain'}} />
+        <img src="icons/logo_web3_512.png" alt="TIMES logo" style={{width:41,height:41,objectFit:'contain'}} />
         <div style={{fontFamily:"'Jost', sans-serif", fontWeight:600}} className="text-2xl leading-none self-center">TIMES</div>
       </div>
       <nav className="p-3 flex-1 overflow-y-auto">
@@ -956,7 +957,7 @@ function MobileTopBar({ title, userEmail, onLogout }) {
     <header className="lg:hidden sticky top-0 z-40 mobile-topbar pt-safe">
       <div className="flex items-center justify-between px-4 h-14">
         <div className="flex items-center gap-2">
-          <img src="logo_web3_512.png" alt="TIMES logo" style={{width:32,height:32,objectFit:'contain'}} />
+          <img src="icons/logo_web3_512.png" alt="TIMES logo" style={{width:32,height:32,objectFit:'contain'}} />
           <div style={{fontFamily:"'Jost', sans-serif", fontWeight:600}} className="text-xl leading-none self-center">TIMES</div>
           <div className="text-muted-soft mx-1">·</div>
           <div className="text-sm text-muted">{title}</div>
@@ -1522,6 +1523,7 @@ const STOCK_REASON_LABELS = {
   return_in:    { label: "คืนเข้า",      tone: "green" },
   manual_adjust:{ label: "แก้ไขเอง",     tone: "gray" },
   initial:      { label: "ตั้งต้น",       tone: "gray" },
+  supplier_claim:{ label: "ส่งเคลม/คืนบริษัท", tone: "red" },
 };
 
 function StockHistoryPanel({ productId }) {
@@ -1919,7 +1921,28 @@ function SalesView() {
 /* =========================================================
    STOCK VIEW (Receive + Return tabs)
 ========================================================= */
-function ReceiveView() { return <div className="px-4 py-4 lg:px-10 lg:py-8"><StockMovementForm kind="receive"/></div>; }
+function ReceiveView() {
+  const [tab, setTab] = useState('receive');
+  const tabs = [
+    { k: 'receive', label: 'รับเข้า',         icon: 'package-in',  hint: 'รับสินค้าจากบริษัท · เพิ่มสต็อก' },
+    { k: 'claim',   label: 'ส่งเคลม / คืน',   icon: 'package-out', hint: 'ส่งสินค้าคืนบริษัท · หักสต็อก' },
+  ];
+  return (
+    <div className="px-4 py-4 lg:px-10 lg:py-8">
+      <div className="inline-flex glass-soft rounded-xl p-1 mb-5 shadow-sm">
+        {tabs.map(t => (
+          <button key={t.k}
+            className={"px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-all " + (tab===t.k?"bg-canvas text-ink shadow-sm":"text-muted hover:text-ink")}
+            onClick={()=>setTab(t.k)}>
+            <Icon name={t.icon} size={16}/> {t.label}
+          </button>
+        ))}
+      </div>
+      <div className="text-xs text-muted mb-4 -mt-3 ml-1">{tabs.find(t=>t.k===tab).hint}</div>
+      <StockMovementForm key={tab} kind={tab}/>
+    </div>
+  );
+}
 function ReturnView()  { return <div className="px-4 py-4 lg:px-10 lg:py-8"><StockMovementForm kind="return"/></div>; }
 
 function StockMovementForm({ kind }) {
@@ -1960,7 +1983,7 @@ function StockMovementForm({ kind }) {
     setItems(it => [...it, {
       product_id: p.id, product_name: p.name,
       quantity: 1, unit: 'เรือน',
-      unit_price: kind==='receive' ? Number(p.cost_price)||0 : Number(p.retail_price)||0,
+      unit_price: kind==='return' ? Number(p.retail_price)||0 : Number(p.cost_price)||0,
       discount1_value: 0, discount1_type: null,
       discount2_value: 0, discount2_type: null,
     }]);
@@ -1976,39 +1999,49 @@ function StockMovementForm({ kind }) {
     if (!items.length) { toast.push("ไม่มีรายการ", 'error'); return; }
     setSubmitting(true);
     try {
-      const headerTable = kind==='receive' ? 'receive_orders' : 'return_orders';
-      const itemTable   = kind==='receive' ? 'receive_order_items' : 'return_order_items';
-      const dateField   = kind==='receive' ? 'receive_date' : 'return_date';
-      const headerPayload = { [dateField]: new Date(date+'T00:00:00').toISOString(), total_value: total, notes: notes.trim()||null };
-      if (kind==='receive') {
+      // Map per-kind table/field names
+      const map = {
+        receive: { headerTable:'receive_orders',          itemTable:'receive_order_items',          dateField:'receive_date', fk:'receive_order_id',         stockReason:'receive',        stockSign:+1 },
+        claim:   { headerTable:'supplier_claim_orders',   itemTable:'supplier_claim_order_items',   dateField:'claim_date',   fk:'supplier_claim_order_id',  stockReason:'supplier_claim', stockSign:-1 },
+        return:  { headerTable:'return_orders',           itemTable:'return_order_items',           dateField:'return_date',  fk:'return_order_id',          stockReason:'return_in',      stockSign:+1 },
+      };
+      const m = map[kind];
+      const headerPayload = { [m.dateField]: new Date(date+'T00:00:00').toISOString(), total_value: total, notes: notes.trim()||null };
+
+      if (kind==='receive' || kind==='claim') {
         const { vat } = vatBreakdown(total, hasVat?VAT_RATE_DEFAULT:0);
         headerPayload.vat_rate = hasVat?VAT_RATE_DEFAULT:0;
         headerPayload.vat_amount = vat;
         headerPayload.supplier_name = supplierName.trim()||null;
         headerPayload.supplier_invoice_no = supplierInvoiceNo.trim()||null;
+        if (kind==='claim') headerPayload.claim_reason = returnReason||null; // reuse the reason state
       } else {
+        // return — from customer
         headerPayload.channel = channel;
         headerPayload.return_reason = returnReason||null;
         const sid = parseInt(origSaleId,10);
         headerPayload.original_sale_order_id = Number.isFinite(sid) && sid>0 ? sid : null;
       }
-      const { data: head, error: e1 } = await sb.from(headerTable).insert(headerPayload).select().single();
+
+      const { data: head, error: e1 } = await sb.from(m.headerTable).insert(headerPayload).select().single();
       if (e1) throw e1;
-      const fk = kind==='receive' ? 'receive_order_id' : 'return_order_id';
+
       const payload = items.map(l => ({
-        [fk]: head.id, product_id: l.product_id, product_name: l.product_name,
+        [m.fk]: head.id, product_id: l.product_id, product_name: l.product_name,
         quantity: l.quantity, unit: l.unit, unit_price: l.unit_price,
         discount1_value: l.discount1_value||0, discount1_type: l.discount1_type,
         discount2_value: l.discount2_value||0, discount2_type: l.discount2_type,
       }));
-      const { error: e2 } = await sb.from(itemTable).insert(payload);
+      const { error: e2 } = await sb.from(m.itemTable).insert(payload);
       if (e2) throw e2;
-      const stockReason = kind==='receive' ? 'receive' : 'return_in';
+
       for (const l of items) {
         if (!l.product_id) continue;
-        await sb.rpc('adjust_stock', { p_id: l.product_id, qty_delta: l.quantity, p_reason: stockReason, p_ref_table: headerTable, p_ref_id: head.id });
+        await sb.rpc('adjust_stock', { p_id: l.product_id, qty_delta: m.stockSign * l.quantity, p_reason: m.stockReason, p_ref_table: m.headerTable, p_ref_id: head.id });
       }
-      toast.push(`บันทึก${kind==='receive'?'การรับ':'การคืน'} #${head.id} สำเร็จ`, 'success');
+
+      const verb = kind==='receive' ? 'การรับ' : kind==='claim' ? 'ส่งเคลม' : 'การคืน';
+      toast.push(`บันทึก${verb} #${head.id} สำเร็จ`, 'success');
       setItems([]); setNotes(""); setSupplierName(""); setSupplierInvoiceNo(""); setOrigSaleId(""); setReturnReason("");
     } catch (e) {
       toast.push("บันทึกไม่ได้: " + e.message, 'error');
@@ -2027,7 +2060,11 @@ function StockMovementForm({ kind }) {
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted"><Icon name="search" size={20}/></span>
               <input
                 className="input !pl-12 !py-3 !text-base"
-                placeholder={kind==='receive'?"ค้นหาสินค้าที่จะรับเข้า (ชื่อรุ่น / บาร์โค้ด)":"ค้นหาสินค้าที่ลูกค้าคืน (ชื่อรุ่น / บาร์โค้ด)"}
+                placeholder={
+                  kind==='receive' ? "ค้นหาสินค้าที่จะรับเข้า (ชื่อรุ่น / บาร์โค้ด)" :
+                  kind==='claim'   ? "ค้นหาสินค้าที่จะส่งเคลม/คืนบริษัท (ชื่อรุ่น / บาร์โค้ด)" :
+                                     "ค้นหาสินค้าที่ลูกค้าคืน (ชื่อรุ่น / บาร์โค้ด)"
+                }
                 value={search}
                 onChange={e=>setSearch(e.target.value)}
               />
@@ -2077,10 +2114,10 @@ function StockMovementForm({ kind }) {
             )}
           </div>
 
-          {kind==='receive' && (
+          {(kind==='receive' || kind==='claim') && (
             <>
               <div>
-                <label className="text-xs uppercase tracking-wider text-muted">ผู้ขาย / Supplier</label>
+                <label className="text-xs uppercase tracking-wider text-muted">{kind==='receive'?'ผู้ขาย / Supplier':'บริษัทที่ส่งคืน'}</label>
                 <div className="flex gap-2 mt-1.5">
                   {SUPPLIERS.map(s => (
                     <button key={s} type="button" onClick={()=>setSupplierName(s)}
@@ -2091,16 +2128,25 @@ function StockMovementForm({ kind }) {
                   ))}
                 </div>
               </div>
+              {kind==='claim' && (
+                <div>
+                  <label className="text-xs uppercase tracking-wider text-muted">เหตุผลที่ส่งคืน</label>
+                  <select className="input mt-1" value={returnReason} onChange={e=>setReturnReason(e.target.value)}>
+                    <option value="">— เลือก —</option>
+                    {CLAIM_REASONS.map(r=><option key={r} value={r}>{r}</option>)}
+                  </select>
+                </div>
+              )}
               <div>
-                <label className="text-xs uppercase tracking-wider text-muted">เลขบิล</label>
-                <input className="input mt-1 font-mono" placeholder="เช่น INV-2026-0001" value={supplierInvoiceNo} onChange={e=>setSupplierInvoiceNo(e.target.value)} />
+                <label className="text-xs uppercase tracking-wider text-muted">{kind==='receive'?'เลขบิล':'เลขเอกสารส่งคืน / Tracking'}</label>
+                <input className="input mt-1 font-mono" placeholder={kind==='receive'?"เช่น INV-2026-0001":"เช่น CLM-2026-0001 หรือ Tracking no."} value={supplierInvoiceNo} onChange={e=>setSupplierInvoiceNo(e.target.value)} />
               </div>
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <span className={"relative flex items-center justify-center w-5 h-5 rounded border transition-colors " + (hasVat?"bg-primary border-primary":"bg-canvas border-hairline")}>
                   <input type="checkbox" className="sr-only" checked={hasVat} onChange={e=>setHasVat(e.target.checked)} />
                   {hasVat && <Icon name="check" size={13} className="text-white" strokeWidth={2.5}/>}
                 </span>
-                <span className="text-sm">รวม VAT 7% (มี input VAT เคลมได้)</span>
+                <span className="text-sm">{kind==='receive'?'รวม VAT 7% (มี input VAT เคลมได้)':'รวม VAT 7% (กลับรายการ input VAT)'}</span>
               </label>
             </>
           )}
@@ -2123,7 +2169,11 @@ function StockMovementForm({ kind }) {
 
           <div>
             <label className="text-xs uppercase tracking-wider text-muted">หมายเหตุ</label>
-            <textarea className="input mt-1" rows="2" placeholder={kind==='receive'?"เช่น เลขล็อต / ตำหนิ / ข้อตกลงพิเศษ":"เช่น สภาพสินค้าที่คืนมา / เปลี่ยนเป็นรุ่นใหม่"} value={notes} onChange={e=>setNotes(e.target.value)} />
+            <textarea className="input mt-1" rows="2" placeholder={
+              kind==='receive' ? "เช่น เลขล็อต / ตำหนิ / ข้อตกลงพิเศษ" :
+              kind==='claim'   ? "เช่น รายละเอียดความเสียหาย / ข้อตกลงเคลมกับ supplier" :
+                                 "เช่น สภาพสินค้าที่คืนมา / เปลี่ยนเป็นรุ่นใหม่"
+            } value={notes} onChange={e=>setNotes(e.target.value)} />
           </div>
         </div>
       </div>
@@ -2132,7 +2182,7 @@ function StockMovementForm({ kind }) {
       <div className="lg:col-span-5">
         <div className="card-cream overflow-hidden">
           <div className="p-4 lg:p-5 border-b hairline">
-            <div className="font-display text-2xl">{kind==='receive'?'รายการรับเข้า':'รายการคืน'}</div>
+            <div className="font-display text-2xl">{kind==='receive'?'รายการรับเข้า':kind==='claim'?'รายการส่งเคลม/คืน':'รายการคืน'}</div>
             <div className="text-xs text-muted mt-0.5">{items.length} รายการ</div>
           </div>
           <div className="max-h-[50vh] lg:max-h-[55vh] overflow-y-auto p-3">
@@ -2157,7 +2207,7 @@ function StockMovementForm({ kind }) {
           <div className="p-4 lg:p-5 border-t hairline bg-surface-cream-strong">
             <div className="flex justify-between font-display text-2xl mb-3"><span>รวม</span><span>{fmtTHB(total)}</span></div>
             <button className="btn-primary w-full !py-3" disabled={submitting||!items.length} onClick={submit}>
-              {submitting?'กำลังบันทึก...':<><Icon name="check" size={16}/>บันทึก{kind==='receive'?'การรับ':'การคืน'}</>}
+              {submitting?'กำลังบันทึก...':<><Icon name="check" size={16}/>บันทึก{kind==='receive'?'การรับ':kind==='claim'?'ส่งเคลม':'การคืน'}</>}
             </button>
           </div>
         </div>
