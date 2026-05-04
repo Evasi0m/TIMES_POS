@@ -113,6 +113,19 @@
   input, select, textarea, button { font-family: 'Taviraj', serif; }
   .uppercase { font-weight: 500; }
   .tabular-nums { font-variant-numeric: tabular-nums; }
+  .stat-value {
+    font-size: clamp(1.25rem, 5.2vw, 2.25rem);
+    line-height: 1.05;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  @media (min-width: 1024px) {
+    .stat-value {
+      font-size: clamp(1.25rem, 2.4vw, 2.25rem);
+    }
+  }
   .font-mono { font-family: 'JetBrains Mono', ui-monospace, monospace !important; font-weight: 400; }
 
   /* ==========  SPIKE LOGO  ========== */
@@ -283,7 +296,11 @@
 
   /* ==========  CARDS (glass)  ========== */
   .card-canvas {
-    background: rgba(255, 254, 252, 0.78);   /* warm-white — pops off the cream canvas */
+    background:
+      radial-gradient(circle at 12% 10%, rgba(204, 120, 92, 0.10), transparent 34%),
+      radial-gradient(circle at 88% 18%, rgba(232, 165, 90, 0.09), transparent 30%),
+      radial-gradient(circle at 55% 95%, rgba(232, 224, 210, 0.42), transparent 42%),
+      linear-gradient(135deg, rgba(255, 254, 252, 0.86), rgba(255, 253, 250, 0.72));   /* warm-white — pops off the cream canvas */
     backdrop-filter: blur(20px) saturate(140%);
     -webkit-backdrop-filter: blur(20px) saturate(140%);
     border: 1px solid var(--glass-border);
@@ -291,7 +308,11 @@
     box-shadow: var(--shadow-low);
   }
   .card-cream {
-    background: rgba(232, 224, 210, 0.82);   /* deeper cream — clearly different from page */
+    background:
+      radial-gradient(circle at 14% 8%, rgba(204, 120, 92, 0.14), transparent 34%),
+      radial-gradient(circle at 90% 18%, rgba(232, 165, 90, 0.14), transparent 32%),
+      radial-gradient(circle at 50% 105%, rgba(255, 254, 252, 0.48), transparent 44%),
+      linear-gradient(135deg, rgba(239, 233, 222, 0.92), rgba(232, 224, 210, 0.78));   /* deeper cream — clearly different from page */
     backdrop-filter: blur(20px) saturate(140%);
     -webkit-backdrop-filter: blur(20px) saturate(140%);
     border: 1px solid var(--glass-border-cream);
@@ -299,13 +320,95 @@
     box-shadow: var(--shadow-low);
   }
   .card-dark {
-    background: rgba(24, 23, 21, 0.85);
+    background:
+      radial-gradient(circle at 12% 8%, rgba(204, 120, 92, 0.28), transparent 36%),
+      radial-gradient(circle at 92% 18%, rgba(93, 184, 166, 0.14), transparent 34%),
+      radial-gradient(circle at 55% 110%, rgba(232, 165, 90, 0.12), transparent 44%),
+      linear-gradient(135deg, rgba(37, 35, 32, 0.94), rgba(24, 23, 21, 0.88));
     backdrop-filter: blur(24px) saturate(120%);
     -webkit-backdrop-filter: blur(24px) saturate(120%);
     color: #faf9f5;
     border: 1px solid var(--glass-border-dark);
     border-radius: 14px;
-    box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, 0 18px 44px -12px rgba(0,0,0,0.45);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.18) inset,
+      0 -1px 0 rgba(255,255,255,0.06) inset,
+      inset 0 0 0 1px rgba(255,255,255,0.05),
+      0 18px 44px -12px rgba(0,0,0,0.45);
+  }
+  .card-primary-mesh {
+    background:
+      radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.24), transparent 34%),
+      radial-gradient(circle at 88% 20%, rgba(232, 165, 90, 0.30), transparent 36%),
+      radial-gradient(circle at 50% 110%, rgba(169, 88, 62, 0.30), transparent 44%),
+      linear-gradient(135deg, #d98874 0%, #cc785c 58%, #a9583e 100%);
+    border: 1px solid rgba(255,255,255,0.45);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.35) inset,
+      0 -1px 0 rgba(120, 55, 36, 0.18) inset,
+      inset 0 0 0 1px rgba(255,255,255,0.10),
+      0 14px 34px -14px rgba(204, 120, 92, 0.60);
+  }
+  .card-dark-tile {
+    background:
+      radial-gradient(circle at 12% 10%, rgba(204, 120, 92, 0.16), transparent 36%),
+      radial-gradient(circle at 90% 90%, rgba(255,255,255,0.06), transparent 40%),
+      rgba(37, 35, 32, 0.74);
+    backdrop-filter: blur(16px) saturate(130%);
+    -webkit-backdrop-filter: blur(16px) saturate(130%);
+    border: 1px solid rgba(255,255,255,0.10);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.10) inset,
+      inset 0 0 0 1px rgba(255,255,255,0.04);
+  }
+  .channel-chart {
+    min-height: 220px;
+    background:
+      radial-gradient(circle at 16% 8%, rgba(255,255,255,0.10), transparent 34%),
+      radial-gradient(circle at 86% 18%, rgba(93, 184, 166, 0.20), transparent 36%),
+      rgba(255,255,255,0.04);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    border: 1px solid rgba(255,255,255,0.12);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.12) inset,
+      inset 0 0 0 1px rgba(255,255,255,0.04);
+  }
+  .channel-bar-track {
+    height: 152px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.025));
+    border: 1px solid rgba(255,255,255,0.09);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.08) inset;
+  }
+  .channel-bar {
+    min-height: 4px;
+    position: relative;
+    overflow: hidden;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.55), rgba(255,255,255,0.12) 18%, transparent 34%),
+      linear-gradient(180deg, #8ddcc9 0%, #5db8a6 55%, #3f8f80 100%);
+    box-shadow:
+      0 -4px 14px -4px rgba(93, 184, 166, 0.55),
+      0 2px 0 rgba(255,255,255,0.55) inset,
+      inset 0 0 0 1px rgba(255,255,255,0.16);
+  }
+  .channel-bar::before {
+    content: '';
+    position: absolute;
+    left: 10%;
+    right: 10%;
+    top: 3px;
+    height: 5px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.78), rgba(255,255,255,0));
+    pointer-events: none;
+  }
+  .channel-bar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 78% 92%, rgba(40, 100, 88, 0.45), transparent 58%);
+    pointer-events: none;
   }
 
   /* ==========  BADGES  ========== */
@@ -374,43 +477,75 @@
   /* ==========  MOBILE TOPBAR / TABBAR (glass)  ========== */
   .mobile-topbar {
     background: rgba(255, 254, 252, 0.85);
-    backdrop-filter: blur(22px) saturate(140%);
-    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
     border-bottom: 1px solid rgba(180, 168, 148, 0.30);
     box-shadow: 0 -1px 0 rgba(255,255,255,0.7) inset, 0 2px 8px -2px rgba(20,20,19,0.06);
   }
   .mobile-tabbar {
-    background: rgba(255, 254, 252, 0.88);
-    backdrop-filter: blur(26px) saturate(140%);
-    -webkit-backdrop-filter: blur(26px) saturate(140%);
-    border-top: 1px solid rgba(180, 168, 148, 0.30);
-    box-shadow: 0 1px 0 rgba(255,255,255,0.7) inset, 0 -2px 8px -2px rgba(20,20,19,0.06);
+    background: linear-gradient(135deg, rgba(255, 254, 252, 0.82), rgba(250, 249, 245, 0.68));
+    backdrop-filter: blur(40px) saturate(200%);
+    -webkit-backdrop-filter: blur(40px) saturate(200%);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 999px;
+    box-shadow: 
+      0 8px 32px -8px rgba(20, 20, 19, 0.18),
+      0 2px 8px -2px rgba(20, 20, 19, 0.08),
+      0 1px 0 rgba(255, 255, 255, 0.75) inset,
+      0 -1px 0 rgba(180, 168, 148, 0.12) inset;
+    margin: 0 auto 14px;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: auto;
+    max-width: calc(100% - 32px);
+    padding: 6px;
   }
   .tab-btn {
-    flex:1; display:flex; flex-direction:column; align-items:center; gap:5px;
-    padding: 10px 4px 10px;
-    color: #8e8b82;
-    font-size: 11px;
-    font-weight: 500;
-    min-height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 52px;
+    color: rgba(20, 20, 19, 0.45);
     position: relative;
-    transition: all .2s var(--ease-out);
+    border-radius: 999px;
+    transition: color .2s var(--ease-out), transform .15s var(--ease-out);
     cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
   }
   .tab-btn::before {
     content: '';
     position: absolute;
-    top: 6px; left: 50%;
-    width: 0; height: 36px;
+    inset: 4px;
+    background: transparent;
     border-radius: 999px;
-    background: rgba(204, 120, 92, 0.14);
-    transform: translateX(-50%);
-    transition: width .28s var(--ease-out);
+    transition: background .3s var(--ease-out), box-shadow .3s var(--ease-out), transform .3s var(--ease-out);
     pointer-events: none;
+    transform: scale(0.85);
   }
-  .tab-btn.active { color: #cc785c; }
-  .tab-btn.active::before { width: 60px; }
-  .tab-btn:active { transform: scale(0.94); }
+  .tab-btn:hover {
+    color: rgba(20, 20, 19, 0.8);
+  }
+  .tab-btn.active { color: #fff; }
+  .tab-btn.active::before { 
+    background: linear-gradient(135deg, #d98874 0%, #cc785c 55%, #b86a4e 100%);
+    box-shadow: 
+      0 4px 12px -2px rgba(204, 120, 92, 0.5),
+      0 2px 4px rgba(204, 120, 92, 0.3),
+      0 1px 0 rgba(255, 255, 255, 0.25) inset;
+    transform: scale(1);
+  }
+  .tab-btn:active { transform: scale(0.88); }
+  .tab-btn svg {
+    position: relative;
+    z-index: 1;
+    transition: transform .25s var(--ease-out);
+  }
+  .tab-btn.active svg {
+    transform: scale(1.05);
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.15));
+  }
 
   /* ==========  STEPPER (qty - / +)  ========== */
   .stepper-btn {
@@ -430,6 +565,41 @@
   }
 
   /* ==========  ANIMATIONS  ========== */
+
+  /* Required-field error indicator — soft, refined */
+  @keyframes errorPulseSoft {
+    0%, 100% { box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.16), 0 6px 16px -2px rgba(239, 68, 68, 0.10); }
+    50%      { box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.28), 0 8px 22px -2px rgba(239, 68, 68, 0.20); }
+  }
+  .field-error-glow {
+    position: relative;
+    border-radius: 14px;
+    padding: 6px;
+    margin: -6px;
+    animation: errorPulseSoft 1.8s ease-in-out infinite;
+    background: linear-gradient(180deg, rgba(254, 242, 242, 0.65), rgba(254, 242, 242, 0.35));
+  }
+  .field-error-glow .input,
+  .field-error-glow > input,
+  .field-error-glow > select,
+  .field-error-glow > textarea {
+    border-color: rgba(239, 68, 68, 0.5) !important;
+    background: rgba(255, 255, 255, 0.92) !important;
+  }
+  .field-error-glow::after {
+    content: "ต้องกรอก";
+    position: absolute;
+    top: -8px; right: 10px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 10px;
+    line-height: 1;
+    padding: 3px 8px;
+    border-radius: 999px;
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.35);
+    letter-spacing: 0.02em;
+    pointer-events: none;
+  }
 
   /* Generic fade in/out (for popovers, inline expansions) */
   @keyframes fadeIn  { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
@@ -575,6 +745,7 @@ const PAYMENTS = [
   { v: "cash",     label: "เงินสด" },
   { v: "transfer", label: "โอนเงิน" },
   { v: "card",     label: "บัตร" },
+  { v: "cod",      label: "เก็บปลายทาง" },
 ];
 const UNITS = ["เรือน", "เส้น", "ก้อน", "ใบ"];
 const RETURN_REASONS = ["ชำรุด", "ผิดรุ่น/ผิดสี", "ลูกค้าเปลี่ยนใจ", "ขายผิดราคา", "อื่นๆ"];
@@ -602,42 +773,43 @@ function applyDiscounts(unitPrice, qty, d1v, d1t, d2v, d2t) {
 function applyOrderDiscount(subtotal, value, type) {
   if (type === 'percent') return Math.max(0, subtotal * (1 - (Number(value)||0)/100));
   if (type === 'baht') return Math.max(0, subtotal - (Number(value)||0));
+  if (type === 'net') return Math.max(0, subtotal - (Number(value)||0));
   return subtotal;
 }
 
 /* =========================================================
    SVG ICONS (Lucide-inspired, stroke=currentColor)
 ========================================================= */
-const Icon = ({ name, size = 20, className = "", strokeWidth = 1.75 }) => {
-  const p = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth, strokeLinecap: "round", strokeLinejoin: "round", className };
+const Icon = ({ name, size = 20, className = "", strokeWidth = 1.75, color }) => {
+  const p = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color || "currentColor", strokeWidth, strokeLinecap: "round", strokeLinejoin: "round", className };
   switch (name) {
-    case "cart":      return <svg {...p}><circle cx="8" cy="21" r="1.25"/><circle cx="19" cy="21" r="1.25"/><path d="M2.5 3h2.4l2.7 12.4a1.8 1.8 0 0 0 1.8 1.4h9.6a1.8 1.8 0 0 0 1.8-1.4L21 7H6"/></svg>;
-    case "watch":     return <svg {...p}><circle cx="12" cy="12" r="6"/><polyline points="12,9.5 12,12 13.8,13"/><path d="m9 4 .9-1.5A1.5 1.5 0 0 1 11.2 2h1.6a1.5 1.5 0 0 1 1.3.5L15 4"/><path d="m9 20 .9 1.5A1.5 1.5 0 0 0 11.2 22h1.6a1.5 1.5 0 0 0 1.3-.5L15 20"/></svg>;
-    case "receipt":   return <svg {...p}><path d="M4 2v20l2.5-1.5L9 22l2.5-1.5L14 22l2.5-1.5L19 22l1-1V2H4z"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>;
-    case "package":   return <svg {...p}><path d="m7.5 4.27 9 5.15"/><path d="M21 8 12 13 3 8"/><path d="M3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8z"/><path d="M12 22V13"/></svg>;
-    case "package-in":  return <svg {...p}><path d="M12 22V13"/><path d="M21 8 12 13 3 8"/><path d="M3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8z"/><path d="m9 5 3 3 3-3"/><path d="M12 8V2"/></svg>;
-    case "package-out": return <svg {...p}><path d="M12 22V13"/><path d="M21 8 12 13 3 8"/><path d="M3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8z"/><path d="m9 4 3-3 3 3"/><path d="M12 1v6"/></svg>;
-    case "dashboard": return <svg {...p}><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>;
-    case "search":    return <svg {...p}><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>;
+    case "cart":      return <svg {...p}><path d="M6 8h12l-1 12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>;
+    case "watch":     return <svg {...p}><rect x="6" y="5" width="12" height="14" rx="3"/><path d="M9 5V3h6v2M9 19v2h6v-2"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg>;
+    case "receipt":   return <svg {...p}><path d="M3 3v6h6"/><path d="M3.5 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l3.5 2"/></svg>;
+    case "package":   return <svg {...p}><path d="M12 3l9 5v10l-9 5-9-5V8l9-5z"/><path d="M12 12l9-5"/><path d="M12 12v10"/></svg>;
+    case "package-in":  return <svg {...p}><path d="M12 3l9 5v10l-9 5-9-5V8l9-5z"/><path d="M12 8v10"/><path d="M8 12l4-4 4 4"/></svg>;
+    case "package-out": return <svg {...p}><path d="M12 3l9 5v10l-9 5-9-5V8l9-5z"/><path d="M12 8v10"/><path d="M8 16l4 4 4-4"/></svg>;
+    case "dashboard": return <svg {...p}><rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/></svg>;
+    case "search":    return <svg {...p}><circle cx="10.5" cy="10.5" r="6.5"/><circle cx="10.5" cy="10.5" r="2.5" opacity="0.4"/><path d="m20 20-4.6-4.6"/><path d="M7 9.2a3.6 3.6 0 0 1 3-2.6" opacity="0.55"/></svg>;
     case "plus":      return <svg {...p}><path d="M12 5v14M5 12h14"/></svg>;
     case "minus":     return <svg {...p}><path d="M5 12h14"/></svg>;
     case "x":         return <svg {...p}><path d="M18 6 6 18M6 6l12 12"/></svg>;
-    case "trash":     return <svg {...p}><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6M14 11v6"/></svg>;
-    case "logout":    return <svg {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
-    case "calendar":  return <svg {...p}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
-    case "tag":       return <svg {...p}><path d="M20 12 12 20l-9-9V3h8z"/><circle cx="7.5" cy="7.5" r="1.2"/></svg>;
-    case "edit":      return <svg {...p}><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>;
-    case "chevron-r": return <svg {...p}><polyline points="9,6 15,12 9,18"/></svg>;
-    case "chevron-d": return <svg {...p}><polyline points="6,9 12,15 18,9"/></svg>;
-    case "chevron-l": return <svg {...p}><polyline points="15,6 9,12 15,18"/></svg>;
-    case "menu":      return <svg {...p}><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>;
-    case "filter":    return <svg {...p}><polygon points="22,3 2,3 10,12.5 10,19 14,21 14,12.5 22,3"/></svg>;
-    case "check":     return <svg {...p}><polyline points="20,6 9,17 4,12"/></svg>;
-    case "alert":     return <svg {...p}><path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12" y2="17.01"/></svg>;
-    case "barcode":   return <svg {...p}><path d="M3 5v14M6 5v14M9 5v14M13 5v14M16 5v14M19 5v14M22 5v14"/></svg>;
-    case "credit-card":return <svg {...p}><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>;
-    case "trend-up":  return <svg {...p}><polyline points="22,7 13.5,15.5 8.5,10.5 2,17"/><polyline points="16,7 22,7 22,13"/></svg>;
-    case "store":     return <svg {...p}><path d="m2 7 2-4h16l2 4"/><path d="M4 7v13a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V7"/><path d="M2 7h20"/><path d="M8 7v3a2 2 0 0 1-4 0V7M16 7v3a2 2 0 0 1-4 0V7M12 7v3a2 2 0 0 1-4 0V7M20 7v3a2 2 0 0 1-4 0V7"/></svg>;
+    case "trash":     return <svg {...p}><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>;
+    case "logout":    return <svg {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>;
+    case "calendar":  return <svg {...p}><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M16 3v4M8 3v4M4 11h16"/></svg>;
+    case "tag":       return <svg {...p}><path d="M4 4h8l8 8-8 8-8-8V4z"/><circle cx="8" cy="8" r="1.5"/></svg>;
+    case "edit":      return <svg {...p}><path d="M12 20h9M16 3l5 5-9 9H7v-5l9-9z"/></svg>;
+    case "chevron-r": return <svg {...p}><path d="m9 18 6-6-6-6"/></svg>;
+    case "chevron-d": return <svg {...p}><path d="m6 9 6 6 6-6"/></svg>;
+    case "chevron-l": return <svg {...p}><path d="m15 18-6-6 6-6"/></svg>;
+    case "menu":      return <svg {...p}><path d="M3 6h18M3 12h18M3 18h18"/></svg>;
+    case "filter":    return <svg {...p}><path d="M4 4h16l-6 8v6l-4 2v-8L4 4z"/></svg>;
+    case "check":     return <svg {...p}><path d="m20 6-9 9-5-5"/></svg>;
+    case "alert":     return <svg {...p}><path d="M12 2 2 22h20L12 2z"/><path d="M12 9v6M12 17h.01"/></svg>;
+    case "barcode":   return <svg {...p}><path d="M4 7v10M7 7v10M10 7v10M14 7v10M17 7v10M20 7v10"/></svg>;
+    case "credit-card":return <svg {...p}><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 11h20"/></svg>;
+    case "trend-up":  return <svg {...p}><path d="M22 7h-6v6M2 17l6-6 4 4 8-8"/></svg>;
+    case "store":     return <svg {...p}><path d="M4 4h16l-2 4H6L4 4z"/><path d="M4 8v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/></svg>;
     default: return null;
   }
 };
@@ -994,7 +1166,7 @@ function SettingsModal({ open, onClose }) {
 /* =========================================================
    RECEIPT — 80mm thermal layout
 ========================================================= */
-const PAYMENT_LABELS = { cash: 'เงินสด', transfer: 'โอนเงิน', card: 'บัตร' };
+const PAYMENT_LABELS = { cash: 'เงินสด', transfer: 'โอนเงิน', card: 'บัตร', cod: 'เก็บปลายทาง' };
 const CHANNEL_LABELS = { store: 'หน้าร้าน', tiktok: 'TikTok', shopee: 'Shopee', lazada: 'Lazada', facebook: 'Facebook' };
 
 function Receipt({ order, items, shop, variant = 'receipt' }) {
@@ -1566,6 +1738,7 @@ const NAV = [
   { k: "receive",   label: "รับเข้า",     labelLong: "รับสินค้าจากบริษัท",  icon: "package-in" },
   { k: "return",    label: "รับคืน",      labelLong: "รับคืนจากลูกค้า",     icon: "package-out" },
   { k: "dashboard", label: "ภาพรวม",     labelLong: "แดชบอร์ด",           icon: "dashboard" },
+  { k: "pnl",       label: "กำไร",       labelLong: "กำไร / ขาดทุน",       icon: "trend-up" },
 ];
 
 const SUPPLIERS = ["CMG", "SEIKO TH"];
@@ -1652,12 +1825,18 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings }) {
 
 function MobileTabBar({ view, setView }) {
   return (
-    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 mobile-tabbar pb-safe">
-      <div className="flex">
+    <nav className="lg:hidden fixed bottom-0 z-50 mobile-tabbar pb-safe">
+      <div className="flex items-center justify-center gap-1">
         {NAV.map(it => (
-          <button key={it.k} className={"tab-btn " + (view===it.k?"active":"")} onClick={()=>setView(it.k)}>
-            <Icon name={it.icon} size={24}/>
-            <span>{it.label}</span>
+          <button 
+            key={it.k} 
+            className={"tab-btn " + (view===it.k?"active":"")} 
+            onClick={()=>setView(it.k)}
+            aria-label={it.label}
+            aria-current={view===it.k?"page":undefined}
+            title={it.label}
+          >
+            <Icon name={it.icon} size={24} strokeWidth={view===it.k?2.2:1.8}/>
           </button>
         ))}
       </div>
@@ -1689,9 +1868,9 @@ function POSView() {
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [cart, setCart] = useState([]);
-  const [channel, setChannel] = useState("store");
+  const [channel, setChannel] = useState("tiktok");
   const [payment, setPayment] = useState("cash");
-  const [orderDiscount, setOrderDiscount] = useState({ value: 0, type: null });
+  const [netPrice, setNetPrice] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const { render: cartSheetRender, closing: cartSheetClosing } = useMountedToggle(cartOpen, 220);
@@ -1741,7 +1920,9 @@ function POSView() {
   const removeLine = (idx) => setCart(c => c.filter((_,i)=>i!==idx));
   const lineNet = (l) => applyDiscounts(l.unit_price, l.quantity, l.discount1_value, l.discount1_type, l.discount2_value, l.discount2_type);
   const subtotal = useMemo(()=> cart.reduce((s,l)=> s + lineNet(l), 0), [cart]);
-  const grand = useMemo(()=> applyOrderDiscount(subtotal, orderDiscount.value, orderDiscount.type), [subtotal, orderDiscount]);
+  const netPriceNum = netPrice === "" || netPrice == null ? null : Math.max(0, Math.min(Number(netPrice)||0, subtotal));
+  const grand = netPriceNum == null ? subtotal : netPriceNum;
+  const discountAmount = Math.max(0, subtotal - grand);
   const totalQty = useMemo(()=> cart.reduce((s,l)=> s+l.quantity, 0), [cart]);
 
   const submit = async () => {
@@ -1752,7 +1933,7 @@ function POSView() {
       const { vat } = vatBreakdown(grand, VAT_RATE_DEFAULT);
       const { data: order, error: e1 } = await sb.from('sale_orders').insert({
         sale_date: new Date().toISOString(), channel, payment_method: payment,
-        discount_value: orderDiscount.value || 0, discount_type: orderDiscount.type,
+        discount_value: discountAmount, discount_type: discountAmount > 0 ? 'net' : null,
         subtotal, total_after_discount: grand, grand_total: grand,
         vat_rate: VAT_RATE_DEFAULT, vat_amount: vat, price_includes_vat: true,
         tax_invoice_no: taxInvoice ? (buyer.invoiceNo.trim() || null) : null,
@@ -1776,8 +1957,8 @@ function POSView() {
       }
       toast.push(`บันทึกบิล #${order.id} · ${fmtTHB(grand)}`, 'success');
       setReceiptOrderId(order.id);  // open receipt modal for this new bill
-      setCart([]); setOrderDiscount({ value: 0, type: null });
-      setChannel("store"); setPayment("cash"); setCartOpen(false);
+      setCart([]); setNetPrice("");
+      setChannel("tiktok"); setPayment("cash"); setCartOpen(false);
       setNotes(""); setShowNotes(false);
       setTaxInvoice(false); setBuyer({ name: "", taxId: "", address: "", invoiceNo: "" });
     } catch (err) {
@@ -1787,7 +1968,7 @@ function POSView() {
 
   const SearchInput = (
     <div className="relative">
-      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-body pointer-events-none"><Icon name="search" size={20} strokeWidth={2}/></span>
+      <span className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"><Icon name="search" size={20} strokeWidth={2.25} color="#6b3a26"/></span>
       <input
         ref={searchRef}
         className="input !pl-12 !py-4 !text-base lg:!text-lg"
@@ -1867,12 +2048,12 @@ function POSView() {
               </button>
               {expanded && (
                 <div className="grid grid-cols-12 gap-1 mt-2 fade-in">
-                  <input type="number" inputMode="numeric" className="input !py-1 !text-xs col-span-4" placeholder="ลด 1" value={l.discount1_value||""} onChange={e=>updateLine(idx,{discount1_value:Number(e.target.value)||0, discount1_type: l.discount1_type||'baht'})}/>
-                  <select className="input !py-1 !text-xs col-span-2" value={l.discount1_type||""} onChange={e=>updateLine(idx,{discount1_type:e.target.value||null})}>
+                  <input type="number" inputMode="numeric" className="input !h-8 !rounded-lg !py-1 !text-xs col-span-4" placeholder="ลด 1" value={l.discount1_value||""} onChange={e=>updateLine(idx,{discount1_value:Number(e.target.value)||0, discount1_type: l.discount1_type||'baht'})}/>
+                  <select className="input !h-8 !rounded-lg !py-1 !text-xs col-span-2" value={l.discount1_type||""} onChange={e=>updateLine(idx,{discount1_type:e.target.value||null})}>
                     <option value="">—</option><option value="baht">฿</option><option value="percent">%</option>
                   </select>
-                  <input type="number" inputMode="numeric" className="input !py-1 !text-xs col-span-4" placeholder="ลด 2" value={l.discount2_value||""} onChange={e=>updateLine(idx,{discount2_value:Number(e.target.value)||0, discount2_type: l.discount2_type||'baht'})}/>
-                  <select className="input !py-1 !text-xs col-span-2" value={l.discount2_type||""} onChange={e=>updateLine(idx,{discount2_type:e.target.value||null})}>
+                  <input type="number" inputMode="numeric" className="input !h-8 !rounded-lg !py-1 !text-xs col-span-4" placeholder="ลด 2" value={l.discount2_value||""} onChange={e=>updateLine(idx,{discount2_value:Number(e.target.value)||0, discount2_type: l.discount2_type||'baht'})}/>
+                  <select className="input !h-8 !rounded-lg !py-1 !text-xs col-span-2" value={l.discount2_type||""} onChange={e=>updateLine(idx,{discount2_type:e.target.value||null})}>
                     <option value="">—</option><option value="baht">฿</option><option value="percent">%</option>
                   </select>
                 </div>
@@ -1886,30 +2067,33 @@ function POSView() {
         <div className="grid grid-cols-2 gap-2 mb-3">
           <div>
             <label className="text-[10px] uppercase tracking-wider text-muted">ช่องทาง</label>
-            <select className="input mt-1 !py-2 !text-sm" value={channel} onChange={e=>setChannel(e.target.value)}>
+            <select className="input mt-1 !h-10 !rounded-xl !py-2 !text-sm" value={channel} onChange={e=>setChannel(e.target.value)}>
               {CHANNELS.map(c=> <option key={c.v} value={c.v}>{c.label}</option>)}
             </select>
           </div>
           <div>
             <label className="text-[10px] uppercase tracking-wider text-muted">ชำระโดย</label>
-            <select className="input mt-1 !py-2 !text-sm" value={payment} onChange={e=>setPayment(e.target.value)}>
+            <select className="input mt-1 !h-10 !rounded-xl !py-2 !text-sm" value={payment} onChange={e=>setPayment(e.target.value)}>
               {PAYMENTS.map(p=> <option key={p.v} value={p.v}>{p.label}</option>)}
             </select>
           </div>
         </div>
 
-        <div className="grid grid-cols-12 gap-2 mb-3 items-end">
-          <div className="col-span-7">
-            <label className="text-[10px] uppercase tracking-wider text-muted">ส่วนลดท้ายบิล</label>
-            <input type="number" inputMode="numeric" className="input mt-1 !py-2 !text-sm" placeholder="0" value={orderDiscount.value||""} onChange={e=>setOrderDiscount(d=>({...d, value: Number(e.target.value)||0, type: d.type||'baht'}))}/>
+        <div className="mb-3">
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] uppercase tracking-wider text-muted">ราคาสุทธิ</label>
+            {discountAmount > 0 && (
+              <span className="text-[10px] text-primary tabular-nums">ส่วนลด −{fmtTHB(discountAmount)}</span>
+            )}
           </div>
-          <div className="col-span-5">
-            <select className="input !py-2 !text-sm" value={orderDiscount.type||""} onChange={e=>setOrderDiscount(d=>({...d, type:e.target.value||null}))}>
-              <option value="">— ไม่ลด —</option>
-              <option value="baht">บาท</option>
-              <option value="percent">เปอร์เซ็นต์</option>
-            </select>
-          </div>
+          <input
+            type="number"
+            inputMode="decimal"
+            className="input mt-1 !h-10 !rounded-xl !py-2 !text-sm"
+            placeholder={subtotal>0 ? fmtTHB(subtotal) : "ราคาที่ลูกค้าจ่ายจริง"}
+            value={netPrice}
+            onChange={e=>setNetPrice(e.target.value)}
+          />
         </div>
 
         {/* Tax invoice + Notes toggles */}
@@ -1982,7 +2166,7 @@ function POSView() {
 
       {/* MOBILE FLOATING CART BUTTON */}
       {cart.length>0 && !cartOpen && (
-        <button className="lg:hidden fixed bottom-20 left-4 right-4 z-30 btn-primary !rounded-xl !py-4 !px-5 flex items-center justify-between fade-in" onClick={()=>setCartOpen(true)}>
+        <button className="lg:hidden fixed bottom-28 left-4 right-4 z-30 btn-primary !rounded-xl !py-4 !px-5 flex items-center justify-between fade-in" onClick={()=>setCartOpen(true)}>
           <div className="flex items-center gap-3">
             <div className="relative">
               <Icon name="cart" size={24}/>
@@ -2106,7 +2290,7 @@ function ProductsView() {
     <div className="px-4 py-4 lg:px-10 lg:py-8">
       <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-3">
         <div className="relative flex-1">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-body pointer-events-none"><Icon name="search" size={18} strokeWidth={2}/></span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"><Icon name="search" size={18} strokeWidth={2.25} color="#6b3a26"/></span>
           <input className="input !pl-10" placeholder="ชื่อรุ่น หรือ บาร์โค้ด" value={q} onChange={e=>setQ(e.target.value)} />
         </div>
         <button className="btn-primary" onClick={()=>setEditing({ name: '', barcode: '', cost_price: 0, retail_price: 0, current_stock: 0 })}>
@@ -2655,11 +2839,19 @@ function StockMovementForm({ kind }) {
   const [supplierName, setSupplierName] = useState("");
   const [supplierInvoiceNo, setSupplierInvoiceNo] = useState("");
   const [hasVat, setHasVat] = useState(true);
+  // Cost-percent auto-fill (receive + claim) — defaults reset every form mount
+  const [costPctEnabled, setCostPctEnabled] = useState(false);
+  const [costPct, setCostPct] = useState(58);
+  const [costPctMode, setCostPctMode] = useState('once'); // 'once' | 'persist'
+  const [costPctChooserOpen, setCostPctChooserOpen] = useState(false);
   // Return-specific
   const [origSaleId, setOrigSaleId] = useState("");
   const [returnReason, setReturnReason] = useState("");
   // Shared
   const [notes, setNotes] = useState("");
+  // Validation + confirm
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(()=>{
     if (!search.trim()) { setResults([]); return; }
@@ -2677,11 +2869,22 @@ function StockMovementForm({ kind }) {
     return ()=>{ cancel=true; clearTimeout(t); };
   }, [search]);
 
+  const computeAutoPrice = (p, pctEnabled, pct) => {
+    if (kind === 'return') return Number(p.retail_price) || 0;
+    if (pctEnabled && (kind === 'receive' || kind === 'claim')) {
+      return Math.round(((Number(p.retail_price) || 0) * (Number(pct) || 0)) / 100);
+    }
+    // Default for receive/claim: show retail price (ราคาป้าย) as starting point
+    return Number(p.retail_price) || 0;
+  };
   const addItem = (p) => {
     setItems(it => [...it, {
       product_id: p.id, product_name: p.name,
+      retail_price: Number(p.retail_price) || 0,
+      cost_price: Number(p.cost_price) || 0,
       quantity: 1, unit: 'เรือน',
-      unit_price: kind==='return' ? Number(p.retail_price)||0 : Number(p.cost_price)||0,
+      unit_price: computeAutoPrice(p, costPctEnabled, costPct),
+      manualPrice: false,
       discount1_value: 0, discount1_type: null,
       discount2_value: 0, discount2_type: null,
     }]);
@@ -2689,9 +2892,49 @@ function StockMovementForm({ kind }) {
     // without retyping. They can clear via the × button or pick a different search.
   };
   const upd = (i, patch) => setItems(it => it.map((x,j)=>j===i?{...x,...patch}:x));
+  const updPrice = (i, val) => setItems(it => it.map((x,j)=>j===i?{...x, unit_price: Number(val)||0, manualPrice: true}:x));
   const rm = (i) => setItems(it => it.filter((_,j)=>j!==i));
 
+  // Recompute non-manual items when cost% toggle / value changes
+  useEffect(()=>{
+    if (kind === 'return') return;
+    setItems(it => it.map(l => {
+      if (l.manualPrice) return l;
+      const auto = costPctEnabled
+        ? Math.round((Number(l.retail_price)||0) * (Number(costPct)||0) / 100)
+        : (Number(l.retail_price)||0);
+      return { ...l, unit_price: auto };
+    }));
+  }, [costPctEnabled, costPct, kind]);
+
   const total = useMemo(()=> items.reduce((s,l)=> s + applyDiscounts(l.unit_price, l.quantity, l.discount1_value, l.discount1_type, l.discount2_value, l.discount2_type), 0), [items]);
+
+  // Required-field validation per kind (เลขบิล optional — auto-generate if empty)
+  const missing = useMemo(()=>{
+    const m = { date: !date };
+    if (kind === 'receive' || kind === 'claim') {
+      m.supplier = !supplierName.trim();
+    }
+    return m;
+  }, [kind, date, supplierName]);
+
+  const autoInvoiceNo = () => {
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}_${p(d.getMonth()+1)}_${p(d.getDate())}_${p(d.getHours())}_${p(d.getMinutes())}_${p(d.getSeconds())}`;
+  };
+  const hasMissing = Object.values(missing).some(Boolean);
+  const errCls = (key) => attemptedSubmit && missing[key] ? ' field-error-glow' : '';
+
+  const requestSubmit = () => {
+    if (!items.length) { toast.push("ไม่มีรายการ", 'error'); return; }
+    if (hasMissing) {
+      setAttemptedSubmit(true);
+      toast.push("กรุณากรอกข้อมูลให้ครบ", 'error');
+      return;
+    }
+    setConfirmOpen(true);
+  };
 
   const submit = async () => {
     if (!items.length) { toast.push("ไม่มีรายการ", 'error'); return; }
@@ -2711,7 +2954,7 @@ function StockMovementForm({ kind }) {
         headerPayload.vat_rate = hasVat?VAT_RATE_DEFAULT:0;
         headerPayload.vat_amount = vat;
         headerPayload.supplier_name = supplierName.trim()||null;
-        headerPayload.supplier_invoice_no = supplierInvoiceNo.trim()||null;
+        headerPayload.supplier_invoice_no = supplierInvoiceNo.trim() || autoInvoiceNo();
         if (kind==='claim') headerPayload.claim_reason = returnReason||null; // reuse the reason state
       } else {
         // return — from customer
@@ -2741,21 +2984,26 @@ function StockMovementForm({ kind }) {
       const verb = kind==='receive' ? 'การรับ' : kind==='claim' ? 'ส่งเคลม' : 'การคืน';
       toast.push(`บันทึก${verb} #${head.id} สำเร็จ`, 'success');
       setItems([]); setNotes(""); setSupplierName(""); setSupplierInvoiceNo(""); setOrigSaleId(""); setReturnReason("");
+      // Cost % toggle: 'once' resets after save, 'persist' stays on until leaving page
+      if (costPctMode !== 'persist') { setCostPctEnabled(false); setCostPct(58); setCostPctMode('once'); }
+      setAttemptedSubmit(false); setConfirmOpen(false);
     } catch (e) {
       toast.push("บันทึกไม่ได้: " + e.message, 'error');
     } finally { setSubmitting(false); }
   };
 
+  const supplierLabel = kind==='receive' ? 'ผู้ขาย / Supplier' : 'บริษัทที่ส่งคืน';
+  const invoiceLabel  = kind==='receive' ? 'เลขบิล' : 'เลขเอกสารส่งคืน / Tracking';
+  const verbLabel     = kind==='receive' ? 'การรับ' : kind==='claim' ? 'ส่งเคลม' : 'การคืน';
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
-      {/* LEFT: Search FIRST → Details below */}
+      {/* LEFT: Search only */}
       <div className="lg:col-span-7 space-y-4">
-
-        {/* SEARCH (top of form) */}
         <div className="card-canvas overflow-hidden">
           <div className="p-3 lg:p-4 border-b hairline">
             <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-body pointer-events-none"><Icon name="search" size={20} strokeWidth={2}/></span>
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"><Icon name="search" size={20} strokeWidth={2.25} color="#6b3a26"/></span>
               <input
                 className="input !pl-12 !py-3 !text-base"
                 placeholder={
@@ -2778,7 +3026,7 @@ function StockMovementForm({ kind }) {
           </div>
           {!search && <div className="p-6 text-muted text-sm">พิมพ์เพื่อค้นหา แล้วแตะเพื่อเพิ่มรายการ — สามารถเลือกหลายรุ่น/หลายสีติดต่อกันได้โดยไม่ต้องค้นหาใหม่</div>}
           {search && !results.length && <div className="p-6 text-muted text-sm">ไม่พบสินค้า "{search}"</div>}
-          <div className="max-h-80 overflow-y-auto">
+          <div className="max-h-[60vh] overflow-y-auto">
             {results.map(p => (
               <div key={p.id} className="px-4 py-3 border-b hairline last:border-0 hover:bg-white/40 cursor-pointer flex items-center gap-3 transition-colors" onClick={()=>addItem(p)}>
                 <div className="min-w-0 flex-1">
@@ -2794,96 +3042,60 @@ function StockMovementForm({ kind }) {
             ))}
           </div>
         </div>
-
-        {/* DETAILS — date, supplier (chips), bill no, VAT, notes */}
-        <div className="card-canvas p-4 lg:p-5 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs uppercase tracking-wider text-muted">วันที่</label>
-              <DatePicker mode="single" value={date} onChange={setDate} placeholder="เลือกวันที่" className="mt-1"/>
-            </div>
-            {kind==='return' && (
-              <div>
-                <label className="text-xs uppercase tracking-wider text-muted">ช่องทางที่ลูกค้าคืน</label>
-                <select className="input mt-1" value={channel} onChange={e=>setChannel(e.target.value)}>
-                  {CHANNELS.map(c=><option key={c.v} value={c.v}>{c.label}</option>)}
-                </select>
-              </div>
-            )}
-          </div>
-
-          {(kind==='receive' || kind==='claim') && (
-            <>
-              <div>
-                <label className="text-xs uppercase tracking-wider text-muted">{kind==='receive'?'ผู้ขาย / Supplier':'บริษัทที่ส่งคืน'}</label>
-                <div className="flex gap-2 mt-1.5">
-                  {SUPPLIERS.map(s => (
-                    <button key={s} type="button" onClick={()=>setSupplierName(s)}
-                      className={"flex-1 py-3 px-4 rounded-lg text-sm font-medium border transition-all " + (supplierName===s ? "bg-primary text-on-primary border-primary shadow-md" : "glass-soft text-ink hover:bg-white/60 hover-lift")}>
-                      {supplierName===s && <Icon name="check" size={14} className="inline mr-1.5" strokeWidth={2.5}/>}
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {kind==='claim' && (
-                <div>
-                  <label className="text-xs uppercase tracking-wider text-muted">เหตุผลที่ส่งคืน</label>
-                  <select className="input mt-1" value={returnReason} onChange={e=>setReturnReason(e.target.value)}>
-                    <option value="">— เลือก —</option>
-                    {CLAIM_REASONS.map(r=><option key={r} value={r}>{r}</option>)}
-                  </select>
-                </div>
-              )}
-              <div>
-                <label className="text-xs uppercase tracking-wider text-muted">{kind==='receive'?'เลขบิล':'เลขเอกสารส่งคืน / Tracking'}</label>
-                <input className="input mt-1 font-mono" placeholder={kind==='receive'?"เช่น INV-2026-0001":"เช่น CLM-2026-0001 หรือ Tracking no."} value={supplierInvoiceNo} onChange={e=>setSupplierInvoiceNo(e.target.value)} />
-              </div>
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <span className={"relative flex items-center justify-center w-5 h-5 rounded border transition-colors " + (hasVat?"bg-primary border-primary":"bg-canvas border-hairline")}>
-                  <input type="checkbox" className="sr-only" checked={hasVat} onChange={e=>setHasVat(e.target.checked)} />
-                  {hasVat && <Icon name="check" size={13} className="text-white" strokeWidth={2.5}/>}
-                </span>
-                <span className="text-sm">{kind==='receive'?'รวม VAT 7% (มี input VAT เคลมได้)':'รวม VAT 7% (กลับรายการ input VAT)'}</span>
-              </label>
-            </>
-          )}
-
-          {kind==='return' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs uppercase tracking-wider text-muted">บิลขายต้นฉบับ (ไม่บังคับ)</label>
-                <input className="input mt-1 font-mono" placeholder="เช่น 60590" inputMode="numeric" value={origSaleId} onChange={e=>setOrigSaleId(e.target.value.replace(/\D/g,''))} />
-              </div>
-              <div>
-                <label className="text-xs uppercase tracking-wider text-muted">เหตุผลที่คืน</label>
-                <select className="input mt-1" value={returnReason} onChange={e=>setReturnReason(e.target.value)}>
-                  <option value="">— เลือก —</option>
-                  {RETURN_REASONS.map(r=><option key={r} value={r}>{r}</option>)}
-                </select>
-              </div>
-            </div>
-          )}
-
-          <div>
-            <label className="text-xs uppercase tracking-wider text-muted">หมายเหตุ</label>
-            <textarea className="input mt-1" rows="2" placeholder={
-              kind==='receive' ? "เช่น เลขล็อต / ตำหนิ / ข้อตกลงพิเศษ" :
-              kind==='claim'   ? "เช่น รายละเอียดความเสียหาย / ข้อตกลงเคลมกับ supplier" :
-                                 "เช่น สภาพสินค้าที่คืนมา / เปลี่ยนเป็นรุ่นใหม่"
-            } value={notes} onChange={e=>setNotes(e.target.value)} />
-          </div>
-        </div>
       </div>
 
-      {/* RIGHT: List + total */}
+      {/* RIGHT: Items list + Bill details + Submit */}
       <div className="lg:col-span-5">
         <div className="card-cream overflow-hidden">
-          <div className="p-4 lg:p-5 border-b hairline">
-            <div className="font-display text-2xl">{kind==='receive'?'รายการรับเข้า':kind==='claim'?'รายการส่งเคลม/คืน':'รายการคืน'}</div>
-            <div className="text-xs text-muted mt-0.5">{items.length} รายการ</div>
+          <div className="p-4 lg:p-5 border-b hairline flex items-center justify-between gap-3">
+            <div>
+              <div className="font-display text-2xl">{kind==='receive'?'รายการรับเข้า':kind==='claim'?'รายการส่งเคลม/คืน':'รายการคืน'}</div>
+              <div className="text-xs text-muted mt-0.5">{items.length} รายการ</div>
+            </div>
           </div>
-          <div className="max-h-[50vh] lg:max-h-[55vh] overflow-y-auto p-3">
+
+          {/* Cost % toggle (receive + claim) */}
+          {(kind==='receive' || kind==='claim') && (
+            <div className="px-4 lg:px-5 py-3 border-b hairline bg-white/40">
+              <div className="flex items-center justify-between gap-3 select-none">
+                <button
+                  type="button"
+                  className="flex items-center gap-2 cursor-pointer"
+                  onClick={()=>{
+                    if (costPctEnabled) { setCostPctEnabled(false); setCostPctMode('once'); }
+                    else { setCostPctChooserOpen(true); }
+                  }}
+                >
+                  <span className={"relative flex items-center justify-center w-5 h-5 rounded border transition-colors " + (costPctEnabled?"bg-primary border-primary":"bg-canvas border-hairline")}>
+                    {costPctEnabled && <Icon name="check" size={13} className="text-white" strokeWidth={2.5}/>}
+                  </span>
+                  <span className="text-sm font-medium">คำนวณทุนจากราคาป้าย</span>
+                  {costPctEnabled && costPctMode==='persist' && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/15 text-primary font-medium">เปิดตลอด</span>
+                  )}
+                </button>
+                {costPctEnabled && (
+                  <span className="flex items-center gap-1.5">
+                    <input
+                      type="number" min="1" max="100" inputMode="numeric"
+                      className="input !h-9 !w-20 !rounded-lg !py-1 !text-sm text-right"
+                      value={costPct}
+                      onChange={e=>{
+                        const v = Number(e.target.value)||0;
+                        setCostPct(Math.max(1, Math.min(100, v)));
+                      }}
+                    />
+                    <span className="text-sm text-muted">%</span>
+                  </span>
+                )}
+              </div>
+              {costPctEnabled && (
+                <div className="text-[11px] text-muted mt-1.5">เปิดอยู่: เมื่อเพิ่มรายการใหม่จะคำนวณราคา = ราคาป้าย × {costPct}% (รายการที่แก้ราคาเองจะคงค่าเดิม)</div>
+              )}
+            </div>
+          )}
+
+          <div className="max-h-[40vh] lg:max-h-[42vh] overflow-y-auto p-3">
             {!items.length && <div className="p-6 text-center text-muted text-sm">ยังไม่มีรายการ</div>}
             {items.map((l, i) => (
               <div key={i} className="glass-soft rounded-lg p-3 mb-2 hover-lift fade-in">
@@ -2896,20 +3108,178 @@ function StockMovementForm({ kind }) {
                   <select className="input !py-1.5 !text-xs col-span-3" value={l.unit} onChange={e=>upd(i,{unit:e.target.value})}>
                     {UNITS.map(u=><option key={u} value={u}>{u}</option>)}
                   </select>
-                  <input type="number" inputMode="decimal" className="input !py-1.5 !text-xs col-span-6 text-right" value={l.unit_price} onChange={e=>upd(i,{unit_price:Number(e.target.value)||0})}/>
+                  <input type="number" inputMode="decimal" className="input !py-1.5 !text-xs col-span-6 text-right" value={l.unit_price} onChange={e=>updPrice(i,e.target.value)}/>
                 </div>
-                <div className="text-right text-sm font-medium mt-2">{fmtTHB(applyDiscounts(l.unit_price,l.quantity,l.discount1_value,l.discount1_type,l.discount2_value,l.discount2_type))}</div>
+                <div className="flex items-center justify-between mt-2">
+                  <div className="text-[10px] text-muted-soft">
+                    {l.manualPrice
+                      ? (Number(l.retail_price) > 0
+                          ? `แก้เอง · ${(l.unit_price / l.retail_price * 100).toFixed(1)}% ของ ${fmtTHB(l.retail_price)}`
+                          : 'แก้เอง')
+                      : (costPctEnabled && (kind==='receive'||kind==='claim'))
+                        ? `${costPct}% ของ ${fmtTHB(l.retail_price)}`
+                        : (Number(l.retail_price) > 0 ? `ราคาป้าย ${fmtTHB(l.retail_price)}` : '')}
+                  </div>
+                  <div className="text-sm font-medium">{fmtTHB(applyDiscounts(l.unit_price,l.quantity,l.discount1_value,l.discount1_type,l.discount2_value,l.discount2_type))}</div>
+                </div>
               </div>
             ))}
           </div>
+
+          {/* BILL DETAILS — moved from left panel */}
+          <div className="p-4 lg:p-5 border-t hairline bg-white/30 space-y-3">
+            <div className="text-xs uppercase tracking-wider text-muted">รายละเอียดบิล</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className={"rounded-xl" + errCls('date')}>
+                <label className="text-xs uppercase tracking-wider text-muted">วันที่</label>
+                <DatePicker mode="single" value={date} onChange={setDate} placeholder="เลือกวันที่" className="mt-1"/>
+              </div>
+              {kind==='return' && (
+                <div>
+                  <label className="text-xs uppercase tracking-wider text-muted">ช่องทางที่ลูกค้าคืน</label>
+                  <select className="input mt-1 !h-10" value={channel} onChange={e=>setChannel(e.target.value)}>
+                    {CHANNELS.map(c=><option key={c.v} value={c.v}>{c.label}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {(kind==='receive' || kind==='claim') && (
+              <>
+                <div className={"rounded-xl" + errCls('supplier')}>
+                  <label className="text-xs uppercase tracking-wider text-muted">{supplierLabel}</label>
+                  <div className="flex gap-2 mt-1.5 flex-wrap">
+                    {SUPPLIERS.map(s => (
+                      <button key={s} type="button" onClick={()=>setSupplierName(s)}
+                        className={"flex-1 min-w-[80px] py-2.5 px-3 rounded-lg text-sm font-medium border transition-all " + (supplierName===s ? "bg-primary text-on-primary border-primary shadow-md" : "glass-soft text-ink hover:bg-white/60 hover-lift")}>
+                        {supplierName===s && <Icon name="check" size={14} className="inline mr-1.5" strokeWidth={2.5}/>}
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {kind==='claim' && (
+                  <div>
+                    <label className="text-xs uppercase tracking-wider text-muted">เหตุผลที่ส่งคืน</label>
+                    <select className="input mt-1 !h-10" value={returnReason} onChange={e=>setReturnReason(e.target.value)}>
+                      <option value="">— เลือก —</option>
+                      {CLAIM_REASONS.map(r=><option key={r} value={r}>{r}</option>)}
+                    </select>
+                  </div>
+                )}
+                <div>
+                  <label className="text-xs uppercase tracking-wider text-muted">{invoiceLabel} <span className="text-muted-soft normal-case tracking-normal">(ไม่บังคับ — ไม่กรอกจะใช้วันเวลาเป็นเลขบิล)</span></label>
+                  <input className="input mt-1 !h-10 font-mono" placeholder={kind==='receive'?"เว้นว่างเพื่อสร้างอัตโนมัติ":"เช่น CLM-2026-0001 หรือ Tracking no."} value={supplierInvoiceNo} onChange={e=>setSupplierInvoiceNo(e.target.value)} />
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <span className={"relative flex items-center justify-center w-5 h-5 rounded border transition-colors " + (hasVat?"bg-primary border-primary":"bg-canvas border-hairline")}>
+                    <input type="checkbox" className="sr-only" checked={hasVat} onChange={e=>setHasVat(e.target.checked)} />
+                    {hasVat && <Icon name="check" size={13} className="text-white" strokeWidth={2.5}/>}
+                  </span>
+                  <span className="text-sm">{kind==='receive'?'รวม VAT 7% (มี input VAT เคลมได้)':'รวม VAT 7% (กลับรายการ input VAT)'}</span>
+                </label>
+              </>
+            )}
+
+            {kind==='return' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs uppercase tracking-wider text-muted">บิลขายต้นฉบับ (ไม่บังคับ)</label>
+                  <input className="input mt-1 !h-10 font-mono" placeholder="เช่น 60590" inputMode="numeric" value={origSaleId} onChange={e=>setOrigSaleId(e.target.value.replace(/\D/g,''))} />
+                </div>
+                <div>
+                  <label className="text-xs uppercase tracking-wider text-muted">เหตุผลที่คืน</label>
+                  <select className="input mt-1 !h-10" value={returnReason} onChange={e=>setReturnReason(e.target.value)}>
+                    <option value="">— เลือก —</option>
+                    {RETURN_REASONS.map(r=><option key={r} value={r}>{r}</option>)}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted">หมายเหตุ</label>
+              <textarea className="input mt-1" rows="2" placeholder={
+                kind==='receive' ? "เช่น เลขล็อต / ตำหนิ / ข้อตกลงพิเศษ" :
+                kind==='claim'   ? "เช่น รายละเอียดความเสียหาย / ข้อตกลงเคลมกับ supplier" :
+                                   "เช่น สภาพสินค้าที่คืนมา / เปลี่ยนเป็นรุ่นใหม่"
+              } value={notes} onChange={e=>setNotes(e.target.value)} />
+            </div>
+          </div>
+
           <div className="p-4 lg:p-5 border-t hairline bg-surface-cream-strong">
             <div className="flex justify-between font-display text-2xl mb-3"><span>รวม</span><span>{fmtTHB(total)}</span></div>
-            <button className="btn-primary w-full !py-3" disabled={submitting||!items.length} onClick={submit}>
-              {submitting?'กำลังบันทึก...':<><Icon name="check" size={16}/>บันทึก{kind==='receive'?'การรับ':kind==='claim'?'ส่งเคลม':'การคืน'}</>}
+            <button className="btn-primary w-full !py-3" disabled={submitting||!items.length} onClick={requestSubmit}>
+              {submitting?'กำลังบันทึก...':<><Icon name="check" size={16}/>บันทึก{verbLabel}</>}
             </button>
           </div>
         </div>
       </div>
+
+      {/* CONFIRM MODAL */}
+      <Modal
+        open={confirmOpen}
+        onClose={()=>!submitting && setConfirmOpen(false)}
+        title={`ยืนยัน${verbLabel}`}
+        footer={<>
+          <button className="btn-ghost" disabled={submitting} onClick={()=>setConfirmOpen(false)}>ยกเลิก</button>
+          <button className="btn-primary" disabled={submitting} onClick={submit}>
+            {submitting ? 'กำลังบันทึก...' : <><Icon name="check" size={16}/> ยืนยันบันทึก</>}
+          </button>
+        </>}
+      >
+        <div className="space-y-3 text-sm">
+          <div className="flex justify-between"><span className="text-muted">จำนวนรายการ</span><span className="font-medium">{items.length} รายการ</span></div>
+          <div className="flex justify-between"><span className="text-muted">วันที่</span><span className="font-medium">{date ? fmtThaiDateShort(date) : '—'}</span></div>
+          {(kind==='receive' || kind==='claim') && (<>
+            <div className="flex justify-between"><span className="text-muted">{supplierLabel}</span><span className="font-medium">{supplierName||'—'}</span></div>
+            <div className="flex justify-between gap-3">
+              <span className="text-muted flex-shrink-0">{invoiceLabel}</span>
+              <span className="font-medium font-mono text-right break-all">
+                {supplierInvoiceNo.trim()
+                  ? supplierInvoiceNo
+                  : <span className="text-muted-soft">— จะสร้างอัตโนมัติ —</span>}
+              </span>
+            </div>
+            <div className="flex justify-between"><span className="text-muted">VAT</span><span className="font-medium">{hasVat?'รวม VAT 7%':'ไม่มี VAT'}</span></div>
+          </>)}
+          {kind==='return' && (
+            <div className="flex justify-between"><span className="text-muted">ช่องทาง</span><span className="font-medium">{CHANNELS.find(c=>c.v===channel)?.label||'—'}</span></div>
+          )}
+          <div className="border-t hairline pt-3 flex justify-between font-display text-2xl"><span>รวม</span><span className="tabular-nums">{fmtTHB(total)}</span></div>
+        </div>
+      </Modal>
+
+      {/* COST % CHOOSER MODAL */}
+      <Modal
+        open={costPctChooserOpen}
+        onClose={()=>setCostPctChooserOpen(false)}
+        title="คำนวณทุนจากราคาป้าย"
+      >
+        <div className="space-y-3">
+          <div className="text-sm text-muted">เลือกโหมดการใช้งาน — ปกติจะปิดเองหลังบันทึกบิลนี้</div>
+          <button
+            type="button"
+            className="w-full text-left p-4 rounded-xl border border-hairline hover:border-primary hover:bg-white/60 transition-all hover-lift"
+            onClick={()=>{ setCostPctEnabled(true); setCostPctMode('once'); setCostPctChooserOpen(false); }}
+          >
+            <div className="font-medium text-sm flex items-center gap-2">
+              <Icon name="check" size={14} className="text-primary"/> เปิดเฉพาะรายการนี้
+            </div>
+            <div className="text-xs text-muted mt-1">เปิดอยู่จนกว่าจะกดบันทึก จากนั้นปิดอัตโนมัติ</div>
+          </button>
+          <button
+            type="button"
+            className="w-full text-left p-4 rounded-xl border border-hairline hover:border-primary hover:bg-white/60 transition-all hover-lift"
+            onClick={()=>{ setCostPctEnabled(true); setCostPctMode('persist'); setCostPctChooserOpen(false); }}
+          >
+            <div className="font-medium text-sm flex items-center gap-2">
+              <Icon name="check" size={14} className="text-primary"/> เปิดตลอด
+            </div>
+            <div className="text-xs text-muted mt-1">เปิดค้างไว้สำหรับทุกบิลถัดไป จนกว่าจะออกจากหน้านี้</div>
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -2965,13 +3335,13 @@ function DashboardView() {
       (tone==='canvas' ? "card-canvas" :
        tone==='cream'  ? "card-cream"  :
        tone==='dark'   ? "card-dark"   :
-       "bg-primary text-on-primary")
+       "card-primary-mesh text-on-primary")
     }>
       <div className="flex items-center justify-between">
         <div className={"text-[10px] lg:text-xs uppercase tracking-[1.5px] " + (tone==='dark'?'text-on-dark-soft':tone==='coral'?'opacity-90':'text-muted')}>{label}</div>
         <span className={tone==='dark'?'text-on-dark-soft':tone==='coral'?'opacity-80':'text-muted-soft'}><Icon name={icon} size={18}/></span>
       </div>
-      <div className="font-display text-2xl lg:text-4xl mt-2">{value}</div>
+      <div className="font-display stat-value tabular-nums mt-2" title={String(value)}>{value}</div>
       {sub && <div className={"text-xs mt-1 " + (tone==='dark'?'text-on-dark-soft':tone==='coral'?'opacity-90':'text-muted')}>{sub}</div>}
     </div>
   );
@@ -2979,6 +3349,12 @@ function DashboardView() {
   const rangeLabel = dateRange.from === dateRange.to
     ? fmtThaiDateShort(dateRange.from)
     : fmtThaiRange(dateRange.from, dateRange.to);
+  const channelRows = CHANNELS.map(c => {
+    const total = byChannel.find(x=>x.channel===c.v)?.total || 0;
+    const share = stats?.rangeTotal ? (total / stats.rangeTotal) * 100 : 0;
+    return { ...c, total, share };
+  });
+  const channelMax = Math.max(...channelRows.map(c=>c.total), 1);
 
   return (
     <div className="px-4 py-4 lg:px-10 lg:py-8 space-y-4 lg:space-y-8">
@@ -3031,23 +3407,388 @@ function DashboardView() {
         </div>
 
         <div className="card-dark p-4 lg:p-6">
-          <div className="font-display text-xl lg:text-2xl mb-3 lg:mb-4 flex items-center gap-2"><Icon name="store" size={20}/> ยอดขายแยกช่องทาง</div>
+          <div className="flex items-start justify-between gap-3 mb-3 lg:mb-4">
+            <div className="font-display text-xl lg:text-2xl flex items-center gap-2"><Icon name="store" size={20}/> ยอดขายแยกช่องทาง</div>
+            <div className="text-right">
+              <div className="text-[10px] uppercase tracking-wider text-on-dark-soft">รวม</div>
+              <div className="font-display text-lg tabular-nums">{fmtTHB(stats.rangeTotal)}</div>
+            </div>
+          </div>
           {!byChannel.length && <div className="text-on-dark-soft text-sm">ยังไม่มียอดขายในช่วงที่เลือก</div>}
           {byChannel.length>0 && (
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 lg:gap-3">
-              {CHANNELS.map(c => {
-                const v = byChannel.find(x=>x.channel===c.v)?.total || 0;
-                return (
-                  <div key={c.v} className="bg-surface-dark-elevated rounded-md p-3 lg:p-4">
-                    <div className="text-[10px] uppercase tracking-wider text-on-dark-soft">{c.label}</div>
-                    <div className="font-display text-lg lg:text-2xl mt-1">{fmtTHB(v)}</div>
-                  </div>
-                );
-              })}
+            <div className="channel-chart rounded-xl p-4 lg:p-5 overflow-hidden">
+              <div className="grid grid-cols-5 gap-2 lg:gap-4 items-end">
+                {channelRows.map(c => {
+                  const h = c.total ? Math.max(10, (c.total / channelMax) * 100) : 4;
+                  return (
+                    <div key={c.v} className="min-w-0 flex flex-col items-center">
+                      <div className="channel-bar-track rounded-2xl p-[3px] flex items-end justify-center overflow-hidden w-full max-w-[38px] sm:max-w-[46px] lg:max-w-[51px]">
+                        <div className="channel-bar w-full rounded-[13px] transition-all duration-500" style={{height:`${h}%`}}></div>
+                      </div>
+                      <div className="mt-3 text-center w-full min-w-0">
+                        <div className="text-[10px] lg:text-xs text-on-dark-soft truncate">{c.label}</div>
+                        <div className="font-display text-sm lg:text-lg tabular-nums mt-0.5 truncate">{fmtTHB(c.total)}</div>
+                        <div className="text-[10px] text-on-dark-soft tabular-nums">{c.share.toFixed(0)}%</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
       </>)}
+    </div>
+  );
+}
+
+/* =========================================================
+   PROFIT / LOSS VIEW
+========================================================= */
+function ProfitLossView() {
+  const today = todayISO();
+  const startMonth = today.slice(0,7) + '-01';
+  const [dateRange, setDateRange] = useState({ from: startMonth, to: today });
+  const [loading, setLoading] = useState(false);
+  const [rows, setRows] = useState([]); // per-line: { sale_id, sale_date, channel, product_id, product_name, qty, unit_price, lineRevenue, unitCost, costTotal, profit, costSource }
+  const [filterChannel, setFilterChannel] = useState('');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 50;
+
+  useEffect(()=>{ (async ()=>{
+    setLoading(true);
+    setRows([]);
+    setPage(1);
+    const { from, to } = dateRange;
+    try {
+      // 1) Sales in range (active only)
+      const { data: orders } = await sb.from('sale_orders')
+        .select('id, sale_date, channel, grand_total, subtotal')
+        .eq('status', 'active')
+        .gte('sale_date', from + 'T00:00:00')
+        .lte('sale_date', to + 'T23:59:59')
+        .order('sale_date', { ascending: false });
+      const ordersList = orders || [];
+      if (!ordersList.length) { setRows([]); setLoading(false); return; }
+
+      const orderIds = ordersList.map(o=>o.id);
+      // 2) Items
+      const { data: itemsData } = await sb.from('sale_order_items')
+        .select('*')
+        .in('sale_order_id', orderIds);
+      const items = itemsData || [];
+
+      const pids = [...new Set(items.map(i=>i.product_id).filter(Boolean))];
+
+      // 3) Receive history (only active i.e. voided_at IS NULL)
+      let recvRows = [];
+      if (pids.length) {
+        const { data } = await sb.from('receive_order_items')
+          .select('product_id, unit_price, receive_orders!inner(receive_date, voided_at)')
+          .in('product_id', pids)
+          .is('receive_orders.voided_at', null);
+        recvRows = data || [];
+      }
+      // Map: product_id -> sorted [{date, unit_price}] desc
+      const recvMap = {};
+      recvRows.forEach(r => {
+        const date = r.receive_orders?.receive_date;
+        if (!date) return;
+        (recvMap[r.product_id] ||= []).push({ date: new Date(date).getTime(), unit_price: Number(r.unit_price)||0 });
+      });
+      Object.values(recvMap).forEach(arr => arr.sort((a,b)=>b.date-a.date));
+
+      // 4) Products fallback
+      let prodMap = {};
+      if (pids.length) {
+        const { data: prods } = await sb.from('products').select('id, cost_price').in('id', pids);
+        (prods||[]).forEach(p => { prodMap[p.id] = Number(p.cost_price)||0; });
+      }
+
+      // 5) Build per-line rows
+      const orderById = Object.fromEntries(ordersList.map(o=>[o.id, o]));
+      const itemsByOrder = {};
+      items.forEach(it => { (itemsByOrder[it.sale_order_id] ||= []).push(it); });
+
+      const result = [];
+      for (const o of ordersList) {
+        const lines = itemsByOrder[o.id] || [];
+        const lineRevenues = lines.map(it => applyDiscounts(it.unit_price, it.quantity, it.discount1_value, it.discount1_type, it.discount2_value, it.discount2_type));
+        const subtotalCalc = lineRevenues.reduce((s,x)=>s+x, 0);
+        // distribute order-level discount: ratio = grand_total / subtotalCalc
+        const ratio = subtotalCalc > 0 ? (Number(o.grand_total)||0) / subtotalCalc : 1;
+        const saleTs = new Date(o.sale_date).getTime();
+
+        lines.forEach((it, idx) => {
+          const qty = Number(it.quantity)||0;
+          const lineRev = lineRevenues[idx] * ratio;
+          let unitCost = 0;
+          let costSource = 'fallback';
+          if (it.product_id) {
+            const list = recvMap[it.product_id];
+            if (list && list.length) {
+              const found = list.find(r => r.date <= saleTs);
+              if (found) { unitCost = found.unit_price; costSource = 'receive'; }
+              else { unitCost = prodMap[it.product_id] || 0; costSource = 'fallback'; }
+            } else {
+              unitCost = prodMap[it.product_id] || 0;
+              costSource = 'fallback';
+            }
+          }
+          const costTotal = unitCost * qty;
+          const profit = lineRev - costTotal;
+          result.push({
+            sale_id: o.id,
+            sale_date: o.sale_date,
+            channel: o.channel || '',
+            product_id: it.product_id,
+            product_name: it.product_name,
+            qty,
+            unit_price: Number(it.unit_price)||0,
+            lineRevenue: lineRev,
+            unitCost,
+            costTotal,
+            profit,
+            costSource,
+          });
+        });
+      }
+      setRows(result);
+    } catch (e) {
+      console.error(e);
+      setRows([]);
+    } finally { setLoading(false); }
+  })(); }, [dateRange.from, dateRange.to]);
+
+  // Filtered rows (channel + search)
+  const filtered = useMemo(()=>{
+    return rows.filter(r => {
+      if (filterChannel && r.channel !== filterChannel) return false;
+      if (search.trim() && !r.product_name?.toLowerCase().includes(search.trim().toLowerCase())) return false;
+      return true;
+    });
+  }, [rows, filterChannel, search]);
+
+  // Aggregates
+  const agg = useMemo(()=>{
+    let revenue = 0, cost = 0, profit = 0;
+    filtered.forEach(r => { revenue += r.lineRevenue; cost += r.costTotal; profit += r.profit; });
+    const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
+    return { revenue, cost, profit, margin };
+  }, [filtered]);
+
+  // Top 10 by profit
+  const topProfit = useMemo(()=>{
+    const map = {};
+    filtered.forEach(r => {
+      const key = r.product_id || `name:${r.product_name}`;
+      if (!map[key]) map[key] = { name: r.product_name, qty: 0, profit: 0, revenue: 0 };
+      map[key].qty += r.qty;
+      map[key].profit += r.profit;
+      map[key].revenue += r.lineRevenue;
+    });
+    return Object.values(map).sort((a,b)=>b.profit-a.profit).slice(0,10);
+  }, [filtered]);
+
+  // Pagination
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageRows = filtered.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
+  useEffect(()=>{ if (page > totalPages) setPage(1); }, [totalPages, page]);
+
+  const rangeLabel = dateRange.from === dateRange.to
+    ? fmtThaiDateShort(dateRange.from)
+    : fmtThaiRange(dateRange.from, dateRange.to);
+
+  const StatCard = ({ tone, label, value, sub, icon }) => (
+    <div className={
+      "rounded-lg p-4 lg:p-6 " +
+      (tone==='canvas' ? "card-canvas" :
+       tone==='cream'  ? "card-cream"  :
+       tone==='dark'   ? "card-dark"   :
+       "card-primary-mesh text-on-primary")
+    }>
+      <div className="flex items-center justify-between">
+        <div className={"text-[10px] lg:text-xs uppercase tracking-[1.5px] " + (tone==='dark'?'text-on-dark-soft':tone==='coral'?'opacity-90':'text-muted')}>{label}</div>
+        <span className={tone==='dark'?'text-on-dark-soft':tone==='coral'?'opacity-80':'text-muted-soft'}><Icon name={icon} size={18}/></span>
+      </div>
+      <div className="font-display stat-value tabular-nums mt-2" title={String(value)}>{value}</div>
+      {sub && <div className={"text-xs mt-1 " + (tone==='dark'?'text-on-dark-soft':tone==='coral'?'opacity-90':'text-muted')}>{sub}</div>}
+    </div>
+  );
+
+  // Quick presets
+  const setPreset = (preset) => {
+    const t = new Date();
+    const iso = (d) => d.toISOString().slice(0,10);
+    if (preset === 'today') setDateRange({ from: iso(t), to: iso(t) });
+    else if (preset === '7d') { const d = new Date(t); d.setDate(d.getDate()-6); setDateRange({ from: iso(d), to: iso(t) }); }
+    else if (preset === 'month') { setDateRange({ from: iso(t).slice(0,7)+'-01', to: iso(t) }); }
+    else if (preset === 'year')  { setDateRange({ from: t.getFullYear()+'-01-01', to: iso(t) }); }
+  };
+
+  return (
+    <div className="px-4 py-4 lg:px-10 lg:py-8 space-y-4 lg:space-y-6">
+
+      {/* Disclaimer */}
+      <div className="rounded-xl border-2 border-dashed border-red-300/70 bg-red-50/40 px-4 py-2.5 text-xs lg:text-sm text-red-700/80">
+        # คำนวณกำไรแบบถูกต้อง ตั้งแต่ มิถุนายน 2026 เป็นต้นไป
+      </div>
+
+      {/* Date controls */}
+      <div className="flex flex-wrap items-center gap-2 lg:gap-3">
+        <Icon name="calendar" size={18} className="text-muted flex-shrink-0"/>
+        <DatePicker mode="range" value={dateRange} onChange={setDateRange} placeholder="เลือกช่วงวันที่" className="w-64"/>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <button className="badge-pill hover:!bg-primary/15 cursor-pointer" onClick={()=>setPreset('today')}>วันนี้</button>
+          <button className="badge-pill hover:!bg-primary/15 cursor-pointer" onClick={()=>setPreset('7d')}>7 วัน</button>
+          <button className="badge-pill hover:!bg-primary/15 cursor-pointer" onClick={()=>setPreset('month')}>เดือนนี้</button>
+          <button className="badge-pill hover:!bg-primary/15 cursor-pointer" onClick={()=>setPreset('year')}>ปีนี้</button>
+        </div>
+        {loading && <span className="spinner text-muted ml-2"/>}
+      </div>
+
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+        <StatCard tone="canvas" label="ยอดขายสุทธิ" value={fmtTHB(agg.revenue)} sub={rangeLabel} icon="trend-up"/>
+        <StatCard tone="cream"  label="ต้นทุนรวม" value={fmtTHB(agg.cost)} sub={`${filtered.length} รายการ`} icon="package-in"/>
+        <StatCard tone={agg.profit>=0?"dark":"coral"} label="กำไรสุทธิ" value={fmtTHB(agg.profit)} sub={agg.profit>=0?"กำไร":"ขาดทุน"} icon="trend-up"/>
+        <StatCard tone="coral"  label="Margin" value={`${agg.margin.toFixed(1)}%`} sub="กำไร / ยอดขาย" icon="tag"/>
+      </div>
+
+      {/* Top 10 */}
+      <div className="card-canvas p-4 lg:p-6">
+        <div className="font-display text-xl lg:text-2xl mb-3 lg:mb-4 flex items-center gap-2">
+          <Icon name="trend-up" size={20}/> Top 10 สินค้าทำกำไรสูงสุด
+        </div>
+        {!topProfit.length && <div className="text-muted text-sm">ยังไม่มีข้อมูลในช่วงที่เลือก</div>}
+        {topProfit.map((p,i)=>(
+          <div key={i} className="flex items-center gap-3 py-2 border-b hairline-soft last:border-0">
+            <div className="font-display text-xl lg:text-2xl w-7 text-muted-soft">{i+1}</div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm truncate font-medium">{p.name}</div>
+              <div className="text-xs text-muted">ขาย {p.qty} ชิ้น · ยอด {fmtTHB(p.revenue)}</div>
+            </div>
+            <div className={"font-display text-base lg:text-lg tabular-nums " + (p.profit>=0?"text-ink":"text-error")}>
+              {p.profit>=0?'+':''}{fmtTHB(p.profit)}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Detail table */}
+      <div className="card-cream overflow-hidden">
+        <div className="p-4 lg:p-5 border-b hairline space-y-3">
+          <div className="font-display text-xl lg:text-2xl flex items-center gap-2"><Icon name="receipt" size={20}/> รายละเอียดทุกรายการ</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 lg:gap-3">
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"><Icon name="search" size={16} strokeWidth={2.25} color="#6b3a26"/></span>
+              <input className="input !pl-9 !py-2 !text-sm" placeholder="ค้นหาชื่อสินค้า" value={search} onChange={e=>setSearch(e.target.value)}/>
+            </div>
+            <select className="input !py-2 !text-sm" value={filterChannel} onChange={e=>setFilterChannel(e.target.value)}>
+              <option value="">ทุกช่องทาง</option>
+              {CHANNELS.map(c => <option key={c.v} value={c.v}>{c.label}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden lg:block overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-surface-cream-strong/95 backdrop-blur z-10">
+              <tr className="text-[10px] uppercase tracking-wider text-muted">
+                <th className="text-left px-4 py-2 font-medium">บิล</th>
+                <th className="text-left px-2 py-2 font-medium">วันที่</th>
+                <th className="text-left px-2 py-2 font-medium">สินค้า</th>
+                <th className="text-left px-2 py-2 font-medium">ช่องทาง</th>
+                <th className="text-right px-2 py-2 font-medium">จำนวน</th>
+                <th className="text-right px-2 py-2 font-medium">ขาย</th>
+                <th className="text-right px-2 py-2 font-medium">ทุน/หน่วย</th>
+                <th className="text-right px-2 py-2 font-medium">ทุนรวม</th>
+                <th className="text-right px-2 py-2 font-medium">กำไร</th>
+                <th className="text-right px-4 py-2 font-medium">%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!loading && !pageRows.length && (
+                <tr><td colSpan="10" className="text-center text-muted py-8">ไม่มีข้อมูล</td></tr>
+              )}
+              {pageRows.map((r, i) => {
+                const pct = r.lineRevenue > 0 ? (r.profit / r.lineRevenue) * 100 : 0;
+                return (
+                  <tr key={i} className="border-b hairline-soft hover:bg-white/40">
+                    <td className="px-4 py-2 font-mono text-xs">#{r.sale_id}</td>
+                    <td className="px-2 py-2 text-xs whitespace-nowrap">{fmtThaiDateShort(r.sale_date.slice(0,10))}</td>
+                    <td className="px-2 py-2">
+                      <div className="truncate max-w-[260px]" title={r.product_name}>{r.product_name}</div>
+                      {r.costSource==='fallback' && <span className="badge-pill !bg-warning/15 !text-[#8a6500] !text-[10px] mt-0.5">ทุนประมาณ</span>}
+                    </td>
+                    <td className="px-2 py-2"><span className="badge-pill !text-[10px]">{CHANNEL_LABELS[r.channel]||r.channel||'—'}</span></td>
+                    <td className="px-2 py-2 text-right tabular-nums">{r.qty}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{fmtTHB(r.lineRevenue)}</td>
+                    <td className="px-2 py-2 text-right tabular-nums text-muted">{fmtTHB(r.unitCost)}</td>
+                    <td className="px-2 py-2 text-right tabular-nums text-muted">{fmtTHB(r.costTotal)}</td>
+                    <td className={"px-2 py-2 text-right tabular-nums font-medium " + (r.profit>=0?"text-ink":"text-error")}>
+                      {r.profit>=0?'+':''}{fmtTHB(r.profit)}
+                    </td>
+                    <td className={"px-4 py-2 text-right tabular-nums text-xs " + (r.profit>=0?"text-muted":"text-error")}>
+                      {pct.toFixed(1)}%
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile cards */}
+        <div className="lg:hidden p-3 space-y-2">
+          {!loading && !pageRows.length && <div className="text-center text-muted text-sm py-8">ไม่มีข้อมูล</div>}
+          {pageRows.map((r,i) => {
+            const pct = r.lineRevenue > 0 ? (r.profit / r.lineRevenue) * 100 : 0;
+            return (
+              <div key={i} className="glass-soft rounded-lg p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium truncate">{r.product_name}</div>
+                    <div className="text-xs text-muted mt-0.5">
+                      #{r.sale_id} · {fmtThaiDateShort(r.sale_date.slice(0,10))} · {CHANNEL_LABELS[r.channel]||r.channel||'—'}
+                    </div>
+                    {r.costSource==='fallback' && <span className="badge-pill !bg-warning/15 !text-[#8a6500] !text-[10px] mt-1">ทุนประมาณ</span>}
+                  </div>
+                  <div className={"text-right " + (r.profit>=0?"":"text-error")}>
+                    <div className="font-display text-base tabular-nums">{r.profit>=0?'+':''}{fmtTHB(r.profit)}</div>
+                    <div className="text-[10px] text-muted">{pct.toFixed(1)}%</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 mt-2 text-[11px]">
+                  <div><div className="text-muted-soft">จำนวน</div><div className="tabular-nums">{r.qty}</div></div>
+                  <div><div className="text-muted-soft">ขาย</div><div className="tabular-nums">{fmtTHB(r.lineRevenue)}</div></div>
+                  <div><div className="text-muted-soft">ทุน</div><div className="tabular-nums">{fmtTHB(r.costTotal)}</div></div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Pagination */}
+        {filtered.length > PAGE_SIZE && (
+          <div className="p-3 border-t hairline flex items-center justify-between gap-2">
+            <div className="text-xs text-muted">
+              {(page-1)*PAGE_SIZE+1}–{Math.min(page*PAGE_SIZE, filtered.length)} จาก {filtered.length}
+            </div>
+            <div className="flex items-center gap-2">
+              <button className="btn-ghost !py-1.5 !px-3 !min-h-0" disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))}>
+                <Icon name="chevron-r" size={14} className="rotate-180"/>
+              </button>
+              <span className="text-xs tabular-nums">{page} / {totalPages}</span>
+              <button className="btn-ghost !py-1.5 !px-3 !min-h-0" disabled={page>=totalPages} onClick={()=>setPage(p=>Math.min(totalPages,p+1))}>
+                <Icon name="chevron-r" size={14}/>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -3076,6 +3817,7 @@ function App() {
     receive:   { t: "รับสินค้าจากบริษัท",    s: "Stock In · From Supplier" },
     return:    { t: "รับคืนจากลูกค้า",       s: "Customer Return" },
     dashboard: { t: "แดชบอร์ด",              s: "Dashboard" },
+    pnl:       { t: "กำไร / ขาดทุน",         s: "Profit & Loss" },
   };
 
   return (
@@ -3093,6 +3835,7 @@ function App() {
               {view==='receive' && <ReceiveView />}
               {view==='return' && <ReturnView />}
               {view==='dashboard' && <DashboardView />}
+              {view==='pnl' && <ProfitLossView />}
             </div>
           </main>
         </div>
