@@ -332,6 +332,42 @@
     border-color: rgba(140, 128, 105, 0.55);
   }
 
+  /* ==========  SELECT / DROPDOWN BUTTON  ========== */
+  /* Style only the trigger button — leave the native option list alone */
+  select.input {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b3a26' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px 16px;
+    padding-right: 38px;
+    cursor: pointer;
+  }
+  select.input:hover,
+  select.input:focus {
+    background-color: rgba(255, 255, 255, 0.97);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23cc785c' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px 16px;
+  }
+  select.input.\!py-1:hover,
+  select.input.\!py-1:focus,
+  select.input.\!py-1\.5:hover,
+  select.input.\!py-1\.5:focus {
+    background-position: right 8px center;
+    background-size: 14px 14px;
+  }
+  /* Compact variants — keep the chevron tucked closer */
+  select.input.\!py-1,
+  select.input.\!py-1\.5 {
+    background-position: right 8px center;
+    background-size: 14px 14px;
+    padding-right: 28px;
+  }
+
   /* ==========  CARDS (glass)  ========== */
   .card-canvas {
     background:
@@ -2060,20 +2096,25 @@ function POSView() {
       const q = search.trim();
       const { data: barcodeHit } = await sb.from('products').select('*').eq('barcode', q).limit(1);
       let rows = [];
-      if (barcodeHit && barcodeHit.length) rows = barcodeHit;
-      else {
-        const { data, error } = await sb.from('products').select('*').ilike('name', `%${q}%`).limit(20);
-        if (!error) rows = data || [];
+      if (barcodeHit && barcodeHit.length) {
+        if (!cancelled) { addToCart(barcodeHit[0]); setSearch(''); setSearching(false); }
+        return;
       }
+      const { data, error } = await sb.from('products').select('*').ilike('name', `%${q}%`).limit(20);
+      if (!error) rows = data || [];
+      rows.sort((a,b) => (Number(b.current_stock)||0) - (Number(a.current_stock)||0));
       if (!cancelled) { setResults(rows); setSearching(false); }
     }, 200);
     return () => { cancelled = true; clearTimeout(t); };
   }, [search]);
 
   const addToCart = (p) => {
+    const stock = Number(p.current_stock) || 0;
+    if (stock <= 0) { toast.push(`"${p.name}" หมดสต็อก ไม่สามารถขายได้`, "error"); return; }
     setCart(c => {
       const i = c.findIndex(x => x.product_id === p.id);
       if (i >= 0) {
+        if (c[i].quantity >= stock) { toast.push(`เพิ่มไม่ได้ — เกินสต็อก (${stock} ชิ้น)`, "error"); return c; }
         const n = [...c]; n[i] = { ...n[i], quantity: n[i].quantity + 1 }; return n;
       }
       return [...c, {
@@ -2081,10 +2122,10 @@ function POSView() {
         quantity: 1, unit_price: Number(p.retail_price)||0,
         discount1_value: 0, discount1_type: null,
         discount2_value: 0, discount2_type: null,
-        current_stock: p.current_stock,
+        current_stock: stock,
       }];
     });
-    setSearch(""); setResults([]); searchRef.current?.focus();
+    searchRef.current?.focus();
   };
   const updateLine = (idx, patch) => setCart(c => c.map((l,i)=> i===idx?{...l,...patch}:l));
   const removeLine = (idx) => setCart(c => c.filter((_,i)=>i!==idx));
@@ -2164,8 +2205,12 @@ function POSView() {
       {search && searching && <div className="p-6 text-muted text-sm flex-shrink-0">กำลังค้นหา...</div>}
       {search && !searching && results.length===0 && <div className="p-6 text-muted text-sm flex-shrink-0">ไม่พบสินค้า "{search}"</div>}
       <div className="flex-1 overflow-y-auto min-h-0">
-        {results.map(p => (
-          <div key={p.id} className="px-4 lg:px-5 py-3.5 border-b hairline last:border-0 hover:bg-white/40 cursor-pointer flex items-center gap-3 transition-colors" onClick={()=>addToCart(p)}>
+        {results.map(p => {
+          const oos = (Number(p.current_stock)||0) <= 0;
+          return (
+          <div key={p.id}
+            className={"px-4 lg:px-5 py-3.5 border-b hairline last:border-0 flex items-center gap-3 transition-colors " + (oos ? "opacity-60 cursor-not-allowed" : "hover:bg-white/40 cursor-pointer")}
+            onClick={oos ? undefined : ()=>addToCart(p)}>
             <div className="flex-1 min-w-0">
               <div className="font-medium text-ink truncate text-base">{p.name}</div>
               <div className="text-xs text-muted mt-0.5 font-mono truncate">{p.barcode || '— ไม่มีบาร์โค้ด —'}</div>
@@ -2173,14 +2218,17 @@ function POSView() {
             <div className="text-right flex-shrink-0">
               <div className="font-display text-xl lg:text-2xl text-ink leading-tight tabular-nums">{fmtTHB(p.retail_price)}</div>
               <div className="mt-1">
-                <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':p.current_stock<5?'!bg-warning/15 !text-[#8a6500]':'')}>
-                  คงเหลือ {p.current_stock}
+                <span className={"badge-pill " + (oos?'!bg-error/10 !text-error':p.current_stock<5?'!bg-warning/15 !text-[#8a6500]':'')}>
+                  {oos ? 'หมดสต็อก' : `คงเหลือ ${p.current_stock}`}
                 </span>
               </div>
             </div>
-            <button className="btn-primary !py-2 !px-3 !min-h-[40px] flex-shrink-0" aria-label="เพิ่ม"><Icon name="plus" size={18}/></button>
+            {oos
+              ? <button className="!py-2 !px-3 !min-h-[40px] rounded-md bg-hairline text-muted cursor-not-allowed flex-shrink-0 inline-flex items-center justify-center" disabled aria-label="หมดสต็อก"><Icon name="x" size={18}/></button>
+              : <button className="btn-primary !py-2 !px-3 !min-h-[40px] flex-shrink-0" aria-label="เพิ่ม"><Icon name="plus" size={18}/></button>}
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -2208,8 +2256,17 @@ function POSView() {
               <div className="flex items-center gap-2 mt-2">
                 <div className="flex items-center bg-white/60 backdrop-blur rounded-lg border border-white/50 shadow-sm overflow-hidden">
                   <button className="stepper-btn rounded-l-lg text-ink" onClick={()=>updateLine(idx,{quantity:Math.max(1,l.quantity-1)})}><Icon name="minus" size={16}/></button>
-                  <input type="number" min="1" inputMode="numeric" className="w-12 text-center bg-transparent text-base font-medium border-0 focus:!outline-none focus:!shadow-none py-1" value={l.quantity} onChange={e=>updateLine(idx,{quantity:Math.max(1,Number(e.target.value)||1)})}/>
-                  <button className="stepper-btn rounded-r-lg text-ink" onClick={()=>updateLine(idx,{quantity:l.quantity+1})}><Icon name="plus" size={16}/></button>
+                  <input type="number" min="1" max={l.current_stock||undefined} inputMode="numeric" className="w-12 text-center bg-transparent text-base font-medium border-0 focus:!outline-none focus:!shadow-none py-1" value={l.quantity} onChange={e=>{
+                    const v = Math.max(1, Number(e.target.value)||1);
+                    const cap = Number(l.current_stock)||v;
+                    if (v > cap) toast.push(`เกินสต็อก (${cap} ชิ้น)`, 'error');
+                    updateLine(idx,{quantity: Math.min(v, cap)});
+                  }}/>
+                  <button className="stepper-btn rounded-r-lg text-ink disabled:opacity-40 disabled:cursor-not-allowed" disabled={l.quantity >= (Number(l.current_stock)||l.quantity)} onClick={()=>{
+                    const cap = Number(l.current_stock)||l.quantity;
+                    if (l.quantity >= cap) { toast.push(`เกินสต็อก (${cap} ชิ้น)`, 'error'); return; }
+                    updateLine(idx,{quantity: l.quantity+1});
+                  }}><Icon name="plus" size={16}/></button>
                 </div>
                 <div className="text-xs text-muted flex-1 tabular-nums">@ {fmtTHB(l.unit_price)}</div>
                 <div className="text-right font-medium text-sm tabular-nums">{fmtTHB(lineNet(l))}</div>
@@ -2610,7 +2667,10 @@ function StockHistoryPanel({ productId }) {
 
 function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand, addCategory }) {
   const [draft, setDraft] = useState(null);
-  useEffect(()=>{ setDraft(editing? {...editing} : null); }, [editing]);
+  const [barcodeEdit, setBarcodeEdit] = useState(false);
+  const [manualApproved, setManualApproved] = useState(false);
+  const barcodeRef = useRef(null);
+  useEffect(()=>{ setDraft(editing? {...editing} : null); setBarcodeEdit(false); setManualApproved(false); }, [editing]);
   if (!draft) return null;
   const set = (k,v)=> setDraft(d=>({...d,[k]:v}));
   const onBrandChange = async (val) => {
@@ -2639,17 +2699,49 @@ function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand,
         <div>
           <label className="text-xs uppercase tracking-wider text-muted flex items-center gap-2">
             บาร์โค้ด
-            <span className="inline-flex items-center gap-1 text-muted-soft normal-case tracking-normal font-normal">
-              <Icon name="barcode" size={12}/> สแกน หรือ พิมพ์
-            </span>
+            {draft.id && !barcodeEdit && (
+              <button type="button" className="inline-flex items-center gap-1 text-xs text-[#6b3a26] bg-[#6b3a26]/10 hover:bg-[#6b3a26]/20 px-2 py-0.5 rounded-md transition-colors normal-case tracking-normal font-medium" onClick={()=>{ setBarcodeEdit(true); setTimeout(()=>barcodeRef.current?.focus(), 50); }}>
+                <Icon name="barcode" size={11}/> แก้ไข Barcode
+              </button>
+            )}
+            {draft.id && barcodeEdit && (
+              <span className="inline-flex items-center gap-1 text-xs text-success normal-case tracking-normal font-medium">
+                <Icon name="barcode" size={11}/> พร้อมสแกน — สแกนเพื่อเปลี่ยน
+              </span>
+            )}
+            {!draft.id && (
+              <span className="inline-flex items-center gap-1 text-muted-soft normal-case tracking-normal font-normal">
+                <Icon name="barcode" size={12}/> สแกน หรือ พิมพ์
+              </span>
+            )}
           </label>
           <input
-            className="input mt-1 font-mono"
+            ref={barcodeRef}
+            className={"input mt-1 font-mono" + (draft.id && !barcodeEdit ? " opacity-60 cursor-not-allowed" : "")}
             placeholder="วางหัวอ่านแล้วสแกน หรือพิมพ์ตรงนี้..."
             inputMode="text"
             autoFocus={!draft.id}
+            readOnly={!!(draft.id && !barcodeEdit)}
             value={draft.barcode||""}
             onChange={e=>set('barcode', e.target.value)}
+            onMouseDown={e=>{
+              if (draft.id && barcodeEdit && !manualApproved) {
+                e.preventDefault();
+                if (window.confirm("ยืนยันการแก้ไข Barcode ด้วยการพิมพ์?\n\nหากต้องการเปลี่ยน ควรใช้เครื่องสแกนเพื่อความแม่นยำ")) {
+                  setManualApproved(true);
+                  setTimeout(()=>barcodeRef.current?.focus(), 0);
+                }
+              }
+            }}
+            onTouchStart={e=>{
+              if (draft.id && barcodeEdit && !manualApproved) {
+                e.preventDefault();
+                if (window.confirm("ยืนยันการแก้ไข Barcode ด้วยการพิมพ์?\n\nหากต้องการเปลี่ยน ควรใช้เครื่องสแกนเพื่อความแม่นยำ")) {
+                  setManualApproved(true);
+                  setTimeout(()=>barcodeRef.current?.focus(), 0);
+                }
+              }
+            }}
           />
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -3197,11 +3289,12 @@ function StockMovementForm({ kind }) {
     const t = setTimeout(async ()=>{
       const q = search.trim();
       const { data: barcodeHit } = await sb.from('products').select('*').eq('barcode', q).limit(1);
-      let rows = barcodeHit?.length ? barcodeHit : [];
-      if (!rows.length) {
-        const { data } = await sb.from('products').select('*').ilike('name', `%${q}%`).limit(15);
-        rows = data || [];
+      if (barcodeHit?.length) {
+        if (!cancel) { addItem(barcodeHit[0]); setSearch(''); }
+        return;
       }
+      const { data } = await sb.from('products').select('*').ilike('name', `%${q}%`).limit(15);
+      const rows = data || [];
       if (!cancel) setResults(rows);
     }, 200);
     return ()=>{ cancel=true; clearTimeout(t); };
