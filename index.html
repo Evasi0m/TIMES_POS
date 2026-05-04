@@ -294,6 +294,24 @@
   .btn-secondary:hover { background: rgba(250, 249, 245, 0.96); transform: translateY(-1px); box-shadow: var(--shadow-mid); }
   .btn-secondary:active { transform: translateY(0) scale(0.98); transition-duration: .08s; }
 
+  .btn-danger {
+    background: #c64545;
+    color: #ffffff;
+    padding: 10px 16px;
+    min-height: 40px;
+    border-radius: 9px;
+    font-weight: 500;
+    font-size: 14px;
+    line-height: 1;
+    border: none;
+    cursor: pointer;
+    transition: background-color .18s var(--ease-out), transform .15s var(--ease-out), box-shadow .15s var(--ease-out), filter .18s;
+    box-shadow: var(--shadow-low);
+  }
+  .btn-danger:hover { background: #ad3838; transform: translateY(-1px); box-shadow: var(--shadow-mid); }
+  .btn-danger:active { transform: translateY(0) scale(0.98); filter: brightness(0.95); transition-duration: .08s; }
+  .btn-danger:disabled { background: #e6dfd8; color: #6c6a64; cursor: not-allowed; box-shadow: none; transform: none; filter: none; }
+
   .btn-ghost {
     background: transparent;
     color: #141413;
@@ -916,10 +934,20 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
 
 const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
-const fmtTHB = (n) => "฿" + (Number(n) || 0).toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+// Round to satang precision (2 decimals) to avoid JS float drift on currency math.
+// Use everywhere prices are added/multiplied/discounted before storing or comparing.
+const roundMoney = (n) => Math.round(((Number(n) || 0) + Number.EPSILON) * 100) / 100;
+const fmtTHB = (n) => "฿" + roundMoney(n).toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const fmtDate = (s) => s ? new Date(s).toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" }) : "-";
 const fmtDateTime = (s) => s ? new Date(s).toLocaleString("th-TH", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "-";
-const todayISO = () => new Date().toISOString().slice(0,10);
+// Bangkok-local YYYY-MM-DD — avoids the off-by-one bug when the server/client clock is in UTC
+// and the sale happens after 17:00 UTC (= 00:00 next day in Bangkok).
+const dateISOBangkok = (d) => (d || new Date()).toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
+const todayISO = () => dateISOBangkok();
+// Stamps a Bangkok-local date (YYYY-MM-DD) as the start/end-of-day in tz-aware ISO so Supabase
+// timestamptz comparisons line up with how Thai users experience "วันนี้".
+const startOfDayBangkok = (yyyymmdd) => `${yyyymmdd}T00:00:00+07:00`;
+const endOfDayBangkok   = (yyyymmdd) => `${yyyymmdd}T23:59:59.999+07:00`;
 
 const CHANNELS = [
   { v: "store",    label: "หน้าร้าน" },
@@ -939,23 +967,26 @@ const RETURN_REASONS = ["ชำรุด", "ผิดรุ่น/ผิดส�
 const VAT_RATE_DEFAULT = 7;
 
 // VAT-inclusive pricing (retail standard in Thailand): the displayed grand_total already includes VAT.
-// Returns { vat, exVat } where vat + exVat == grand.
+// Returns { vat, exVat } where roundMoney(vat) + roundMoney(exVat) == roundMoney(grand).
 function vatBreakdown(grandTotal, vatRate = VAT_RATE_DEFAULT) {
   const r = (Number(vatRate) || 0) / 100;
-  if (r <= 0) return { vat: 0, exVat: Number(grandTotal) || 0 };
-  const exVat = (Number(grandTotal) || 0) / (1 + r);
-  const vat = (Number(grandTotal) || 0) - exVat;
+  const g = roundMoney(grandTotal);
+  if (r <= 0) return { vat: 0, exVat: g };
+  const exVat = roundMoney(g / (1 + r));
+  const vat = roundMoney(g - exVat);
   return { vat, exVat };
 }
 
+// All intermediate steps are rounded to 2 decimals so cascading discount + qty
+// don't accumulate float drift (e.g. 0.1 + 0.2 != 0.3).
 function applyDiscounts(unitPrice, qty, d1v, d1t, d2v, d2t) {
-  let s1 = Number(unitPrice) || 0;
-  if (d1t === 'percent') s1 = s1 * (1 - (Number(d1v)||0) / 100);
-  else if (d1t === 'baht') s1 = s1 - (Number(d1v)||0);
+  let s1 = roundMoney(unitPrice);
+  if (d1t === 'percent') s1 = roundMoney(s1 * (1 - (Number(d1v)||0) / 100));
+  else if (d1t === 'baht') s1 = roundMoney(s1 - (Number(d1v)||0));
   let s2 = s1;
-  if (d2t === 'percent') s2 = s2 * (1 - (Number(d2v)||0) / 100);
-  else if (d2t === 'baht') s2 = s2 - (Number(d2v)||0);
-  return Math.max(0, s2) * (Number(qty) || 0);
+  if (d2t === 'percent') s2 = roundMoney(s2 * (1 - (Number(d2v)||0) / 100));
+  else if (d2t === 'baht') s2 = roundMoney(s2 - (Number(d2v)||0));
+  return roundMoney(Math.max(0, s2) * (Number(qty) || 0));
 }
 function applyOrderDiscount(subtotal, value, type) {
   if (type === 'percent') return Math.max(0, subtotal * (1 - (Number(value)||0)/100));
@@ -1067,6 +1098,70 @@ function Modal({ open, onClose, title, children, footer, wide }) {
     </div>
   );
 }
+
+/* =========================================================
+   CONFIRM / PROMPT DIALOG (replaces window.confirm / window.prompt)
+   - useConfirm() returns confirm({...}) → Promise<boolean>
+   - usePrompt()  returns prompt({...})  → Promise<string|null>  (null = cancelled)
+========================================================= */
+const DialogCtx = React.createContext({ confirm: ()=>Promise.resolve(false), prompt: ()=>Promise.resolve(null) });
+function DialogProvider({ children }) {
+  const [state, setState] = useState(null); // { kind:'confirm'|'prompt', title, message, label, defaultValue, danger, multiline, resolve }
+  const [value, setValue] = useState("");
+
+  const confirm = useCallback((opts) => new Promise((resolve) => {
+    setState({ kind:'confirm', danger:false, ...opts, resolve });
+  }), []);
+  const prompt = useCallback((opts) => new Promise((resolve) => {
+    setValue(opts?.defaultValue ?? "");
+    setState({ kind:'prompt', danger:false, ...opts, resolve });
+  }), []);
+
+  const close = (result) => {
+    if (!state) return;
+    state.resolve(result);
+    setState(null);
+    setValue("");
+  };
+
+  const okLabel = state?.okLabel || (state?.kind==='prompt' ? 'ตกลง' : 'ยืนยัน');
+  const cancelLabel = state?.cancelLabel || 'ยกเลิก';
+
+  return (
+    <DialogCtx.Provider value={{ confirm, prompt }}>
+      {children}
+      <Modal
+        open={!!state}
+        onClose={() => close(state?.kind==='prompt' ? null : false)}
+        title={state?.title || (state?.kind==='prompt' ? 'กรอกข้อมูล' : 'ยืนยัน')}
+        footer={
+          <>
+            <button className="btn-secondary" onClick={() => close(state?.kind==='prompt' ? null : false)}>{cancelLabel}</button>
+            <button
+              className={state?.danger ? "btn-danger" : "btn-primary"}
+              onClick={() => close(state?.kind==='prompt' ? value : true)}
+              autoFocus
+            >{okLabel}</button>
+          </>
+        }
+      >
+        {state?.message && <div className="text-sm text-body whitespace-pre-line mb-3">{state.message}</div>}
+        {state?.kind === 'prompt' && (
+          <>
+            {state.label && <label className="text-xs uppercase tracking-wider text-muted">{state.label}</label>}
+            {state.multiline
+              ? <textarea className="input mt-1 w-full" rows={3} value={value} onChange={e=>setValue(e.target.value)} autoFocus
+                  onKeyDown={e=>{ if (e.key==='Enter' && (e.ctrlKey||e.metaKey)) close(value); if (e.key==='Escape') close(null); }}/>
+              : <input className="input mt-1 w-full" value={value} onChange={e=>setValue(e.target.value)} autoFocus
+                  onKeyDown={e=>{ if (e.key==='Enter') close(value); if (e.key==='Escape') close(null); }}/>}
+          </>
+        )}
+      </Modal>
+    </DialogCtx.Provider>
+  );
+}
+const useConfirm = () => React.useContext(DialogCtx).confirm;
+const usePrompt  = () => React.useContext(DialogCtx).prompt;
 
 /* =========================================================
    LOGIN
@@ -1556,8 +1651,7 @@ function MovementHistoryModal({ open, onClose, kind }) {
   const [range, setRange] = useState(() => {
     const today = new Date();
     const ago = new Date(today); ago.setDate(today.getDate() - 30);
-    const iso = (d) => d.toISOString().slice(0,10);
-    return { from: iso(ago), to: iso(today) };
+    return { from: dateISOBangkok(ago), to: dateISOBangkok(today) };
   });
   const [excludeVoided, setExcludeVoided] = useState(true);
   const [rows, setRows] = useState([]);
@@ -1571,8 +1665,8 @@ function MovementHistoryModal({ open, onClose, kind }) {
     (async () => {
       setLoading(true);
       let q = sb.from(meta.table).select('*')
-        .gte(meta.dateField, range.from + 'T00:00:00')
-        .lte(meta.dateField, range.to   + 'T23:59:59')
+        .gte(meta.dateField, startOfDayBangkok(range.from))
+        .lte(meta.dateField, endOfDayBangkok(range.to))
         .order(meta.dateField, { ascending: false });
       if (excludeVoided) q = q.is('voided_at', null);
       const { data, error } = await q;
@@ -1649,12 +1743,15 @@ function MovementHistoryModal({ open, onClose, kind }) {
 function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
   const meta = MOVEMENT_META[kind];
   const toast = useToast();
+  const askConfirm = useConfirm();
+  const askPrompt = usePrompt();
   const [order, setOrder] = useState(null);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(null);
   const [busy, setBusy] = useState(false);
+  const voidLockRef = useRef(false);
 
   useEffect(() => {
     if (!orderId) { setOrder(null); setItems([]); setEditing(false); return; }
@@ -1701,16 +1798,32 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
   };
 
   const voidIt = async () => {
-    const reason = window.prompt("เหตุผลในการยกเลิก (ไม่บังคับ):", "");
+    if (voidLockRef.current) return; // hard guard against double-click
+    const reason = await askPrompt({
+      title: "ยกเลิกรายการนี้",
+      label: "เหตุผล (ไม่บังคับ)",
+      defaultValue: "",
+      multiline: true,
+      okLabel: "ถัดไป",
+      danger: true,
+    });
     if (reason === null) return;
-    if (!window.confirm("ยืนยัน? สต็อกจะถูกปรับกลับให้สอดคล้อง")) return;
+    const ok = await askConfirm({
+      title: "ยืนยันการยกเลิก",
+      message: "สต็อกจะถูกปรับกลับให้สอดคล้องอัตโนมัติ — ดำเนินการต่อ?",
+      okLabel: "ยกเลิกรายการ",
+      danger: true,
+    });
+    if (!ok) return;
+    voidLockRef.current = true;
     setBusy(true);
-    const { error } = await sb.rpc(meta.voidRpc, { p_id: order.id, p_reason: reason || null });
-    setBusy(false);
-    if (error) { toast.push("ยกเลิกไม่ได้: " + error.message, 'error'); return; }
-    toast.push("ยกเลิกแล้ว · สต็อกถูกปรับกลับ", 'success');
-    setOrder({ ...order, voided_at: new Date().toISOString(), void_reason: reason || null });
-    onChanged?.();
+    try {
+      const { error } = await sb.rpc(meta.voidRpc, { p_id: order.id, p_reason: reason || null });
+      if (error) { toast.push("ยกเลิกไม่ได้: " + error.message, 'error'); return; }
+      toast.push("ยกเลิกแล้ว · สต็อกถูกปรับกลับ", 'success');
+      setOrder({ ...order, voided_at: new Date().toISOString(), void_reason: reason || null });
+      onChanged?.();
+    } finally { setBusy(false); voidLockRef.current = false; }
   };
 
   const dateInput = editing ? draft[meta.dateField]?.slice(0,10) : null;
@@ -1754,7 +1867,7 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
             <div>
               <label className="text-xs uppercase tracking-wider text-muted">วันที่</label>
               {editing ? (
-                <DatePicker mode="single" value={dateInput} onChange={(v)=>setDraft(d=>({...d,[meta.dateField]: new Date(v+'T00:00:00').toISOString()}))} className="mt-1"/>
+                <DatePicker mode="single" value={dateInput} onChange={(v)=>setDraft(d=>({...d,[meta.dateField]: startOfDayBangkok(v)}))} className="mt-1"/>
               ) : (
                 <div className="mt-1 text-sm">{fmtThaiDateShort(order[meta.dateField])}</div>
               )}
@@ -2087,6 +2200,7 @@ function POSView() {
   const [buyer, setBuyer] = useState({ name: "", taxId: "", address: "", invoiceNo: "" });
   const [receiptOrderId, setReceiptOrderId] = useState(null); // shows ReceiptModal after sale
   const searchRef = useRef(null);
+  const submitLockRef = useRef(false); // prevents double-submit even if React hasn't re-rendered yet
 
   useEffect(() => {
     if (!search.trim()) { setResults([]); return; }
@@ -2137,15 +2251,20 @@ function POSView() {
   const totalQty = useMemo(()=> cart.reduce((s,l)=> s+l.quantity, 0), [cart]);
 
   const submit = async () => {
+    if (submitLockRef.current) return; // hard guard against double-submit
     if (!cart.length) { toast.push("ไม่มีสินค้าในตะกร้า", "error"); return; }
     if (taxInvoice && !buyer.name.trim()) { toast.push("กรุณากรอกชื่อผู้ซื้อสำหรับใบกำกับภาษี", 'error'); return; }
+    submitLockRef.current = true;
     setSubmitting(true);
     try {
-      const { vat } = vatBreakdown(grand, VAT_RATE_DEFAULT);
+      const grandR = roundMoney(grand);
+      const subtotalR = roundMoney(subtotal);
+      const discountR = roundMoney(discountAmount);
+      const { vat } = vatBreakdown(grandR, VAT_RATE_DEFAULT);
       const { data: order, error: e1 } = await sb.from('sale_orders').insert({
         sale_date: new Date().toISOString(), channel, payment_method: payment,
-        discount_value: discountAmount, discount_type: discountAmount > 0 ? 'net' : null,
-        subtotal, total_after_discount: grand, grand_total: grand,
+        discount_value: discountR, discount_type: discountR > 0 ? 'net' : null,
+        subtotal: subtotalR, total_after_discount: grandR, grand_total: grandR,
         vat_rate: VAT_RATE_DEFAULT, vat_amount: vat, price_includes_vat: true,
         tax_invoice_no: taxInvoice ? (buyer.invoiceNo.trim() || null) : null,
         buyer_name:    taxInvoice ? (buyer.name.trim()    || null) : null,
@@ -2156,9 +2275,9 @@ function POSView() {
       if (e1) throw e1;
       const items = cart.map(l => ({
         sale_order_id: order.id, product_id: l.product_id, product_name: l.product_name,
-        quantity: l.quantity, unit_price: l.unit_price,
-        discount1_value: l.discount1_value || 0, discount1_type: l.discount1_type,
-        discount2_value: l.discount2_value || 0, discount2_type: l.discount2_type,
+        quantity: l.quantity, unit_price: roundMoney(l.unit_price),
+        discount1_value: roundMoney(l.discount1_value || 0), discount1_type: l.discount1_type,
+        discount2_value: roundMoney(l.discount2_value || 0), discount2_type: l.discount2_type,
       }));
       const { error: e2 } = await sb.from('sale_order_items').insert(items);
       if (e2) throw e2;
@@ -2173,7 +2292,7 @@ function POSView() {
       setTaxInvoice(false); setBuyer({ name: "", taxId: "", address: "", invoiceNo: "" });
     } catch (err) {
       toast.push("บันทึกไม่สำเร็จ: " + (err.message || err), 'error');
-    } finally { setSubmitting(false); }
+    } finally { setSubmitting(false); submitLockRef.current = false; }
   };
 
   const SearchInput = (
@@ -2245,7 +2364,7 @@ function POSView() {
         {cart.map((l, idx) => {
           const expanded = expandedDisc[idx];
           return (
-            <div key={idx} className="glass-soft rounded-lg p-3 mb-2 hover-lift fade-in">
+            <div key={l.product_id} className="glass-soft rounded-lg p-3 mb-2 hover-lift fade-in">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm truncate">{l.product_name}</div>
@@ -2670,20 +2789,33 @@ function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand,
   const [barcodeEdit, setBarcodeEdit] = useState(false);
   const [manualApproved, setManualApproved] = useState(false);
   const barcodeRef = useRef(null);
+  const askPrompt = usePrompt();
+  const askConfirm = useConfirm();
   useEffect(()=>{ setDraft(editing? {...editing} : null); setBarcodeEdit(false); setManualApproved(false); }, [editing]);
   if (!draft) return null;
   const set = (k,v)=> setDraft(d=>({...d,[k]:v}));
   const onBrandChange = async (val) => {
     if (val === "__new__") {
-      const name = window.prompt("ชื่อแบรนด์ใหม่:", "");
-      if (name) { const id = await addBrand(name); if (id) set('brand_id', id); }
+      const name = await askPrompt({ title: "เพิ่มแบรนด์ใหม่", label: "ชื่อแบรนด์", defaultValue: "" });
+      if (name && name.trim()) { const id = await addBrand(name.trim()); if (id) set('brand_id', id); }
     } else set('brand_id', val? Number(val): null);
   };
   const onCatChange = async (val) => {
     if (val === "__new__") {
-      const name = window.prompt("ชื่อหมวดใหม่:", "");
-      if (name) { const id = await addCategory(name); if (id) set('category_id', id); }
+      const name = await askPrompt({ title: "เพิ่มหมวดใหม่", label: "ชื่อหมวด", defaultValue: "" });
+      if (name && name.trim()) { const id = await addCategory(name.trim()); if (id) set('category_id', id); }
     } else set('category_id', val? Number(val): null);
+  };
+  const confirmManualBarcode = async () => {
+    const ok = await askConfirm({
+      title: "แก้ไข Barcode ด้วยการพิมพ์",
+      message: "หากต้องการเปลี่ยน ควรใช้เครื่องสแกนเพื่อความแม่นยำ — ดำเนินการต่อ?",
+      okLabel: "พิมพ์เอง",
+    });
+    if (ok) {
+      setManualApproved(true);
+      setTimeout(()=>barcodeRef.current?.focus(), 0);
+    }
   };
   return (
     <Modal open={!!draft} onClose={onClose} title={draft.id?"แก้ไขสินค้า":"เพิ่มสินค้าใหม่"}
@@ -2727,19 +2859,13 @@ function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand,
             onMouseDown={e=>{
               if (draft.id && barcodeEdit && !manualApproved) {
                 e.preventDefault();
-                if (window.confirm("ยืนยันการแก้ไข Barcode ด้วยการพิมพ์?\n\nหากต้องการเปลี่ยน ควรใช้เครื่องสแกนเพื่อความแม่นยำ")) {
-                  setManualApproved(true);
-                  setTimeout(()=>barcodeRef.current?.focus(), 0);
-                }
+                confirmManualBarcode();
               }
             }}
             onTouchStart={e=>{
               if (draft.id && barcodeEdit && !manualApproved) {
                 e.preventDefault();
-                if (window.confirm("ยืนยันการแก้ไข Barcode ด้วยการพิมพ์?\n\nหากต้องการเปลี่ยน ควรใช้เครื่องสแกนเพื่อความแม่นยำ")) {
-                  setManualApproved(true);
-                  setTimeout(()=>barcodeRef.current?.focus(), 0);
-                }
+                confirmManualBarcode();
               }
             }}
           />
@@ -2787,6 +2913,7 @@ function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand,
 ========================================================= */
 function SalesView() {
   const toast = useToast();
+  const askPrompt = usePrompt();
   const [range, setRange] = useState({ from: todayISO(), to: todayISO() });
   const from = range.from, to = range.to;
   const [reprintId, setReprintId] = useState(null);
@@ -2795,6 +2922,7 @@ function SalesView() {
   const [orders, setOrders] = useState([]);
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
+  const voidLockRef = useRef(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [voiding, setVoiding] = useState(false);
 
@@ -2803,8 +2931,8 @@ function SalesView() {
     // .limit(200) ทำให้บิลในช่วงเวลาที่กว้าง (เช่น 1-30 เม.ย. ที่มีบิลเกิน 200) โดน truncate
     // เปลี่ยนเป็น 5000 ครอบคลุมเดือนยาวสุดของร้านนี้ (~500 บิล/เดือน × 10 เดือน)
     let q = sb.from('sale_orders').select('*')
-      .gte('sale_date', from + 'T00:00:00')
-      .lte('sale_date', to + 'T23:59:59')
+      .gte('sale_date', startOfDayBangkok(from))
+      .lte('sale_date', endOfDayBangkok(to))
       .order('sale_date', { ascending: false }).limit(5000);
     if (channel) q = q.eq('channel', channel);
     if (excludeVoided) q = q.eq('status', 'active');
@@ -2837,9 +2965,18 @@ function SalesView() {
   };
 
   const voidSale = async () => {
+    if (voidLockRef.current) return; // hard guard against double-click
     if (!detail) return;
-    const reason = window.prompt("เหตุผลในการยกเลิกบิล (ไม่บังคับ):", "");
+    const reason = await askPrompt({
+      title: `ยกเลิกบิล #${detail.order.id}`,
+      label: "เหตุผล (ไม่บังคับ)",
+      defaultValue: "",
+      multiline: true,
+      okLabel: "ยกเลิกบิล",
+      danger: true,
+    });
     if (reason === null) return; // user cancelled the prompt
+    voidLockRef.current = true;
     setVoiding(true);
     try {
       const { error } = await sb.rpc('void_sale_order', { p_sale_order_id: detail.order.id, p_reason: reason || null });
@@ -2849,7 +2986,7 @@ function SalesView() {
       load();
     } catch (e) {
       toast.push("ยกเลิกบิลไม่ได้: " + e.message, 'error');
-    } finally { setVoiding(false); }
+    } finally { setVoiding(false); voidLockRef.current = false; }
   };
 
   const total = useMemo(()=> orders.reduce((s,o)=> s + Number(o.grand_total||0), 0), [orders]);
@@ -3242,6 +3379,7 @@ function StockMovementForm({ kind }) {
   // Validation + confirm
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const submitLockRef = useRef(false); // hard guard against double-submit
 
   // Load recent sales when return + search mode is active
   useEffect(()=>{
@@ -3269,6 +3407,7 @@ function StockMovementForm({ kind }) {
     const { data } = await sb.from('sale_order_items').select('*').eq('sale_order_id', sale.id);
     if (data && data.length) {
       setItems(data.map(l => ({
+        _uid: (crypto.randomUUID?.() || `r${Math.random().toString(36).slice(2)}${Date.now()}`),
         product_id: l.product_id,
         product_name: l.product_name,
         retail_price: l.unit_price,
@@ -3310,6 +3449,7 @@ function StockMovementForm({ kind }) {
   };
   const addItem = (p) => {
     setItems(it => [...it, {
+      _uid: (crypto.randomUUID?.() || `r${Math.random().toString(36).slice(2)}${Date.now()}`),
       product_id: p.id, product_name: p.name,
       retail_price: Number(p.retail_price) || 0,
       cost_price: Number(p.cost_price) || 0,
@@ -3368,7 +3508,9 @@ function StockMovementForm({ kind }) {
   };
 
   const submit = async () => {
+    if (submitLockRef.current) return; // hard guard against double-submit
     if (!items.length) { toast.push("ไม่มีรายการ", 'error'); return; }
+    submitLockRef.current = true;
     setSubmitting(true);
     try {
       // Map per-kind table/field names
@@ -3378,10 +3520,11 @@ function StockMovementForm({ kind }) {
         return:  { headerTable:'return_orders',           itemTable:'return_order_items',           dateField:'return_date',  fk:'return_order_id',          stockReason:'return_in',      stockSign:+1 },
       };
       const m = map[kind];
-      const headerPayload = { [m.dateField]: new Date(date+'T00:00:00').toISOString(), total_value: total, notes: notes.trim()||null };
+      const totalR = roundMoney(total);
+      const headerPayload = { [m.dateField]: startOfDayBangkok(date), total_value: totalR, notes: notes.trim()||null };
 
       if (kind==='receive' || kind==='claim') {
-        const { vat } = vatBreakdown(total, hasVat?VAT_RATE_DEFAULT:0);
+        const { vat } = vatBreakdown(totalR, hasVat?VAT_RATE_DEFAULT:0);
         headerPayload.vat_rate = hasVat?VAT_RATE_DEFAULT:0;
         headerPayload.vat_amount = vat;
         headerPayload.supplier_name = supplierName.trim()||null;
@@ -3400,9 +3543,9 @@ function StockMovementForm({ kind }) {
 
       const payload = items.map(l => ({
         [m.fk]: head.id, product_id: l.product_id, product_name: l.product_name,
-        quantity: l.quantity, unit: l.unit, unit_price: l.unit_price,
-        discount1_value: l.discount1_value||0, discount1_type: l.discount1_type,
-        discount2_value: l.discount2_value||0, discount2_type: l.discount2_type,
+        quantity: l.quantity, unit: l.unit, unit_price: roundMoney(l.unit_price),
+        discount1_value: roundMoney(l.discount1_value||0), discount1_type: l.discount1_type,
+        discount2_value: roundMoney(l.discount2_value||0), discount2_type: l.discount2_type,
       }));
       const { error: e2 } = await sb.from(m.itemTable).insert(payload);
       if (e2) throw e2;
@@ -3420,7 +3563,7 @@ function StockMovementForm({ kind }) {
       setAttemptedSubmit(false); setConfirmOpen(false);
     } catch (e) {
       toast.push("บันทึกไม่ได้: " + e.message, 'error');
-    } finally { setSubmitting(false); }
+    } finally { setSubmitting(false); submitLockRef.current = false; }
   };
 
   const supplierLabel = kind==='receive' ? 'ผู้ขาย / Supplier' : 'บริษัทที่ส่งคืน';
@@ -3531,7 +3674,7 @@ function StockMovementForm({ kind }) {
           <div className="max-h-[40vh] lg:max-h-[42vh] overflow-y-auto p-3">
             {!items.length && <div className="p-6 text-center text-muted text-sm">ยังไม่มีรายการ</div>}
             {items.map((l, i) => (
-              <div key={i} className="glass-soft rounded-lg p-3 mb-2 hover-lift fade-in">
+              <div key={l._uid || i} className="glass-soft rounded-lg p-3 mb-2 hover-lift fade-in">
                 <div className="flex items-start justify-between gap-2">
                   <div className="font-medium text-sm flex-1 truncate">{l.product_name}</div>
                   <button className="text-muted-soft hover:text-error p-1" onClick={()=>rm(i)}><Icon name="trash" size={14}/></button>
@@ -3792,7 +3935,7 @@ function DashboardView() {
 
     const [rangeQ, lowQ] = await Promise.all([
       sb.from('sale_orders').select('id, grand_total, channel').eq('status','active')
-        .gte('sale_date', from + 'T00:00:00').lte('sale_date', to + 'T23:59:59'),
+        .gte('sale_date', startOfDayBangkok(from)).lte('sale_date', endOfDayBangkok(to)),
       sb.from('products').select('id,name,current_stock').lt('current_stock', 5).gt('current_stock', -1).order('current_stock', { ascending: true }).limit(8),
     ]);
 
@@ -3982,8 +4125,8 @@ function ProfitLossView() {
       const { data: orders } = await sb.from('sale_orders')
         .select('id, sale_date, channel, grand_total, subtotal')
         .eq('status', 'active')
-        .gte('sale_date', from + 'T00:00:00')
-        .lte('sale_date', to + 'T23:59:59')
+        .gte('sale_date', startOfDayBangkok(from))
+        .lte('sale_date', endOfDayBangkok(to))
         .order('sale_date', { ascending: false });
       const ordersList = orders || [];
       if (!ordersList.length) { setRows([]); setLoading(false); return; }
@@ -4133,14 +4276,14 @@ function ProfitLossView() {
     </div>
   );
 
-  // Quick presets
+  // Quick presets — all dates Bangkok-local
   const setPreset = (preset) => {
     const t = new Date();
-    const iso = (d) => d.toISOString().slice(0,10);
+    const iso = dateISOBangkok;
     if (preset === 'today') setDateRange({ from: iso(t), to: iso(t) });
     else if (preset === '7d') { const d = new Date(t); d.setDate(d.getDate()-6); setDateRange({ from: iso(d), to: iso(t) }); }
     else if (preset === 'month') { setDateRange({ from: iso(t).slice(0,7)+'-01', to: iso(t) }); }
-    else if (preset === 'year')  { setDateRange({ from: t.getFullYear()+'-01-01', to: iso(t) }); }
+    else if (preset === 'year')  { setDateRange({ from: iso(t).slice(0,4)+'-01-01', to: iso(t) }); }
   };
 
   const DateControls = (
@@ -4188,7 +4331,7 @@ function ProfitLossView() {
         </div>
         {!topProfit.length && <div className="text-muted text-sm">ยังไม่มีข้อมูลในช่วงที่เลือก</div>}
         {topProfit.map((p,i)=>(
-          <div key={i} className="flex items-center gap-3 py-2 border-b hairline-soft last:border-0">
+          <div key={p.product_id || p.name || i} className="flex items-center gap-3 py-2 border-b hairline-soft last:border-0">
             <div className="font-display text-xl lg:text-2xl w-7 text-muted-soft">{i+1}</div>
             <div className="flex-1 min-w-0">
               <div className="text-sm truncate font-medium">{p.name}</div>
@@ -4241,7 +4384,7 @@ function ProfitLossView() {
               {pageRows.map((r, i) => {
                 const pct = r.lineRevenue > 0 ? (r.profit / r.lineRevenue) * 100 : 0;
                 return (
-                  <tr key={i} className="border-b hairline-soft hover:bg-white/40">
+                  <tr key={`${r.sale_id}-${r.product_id || r.product_name}-${i}`} className="border-b hairline-soft hover:bg-white/40">
                     <td className="px-4 py-2 font-mono text-xs">#{r.sale_id}</td>
                     <td className="px-2 py-2 text-xs whitespace-nowrap">{fmtThaiDateShort(r.sale_date.slice(0,10))}</td>
                     <td className="px-2 py-2">
@@ -4272,7 +4415,7 @@ function ProfitLossView() {
           {pageRows.map((r,i) => {
             const pct = r.lineRevenue > 0 ? (r.profit / r.lineRevenue) * 100 : 0;
             return (
-              <div key={i} className="glass-soft rounded-lg p-3">
+              <div key={`${r.sale_id}-${r.product_id || r.product_name}-${i}`} className="glass-soft rounded-lg p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium truncate">{r.product_name}</div>
@@ -4334,7 +4477,7 @@ function App() {
   }, []);
 
   if (session === undefined) return <div className="min-h-screen flex items-center justify-center gap-3 text-muted"><span className="spinner lg"/>กำลังโหลด...</div>;
-  if (!session) return <ToastProvider><LoginScreen /></ToastProvider>;
+  if (!session) return <ToastProvider><DialogProvider><LoginScreen /></DialogProvider></ToastProvider>;
 
   const titles = {
     pos:       { t: "ขายสินค้า",            s: "POS" },
@@ -4348,6 +4491,7 @@ function App() {
 
   return (
     <ToastProvider>
+      <DialogProvider>
       <ShopProvider>
         <div className="lg:flex">
           <Sidebar view={view} setView={setView} userEmail={session.user?.email} onOpenSettings={()=>setSettingsOpen(true)}/>
@@ -4368,6 +4512,7 @@ function App() {
         <MobileTabBar view={view} setView={setView} />
         <SettingsModal open={settingsOpen} onClose={()=>setSettingsOpen(false)} />
       </ShopProvider>
+      </DialogProvider>
     </ToastProvider>
   );
 }
