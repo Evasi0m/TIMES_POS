@@ -74,17 +74,20 @@
 <style>
   /* ==========  TOKENS  ========== */
   :root {
-    --glass-bg: rgba(250, 249, 245, 0.62);
-    --glass-bg-strong: rgba(250, 249, 245, 0.86);
-    --glass-bg-soft: rgba(250, 249, 245, 0.42);
-    --glass-cream: rgba(239, 233, 222, 0.65);
-    --glass-dark: rgba(24, 23, 21, 0.82);
-    --glass-border: rgba(255, 255, 255, 0.55);
-    --glass-border-cream: rgba(255, 255, 255, 0.42);
-    --glass-border-dark: rgba(255, 255, 255, 0.08);
-    --shadow-low:  0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 -1px 0 rgba(20, 20, 19, 0.04) inset, 0 4px 14px -4px rgba(20, 20, 19, 0.06);
-    --shadow-mid:  0 1px 0 rgba(255, 255, 255, 0.85) inset, 0 -1px 0 rgba(20, 20, 19, 0.05) inset, 0 10px 28px -6px rgba(20, 20, 19, 0.12);
-    --shadow-high: 0 1px 0 rgba(255, 255, 255, 0.95) inset, 0 -1px 0 rgba(20, 20, 19, 0.06) inset, 0 18px 44px -10px rgba(20, 20, 19, 0.18);
+    /* Surfaces: shifted toward warm-white so they pop off the cream canvas */
+    --glass-bg:        rgba(255, 254, 252, 0.74);
+    --glass-bg-strong: rgba(255, 255, 255, 0.92);
+    --glass-bg-soft:   rgba(255, 253, 250, 0.55);
+    --glass-cream:     rgba(232, 224, 210, 0.78);
+    --glass-dark:      rgba(24, 23, 21, 0.85);
+    /* Borders: visibly darker than the canvas so edges read clearly */
+    --glass-border:        rgba(180, 168, 148, 0.35);
+    --glass-border-cream:  rgba(180, 168, 148, 0.35);
+    --glass-border-dark:   rgba(255, 255, 255, 0.10);
+    /* Shadows lift surfaces meaningfully off the cream canvas */
+    --shadow-low:  0 1px 0 rgba(255, 255, 255, 0.85) inset, 0 -1px 0 rgba(180, 170, 155, 0.10) inset, 0 4px 14px -4px rgba(20, 20, 19, 0.08);
+    --shadow-mid:  0 1px 0 rgba(255, 255, 255, 0.92) inset, 0 -1px 0 rgba(180, 170, 155, 0.12) inset, 0 10px 28px -6px rgba(20, 20, 19, 0.14);
+    --shadow-high: 0 1px 0 rgba(255, 255, 255, 0.98) inset, 0 -1px 0 rgba(180, 170, 155, 0.16) inset, 0 18px 44px -10px rgba(20, 20, 19, 0.20);
     --ease-out: cubic-bezier(.2,.7,.2,1);
   }
 
@@ -145,7 +148,7 @@
     background: var(--glass-bg-soft);
     backdrop-filter: blur(14px) saturate(130%);
     -webkit-backdrop-filter: blur(14px) saturate(130%);
-    border: 1px solid rgba(230, 223, 216, 0.6);
+    border: 1px solid rgba(180, 168, 148, 0.30);
   }
 
   /* Specular highlight overlay for glass surfaces */
@@ -257,10 +260,10 @@
 
   /* ==========  INPUTS  ========== */
   .input {
-    background: rgba(250, 249, 245, 0.65);
-    backdrop-filter: blur(12px) saturate(130%);
-    -webkit-backdrop-filter: blur(12px) saturate(130%);
-    border: 1px solid rgba(230, 223, 216, 0.85);
+    background: rgba(255, 255, 255, 0.85);     /* leans white — clearly distinct from cream canvas */
+    backdrop-filter: blur(12px) saturate(125%);
+    -webkit-backdrop-filter: blur(12px) saturate(125%);
+    border: 1px solid rgba(165, 152, 130, 0.45); /* darker border so edges are visible */
     border-radius: 10px;
     padding: 12px 14px;
     font-size: 15px;
@@ -268,13 +271,19 @@
     color: #141413;
     width: 100%;
     transition: border-color .15s, background-color .15s, box-shadow .15s, transform .15s var(--ease-out);
-    box-shadow: 0 1px 0 rgba(255,255,255,0.5) inset;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.6) inset,
+      0 1px 3px rgba(20, 20, 19, 0.04);
   }
-  .input:hover { background: rgba(250, 249, 245, 0.85); border-color: rgba(180, 170, 155, 0.6); }
+  .input::placeholder { color: rgba(108, 106, 100, 0.7); }
+  .input:hover {
+    background: rgba(255, 255, 255, 0.97);
+    border-color: rgba(140, 128, 105, 0.55);
+  }
 
   /* ==========  CARDS (glass)  ========== */
   .card-canvas {
-    background: rgba(250, 249, 245, 0.65);
+    background: rgba(255, 254, 252, 0.78);   /* warm-white — pops off the cream canvas */
     backdrop-filter: blur(20px) saturate(140%);
     -webkit-backdrop-filter: blur(20px) saturate(140%);
     border: 1px solid var(--glass-border);
@@ -282,7 +291,7 @@
     box-shadow: var(--shadow-low);
   }
   .card-cream {
-    background: rgba(239, 233, 222, 0.66);
+    background: rgba(232, 224, 210, 0.82);   /* deeper cream — clearly different from page */
     backdrop-filter: blur(20px) saturate(140%);
     -webkit-backdrop-filter: blur(20px) saturate(140%);
     border: 1px solid var(--glass-border-cream);
@@ -364,18 +373,18 @@
 
   /* ==========  MOBILE TOPBAR / TABBAR (glass)  ========== */
   .mobile-topbar {
-    background: rgba(250, 249, 245, 0.78);
+    background: rgba(255, 254, 252, 0.85);
     backdrop-filter: blur(22px) saturate(140%);
     -webkit-backdrop-filter: blur(22px) saturate(140%);
-    border-bottom: 1px solid rgba(230, 223, 216, 0.6);
-    box-shadow: 0 -1px 0 rgba(255,255,255,0.6) inset;
+    border-bottom: 1px solid rgba(180, 168, 148, 0.30);
+    box-shadow: 0 -1px 0 rgba(255,255,255,0.7) inset, 0 2px 8px -2px rgba(20,20,19,0.06);
   }
   .mobile-tabbar {
-    background: rgba(250, 249, 245, 0.82);
+    background: rgba(255, 254, 252, 0.88);
     backdrop-filter: blur(26px) saturate(140%);
     -webkit-backdrop-filter: blur(26px) saturate(140%);
-    border-top: 1px solid rgba(230, 223, 216, 0.6);
-    box-shadow: 0 1px 0 rgba(255,255,255,0.55) inset;
+    border-top: 1px solid rgba(180, 168, 148, 0.30);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.7) inset, 0 -2px 8px -2px rgba(20,20,19,0.06);
   }
   .tab-btn {
     flex:1; display:flex; flex-direction:column; align-items:center; gap:5px;
@@ -628,7 +637,7 @@ function Modal({ open, onClose, title, children, footer, wide }) {
   if (!render) return null;
   return (
     <div className={"fixed inset-0 modal-overlay z-[100] flex items-end lg:items-center justify-center lg:p-6 " + (closing ? "overlay-out" : "overlay-in")} onClick={onClose}>
-      <div className={"bg-canvas rounded-t-2xl lg:rounded-lg shadow-xl w-full " + (wide?"lg:max-w-3xl":"lg:max-w-lg") + " max-h-[92vh] flex flex-col " + (closing ? "sheet-out" : "sheet-anim")} onClick={e=>e.stopPropagation()}>
+      <div className={"bg-white rounded-t-2xl lg:rounded-lg shadow-2xl w-full " + (wide?"lg:max-w-3xl":"lg:max-w-lg") + " max-h-[92vh] flex flex-col " + (closing ? "sheet-out" : "sheet-anim")} onClick={e=>e.stopPropagation()}>
         <div className="px-5 py-4 border-b hairline flex items-center justify-between flex-shrink-0">
           <div className="font-display text-xl lg:text-2xl">{title}</div>
           <button className="btn-ghost !p-2" onClick={onClose}><Icon name="x" size={20}/></button>
@@ -883,7 +892,7 @@ function LoginScreen() {
             </div>
 
             <label className="flex items-center gap-3 cursor-pointer select-none py-1">
-              <span className={"relative flex items-center justify-center w-5 h-5 rounded border transition-colors " + (remember?"bg-primary border-primary":"bg-canvas border-hairline hover:border-muted")}>
+              <span className={"relative flex items-center justify-center w-5 h-5 rounded border transition-colors " + (remember?"bg-primary border-primary":"bg-white border-hairline hover:border-muted")}>
                 <input type="checkbox" className="sr-only" checked={remember} onChange={e=>setRemember(e.target.checked)} />
                 {remember && <Icon name="check" size={14} className="text-white" strokeWidth={2.5}/>}
               </span>
@@ -1251,17 +1260,17 @@ function POSView() {
         {/* Tax invoice + Notes toggles */}
         <div className="flex gap-2 mb-3">
           <button type="button" onClick={()=>setTaxInvoice(v=>!v)}
-            className={"flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-xs font-medium border transition " + (taxInvoice?"bg-primary text-on-primary border-primary":"bg-canvas text-muted border-hairline hover:text-ink")}>
+            className={"flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-md text-xs font-medium border transition " + (taxInvoice?"bg-primary text-on-primary border-primary shadow-sm":"bg-white text-muted border-hairline hover:text-ink hover:bg-white/90")}>
             <Icon name={taxInvoice?"check":"plus"} size={13}/> ใบกำกับภาษี
           </button>
           <button type="button" onClick={()=>setShowNotes(v=>!v)}
-            className={"flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-xs font-medium border transition " + (showNotes||notes?"bg-surface-card text-ink border-hairline":"bg-canvas text-muted border-hairline hover:text-ink")}>
+            className={"flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-md text-xs font-medium border transition " + (showNotes||notes?"bg-white text-ink border-primary/40 shadow-sm":"bg-white text-muted border-hairline hover:text-ink")}>
             <Icon name="edit" size={13}/> หมายเหตุ {notes && <span className="w-1.5 h-1.5 bg-primary rounded-full"/>}
           </button>
         </div>
 
         {taxInvoice && (
-          <div className="bg-canvas border hairline rounded-md p-3 mb-3 space-y-2 fade-in">
+          <div className="bg-white border hairline rounded-md p-3 mb-3 space-y-2 fade-in shadow-sm">
             <div className="text-[10px] uppercase tracking-wider text-muted">ข้อมูลผู้ซื้อ (ใบกำกับภาษี)</div>
             <input className="input !py-2 !text-sm" placeholder="ชื่อผู้ซื้อ / บริษัท *" value={buyer.name} onChange={e=>setBuyer(b=>({...b,name:e.target.value}))}/>
             <div className="grid grid-cols-2 gap-2">
@@ -1741,7 +1750,7 @@ function SalesView() {
         </div>
       </div>
       <label className="flex items-center gap-2 cursor-pointer select-none">
-        <span className={"relative flex items-center justify-center w-5 h-5 rounded border transition-colors " + (excludeVoided?"bg-primary border-primary":"bg-canvas border-hairline")}>
+        <span className={"relative flex items-center justify-center w-5 h-5 rounded border transition-colors " + (excludeVoided?"bg-primary border-primary":"bg-white border-hairline")}>
           <input type="checkbox" className="sr-only" checked={excludeVoided} onChange={e=>setExcludeVoided(e.target.checked)} />
           {excludeVoided && <Icon name="check" size={13} className="text-white" strokeWidth={2.5}/>}
         </span>
@@ -1932,7 +1941,7 @@ function ReceiveView() {
       <div className="inline-flex glass-soft rounded-xl p-1 mb-5 shadow-sm">
         {tabs.map(t => (
           <button key={t.k}
-            className={"px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-all " + (tab===t.k?"bg-canvas text-ink shadow-sm":"text-muted hover:text-ink")}
+            className={"px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-all " + (tab===t.k?"bg-white text-ink shadow-md ring-1 ring-hairline":"text-muted hover:text-ink hover:bg-white/40")}
             onClick={()=>setTab(t.k)}>
             <Icon name={t.icon} size={16}/> {t.label}
           </button>
