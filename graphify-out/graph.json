@@ -4,13 +4,13 @@
   "graph": {
     "hyperedges": [
       {
-        "id": "he_pos_sale_flow",
-        "label": "POS Sale Flow \u2014 POSView + sale_orders + sale_order_items + adjust_stock RPC",
+        "id": "he_stock_adjustment_flow",
+        "label": "Stock adjustment flow: POSView / StockMovementForm call adjust_stock RPC which writes to stock_movements table",
         "nodes": [
-          "index_posview",
-          "arch_sale_orders_table",
-          "arch_sale_order_items_table",
-          "arch_products_table"
+          "index_pos_view",
+          "index_stock_movement_form",
+          "index_adjust_stock_rpc",
+          "index_supabase_tables"
         ],
         "relation": "participate_in",
         "confidence": "EXTRACTED",
@@ -18,30 +18,31 @@
         "source_file": "index.html"
       },
       {
-        "id": "he_movement_system",
-        "label": "Movement Tracking System \u2014 MOVEMENT_META + MovementHistoryModal + MovementDetailModal covering receive/claim/return order kinds",
+        "id": "he_receipt_print_chain",
+        "label": "Receipt printing chain: POSView / SalesView \u2192 ReceiptModal \u2192 Receipt (80mm thermal layout) \u2192 window.print()",
         "nodes": [
-          "index_movement_meta",
-          "index_movementhistorymodal",
-          "index_movementdetailmodal"
+          "index_pos_view",
+          "index_sales_view",
+          "index_receipt_modal",
+          "index_receipt"
         ],
-        "relation": "implement",
+        "relation": "participate_in",
         "confidence": "EXTRACTED",
         "confidence_score": 1.0,
         "source_file": "index.html"
       },
       {
-        "id": "he_design_token_bridge",
-        "label": "Design Token Bridge \u2014 DESIGN-claude.md tokens realized in Tailwind config inside index.html",
+        "id": "he_migration_pipeline",
+        "label": "Legacy data migration pipeline: CBS CSV files \u2192 import_to_supabase.py normalization \u2192 Supabase tables consumed by index.html app",
         "nodes": [
-          "design_claude_md",
-          "index_tailwindcss",
-          "design_cream_canvas"
+          "import_to_supabase_cbs_csv_files",
+          "import_to_supabase_main",
+          "index_supabase_tables"
         ],
-        "relation": "form",
-        "confidence": "INFERRED",
+        "relation": "participate_in",
+        "confidence": "EXTRACTED",
         "confidence_score": 0.95,
-        "source_file": "index.html"
+        "source_file": "TIMES-POS-Architecture/import_to_supabase.py"
       }
     ]
   },
@@ -52,7 +53,7 @@
       "source_file": "import_to_supabase.py",
       "source_location": "L1",
       "id": "import_to_supabase_py",
-      "community": 3,
+      "community": 1,
       "norm_label": "import_to_supabase.py"
     },
     {
@@ -61,7 +62,7 @@
       "source_file": "import_to_supabase.py",
       "source_location": "L35",
       "id": "times_pos_architecture_import_to_supabase_read_csv",
-      "community": 3,
+      "community": 1,
       "norm_label": "read_csv()"
     },
     {
@@ -70,7 +71,7 @@
       "source_file": "import_to_supabase.py",
       "source_location": "L49",
       "id": "times_pos_architecture_import_to_supabase_safe_num",
-      "community": 3,
+      "community": 1,
       "norm_label": "safe_num()"
     },
     {
@@ -79,7 +80,7 @@
       "source_file": "import_to_supabase.py",
       "source_location": "L60",
       "id": "times_pos_architecture_import_to_supabase_safe_str",
-      "community": 3,
+      "community": 1,
       "norm_label": "safe_str()"
     },
     {
@@ -88,7 +89,7 @@
       "source_file": "import_to_supabase.py",
       "source_location": "L66",
       "id": "times_pos_architecture_import_to_supabase_normalize_channel",
-      "community": 3,
+      "community": 1,
       "norm_label": "normalize_channel()"
     },
     {
@@ -97,7 +98,7 @@
       "source_file": "import_to_supabase.py",
       "source_location": "L75",
       "id": "times_pos_architecture_import_to_supabase_normalize_discount_type",
-      "community": 3,
+      "community": 1,
       "norm_label": "normalize_discount_type()"
     },
     {
@@ -106,7 +107,7 @@
       "source_file": "import_to_supabase.py",
       "source_location": "L86",
       "id": "times_pos_architecture_import_to_supabase_normalize_unit",
-      "community": 3,
+      "community": 1,
       "norm_label": "normalize_unit()"
     },
     {
@@ -115,7 +116,7 @@
       "source_file": "import_to_supabase.py",
       "source_location": "L92",
       "id": "times_pos_architecture_import_to_supabase_batch_upsert",
-      "community": 3,
+      "community": 1,
       "norm_label": "batch_upsert()"
     },
     {
@@ -124,7 +125,7 @@
       "source_file": "import_to_supabase.py",
       "source_location": "L117",
       "id": "times_pos_architecture_import_to_supabase_main",
-      "community": 3,
+      "community": 1,
       "norm_label": "main()"
     },
     {
@@ -133,7 +134,7 @@
       "source_file": "import_to_supabase.py",
       "source_location": "L1",
       "id": "times_pos_architecture_import_to_supabase_rationale_1",
-      "community": 3,
+      "community": 1,
       "norm_label": "times pos - data migration script =================================== import \u0e02\u0e2d"
     },
     {
@@ -142,21 +143,8 @@
       "source_file": "import_to_supabase.py",
       "source_location": "L93",
       "id": "times_pos_architecture_import_to_supabase_rationale_93",
-      "community": 3,
+      "community": 1,
       "norm_label": "insert data in batches."
-    },
-    {
-      "label": "index.html \u2014 TIMES POS Single-File Web App",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_html",
-      "community": 2,
-      "norm_label": "index.html \u2014 times pos single-file web app"
     },
     {
       "label": "DESIGN-claude.md \u2014 Claude/Anthropic Design System Spec",
@@ -168,8 +156,86 @@
       "author": null,
       "contributor": null,
       "id": "design_claude_md",
-      "community": 2,
+      "community": 7,
       "norm_label": "design-claude.md \u2014 claude/anthropic design system spec"
+    },
+    {
+      "label": "Cream Canvas (#faf9f5) \u2014 warm tinted base surface",
+      "file_type": "rationale",
+      "source_file": "DESIGN-claude.md",
+      "source_location": "\u00a7Colors",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "design_cream_canvas",
+      "community": 7,
+      "norm_label": "cream canvas (#faf9f5) \u2014 warm tinted base surface"
+    },
+    {
+      "label": "Coral Primary (#cc785c) \u2014 Anthropic signature CTA color",
+      "file_type": "rationale",
+      "source_file": "DESIGN-claude.md",
+      "source_location": "\u00a7Colors",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "design_coral_primary",
+      "community": 7,
+      "norm_label": "coral primary (#cc785c) \u2014 anthropic signature cta color"
+    },
+    {
+      "label": "Surface Dark (#181715) \u2014 Dark navy product surface",
+      "file_type": "rationale",
+      "source_file": "DESIGN-claude.md",
+      "source_location": "\u00a7Colors",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "design_surface_dark",
+      "community": 7,
+      "norm_label": "surface dark (#181715) \u2014 dark navy product surface"
+    },
+    {
+      "label": "Typography System \u2014 Copernicus serif + StyreneB sans + JetBrains Mono",
+      "file_type": "rationale",
+      "source_file": "DESIGN-claude.md",
+      "source_location": "\u00a7Typography",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "design_typography_system",
+      "community": 7,
+      "norm_label": "typography system \u2014 copernicus serif + styreneb sans + jetbrains mono"
+    },
+    {
+      "label": "Component Token System \u2014 button/card/badge/form tokens",
+      "file_type": "rationale",
+      "source_file": "DESIGN-claude.md",
+      "source_location": "\u00a7Components",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "design_component_system",
+      "community": 7,
+      "norm_label": "component token system \u2014 button/card/badge/form tokens"
+    },
+    {
+      "label": "Anthropic Spike Mark \u2014 4-spoke radial asterisk brand glyph",
+      "file_type": "rationale",
+      "source_file": "DESIGN-claude.md",
+      "source_location": "\u00a7Overview",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "design_anthropic_spike_mark",
+      "community": 7,
+      "norm_label": "anthropic spike mark \u2014 4-spoke radial asterisk brand glyph"
     },
     {
       "label": "TIMES-POS-Architecture.md \u2014 Architecture & DB Schema Reference",
@@ -185,318 +251,6 @@
       "norm_label": "times-pos-architecture.md \u2014 architecture & db schema reference"
     },
     {
-      "label": "Supabase JS Client (sb)",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 556",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_supabase_client",
-      "community": 4,
-      "norm_label": "supabase js client (sb)"
-    },
-    {
-      "label": "React 18 (CDN)",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 26-27",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_react",
-      "community": 2,
-      "norm_label": "react 18 (cdn)"
-    },
-    {
-      "label": "Tailwind CSS (CDN, custom config)",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 25",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_tailwindcss",
-      "community": 2,
-      "norm_label": "tailwind css (cdn, custom config)"
-    },
-    {
-      "label": "Babel Standalone (JSX transform)",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 28",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_babel_standalone",
-      "community": 2,
-      "norm_label": "babel standalone (jsx transform)"
-    },
-    {
-      "label": "POSView \u2014 POS / Sales Component",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 1686",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_posview",
-      "community": 0,
-      "norm_label": "posview \u2014 pos / sales component"
-    },
-    {
-      "label": "ProductsView \u2014 Product Management Component",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 2022",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_productsview",
-      "community": 4,
-      "norm_label": "productsview \u2014 product management component"
-    },
-    {
-      "label": "MovementHistoryModal \u2014 Receive/Claim/Return History",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 1174",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_movementhistorymodal",
-      "community": 4,
-      "norm_label": "movementhistorymodal \u2014 receive/claim/return history"
-    },
-    {
-      "label": "MovementDetailModal \u2014 Order Detail/Edit/Void",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 1270",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_movementdetailmodal",
-      "community": 4,
-      "norm_label": "movementdetailmodal \u2014 order detail/edit/void"
-    },
-    {
-      "label": "ReceiptModal \u2014 Receipt Preview & Print",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 1070",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_receiptmodal",
-      "community": 0,
-      "norm_label": "receiptmodal \u2014 receipt preview & print"
-    },
-    {
-      "label": "Receipt \u2014 80mm Thermal Receipt Component",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 1000",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_receipt",
-      "community": 0,
-      "norm_label": "receipt \u2014 80mm thermal receipt component"
-    },
-    {
-      "label": "SettingsModal \u2014 Shop Settings Editor",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 932",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_settingsmodal",
-      "community": 4,
-      "norm_label": "settingsmodal \u2014 shop settings editor"
-    },
-    {
-      "label": "ShopCtx / ShopProvider \u2014 Shop Settings Context",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 916",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_shopctx",
-      "community": 4,
-      "norm_label": "shopctx / shopprovider \u2014 shop settings context"
-    },
-    {
-      "label": "ToastCtx / ToastProvider \u2014 Toast Notification System",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 648",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_toastctx",
-      "community": 0,
-      "norm_label": "toastctx / toastprovider \u2014 toast notification system"
-    },
-    {
-      "label": "Modal \u2014 Reusable Modal/Sheet Component",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 691",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_modal",
-      "community": 4,
-      "norm_label": "modal \u2014 reusable modal/sheet component"
-    },
-    {
-      "label": "DatePicker \u2014 Thai Calendar Date/Range Picker",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 744",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_datepicker",
-      "community": 6,
-      "norm_label": "datepicker \u2014 thai calendar date/range picker"
-    },
-    {
-      "label": "Sidebar \u2014 Desktop Navigation Sidebar",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 1577",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_sidebar",
-      "community": 6,
-      "norm_label": "sidebar \u2014 desktop navigation sidebar"
-    },
-    {
-      "label": "MobileTopBar \u2014 Mobile Top Navigation Bar",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 1609",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_mobiletopbar",
-      "community": 7,
-      "norm_label": "mobiletopbar \u2014 mobile top navigation bar"
-    },
-    {
-      "label": "MobileTabBar \u2014 Mobile Bottom Tab Bar",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 1653",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_mobiletabbar",
-      "community": 6,
-      "norm_label": "mobiletabbar \u2014 mobile bottom tab bar"
-    },
-    {
-      "label": "LoginScreen \u2014 Supabase Auth Login",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 1501",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_loginscreen",
-      "community": 4,
-      "norm_label": "loginscreen \u2014 supabase auth login"
-    },
-    {
-      "label": "applyDiscounts \u2014 Cascading Discount Calculator",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 593",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_applydiscounts",
-      "community": 0,
-      "norm_label": "applydiscounts \u2014 cascading discount calculator"
-    },
-    {
-      "label": "vatBreakdown \u2014 VAT-Inclusive Price Breakdown",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 585",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_vatbreakdown",
-      "community": 0,
-      "norm_label": "vatbreakdown \u2014 vat-inclusive price breakdown"
-    },
-    {
-      "label": "Icon \u2014 SVG Icon Component (Lucide-inspired)",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 611",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_icon",
-      "community": 6,
-      "norm_label": "icon \u2014 svg icon component (lucide-inspired)"
-    },
-    {
-      "label": "Liquid Glass UI Design \u2014 backdrop-filter glassmorphism primitives",
-      "file_type": "rationale",
-      "source_file": "index.html",
-      "source_location": "line 132",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_glass_design",
-      "community": 2,
-      "norm_label": "liquid glass ui design \u2014 backdrop-filter glassmorphism primitives"
-    },
-    {
-      "label": "PWA / Web App Manifest",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 21",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_pwa",
-      "community": 2,
-      "norm_label": "pwa / web app manifest"
-    },
-    {
       "label": "Supabase Project \u2014 TIMES POS (zrymhhkqdcttqsdczfcr)",
       "file_type": "document",
       "source_file": "TIMES-POS-Architecture/TIMES-POS-Architecture.md",
@@ -506,7 +260,7 @@
       "author": null,
       "contributor": null,
       "id": "arch_supabase_project",
-      "community": 4,
+      "community": 0,
       "norm_label": "supabase project \u2014 times pos (zrymhhkqdcttqsdczfcr)"
     },
     {
@@ -653,123 +407,6 @@
       "norm_label": "row level security (rls) \u2014 supabase per-table policies"
     },
     {
-      "label": "Cream Canvas (#faf9f5) \u2014 warm tinted base surface",
-      "file_type": "rationale",
-      "source_file": "DESIGN-claude.md",
-      "source_location": "\u00a7Colors",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "design_cream_canvas",
-      "community": 2,
-      "norm_label": "cream canvas (#faf9f5) \u2014 warm tinted base surface"
-    },
-    {
-      "label": "Coral Primary (#cc785c) \u2014 Anthropic signature CTA color",
-      "file_type": "rationale",
-      "source_file": "DESIGN-claude.md",
-      "source_location": "\u00a7Colors",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "design_coral_primary",
-      "community": 2,
-      "norm_label": "coral primary (#cc785c) \u2014 anthropic signature cta color"
-    },
-    {
-      "label": "Surface Dark (#181715) \u2014 Dark navy product surface",
-      "file_type": "rationale",
-      "source_file": "DESIGN-claude.md",
-      "source_location": "\u00a7Colors",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "design_surface_dark",
-      "community": 2,
-      "norm_label": "surface dark (#181715) \u2014 dark navy product surface"
-    },
-    {
-      "label": "Typography System \u2014 Copernicus serif + StyreneB sans + JetBrains Mono",
-      "file_type": "rationale",
-      "source_file": "DESIGN-claude.md",
-      "source_location": "\u00a7Typography",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "design_typography_system",
-      "community": 2,
-      "norm_label": "typography system \u2014 copernicus serif + styreneb sans + jetbrains mono"
-    },
-    {
-      "label": "Component Token System \u2014 button/card/badge/form tokens",
-      "file_type": "rationale",
-      "source_file": "DESIGN-claude.md",
-      "source_location": "\u00a7Components",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "design_component_system",
-      "community": 2,
-      "norm_label": "component token system \u2014 button/card/badge/form tokens"
-    },
-    {
-      "label": "Anthropic Spike Mark \u2014 4-spoke radial asterisk brand glyph",
-      "file_type": "rationale",
-      "source_file": "DESIGN-claude.md",
-      "source_location": "\u00a7Overview",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "design_anthropic_spike_mark",
-      "community": 2,
-      "norm_label": "anthropic spike mark \u2014 4-spoke radial asterisk brand glyph"
-    },
-    {
-      "label": "MOVEMENT_META \u2014 metadata map for receive/claim/return order kinds",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 1137",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_movement_meta",
-      "community": 4,
-      "norm_label": "movement_meta \u2014 metadata map for receive/claim/return order kinds"
-    },
-    {
-      "label": "authStorage \u2014 localStorage/sessionStorage custom auth adapter",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 547",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_auth_storage",
-      "community": 4,
-      "norm_label": "authstorage \u2014 localstorage/sessionstorage custom auth adapter"
-    },
-    {
-      "label": "Taviraj Font \u2014 Thai serif body/display font (Google Fonts)",
-      "file_type": "code",
-      "source_file": "index.html",
-      "source_location": "line 24",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "index_taviraj_font",
-      "community": 2,
-      "norm_label": "taviraj font \u2014 thai serif body/display font (google fonts)"
-    },
-    {
       "label": "TIMES POS Application",
       "file_type": "image",
       "source_file": "apple-touch-icon.png",
@@ -779,7 +416,7 @@
       "author": null,
       "contributor": null,
       "id": "times_pos_app",
-      "community": 5,
+      "community": 4,
       "norm_label": "times pos application"
     },
     {
@@ -792,7 +429,7 @@
       "author": null,
       "contributor": null,
       "id": "apple_touch_icon",
-      "community": 5,
+      "community": 4,
       "norm_label": "apple touch icon"
     },
     {
@@ -805,7 +442,7 @@
       "author": null,
       "contributor": null,
       "id": "shopping_bag_icon",
-      "community": 1,
+      "community": 3,
       "norm_label": "shopping bag icon"
     },
     {
@@ -818,7 +455,7 @@
       "author": null,
       "contributor": null,
       "id": "person_silhouette",
-      "community": 5,
+      "community": 4,
       "norm_label": "person/user silhouette"
     },
     {
@@ -831,7 +468,7 @@
       "author": null,
       "contributor": null,
       "id": "orange_red_background",
-      "community": 5,
+      "community": 4,
       "norm_label": "orange-red gradient background"
     },
     {
@@ -844,7 +481,7 @@
       "author": null,
       "contributor": null,
       "id": "pos_retail_domain",
-      "community": 5,
+      "community": 4,
       "norm_label": "point of sale / retail domain"
     },
     {
@@ -857,7 +494,7 @@
       "author": null,
       "contributor": null,
       "id": "ios_pwa_asset",
-      "community": 5,
+      "community": 4,
       "norm_label": "ios / pwa home screen asset"
     },
     {
@@ -870,7 +507,7 @@
       "author": null,
       "contributor": null,
       "id": "logo_web3_512",
-      "community": 1,
+      "community": 5,
       "norm_label": "logo_web3_512.png"
     },
     {
@@ -883,7 +520,7 @@
       "author": null,
       "contributor": null,
       "id": "times_pos_brand",
-      "community": 1,
+      "community": 5,
       "norm_label": "times pos brand identity"
     },
     {
@@ -896,7 +533,7 @@
       "author": null,
       "contributor": null,
       "id": "user_avatar_icon",
-      "community": 1,
+      "community": 5,
       "norm_label": "user / person avatar icon"
     },
     {
@@ -909,7 +546,7 @@
       "author": null,
       "contributor": null,
       "id": "orange_gradient_style",
-      "community": 1,
+      "community": 5,
       "norm_label": "orange gradient visual style"
     },
     {
@@ -922,7 +559,7 @@
       "author": null,
       "contributor": null,
       "id": "web3_label",
-      "community": 1,
+      "community": 5,
       "norm_label": "web3 design variant"
     },
     {
@@ -935,7 +572,7 @@
       "author": null,
       "contributor": null,
       "id": "app_icon",
-      "community": 1,
+      "community": 5,
       "norm_label": "application icon (512px)"
     },
     {
@@ -948,7 +585,7 @@
       "author": null,
       "contributor": null,
       "id": "logo_web_512",
-      "community": 5,
+      "community": 4,
       "norm_label": "web logo 512px"
     },
     {
@@ -961,7 +598,7 @@
       "author": null,
       "contributor": null,
       "id": "orange_color_scheme",
-      "community": 5,
+      "community": 4,
       "norm_label": "orange color scheme"
     },
     {
@@ -974,7 +611,7 @@
       "author": null,
       "contributor": null,
       "id": "glossy_black_surface",
-      "community": 5,
+      "community": 4,
       "norm_label": "glossy black surface"
     },
     {
@@ -987,7 +624,7 @@
       "author": null,
       "contributor": null,
       "id": "pos_brand_identity",
-      "community": 5,
+      "community": 4,
       "norm_label": "pos brand identity"
     },
     {
@@ -1000,7 +637,7 @@
       "author": null,
       "contributor": null,
       "id": "times_pos_logo",
-      "community": 1,
+      "community": 3,
       "norm_label": "times pos logo (web 64px)"
     },
     {
@@ -1013,7 +650,7 @@
       "author": null,
       "contributor": null,
       "id": "person_silhouette_icon",
-      "community": 1,
+      "community": 3,
       "norm_label": "person silhouette icon"
     },
     {
@@ -1026,7 +663,7 @@
       "author": null,
       "contributor": null,
       "id": "pos_application",
-      "community": 1,
+      "community": 3,
       "norm_label": "point of sale application"
     },
     {
@@ -1039,7 +676,7 @@
       "author": null,
       "contributor": null,
       "id": "retail_domain",
-      "community": 1,
+      "community": 3,
       "norm_label": "retail / commerce domain"
     },
     {
@@ -1052,7 +689,7 @@
       "author": null,
       "contributor": null,
       "id": "user_silhouette_icon",
-      "community": 1,
+      "community": 3,
       "norm_label": "user silhouette icon"
     },
     {
@@ -1065,7 +702,7 @@
       "author": null,
       "contributor": null,
       "id": "orange_red_gradient",
-      "community": 1,
+      "community": 3,
       "norm_label": "orange-red gradient background"
     },
     {
@@ -1078,7 +715,7 @@
       "author": null,
       "contributor": null,
       "id": "web_app_icon_192",
-      "community": 1,
+      "community": 3,
       "norm_label": "web app icon 192x192"
     },
     {
@@ -1091,7 +728,7 @@
       "author": null,
       "contributor": null,
       "id": "pwa_manifest_icon",
-      "community": 1,
+      "community": 3,
       "norm_label": "pwa manifest icon"
     },
     {
@@ -1104,7 +741,7 @@
       "author": null,
       "contributor": null,
       "id": "web_app_icon",
-      "community": 5,
+      "community": 3,
       "norm_label": "web application icon (192px)"
     },
     {
@@ -1117,7 +754,7 @@
       "author": null,
       "contributor": null,
       "id": "logo_web3_64",
-      "community": 1,
+      "community": 5,
       "norm_label": "logo_web3_64.png"
     },
     {
@@ -1130,7 +767,7 @@
       "author": null,
       "contributor": null,
       "id": "gradient_style",
-      "community": 1,
+      "community": 5,
       "norm_label": "orange-pink gradient style"
     },
     {
@@ -1143,8 +780,658 @@
       "author": null,
       "contributor": null,
       "id": "web3_theme",
-      "community": 1,
+      "community": 5,
       "norm_label": "web3 theme"
+    },
+    {
+      "label": "main() \u2014 data migration entry point",
+      "file_type": "code",
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 117",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "import_to_supabase_main",
+      "community": 2,
+      "norm_label": "main() \u2014 data migration entry point"
+    },
+    {
+      "label": "read_csv() \u2014 reads CSV with UTF-8-sig encoding",
+      "file_type": "code",
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 35",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "import_to_supabase_read_csv",
+      "community": 2,
+      "norm_label": "read_csv() \u2014 reads csv with utf-8-sig encoding"
+    },
+    {
+      "label": "batch_upsert() \u2014 inserts rows in configurable batches to Supabase",
+      "file_type": "code",
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 92",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "import_to_supabase_batch_upsert",
+      "community": 2,
+      "norm_label": "batch_upsert() \u2014 inserts rows in configurable batches to supabase"
+    },
+    {
+      "label": "safe_num() \u2014 safely converts string to int/float",
+      "file_type": "code",
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 49",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "import_to_supabase_safe_num",
+      "community": 2,
+      "norm_label": "safe_num() \u2014 safely converts string to int/float"
+    },
+    {
+      "label": "safe_str() \u2014 converts NULL/empty to Python None",
+      "file_type": "code",
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 60",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "import_to_supabase_safe_str",
+      "community": 2,
+      "norm_label": "safe_str() \u2014 converts null/empty to python none"
+    },
+    {
+      "label": "normalize_channel() \u2014 maps single-char codes to channel slugs",
+      "file_type": "code",
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 66",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "import_to_supabase_normalize_channel",
+      "community": 2,
+      "norm_label": "normalize_channel() \u2014 maps single-char codes to channel slugs"
+    },
+    {
+      "label": "normalize_discount_type() \u2014 maps Thai symbols to percent/baht",
+      "file_type": "code",
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 75",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "import_to_supabase_normalize_discount_type",
+      "community": 2,
+      "norm_label": "normalize_discount_type() \u2014 maps thai symbols to percent/baht"
+    },
+    {
+      "label": "normalize_unit() \u2014 extracts unit string from raw CSV field",
+      "file_type": "code",
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 86",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "import_to_supabase_normalize_unit",
+      "community": 2,
+      "norm_label": "normalize_unit() \u2014 extracts unit string from raw csv field"
+    },
+    {
+      "label": "Supabase client (create_client) \u2014 service_role key, bypasses RLS",
+      "file_type": "code",
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 130",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "import_to_supabase_supabase_client",
+      "community": 2,
+      "norm_label": "supabase client (create_client) \u2014 service_role key, bypasses rls"
+    },
+    {
+      "label": "CBS CSV files \u2014 legacy SQL Server 2014 export (8 files)",
+      "file_type": "document",
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 4",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "import_to_supabase_cbs_csv_files",
+      "community": 2,
+      "norm_label": "cbs csv files \u2014 legacy sql server 2014 export (8 files)"
+    },
+    {
+      "label": "legacy_id \u2192 new UUID mapping pattern (products, sale_orders, receive_orders, return_orders)",
+      "file_type": "rationale",
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 160",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "import_to_supabase_legacy_id_mapping",
+      "community": 2,
+      "norm_label": "legacy_id \u2192 new uuid mapping pattern (products, sale_orders, receive_orders, return_orders)"
+    },
+    {
+      "label": "App \u2014 React root shell; manages auth session and view routing",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 4207",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_app",
+      "community": 8,
+      "norm_label": "app \u2014 react root shell; manages auth session and view routing"
+    },
+    {
+      "label": "sb \u2014 Supabase anon client with custom authStorage (localStorage/sessionStorage)",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 866",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_supabase_client",
+      "community": 10,
+      "norm_label": "sb \u2014 supabase anon client with custom authstorage (localstorage/sessionstorage)"
+    },
+    {
+      "label": "authStorage \u2014 custom storage adapter routing tokens based on remember-me flag",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 857",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_auth_storage",
+      "community": 10,
+      "norm_label": "authstorage \u2014 custom storage adapter routing tokens based on remember-me flag"
+    },
+    {
+      "label": "LoginScreen \u2014 email/password login with remember-me, stored in localStorage",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 1819",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_login_screen",
+      "community": 8,
+      "norm_label": "loginscreen \u2014 email/password login with remember-me, stored in localstorage"
+    },
+    {
+      "label": "ToastProvider / useToast \u2014 global notification system with 3.5s auto-dismiss",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 964",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_toast_provider",
+      "community": 8,
+      "norm_label": "toastprovider / usetoast \u2014 global notification system with 3.5s auto-dismiss"
+    },
+    {
+      "label": "ShopProvider / useShop \u2014 single-row shop_settings context for receipt data",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 1234",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_shop_provider",
+      "community": 10,
+      "norm_label": "shopprovider / useshop \u2014 single-row shop_settings context for receipt data"
+    },
+    {
+      "label": "Modal \u2014 bottom-sheet on mobile, scale-fade dialog on desktop",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 1006",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_modal",
+      "community": 10,
+      "norm_label": "modal \u2014 bottom-sheet on mobile, scale-fade dialog on desktop"
+    },
+    {
+      "label": "useMountedToggle \u2014 keeps component mounted during exit animation",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 992",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_use_mounted_toggle",
+      "community": 10,
+      "norm_label": "usemountedtoggle \u2014 keeps component mounted during exit animation"
+    },
+    {
+      "label": "DatePicker \u2014 custom Thai calendar with single/range modes and preset buttons",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 1059",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_date_picker",
+      "community": 12,
+      "norm_label": "datepicker \u2014 custom thai calendar with single/range modes and preset buttons"
+    },
+    {
+      "label": "Icon \u2014 inline Lucide-inspired SVG icon factory",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 923",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_icon",
+      "community": 14,
+      "norm_label": "icon \u2014 inline lucide-inspired svg icon factory"
+    },
+    {
+      "label": "POSView \u2014 point-of-sale screen: product search, cart, checkout, VAT, tax invoice",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 2010",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_pos_view",
+      "community": 6,
+      "norm_label": "posview \u2014 point-of-sale screen: product search, cart, checkout, vat, tax invoice"
+    },
+    {
+      "label": "ProductsView \u2014 product list with brand/category filters",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 2352",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_products_view",
+      "community": 11,
+      "norm_label": "productsview \u2014 product list with brand/category filters"
+    },
+    {
+      "label": "ProductEditor \u2014 modal form for create/edit product with inline brand/category creation",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 2586",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_product_editor",
+      "community": 11,
+      "norm_label": "producteditor \u2014 modal form for create/edit product with inline brand/category creation"
+    },
+    {
+      "label": "StockHistoryPanel \u2014 collapsible stock_movements log inside ProductEditor",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 2528",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_stock_history_panel",
+      "community": 12,
+      "norm_label": "stockhistorypanel \u2014 collapsible stock_movements log inside producteditor"
+    },
+    {
+      "label": "SalesView \u2014 sales history grouped by day, void support, reprint",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 2671",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_sales_view",
+      "community": 9,
+      "norm_label": "salesview \u2014 sales history grouped by day, void support, reprint"
+    },
+    {
+      "label": "Receipt \u2014 80mm thermal receipt/tax-invoice layout component",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 1315",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_receipt",
+      "community": 6,
+      "norm_label": "receipt \u2014 80mm thermal receipt/tax-invoice layout component"
+    },
+    {
+      "label": "ReceiptModal \u2014 receipt preview + print modal, loads sale_orders + sale_order_items",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 1388",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_receipt_modal",
+      "community": 6,
+      "norm_label": "receiptmodal \u2014 receipt preview + print modal, loads sale_orders + sale_order_items"
+    },
+    {
+      "label": "SettingsModal \u2014 edit shop_settings (name, address, phone, tax ID, footer)",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 1247",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_settings_modal",
+      "community": 10,
+      "norm_label": "settingsmodal \u2014 edit shop_settings (name, address, phone, tax id, footer)"
+    },
+    {
+      "label": "ReceiveView \u2014 stock-in / supplier-claim tabs with history and add-product shortcut",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 3013",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_receive_view",
+      "community": 11,
+      "norm_label": "receiveview \u2014 stock-in / supplier-claim tabs with history and add-product shortcut"
+    },
+    {
+      "label": "ReturnView \u2014 customer return form with history",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 3070",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_return_view",
+      "community": 9,
+      "norm_label": "returnview \u2014 customer return form with history"
+    },
+    {
+      "label": "StockMovementForm \u2014 unified form for receive/claim/return with adjust_stock RPC",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 3097",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_stock_movement_form",
+      "community": 6,
+      "norm_label": "stockmovementform \u2014 unified form for receive/claim/return with adjust_stock rpc"
+    },
+    {
+      "label": "MovementHistoryModal \u2014 filterable list of receive/claim/return orders",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 1492",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_movement_history_modal",
+      "community": 9,
+      "norm_label": "movementhistorymodal \u2014 filterable list of receive/claim/return orders"
+    },
+    {
+      "label": "MovementDetailModal \u2014 detail/edit/void for movement orders with header-only edit policy",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 1588",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_movement_detail_modal",
+      "community": 9,
+      "norm_label": "movementdetailmodal \u2014 detail/edit/void for movement orders with header-only edit policy"
+    },
+    {
+      "label": "AddProductModal \u2014 quick add-product modal launched from ReceiveView",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 2943",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_add_product_modal",
+      "community": 11,
+      "norm_label": "addproductmodal \u2014 quick add-product modal launched from receiveview"
+    },
+    {
+      "label": "DashboardView \u2014 sales summary stats and channel breakdown chart",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_dashboard_view",
+      "community": 8,
+      "norm_label": "dashboardview \u2014 sales summary stats and channel breakdown chart"
+    },
+    {
+      "label": "ProfitLossView \u2014 per-line P&L with FIFO-like cost lookup from receive_order_items",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 3847",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_profit_loss_view",
+      "community": 12,
+      "norm_label": "profitlossview \u2014 per-line p&l with fifo-like cost lookup from receive_order_items"
+    },
+    {
+      "label": "Sidebar \u2014 desktop dark-glass navigation with settings and logout",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 1896",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_sidebar",
+      "community": 8,
+      "norm_label": "sidebar \u2014 desktop dark-glass navigation with settings and logout"
+    },
+    {
+      "label": "MobileTopBar \u2014 sticky mobile header with drawer menu",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 1927",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_mobile_topbar",
+      "community": 8,
+      "norm_label": "mobiletopbar \u2014 sticky mobile header with drawer menu"
+    },
+    {
+      "label": "MobileTabBar \u2014 floating pill bottom nav with active indicator",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 1971",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_mobile_tabbar",
+      "community": 8,
+      "norm_label": "mobiletabbar \u2014 floating pill bottom nav with active indicator"
+    },
+    {
+      "label": "applyDiscounts() \u2014 computes line total after two cascading discounts (percent or baht)",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 904",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_apply_discounts",
+      "community": 6,
+      "norm_label": "applydiscounts() \u2014 computes line total after two cascading discounts (percent or baht)"
+    },
+    {
+      "label": "vatBreakdown() \u2014 splits VAT-inclusive grand total into exVat + vat (7% default)",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 896",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_vat_breakdown",
+      "community": 6,
+      "norm_label": "vatbreakdown() \u2014 splits vat-inclusive grand total into exvat + vat (7% default)"
+    },
+    {
+      "label": "adjust_stock RPC \u2014 Supabase stored procedure for atomic stock delta",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 2100",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_adjust_stock_rpc",
+      "community": 6,
+      "norm_label": "adjust_stock rpc \u2014 supabase stored procedure for atomic stock delta"
+    },
+    {
+      "label": "void_* RPCs \u2014 void_sale_order / void_receive_order / void_return_order / void_supplier_claim (stock reversal)",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 2728",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_void_rpcs",
+      "community": 9,
+      "norm_label": "void_* rpcs \u2014 void_sale_order / void_receive_order / void_return_order / void_supplier_claim (stock reversal)"
+    },
+    {
+      "label": "MOVEMENT_META \u2014 configuration map driving MovementHistoryModal/DetailModal for receive/claim/return",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 1455",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_movement_meta",
+      "community": 9,
+      "norm_label": "movement_meta \u2014 configuration map driving movementhistorymodal/detailmodal for receive/claim/return"
+    },
+    {
+      "label": "CHANNELS / PAYMENTS constants \u2014 tiktok/shopee/lazada/facebook/store, cash/transfer/card/cod",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 877",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_channels_payments",
+      "community": 6,
+      "norm_label": "channels / payments constants \u2014 tiktok/shopee/lazada/facebook/store, cash/transfer/card/cod"
+    },
+    {
+      "label": "Liquid-glass CSS design system \u2014 glass, glass-strong, glass-soft, specular, card variants, hover-lift",
+      "file_type": "rationale",
+      "source_file": "index.html",
+      "source_location": "line 144",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_glass_design_system",
+      "community": 13,
+      "norm_label": "liquid-glass css design system \u2014 glass, glass-strong, glass-soft, specular, card variants, hover-lift"
+    },
+    {
+      "label": "PWA manifest + icons \u2014 installable progressive web app configuration",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 21",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_pwa_manifest",
+      "community": 15,
+      "norm_label": "pwa manifest + icons \u2014 installable progressive web app configuration"
+    },
+    {
+      "label": "Tailwind custom config \u2014 primary/ink/body/muted/hairline/canvas/surface color tokens",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 31",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_tailwind_config",
+      "community": 13,
+      "norm_label": "tailwind custom config \u2014 primary/ink/body/muted/hairline/canvas/surface color tokens"
+    },
+    {
+      "label": "Supabase tables \u2014 products, sale_orders, sale_order_items, receive_orders, receive_order_items, return_orders, return_order_items, supplier_claim_orders, supplier_claim_order_items, shop_settings, stock_movements, brands, categories",
+      "file_type": "code",
+      "source_file": "index.html",
+      "source_location": "line 849",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "index_supabase_tables",
+      "community": 12,
+      "norm_label": "supabase tables \u2014 products, sale_orders, sale_order_items, receive_orders, receive_order_items, return_orders, return_order_items, supplier_claim_orders, supplier_claim_order_items, shop_settings, stock_movements, brands, categories"
     }
   ],
   "links": [
@@ -1324,96 +1611,6 @@
       "source": "times_pos_architecture_import_to_supabase_rationale_93",
       "target": "times_pos_architecture_import_to_supabase_batch_upsert",
       "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 26-27",
-      "weight": 1.0,
-      "source": "index_html",
-      "target": "index_react"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 25",
-      "weight": 1.0,
-      "source": "index_html",
-      "target": "index_tailwindcss"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 28",
-      "weight": 1.0,
-      "source": "index_html",
-      "target": "index_babel_standalone"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 29",
-      "weight": 1.0,
-      "source": "index_html",
-      "target": "index_supabase_client"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 21",
-      "weight": 1.0,
-      "source": "index_html",
-      "target": "index_pwa"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 24",
-      "weight": 1.0,
-      "source": "index_html",
-      "target": "index_taviraj_font"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 132",
-      "weight": 1.0,
-      "source": "index_html",
-      "target": "index_glass_design"
-    },
-    {
-      "relation": "conceptually_related_to",
-      "confidence": "INFERRED",
-      "confidence_score": 0.95,
-      "source_file": "index.html",
-      "source_location": "line 31-71",
-      "weight": 0.95,
-      "source": "index_html",
-      "target": "design_claude_md"
-    },
-    {
-      "relation": "conceptually_related_to",
-      "confidence": "INFERRED",
-      "confidence_score": 0.85,
-      "source_file": "index.html",
-      "source_location": "line 556",
-      "weight": 0.85,
-      "source": "index_html",
-      "target": "arch_rls"
     },
     {
       "relation": "references",
@@ -1599,416 +1796,6 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 539",
-      "weight": 1.0,
-      "source": "index_supabase_client",
-      "target": "arch_supabase_project"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1712",
-      "weight": 1.0,
-      "source": "index_posview",
-      "target": "index_supabase_client"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1286",
-      "weight": 1.0,
-      "source": "index_movementdetailmodal",
-      "target": "index_supabase_client"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 942",
-      "weight": 1.0,
-      "source": "index_settingsmodal",
-      "target": "index_supabase_client"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1514",
-      "weight": 1.0,
-      "source": "index_loginscreen",
-      "target": "index_supabase_client"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 556",
-      "weight": 1.0,
-      "source": "index_auth_storage",
-      "target": "index_supabase_client"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 2034",
-      "weight": 1.0,
-      "source": "index_productsview",
-      "target": "index_supabase_client"
-    },
-    {
-      "relation": "implements",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 35",
-      "weight": 1.0,
-      "source": "index_tailwindcss",
-      "target": "design_coral_primary"
-    },
-    {
-      "relation": "implements",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 45",
-      "weight": 1.0,
-      "source": "index_tailwindcss",
-      "target": "design_cream_canvas"
-    },
-    {
-      "relation": "implements",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 49",
-      "weight": 1.0,
-      "source": "index_tailwindcss",
-      "target": "design_surface_dark"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1688",
-      "weight": 1.0,
-      "source": "index_posview",
-      "target": "index_toastctx"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1742",
-      "weight": 1.0,
-      "source": "index_posview",
-      "target": "index_applydiscounts"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1752",
-      "weight": 1.0,
-      "source": "index_posview",
-      "target": "index_vatbreakdown"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 2014",
-      "weight": 1.0,
-      "source": "index_posview",
-      "target": "index_receiptmodal"
-    },
-    {
-      "relation": "shares_data_with",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1753",
-      "weight": 1.0,
-      "source": "index_posview",
-      "target": "arch_sale_orders_table"
-    },
-    {
-      "relation": "shares_data_with",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1771",
-      "weight": 1.0,
-      "source": "index_posview",
-      "target": "arch_sale_order_items_table"
-    },
-    {
-      "relation": "shares_data_with",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1712",
-      "weight": 1.0,
-      "source": "index_posview",
-      "target": "arch_products_table"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1807",
-      "weight": 1.0,
-      "source": "index_posview",
-      "target": "index_icon"
-    },
-    {
-      "relation": "conceptually_related_to",
-      "confidence": "INFERRED",
-      "confidence_score": 0.85,
-      "source_file": "TIMES-POS-Architecture/TIMES-POS-Architecture.md",
-      "source_location": "\u00a75.2",
-      "weight": 0.85,
-      "source": "arch_stock_formula",
-      "target": "index_productsview"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1175",
-      "weight": 1.0,
-      "source": "index_movementhistorymodal",
-      "target": "index_movement_meta"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1264",
-      "weight": 1.0,
-      "source": "index_movementhistorymodal",
-      "target": "index_movementdetailmodal"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1217",
-      "weight": 1.0,
-      "source": "index_movementhistorymodal",
-      "target": "index_datepicker"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1211",
-      "weight": 1.0,
-      "source": "index_movementhistorymodal",
-      "target": "index_modal"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1272",
-      "weight": 1.0,
-      "source": "index_movementdetailmodal",
-      "target": "index_movement_meta"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1341",
-      "weight": 1.0,
-      "source": "index_movementdetailmodal",
-      "target": "index_modal"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1123",
-      "weight": 1.0,
-      "source": "index_receiptmodal",
-      "target": "index_receipt"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1072",
-      "weight": 1.0,
-      "source": "index_receiptmodal",
-      "target": "index_shopctx"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1099",
-      "weight": 1.0,
-      "source": "index_receiptmodal",
-      "target": "index_modal"
-    },
-    {
-      "relation": "shares_data_with",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1083",
-      "weight": 1.0,
-      "source": "index_receiptmodal",
-      "target": "arch_sale_orders_table"
-    },
-    {
-      "relation": "shares_data_with",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1084",
-      "weight": 1.0,
-      "source": "index_receiptmodal",
-      "target": "arch_sale_order_items_table"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1028",
-      "weight": 1.0,
-      "source": "index_receipt",
-      "target": "index_applydiscounts"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 934",
-      "weight": 1.0,
-      "source": "index_settingsmodal",
-      "target": "index_shopctx"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 957",
-      "weight": 1.0,
-      "source": "index_settingsmodal",
-      "target": "index_modal"
-    },
-    {
-      "relation": "shares_data_with",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 922",
-      "weight": 1.0,
-      "source": "index_shopctx",
-      "target": "arch_supabase_project"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 837",
-      "weight": 1.0,
-      "source": "index_datepicker",
-      "target": "index_icon"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1587",
-      "weight": 1.0,
-      "source": "index_sidebar",
-      "target": "index_icon"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1659",
-      "weight": 1.0,
-      "source": "index_mobiletabbar",
-      "target": "index_icon"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1511",
-      "weight": 1.0,
-      "source": "index_loginscreen",
-      "target": "index_auth_storage"
-    },
-    {
-      "relation": "implements",
-      "confidence": "INFERRED",
-      "confidence_score": 0.95,
-      "source_file": "index.html",
-      "source_location": "line 593",
-      "weight": 0.95,
-      "source": "index_applydiscounts",
-      "target": "arch_cascading_discount"
-    },
-    {
-      "relation": "conceptually_related_to",
-      "confidence": "INFERRED",
-      "confidence_score": 0.85,
-      "source_file": "index.html",
-      "source_location": "line 76",
-      "weight": 0.85,
-      "source": "index_glass_design",
-      "target": "design_cream_canvas"
-    },
-    {
-      "relation": "semantically_similar_to",
-      "confidence": "INFERRED",
-      "confidence_score": 0.65,
-      "source_file": "index.html",
-      "source_location": "line 191",
-      "weight": 0.65,
-      "source": "design_coral_primary",
-      "target": "index_glass_design"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
       "source_file": "TIMES-POS-Architecture/TIMES-POS-Architecture.md",
       "source_location": "\u00a72.3",
       "weight": 1.0,
@@ -2059,41 +1846,11 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1143",
-      "weight": 1.0,
-      "source": "index_movement_meta",
-      "target": "arch_receive_orders_table"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
       "source_file": "TIMES-POS-Architecture/TIMES-POS-Architecture.md",
       "source_location": "\u00a72.7",
       "weight": 1.0,
       "source": "arch_return_order_items_table",
       "target": "arch_return_orders_table"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "index.html",
-      "source_location": "line 1163",
-      "weight": 1.0,
-      "source": "index_movement_meta",
-      "target": "arch_return_orders_table"
-    },
-    {
-      "relation": "semantically_similar_to",
-      "confidence": "INFERRED",
-      "confidence_score": 0.75,
-      "source_file": "index.html",
-      "source_location": "line 61-65",
-      "weight": 0.75,
-      "source": "index_taviraj_font",
-      "target": "design_typography_system"
     },
     {
       "relation": "is_app_icon_for",
@@ -2684,17 +2441,757 @@
       "weight": 1.0,
       "source": "logo_web3_64",
       "target": "web3_theme"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 136",
+      "weight": 1.0,
+      "source": "import_to_supabase_main",
+      "target": "import_to_supabase_read_csv"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 158",
+      "weight": 1.0,
+      "source": "import_to_supabase_main",
+      "target": "import_to_supabase_batch_upsert"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 145",
+      "weight": 1.0,
+      "source": "import_to_supabase_main",
+      "target": "import_to_supabase_safe_num"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 149",
+      "weight": 1.0,
+      "source": "import_to_supabase_main",
+      "target": "import_to_supabase_safe_str"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 185",
+      "weight": 1.0,
+      "source": "import_to_supabase_main",
+      "target": "import_to_supabase_normalize_channel"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 189",
+      "weight": 1.0,
+      "source": "import_to_supabase_main",
+      "target": "import_to_supabase_normalize_discount_type"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 295",
+      "weight": 1.0,
+      "source": "import_to_supabase_main",
+      "target": "import_to_supabase_normalize_unit"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 130",
+      "weight": 1.0,
+      "source": "import_to_supabase_main",
+      "target": "import_to_supabase_supabase_client"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 136",
+      "weight": 1.0,
+      "source": "import_to_supabase_main",
+      "target": "import_to_supabase_cbs_csv_files"
+    },
+    {
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 160",
+      "weight": 1.0,
+      "source": "import_to_supabase_main",
+      "target": "import_to_supabase_legacy_id_mapping"
+    },
+    {
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 158",
+      "weight": 1.0,
+      "source": "import_to_supabase_main",
+      "target": "index_supabase_tables"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 101",
+      "weight": 1.0,
+      "source": "import_to_supabase_batch_upsert",
+      "target": "import_to_supabase_supabase_client"
+    },
+    {
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 66",
+      "weight": 0.95,
+      "source": "import_to_supabase_normalize_channel",
+      "target": "index_channels_payments"
+    },
+    {
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 75",
+      "weight": 0.85,
+      "source": "import_to_supabase_normalize_discount_type",
+      "target": "index_apply_discounts"
+    },
+    {
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py",
+      "source_location": "line 130",
+      "weight": 0.75,
+      "source": "import_to_supabase_supabase_client",
+      "target": "index_supabase_client"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 4213",
+      "weight": 1.0,
+      "source": "index_app",
+      "target": "index_supabase_client"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 4232",
+      "weight": 1.0,
+      "source": "index_app",
+      "target": "index_toast_provider"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 4233",
+      "weight": 1.0,
+      "source": "index_app",
+      "target": "index_shop_provider"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 4235",
+      "weight": 1.0,
+      "source": "index_app",
+      "target": "index_sidebar"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 4237",
+      "weight": 1.0,
+      "source": "index_app",
+      "target": "index_mobile_topbar"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 4250",
+      "weight": 1.0,
+      "source": "index_app",
+      "target": "index_mobile_tabbar"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 4241",
+      "weight": 1.0,
+      "source": "index_app",
+      "target": "index_pos_view"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 4242",
+      "weight": 1.0,
+      "source": "index_app",
+      "target": "index_products_view"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 4243",
+      "weight": 1.0,
+      "source": "index_app",
+      "target": "index_sales_view"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 4244",
+      "weight": 1.0,
+      "source": "index_app",
+      "target": "index_receive_view"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 4245",
+      "weight": 1.0,
+      "source": "index_app",
+      "target": "index_return_view"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 4246",
+      "weight": 1.0,
+      "source": "index_app",
+      "target": "index_dashboard_view"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 4247",
+      "weight": 1.0,
+      "source": "index_app",
+      "target": "index_profit_loss_view"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 4251",
+      "weight": 1.0,
+      "source": "index_app",
+      "target": "index_settings_modal"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 4219",
+      "weight": 1.0,
+      "source": "index_app",
+      "target": "index_login_screen"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 866",
+      "weight": 1.0,
+      "source": "index_supabase_client",
+      "target": "index_auth_storage"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 1237",
+      "weight": 1.0,
+      "source": "index_shop_provider",
+      "target": "index_supabase_client"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 1389",
+      "weight": 1.0,
+      "source": "index_receipt_modal",
+      "target": "index_shop_provider"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 1249",
+      "weight": 1.0,
+      "source": "index_settings_modal",
+      "target": "index_shop_provider"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 1007",
+      "weight": 1.0,
+      "source": "index_modal",
+      "target": "index_use_mounted_toggle"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 1272",
+      "weight": 1.0,
+      "source": "index_settings_modal",
+      "target": "index_modal"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 2604",
+      "weight": 1.0,
+      "source": "index_product_editor",
+      "target": "index_modal"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 1659",
+      "weight": 1.0,
+      "source": "index_movement_detail_modal",
+      "target": "index_modal"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 1061",
+      "weight": 1.0,
+      "source": "index_date_picker",
+      "target": "index_use_mounted_toggle"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 2745",
+      "weight": 1.0,
+      "source": "index_sales_view",
+      "target": "index_date_picker"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 3100",
+      "weight": 1.0,
+      "source": "index_stock_movement_form",
+      "target": "index_date_picker"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 1535",
+      "weight": 1.0,
+      "source": "index_movement_history_modal",
+      "target": "index_date_picker"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 4030",
+      "weight": 1.0,
+      "source": "index_profit_loss_view",
+      "target": "index_date_picker"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 2066",
+      "weight": 1.0,
+      "source": "index_pos_view",
+      "target": "index_apply_discounts"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 2078",
+      "weight": 1.0,
+      "source": "index_pos_view",
+      "target": "index_vat_breakdown"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 2100",
+      "weight": 1.0,
+      "source": "index_pos_view",
+      "target": "index_adjust_stock_rpc"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 2344",
+      "weight": 1.0,
+      "source": "index_pos_view",
+      "target": "index_receipt_modal"
+    },
+    {
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 2036",
+      "weight": 1.0,
+      "source": "index_pos_view",
+      "target": "index_supabase_tables"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 2016",
+      "weight": 1.0,
+      "source": "index_pos_view",
+      "target": "index_channels_payments"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 2509",
+      "weight": 1.0,
+      "source": "index_products_view",
+      "target": "index_product_editor"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 2662",
+      "weight": 1.0,
+      "source": "index_product_editor",
+      "target": "index_stock_history_panel"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 2998",
+      "weight": 1.0,
+      "source": "index_add_product_modal",
+      "target": "index_product_editor"
+    },
+    {
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 2535",
+      "weight": 1.0,
+      "source": "index_stock_history_panel",
+      "target": "index_supabase_tables"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 2935",
+      "weight": 1.0,
+      "source": "index_sales_view",
+      "target": "index_receipt_modal"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 2728",
+      "weight": 1.0,
+      "source": "index_sales_view",
+      "target": "index_void_rpcs"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 1441",
+      "weight": 1.0,
+      "source": "index_receipt_modal",
+      "target": "index_receipt"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 1343",
+      "weight": 1.0,
+      "source": "index_receipt",
+      "target": "index_apply_discounts"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 3063",
+      "weight": 1.0,
+      "source": "index_receive_view",
+      "target": "index_stock_movement_form"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 3064",
+      "weight": 1.0,
+      "source": "index_receive_view",
+      "target": "index_movement_history_modal"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 3065",
+      "weight": 1.0,
+      "source": "index_receive_view",
+      "target": "index_add_product_modal"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 3090",
+      "weight": 1.0,
+      "source": "index_return_view",
+      "target": "index_stock_movement_form"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 3091",
+      "weight": 1.0,
+      "source": "index_return_view",
+      "target": "index_movement_history_modal"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 3293",
+      "weight": 1.0,
+      "source": "index_stock_movement_form",
+      "target": "index_adjust_stock_rpc"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 3266",
+      "weight": 1.0,
+      "source": "index_stock_movement_form",
+      "target": "index_vat_breakdown"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 3223",
+      "weight": 1.0,
+      "source": "index_stock_movement_form",
+      "target": "index_apply_discounts"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 3101",
+      "weight": 1.0,
+      "source": "index_stock_movement_form",
+      "target": "index_channels_payments"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 1582",
+      "weight": 1.0,
+      "source": "index_movement_history_modal",
+      "target": "index_movement_detail_modal"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 1493",
+      "weight": 1.0,
+      "source": "index_movement_history_modal",
+      "target": "index_movement_meta"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 1589",
+      "weight": 1.0,
+      "source": "index_movement_detail_modal",
+      "target": "index_movement_meta"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 1647",
+      "weight": 1.0,
+      "source": "index_movement_detail_modal",
+      "target": "index_void_rpcs"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 3915",
+      "weight": 1.0,
+      "source": "index_profit_loss_view",
+      "target": "index_apply_discounts"
+    },
+    {
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "index.html",
+      "source_location": "line 3864",
+      "weight": 1.0,
+      "source": "index_profit_loss_view",
+      "target": "index_supabase_tables"
+    },
+    {
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "index.html",
+      "source_location": "line 1896",
+      "weight": 0.85,
+      "source": "index_sidebar",
+      "target": "index_mobile_tabbar"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "index.html",
+      "source_location": "line 31",
+      "weight": 0.85,
+      "source": "index_glass_design_system",
+      "target": "index_tailwind_config"
     }
   ],
   "hyperedges": [
     {
-      "id": "he_pos_sale_flow",
-      "label": "POS Sale Flow \u2014 POSView + sale_orders + sale_order_items + adjust_stock RPC",
+      "id": "he_stock_adjustment_flow",
+      "label": "Stock adjustment flow: POSView / StockMovementForm call adjust_stock RPC which writes to stock_movements table",
       "nodes": [
-        "index_posview",
-        "arch_sale_orders_table",
-        "arch_sale_order_items_table",
-        "arch_products_table"
+        "index_pos_view",
+        "index_stock_movement_form",
+        "index_adjust_stock_rpc",
+        "index_supabase_tables"
       ],
       "relation": "participate_in",
       "confidence": "EXTRACTED",
@@ -2702,30 +3199,31 @@
       "source_file": "index.html"
     },
     {
-      "id": "he_movement_system",
-      "label": "Movement Tracking System \u2014 MOVEMENT_META + MovementHistoryModal + MovementDetailModal covering receive/claim/return order kinds",
+      "id": "he_receipt_print_chain",
+      "label": "Receipt printing chain: POSView / SalesView \u2192 ReceiptModal \u2192 Receipt (80mm thermal layout) \u2192 window.print()",
       "nodes": [
-        "index_movement_meta",
-        "index_movementhistorymodal",
-        "index_movementdetailmodal"
+        "index_pos_view",
+        "index_sales_view",
+        "index_receipt_modal",
+        "index_receipt"
       ],
-      "relation": "implement",
+      "relation": "participate_in",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "index.html"
     },
     {
-      "id": "he_design_token_bridge",
-      "label": "Design Token Bridge \u2014 DESIGN-claude.md tokens realized in Tailwind config inside index.html",
+      "id": "he_migration_pipeline",
+      "label": "Legacy data migration pipeline: CBS CSV files \u2192 import_to_supabase.py normalization \u2192 Supabase tables consumed by index.html app",
       "nodes": [
-        "design_claude_md",
-        "index_tailwindcss",
-        "design_cream_canvas"
+        "import_to_supabase_cbs_csv_files",
+        "import_to_supabase_main",
+        "index_supabase_tables"
       ],
-      "relation": "form",
-      "confidence": "INFERRED",
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
       "confidence_score": 0.95,
-      "source_file": "index.html"
+      "source_file": "TIMES-POS-Architecture/import_to_supabase.py"
     }
   ]
 }
