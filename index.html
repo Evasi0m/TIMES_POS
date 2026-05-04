@@ -831,6 +831,7 @@
     body * { visibility: hidden !important; }
     .receipt-print, .receipt-print * { visibility: visible !important; }
     .receipt-print {
+      display: block !important;
       position: absolute !important;
       left: 0 !important; top: 0 !important;
       width: 80mm !important;
@@ -838,6 +839,7 @@
       border: 0 !important;
       background: #fff !important;
     }
+    .no-print { display: none !important; }
   }
 </style>
 </head>
@@ -953,6 +955,7 @@ const Icon = ({ name, size = 20, className = "", strokeWidth = 1.75, color }) =>
     case "arrow-up":  return <svg {...p}><path d="M12 20V4"/><path d="M5 11l7-7 7 7"/></svg>;
     case "arrow-down":return <svg {...p}><path d="M12 4v16"/><path d="M19 13l-7 7-7-7"/></svg>;
     case "store":     return <svg {...p}><path d="M4 4h16l-2 4H6L4 4z"/><path d="M4 8v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/></svg>;
+    case "file":      return <svg {...p}><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>;
     default: return null;
   }
 };
@@ -1885,6 +1888,7 @@ const NAV = [
   { k: "return",    label: "รับคืน",      labelLong: "รับคืนจากลูกค้า",     icon: "arrow-down" },
   { k: "dashboard", label: "ภาพรวม",     labelLong: "แดชบอร์ด",           icon: "dashboard" },
   { k: "pnl",       label: "กำไร",       labelLong: "กำไร / ขาดทุน",       icon: "trend-up" },
+  { k: "report",    label: "ปิดวัน",     labelLong: "รายงานปิดวัน",         icon: "file" },
 ];
 
 const SUPPLIERS = ["CMG", "SEIKO TH", "ถ่าน", "สาย"];
@@ -4202,6 +4206,193 @@ function ProfitLossView() {
 }
 
 /* =========================================================
+   DAILY REPORT VIEW — รายงานปิดวัน
+========================================================= */
+function DailyReportView() {
+  const { shop } = useShop();
+  const [date, setDate] = useState(todayISO());
+  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState(null);
+
+  const PAYMENT_LABEL = { cash: 'เงินสด', transfer: 'โอนเงิน', card: 'บัตร', cod: 'เก็บปลายทาง' };
+
+  useEffect(() => { load(date); }, [date]);
+
+  async function load(dateStr) {
+    setLoading(true);
+    setData(null);
+    try {
+      const from = dateStr + 'T00:00:00';
+      const to   = dateStr + 'T23:59:59';
+
+      // 1) All orders for the day (active + voided)
+      const { data: allOrders } = await sb.from('sale_orders')
+        .select('id, grand_total, subtotal, payment_method, status, sale_date')
+        .gte('sale_date', from).lte('sale_date', to);
+
+      const active  = (allOrders||[]).filter(o => o.status === 'active');
+      const voided  = (allOrders||[]).filter(o => o.status !== 'active');
+
+      const byPayment = { cash: 0, transfer: 0, card: 0, cod: 0 };
+      active.forEach(o => {
+        const k = o.payment_method || 'cash';
+        byPayment[k] = (byPayment[k] || 0) + Number(o.grand_total || 0);
+      });
+      const netTotal = Object.values(byPayment).reduce((a, b) => a + b, 0);
+
+      // 2) Profit calculation — same FIFO logic as ProfitLossView
+      const orderIds = active.map(o => o.id);
+      let totalProfit = 0;
+      if (orderIds.length) {
+        const { data: itemsData } = await sb.from('sale_order_items')
+          .select('*').in('sale_order_id', orderIds);
+        const items = itemsData || [];
+
+        const pids = [...new Set(items.map(i => i.product_id).filter(Boolean))];
+
+        let recvMap = {};
+        let prodMap = {};
+        if (pids.length) {
+          const [{ data: recvRows }, { data: prods }] = await Promise.all([
+            sb.from('receive_order_items')
+              .select('product_id, unit_price, receive_orders!inner(receive_date, voided_at)')
+              .in('product_id', pids).is('receive_orders.voided_at', null),
+            sb.from('products').select('id, cost_price').in('id', pids),
+          ]);
+          (recvRows||[]).forEach(r => {
+            const ts = new Date(r.receive_orders?.receive_date).getTime();
+            if (!ts) return;
+            (recvMap[r.product_id] ||= []).push({ date: ts, unit_price: Number(r.unit_price)||0 });
+          });
+          Object.values(recvMap).forEach(arr => arr.sort((a, b) => b.date - a.date));
+          (prods||[]).forEach(p => { prodMap[p.id] = Number(p.cost_price)||0; });
+        }
+
+        const itemsByOrder = {};
+        items.forEach(it => { (itemsByOrder[it.sale_order_id] ||= []).push(it); });
+
+        for (const o of active) {
+          const lines = itemsByOrder[o.id] || [];
+          const lineRevs = lines.map(it => applyDiscounts(it.unit_price, it.quantity, it.discount1_value, it.discount1_type, it.discount2_value, it.discount2_type));
+          const subtotalCalc = lineRevs.reduce((s, x) => s + x, 0);
+          const ratio = subtotalCalc > 0 ? (Number(o.grand_total)||0) / subtotalCalc : 1;
+          const saleTs = new Date(o.sale_date).getTime();
+          lines.forEach((it, idx) => {
+            const qty = Number(it.quantity)||0;
+            const rev = lineRevs[idx] * ratio;
+            let unitCost = 0;
+            if (it.product_id) {
+              const list = recvMap[it.product_id];
+              const found = list?.find(r => r.date <= saleTs);
+              unitCost = found ? found.unit_price : (prodMap[it.product_id]||0);
+            }
+            totalProfit += rev - unitCost * qty;
+          });
+        }
+      }
+
+      setData({ activeCount: active.length, voidedCount: voided.length, byPayment, netTotal, totalProfit });
+    } catch (e) {
+      console.error(e);
+    }
+    setLoading(false);
+  }
+
+  const pct = data && data.netTotal > 0 ? (data.totalProfit / data.netTotal * 100) : 0;
+  const printedAt = new Date().toLocaleString('th-TH', { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+
+  return (
+    <div className="p-4 lg:p-8 max-w-lg mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
+        <h1 className="text-xl font-bold">รายงานปิดวัน</h1>
+        <div className="flex items-center gap-2">
+          <DatePicker value={date} onChange={setDate} />
+          <button
+            className="btn-primary flex items-center gap-1.5 no-print"
+            onClick={() => window.print()}
+            disabled={!data}
+          >
+            <Icon name="receipt" size={15}/> พิมพ์
+          </button>
+        </div>
+      </div>
+
+      {/* Screen view */}
+      {loading && <div className="flex items-center gap-2 text-muted py-12 justify-center"><span className="spinner"/>กำลังโหลด...</div>}
+
+      {!loading && data && (
+        <div className="card-canvas rounded-2xl overflow-hidden">
+          {/* Bill counts */}
+          <div className="grid grid-cols-2 divide-x divide-hairline border-b border-hairline">
+            <div className="p-5 text-center">
+              <div className="text-3xl font-bold tabular-nums">{data.activeCount}</div>
+              <div className="text-sm text-muted mt-1">บิลสำเร็จ</div>
+            </div>
+            <div className="p-5 text-center">
+              <div className="text-3xl font-bold tabular-nums text-error">{data.voidedCount}</div>
+              <div className="text-sm text-muted mt-1">ยกเลิก</div>
+            </div>
+          </div>
+
+          {/* Payment breakdown */}
+          <div className="p-5 space-y-2.5">
+            {Object.entries(data.byPayment).map(([key, val]) => (
+              <div key={key} className="flex justify-between items-center">
+                <span className="text-muted">{PAYMENT_LABEL[key] || key}</span>
+                <span className="font-semibold tabular-nums">{fmtTHB(val)}</span>
+              </div>
+            ))}
+            <div className="border-t border-hairline pt-3 mt-3 space-y-2">
+              <div className="flex justify-between items-center text-lg font-bold">
+                <span>รวมสุทธิ</span>
+                <span className="tabular-nums">{fmtTHB(data.netTotal)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted">กำไรรวม</span>
+                <span className={`font-semibold tabular-nums ${data.totalProfit >= 0 ? 'text-[#1a5c2a]' : 'text-error'}`}>{fmtTHB(data.totalProfit)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted">% กำไร</span>
+                <span className={`font-semibold tabular-nums ${pct >= 0 ? 'text-[#1a5c2a]' : 'text-error'}`}>{pct.toFixed(1)}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!loading && !data && (
+        <div className="text-center text-muted py-12">ไม่มีข้อมูลสำหรับวันที่เลือก</div>
+      )}
+
+      {/* Thermal print layout — hidden on screen, visible on print */}
+      {data && (
+        <div className="receipt-80mm receipt-print" style={{ display:'none' }}>
+          <div className="r-center r-xl">{shop?.shop_name || 'TIMES'}</div>
+          {shop?.shop_address && <div className="r-center r-sm">{shop.shop_address}</div>}
+          <hr className="r-double"/>
+          <div className="r-center r-bold r-lg">รายงานปิดวัน</div>
+          <div className="r-center r-sm">{fmtDate(date)}</div>
+          <hr className="r-hr"/>
+          <div className="r-row tight"><span>บิลสำเร็จ</span><span>{data.activeCount} บิล</span></div>
+          <div className="r-row tight"><span>ยกเลิก</span><span>{data.voidedCount} บิล</span></div>
+          <hr className="r-hr"/>
+          {Object.entries(data.byPayment).map(([key, val]) => (
+            <div key={key} className="r-row tight"><span>{PAYMENT_LABEL[key]||key}</span><span>{fmtTHB(val)}</span></div>
+          ))}
+          <hr className="r-double"/>
+          <div className="r-row r-lg"><span>รวมสุทธิ</span><span>{fmtTHB(data.netTotal)}</span></div>
+          <div className="r-row tight"><span>กำไรรวม</span><span>{fmtTHB(data.totalProfit)}</span></div>
+          <div className="r-row tight"><span>% กำไร</span><span>{pct.toFixed(1)}%</span></div>
+          <hr className="r-hr"/>
+          <div className="r-center r-sm">พิมพ์ {printedAt}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* =========================================================
    APP SHELL
 ========================================================= */
 function App() {
@@ -4226,6 +4417,7 @@ function App() {
     return:    { t: "รับคืนจากลูกค้า",       s: "Customer Return" },
     dashboard: { t: "แดชบอร์ด",              s: "Dashboard" },
     pnl:       { t: "กำไร / ขาดทุน",         s: "Profit & Loss" },
+    report:    { t: "รายงานปิดวัน",           s: "Daily Close Report" },
   };
 
   return (
@@ -4244,6 +4436,7 @@ function App() {
               {view==='return' && <ReturnView />}
               {view==='dashboard' && <DashboardView />}
               {view==='pnl' && <ProfitLossView />}
+              {view==='report' && <DailyReportView />}
             </div>
           </main>
         </div>
