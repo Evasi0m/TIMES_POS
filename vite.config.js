@@ -12,6 +12,11 @@ import { viteSingleFile } from 'vite-plugin-singlefile';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
+  // Use RELATIVE asset URLs so the same dist/ works whether the app is
+  // hosted at the domain root (Cloudflare Pages, S3, custom domain) OR
+  // under a subpath (GitHub Pages project site at /<repo>/, Netlify
+  // preview URLs). Don't hardcode '/times_pos/'.
+  base: './',
   plugins: [
     react(),
 
