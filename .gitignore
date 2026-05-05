@@ -5,3 +5,10 @@ __pycache__/
 
 # Internal reference + data — contains service_role key and source CSVs
 TIMES-POS-Architecture/
+
+# Node / Vite
+node_modules/
+dist/
+*.log
+.vite/
+coverage/
