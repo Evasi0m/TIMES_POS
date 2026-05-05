@@ -1545,9 +1545,17 @@ function POSView() {
   const discountAmount = Math.max(0, subtotal - grand);
   const totalQty = useMemo(()=> cart.reduce((s,l)=> s+l.quantity, 0), [cart]);
 
+  // Form validity — drives the submit button disabled state and the
+  // submit() guard. Centralised so both stay in sync.
+  const netPriceFilled = netPrice !== "" && Number(netPrice) > 0;
+  const netReceivedOk  = !requiresNetReceived(channel, payment)
+    || (netReceived !== "" && Number(netReceived) > 0);
+  const canSubmit = !submitting && cart.length > 0 && netPriceFilled && netReceivedOk;
+
   const submit = async () => {
     if (submitLockRef.current) return; // hard guard against double-submit
     if (!cart.length) { toast.push("ไม่มีสินค้าในตะกร้า", "error"); return; }
+    if (!netPriceFilled) { toast.push("กรุณากรอก 'ราคาที่ลูกค้าจ่าย'", "error"); return; }
     if (taxInvoice && !buyer.name.trim()) { toast.push("กรุณากรอกชื่อผู้ซื้อสำหรับใบกำกับภาษี", 'error'); return; }
     if (requiresNetReceived(channel, payment) && (netReceived === "" || Number(netReceived) <= 0)) {
       toast.push("กรุณากรอก 'เงินที่ร้านค้าได้รับ' (ช่องทาง e-commerce + ชำระทันที)", 'error');
@@ -1752,7 +1760,9 @@ function POSView() {
 
         <div className="mb-3">
           <div className="flex items-center justify-between">
-            <label className="text-[10px] uppercase tracking-wider text-muted">ราคาสุทธิ</label>
+            <label className="text-[10px] uppercase tracking-wider text-muted">
+              ราคาที่ลูกค้าจ่าย <span className="text-error">*</span>
+            </label>
             {discountAmount > 0 && (
               <span className="text-[10px] text-primary tabular-nums">ส่วนลด −{fmtTHB(discountAmount)}</span>
             )}
@@ -1831,7 +1841,7 @@ function POSView() {
         <div className="flex justify-between text-xs text-muted-soft mb-2"><span>VAT 7%</span><span className="tabular-nums">{fmtTHB(vatBreakdown(grand).vat)}</span></div>
         <div className="flex justify-between font-display text-3xl mb-3"><span>รวม</span><span className="tabular-nums">{fmtTHB(grand)}</span></div>
 
-        <button className="btn-primary w-full !py-3 !text-base" disabled={submitting||!cart.length} onClick={submit}>
+        <button className="btn-primary w-full !py-3 !text-base" disabled={!canSubmit} onClick={submit}>
           {submitting? 'กำลังบันทึก...' : `ชำระเงิน ${fmtTHB(grand)}`}
         </button>
       </div>
