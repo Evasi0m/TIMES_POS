@@ -8,11 +8,44 @@
 import React from 'react';
 import * as ReactDOM from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
+import { registerSW } from 'virtual:pwa-register';
+import { drainQueue, queueSale, onQueueChange } from './lib/offline-queue.js';
+import { onOnlineChange, isOnline } from './lib/online-status.js';
 import './styles.css';
 
 // `supabase.createClient(...)` from the CDN UMD bundle becomes a one-method
 // shim around the real ES-module export. Same shape, no other code changes.
 const supabase = { createClient };
+
+// Register the service worker (from src/sw.js, emitted by vite-plugin-pwa).
+// `autoUpdate` in vite.config.js means the SW silently swaps itself when a
+// new build reaches the cache — no "Update available" dialog at the front
+// counter. In dev mode this is a stub.
+registerSW({
+  immediate: true,
+  onRegisterError(err) { console.warn('[sw] register failed', err); },
+});
+
+// Drain the offline-sale queue any time the browser comes back online.
+// Wiring into POSView.submit (push to queue when offline) is the next
+// chunk — see /root/.claude/plans/delightful-watching-gray.md Phase 3.
+let _draining = false;
+async function tryDrain() {
+  if (_draining || !isOnline() || !window._sb) return;
+  _draining = true;
+  try { await drainQueue(window._sb); } finally { _draining = false; }
+}
+onOnlineChange((on) => { if (on) tryDrain(); });
+window.addEventListener('focus', tryDrain);
+
+// Expose offline-queue helpers + Supabase client to the legacy script
+// below. (The script accesses `sb` lexically; we also stash it on window
+// so the SW-aware drainer can use it.)
+window._tryDrain = tryDrain;
+window._queueSale = queueSale;
+window._isOnline = isOnline;
+window._onQueueChange = onQueueChange;
+window._onOnlineChange = onOnlineChange;
 
 // === BEGIN legacy app body (extracted verbatim from legacy-index.html) =====
 //   The block below is the contents of `src/app.legacy.jsx`, inlined so it
@@ -42,6 +75,10 @@ const authStorage = {
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
   auth: { persistSession: true, autoRefreshToken: true, storage: authStorage }
 });
+// Hand the client to the SW-aware queue drainer (set up in the prelude above).
+window._sb = sb;
+// Drain on first load too in case the user opened a queued tab while online.
+queueMicrotask(() => window._tryDrain?.());
 
 const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
@@ -1419,15 +1456,34 @@ function POSView() {
         discount1_value: roundMoney(l.discount1_value || 0), discount1_type: l.discount1_type,
         discount2_value: roundMoney(l.discount2_value || 0), discount2_type: l.discount2_type,
       }));
-      // Atomic: header + items + adjust_stock all in one Postgres transaction.
-      // See supabase-migrations/001_create_sale_order_with_items.sql.
-      const { data: order, error: e1 } = await sb.rpc('create_sale_order_with_items', {
-        p_header: headerPayload,
-        p_items: itemsPayload,
-      });
-      if (e1) throw e1;
-      toast.push(`บันทึกบิล #${order.id} · ${fmtTHB(grandR)}`, 'success');
-      setReceiptOrderId(order.id);  // open receipt modal for this new bill
+      const rpcArgs = { p_header: headerPayload, p_items: itemsPayload };
+
+      // Offline path: stash the sale in IndexedDB and let the SW-aware drainer
+      // send it when the network returns. We can't open a receipt (no order id
+      // yet), so we just confirm it's queued.
+      if (window._isOnline && !window._isOnline()) {
+        await window._queueSale(rpcArgs);
+        toast.push(`บันทึกในคิวออฟไลน์ · ${fmtTHB(grandR)} (จะส่งเมื่อออนไลน์)`, 'info');
+      } else {
+        // Atomic: header + items + adjust_stock all in one Postgres transaction.
+        // See supabase-migrations/001_create_sale_order_with_items.sql.
+        const { data: order, error: e1 } = await sb.rpc('create_sale_order_with_items', rpcArgs);
+        if (e1) {
+          // Network failure mid-call → fall back to the offline queue rather
+          // than asking the user to redo the bill.
+          const networkish = /Failed to fetch|NetworkError|TypeError/i.test(String(e1.message || e1));
+          if (networkish && window._queueSale) {
+            await window._queueSale(rpcArgs);
+            toast.push(`บันทึกในคิวออฟไลน์ · ${fmtTHB(grandR)} (จะส่งเมื่อออนไลน์)`, 'info');
+          } else {
+            throw e1;
+          }
+        } else {
+          toast.push(`บันทึกบิล #${order.id} · ${fmtTHB(grandR)}`, 'success');
+          setReceiptOrderId(order.id);  // open receipt modal for this new bill
+        }
+      }
+
       setCart([]); setNetPrice("");
       setChannel("tiktok"); setPayment("cash"); setCartOpen(false);
       setNotes(""); setShowNotes(false);
@@ -3602,6 +3658,36 @@ function ProfitLossView() {
 }
 
 /* =========================================================
+   OFFLINE BANNER
+   - Persistent strip at the top when network is down OR queued sales > 0
+   - Refreshes from window._isOnline + window._onQueueChange (set up in
+     main.jsx prelude). No props needed.
+========================================================= */
+function OfflineBanner() {
+  const [online, setOnline] = useState(() => (window._isOnline ? window._isOnline() : true));
+  const [queued, setQueued] = useState(0);
+  useEffect(() => {
+    const offOnline = window._onOnlineChange?.(setOnline);
+    const offQueue  = window._onQueueChange?.(setQueued);
+    return () => { offOnline?.(); offQueue?.(); };
+  }, []);
+  if (online && queued === 0) return null;
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className={"sticky top-0 z-[80] w-full text-sm font-medium px-4 py-2 flex items-center justify-center gap-3 " +
+        (online ? "bg-warning/15 text-[#8a6500]" : "bg-error/15 text-error")}
+    >
+      <span className={"inline-block w-2 h-2 rounded-full " + (online ? "bg-warning" : "bg-error")} />
+      {online
+        ? <>มีบิลรอส่ง {queued} รายการ — กำลัง sync…</>
+        : <>ออฟไลน์ — บิลใหม่จะถูกเก็บในเครื่องและส่งเมื่อออนไลน์{queued > 0 ? ` (รอ ${queued})` : ''}</>}
+    </div>
+  );
+}
+
+/* =========================================================
    APP SHELL
 ========================================================= */
 function App() {
@@ -3643,6 +3729,7 @@ function App() {
       <DialogProvider>
       <RoleCtx.Provider value={role}>
       <ShopProvider>
+        <OfflineBanner />
         <div className="lg:flex">
           <Sidebar view={view} setView={setView} userEmail={session.user?.email} onOpenSettings={()=>setSettingsOpen(true)}/>
           <main className="flex-1 min-h-screen pb-16 lg:pb-0 lg:pl-64">
