@@ -71,7 +71,7 @@ BEGIN
     v_order_id,
     NULLIF(item->>'product_id','')::bigint,
     item->>'product_name',
-    COALESCE((item->>'quantity')::numeric, 0),
+    COALESCE((item->>'quantity')::integer, 0),
     COALESCE((item->>'unit_price')::numeric, 0),
     COALESCE((item->>'discount1_value')::numeric, 0),
     item->>'discount1_type',
@@ -85,7 +85,10 @@ BEGIN
     IF NULLIF(v_item->>'product_id','') IS NOT NULL THEN
       PERFORM public.adjust_stock(
         p_id        => (v_item->>'product_id')::bigint,
-        qty_delta   => -((v_item->>'quantity')::numeric),
+        -- qty_delta MUST be cast to integer; adjust_stock(p_id bigint,
+        -- qty_delta integer, ...) and Postgres named-arg dispatch does
+        -- not implicit-cast numeric → integer.
+        qty_delta   => -((v_item->>'quantity')::integer),
         p_reason    => 'sale',
         p_ref_table => 'sale_orders',
         p_ref_id    => v_order_id

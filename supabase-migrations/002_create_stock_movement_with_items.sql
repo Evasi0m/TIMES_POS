@@ -117,7 +117,7 @@ BEGIN
     'INSERT INTO %I (%I, product_id, product_name, quantity, unit, unit_price, '
     'discount1_value, discount1_type, discount2_value, discount2_type) '
     'SELECT $1, NULLIF(item->>''product_id'','''')::bigint, item->>''product_name'', '
-    '       COALESCE((item->>''quantity'')::numeric, 0), '
+    '       COALESCE((item->>''quantity'')::integer, 0), '
     '       item->>''unit'', '
     '       COALESCE((item->>''unit_price'')::numeric, 0), '
     '       COALESCE((item->>''discount1_value'')::numeric, 0), item->>''discount1_type'', '
@@ -129,7 +129,9 @@ BEGIN
   -- Stock adjustments — reuse adjust_stock so stock_movements audit stays consistent.
   PERFORM public.adjust_stock(
     p_id        => (item->>'product_id')::bigint,
-    qty_delta   => v_stock_sign * (item->>'quantity')::numeric,
+    -- adjust_stock requires qty_delta integer; explicit cast or named-arg
+    -- dispatch fails with "function does not exist".
+    qty_delta   => (v_stock_sign * (item->>'quantity')::integer)::integer,
     p_reason    => v_stock_reason,
     p_ref_table => v_header_table,
     p_ref_id    => v_id

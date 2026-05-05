@@ -9,7 +9,11 @@ import React from 'react';
 import * as ReactDOM from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
 import { registerSW } from 'virtual:pwa-register';
-import { drainQueue, queueSale, onQueueChange } from './lib/offline-queue.js';
+import {
+  drainQueue, queueSale, onQueueChange,
+  onDrainStateChange, getDrainState,
+  listQueuedSales, deleteQueuedSale,
+} from './lib/offline-queue.js';
 import { onOnlineChange, isOnline } from './lib/online-status.js';
 import { mapError } from './lib/error-map.js';
 import './styles.css';
@@ -28,13 +32,15 @@ registerSW({
 });
 
 // Drain the offline-sale queue any time the browser comes back online.
-// Wiring into POSView.submit (push to queue when offline) is the next
-// chunk — see /root/.claude/plans/delightful-watching-gray.md Phase 3.
+// Errors are mapped to Thai via mapError() and surfaced to OfflineBanner
+// through the offline-queue's drain-state pub/sub — so a queue that gets
+// stuck on a server-side bug (signature mismatch, RLS denial, etc.) shows
+// the error and a retry button instead of looping "กำลัง sync…" forever.
 let _draining = false;
 async function tryDrain() {
   if (_draining || !isOnline() || !window._sb) return;
   _draining = true;
-  try { await drainQueue(window._sb); } finally { _draining = false; }
+  try { await drainQueue(window._sb, mapError); } finally { _draining = false; }
 }
 onOnlineChange((on) => { if (on) tryDrain(); });
 window.addEventListener('focus', tryDrain);
@@ -47,6 +53,10 @@ window._queueSale = queueSale;
 window._isOnline = isOnline;
 window._onQueueChange = onQueueChange;
 window._onOnlineChange = onOnlineChange;
+window._onDrainStateChange = onDrainStateChange;
+window._getDrainState = getDrainState;
+window._listQueuedSales = listQueuedSales;
+window._deleteQueuedSale = deleteQueuedSale;
 
 // === BEGIN legacy app body (extracted verbatim from legacy-index.html) =====
 //   The block below is the contents of `src/app.legacy.jsx`, inlined so it
@@ -3770,30 +3780,72 @@ function ProfitLossView() {
 
 /* =========================================================
    OFFLINE BANNER
-   - Persistent strip at the top when network is down OR queued sales > 0
-   - Refreshes from window._isOnline + window._onQueueChange (set up in
-     main.jsx prelude). No props needed.
+   Persistent strip at the top when network is down OR there are queued
+   sales OR the last drain attempt failed. Three visual states:
+
+     - red      offline (bills will queue)
+     - yellow   online + draining or queue has pending items
+     - dark red online + queue stuck on a hard error → show the message
+                + retry button so the cashier isn't stuck staring at a
+                forever-spinning "กำลัง sync…"
+
+   Refreshes from window._isOnline + window._onQueueChange +
+   window._onDrainStateChange (set up in the main.jsx prelude).
 ========================================================= */
 function OfflineBanner() {
-  const [online, setOnline] = useState(() => (window._isOnline ? window._isOnline() : true));
-  const [queued, setQueued] = useState(0);
+  const [online, setOnline]   = useState(() => (window._isOnline ? window._isOnline() : true));
+  const [queued, setQueued]   = useState(0);
+  const [drainSt, setDrainSt] = useState(() => window._getDrainState?.() || { state: 'idle', lastError: null });
+  const [retrying, setRetrying] = useState(false);
+
   useEffect(() => {
     const offOnline = window._onOnlineChange?.(setOnline);
     const offQueue  = window._onQueueChange?.(setQueued);
-    return () => { offOnline?.(); offQueue?.(); };
+    const offDrain  = window._onDrainStateChange?.(setDrainSt);
+    return () => { offOnline?.(); offQueue?.(); offDrain?.(); };
   }, []);
-  if (online && queued === 0) return null;
+
+  const handleRetry = async () => {
+    setRetrying(true);
+    try { await window._tryDrain?.(); } finally { setRetrying(false); }
+  };
+
+  if (online && queued === 0 && drainSt.state !== 'error') return null;
+
+  const stuck = online && drainSt.state === 'error' && queued > 0;
+  const cls = !online
+    ? 'bg-error/15 text-error'
+    : stuck
+      ? 'bg-error/20 text-error'
+      : 'bg-warning/15 text-[#8a6500]';
+  const dot = !online || stuck ? 'bg-error' : 'bg-warning';
+
   return (
     <div
       role="status"
       aria-live="polite"
-      className={"sticky top-0 z-[80] w-full text-sm font-medium px-4 py-2 flex items-center justify-center gap-3 " +
-        (online ? "bg-warning/15 text-[#8a6500]" : "bg-error/15 text-error")}
+      className={"sticky top-0 z-[80] w-full text-sm font-medium px-4 py-2 flex items-center justify-center gap-3 flex-wrap " + cls}
     >
-      <span className={"inline-block w-2 h-2 rounded-full " + (online ? "bg-warning" : "bg-error")} />
-      {online
-        ? <>มีบิลรอส่ง {queued} รายการ — กำลัง sync…</>
-        : <>ออฟไลน์ — บิลใหม่จะถูกเก็บในเครื่องและส่งเมื่อออนไลน์{queued > 0 ? ` (รอ ${queued})` : ''}</>}
+      <span className={"inline-block w-2 h-2 rounded-full " + dot} />
+      {!online && (
+        <>ออฟไลน์ — บิลใหม่จะถูกเก็บในเครื่องและส่งเมื่อออนไลน์{queued > 0 ? ` (รอ ${queued})` : ''}</>
+      )}
+      {online && stuck && (
+        <>
+          <span>ส่งบิลในคิวไม่สำเร็จ ({queued} รายการ): <span className="font-normal">{drainSt.lastError}</span></span>
+          <button
+            type="button"
+            onClick={handleRetry}
+            disabled={retrying}
+            className="ml-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-error/15 hover:bg-error/25 text-error text-xs font-medium disabled:opacity-60"
+          >
+            {retrying ? 'กำลังลอง…' : 'ลองส่งอีกครั้ง'}
+          </button>
+        </>
+      )}
+      {online && !stuck && queued > 0 && (
+        <>มีบิลรอส่ง {queued} รายการ — กำลัง sync…</>
+      )}
     </div>
   );
 }
