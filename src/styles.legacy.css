@@ -766,6 +766,24 @@
   }
   .spinner.lg { width: 28px; height: 28px; border-width: 2.5px; }
 
+  /* Skeleton loaders — shimmering rectangles used while data is fetching.
+     Less visually jarring than a centered spinner because the eye sees
+     the layout immediately and just waits for the content to fill in.   */
+  @keyframes skeleton-shimmer {
+    0%   { background-position: -240px 0; }
+    100% { background-position:  240px 0; }
+  }
+  .skeleton {
+    display: inline-block;
+    background: linear-gradient(90deg,
+      rgba(230, 223, 216, 0.55) 0%,
+      rgba(245, 240, 232, 0.85) 50%,
+      rgba(230, 223, 216, 0.55) 100%);
+    background-size: 480px 100%;
+    border-radius: 6px;
+    animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  }
+
   /* View transition (fades when switching nav) */
   @keyframes viewIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   .view-fade { animation: viewIn .3s var(--ease-out); }

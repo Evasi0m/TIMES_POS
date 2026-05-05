@@ -11,6 +11,7 @@ import { createClient } from '@supabase/supabase-js';
 import { registerSW } from 'virtual:pwa-register';
 import { drainQueue, queueSale, onQueueChange } from './lib/offline-queue.js';
 import { onOnlineChange, isOnline } from './lib/online-status.js';
+import { mapError } from './lib/error-map.js';
 import './styles.css';
 
 // `supabase.createClient(...)` from the CDN UMD bundle becomes a one-method
@@ -214,6 +215,30 @@ const useToast = () => React.useContext(ToastCtx);
 /* =========================================================
    MODAL / SHEET
 ========================================================= */
+/* Skeleton primitives.
+ *   <Skeleton w="120px" h="14px" />   one shimmering block
+ *   <SkeletonRows n={6} />            list-shaped placeholder
+ * Less visually noisy than a centered spinner — the eye sees the layout
+ * immediately and just waits for content to fill in. */
+function Skeleton({ w = '100%', h = '14px', className = '', style }) {
+  return <span className={"skeleton " + className} style={{ width: w, height: h, ...(style || {}) }} aria-hidden="true" />;
+}
+function SkeletonRows({ n = 5, label = 'กำลังโหลด' }) {
+  return (
+    <div className="p-4 space-y-3" role="status" aria-live="polite" aria-label={label}>
+      {Array.from({ length: n }).map((_, i) => (
+        <div key={i} className="grid grid-cols-12 gap-3 items-center">
+          <Skeleton w="100%" h="12px" className="col-span-4" />
+          <Skeleton w="80%"  h="12px" className="col-span-3" />
+          <Skeleton w="60%"  h="12px" className="col-span-2" />
+          <Skeleton w="50%"  h="12px" className="col-span-2" />
+          <Skeleton w="40%"  h="12px" className="col-span-1" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* Hook: keep a component mounted briefly after `open` flips false so an exit animation can run.
    Returns { render, closing } — render the element while `render`, apply close-animation classes when `closing`. */
 function useMountedToggle(open, exitMs = 220) {
@@ -230,15 +255,79 @@ function useMountedToggle(open, exitMs = 220) {
   return { render, closing };
 }
 
+// Selector matching every focusable interactive element inside the modal.
+// Used by the focus trap below.
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea:not([disabled]), ' +
+  'input:not([disabled]), select:not([disabled]), ' +
+  '[tabindex]:not([tabindex="-1"])';
+
 function Modal({ open, onClose, title, children, footer, wide }) {
   const { render, closing } = useMountedToggle(open, 220);
+  const dialogRef = useRef(null);
+  const previousFocusRef = useRef(null);
+
+  // Capture focus on open, restore it on close. Trap Tab inside the dialog.
+  useEffect(() => {
+    if (!render || closing) return;
+    previousFocusRef.current = document.activeElement;
+
+    // Focus the first focusable child after the dialog mounts and CSS lays
+    // out (a 0ms timeout is enough; rAF here would skip a paint).
+    const t = setTimeout(() => {
+      const root = dialogRef.current;
+      if (!root) return;
+      const first = root.querySelector(FOCUSABLE_SELECTOR);
+      (first || root).focus();
+    }, 0);
+
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); onClose?.(); return; }
+      if (e.key !== 'Tab') return;
+      const root = dialogRef.current;
+      if (!root) return;
+      const focusables = root.querySelectorAll(FOCUSABLE_SELECTOR);
+      if (focusables.length === 0) { e.preventDefault(); return; }
+      const first = focusables[0];
+      const last  = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault(); last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault(); first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener('keydown', onKey, true);
+      // Restore focus to whatever opened us, but only if the focus didn't
+      // already move somewhere else (e.g. a toast button).
+      const prev = previousFocusRef.current;
+      if (prev && document.contains(prev)) {
+        try { prev.focus({ preventScroll: true }); } catch {}
+      }
+    };
+  }, [render, closing, onClose]);
+
   if (!render) return null;
   return (
-    <div className={"fixed inset-0 modal-overlay z-[100] flex items-end lg:items-center justify-center lg:p-6 " + (closing ? "overlay-out" : "overlay-in")} onClick={onClose}>
-      <div className={"bg-white rounded-t-2xl lg:rounded-lg shadow-2xl w-full " + (wide?"lg:max-w-3xl":"lg:max-w-lg") + " max-h-[92vh] flex flex-col " + (closing ? "sheet-out" : "sheet-anim")} onClick={e=>e.stopPropagation()}>
+    <div
+      className={"fixed inset-0 modal-overlay z-[100] flex items-end lg:items-center justify-center lg:p-6 " + (closing ? "overlay-out" : "overlay-in")}
+      onClick={onClose}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={typeof title === 'string' ? title : undefined}
+        tabIndex={-1}
+        className={"bg-white rounded-t-2xl lg:rounded-lg shadow-2xl w-full " + (wide?"lg:max-w-3xl":"lg:max-w-lg") + " max-h-[92vh] flex flex-col " + (closing ? "sheet-out" : "sheet-anim")}
+        onClick={e=>e.stopPropagation()}
+      >
         <div className="px-5 py-4 border-b hairline flex items-center justify-between flex-shrink-0">
           <div className="font-display text-xl lg:text-2xl">{title}</div>
-          <button className="btn-ghost !p-2" onClick={onClose}><Icon name="x" size={20}/></button>
+          <button className="btn-ghost !p-2" onClick={onClose} aria-label="ปิด"><Icon name="x" size={20}/></button>
         </div>
         <div className="p-5 overflow-y-auto flex-1">{children}</div>
         {footer && <div className="px-5 py-4 border-t hairline flex justify-end gap-2 flex-shrink-0 pb-safe">{footer}</div>}
@@ -554,7 +643,7 @@ function SettingsModal({ open, onClose }) {
       updated_at: new Date().toISOString(),
     }).eq('id', 1);
     setBusy(false);
-    if (error) { toast.push("บันทึกไม่ได้: " + error.message, 'error'); return; }
+    if (error) { toast.push("บันทึกไม่ได้: " + mapError(error), 'error'); return; }
     toast.push("บันทึกการตั้งค่าแล้ว", 'success');
     await refreshShop();
     onClose();
@@ -819,7 +908,7 @@ function MovementHistoryModal({ open, onClose, kind }) {
       if (excludeVoided) q = q.is('voided_at', null);
       const { data, error } = await q;
       if (!cancel) {
-        if (error) toast.push("โหลดไม่ได้: "+error.message, 'error');
+        if (error) toast.push("โหลดไม่ได้: " + mapError(error), 'error');
         setRows(data || []); setLoading(false);
       }
     })();
@@ -939,7 +1028,7 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
     }
     const { error } = await sb.from(meta.table).update(patch).eq('id', order.id);
     setBusy(false);
-    if (error) { toast.push("บันทึกไม่ได้: " + error.message, 'error'); return; }
+    if (error) { toast.push("บันทึกไม่ได้: " + mapError(error), 'error'); return; }
     toast.push("แก้ไขแล้ว", 'success');
     setOrder({ ...order, ...patch });
     setEditing(false);
@@ -968,7 +1057,7 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
     setBusy(true);
     try {
       const { error } = await sb.rpc(meta.voidRpc, { p_id: order.id, p_reason: reason || null });
-      if (error) { toast.push("ยกเลิกไม่ได้: " + error.message, 'error'); return; }
+      if (error) { toast.push("ยกเลิกไม่ได้: " + mapError(error), 'error'); return; }
       toast.push("ยกเลิกแล้ว · สต็อกถูกปรับกลับ", 'success');
       setOrder({ ...order, voided_at: new Date().toISOString(), void_reason: reason || null });
       onChanged?.();
@@ -1154,7 +1243,7 @@ function LoginScreen() {
     else          localStorage.removeItem(LAST_EMAIL_KEY);
     const { error } = await sb.auth.signInWithPassword({ email, password });
     setBusy(false);
-    if (error) setErr(error.message || "เข้าสู่ระบบไม่สำเร็จ");
+    if (error) setErr(mapError(error));
   };
   return (
     <div className="min-h-screen flex items-center justify-center bg-canvas px-5">
@@ -1241,12 +1330,18 @@ function Sidebar({ view, setView, userEmail, onOpenSettings }) {
         <img src="icons/logo_web3_512.png" alt="TIMES logo" style={{width:41,height:41,objectFit:'contain'}} />
         <div style={{fontFamily:"'Jost', sans-serif", fontWeight:600, color:'#faf9f5'}} className="text-2xl leading-none self-center">TIMES</div>
       </div>
-      <nav className="p-3 flex-1 overflow-y-auto">
+      <nav className="p-3 flex-1 overflow-y-auto" aria-label="เมนูหลัก">
         {items.map(it => (
-          <div key={it.k} className={"nav-item " + (view===it.k?"active":"")} onClick={()=>setView(it.k)}>
+          <button
+            key={it.k}
+            type="button"
+            className={"nav-item w-full text-left bg-transparent " + (view===it.k?"active":"")}
+            onClick={()=>setView(it.k)}
+            aria-current={view===it.k ? 'page' : undefined}
+          >
             <Icon name={it.icon} size={18}/>
             <span>{it.labelLong}</span>
-          </div>
+          </button>
         ))}
       </nav>
       <div className="sidebar-footer p-4 border-t space-y-2">
@@ -1293,7 +1388,7 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings }) {
         <div className={"absolute right-0 top-0 bottom-0 w-72 bg-canvas shadow-xl pt-safe " + (drawerClosing?"drawer-out":"drawer-in")} onClick={e=>e.stopPropagation()}>
           <div className="px-5 py-4 border-b hairline flex items-center justify-between">
             <div className="font-display text-xl">เมนู</div>
-            <button className="btn-ghost !p-2" onClick={()=>setOpenMenu(false)}><Icon name="x" size={20}/></button>
+            <button className="btn-ghost !p-2" onClick={()=>setOpenMenu(false)} aria-label="ปิดเมนู"><Icon name="x" size={20}/></button>
           </div>
           <div className="p-4 space-y-3">
             {role === 'admin' && (
@@ -1489,7 +1584,7 @@ function POSView() {
       setNotes(""); setShowNotes(false);
       setTaxInvoice(false); setBuyer({ name: "", taxId: "", address: "", invoiceNo: "" });
     } catch (err) {
-      toast.push("บันทึกไม่สำเร็จ: " + (err.message || err), 'error');
+      toast.push("บันทึกไม่สำเร็จ: " + mapError(err), 'error');
     } finally { setSubmitting(false); submitLockRef.current = false; }
   };
 
@@ -1504,7 +1599,7 @@ function POSView() {
         onChange={e=>setSearch(e.target.value)}
         autoFocus
       />
-      {search && <button className="absolute right-3 top-1/2 -translate-y-1/2 btn-ghost !p-2 !min-h-0" onClick={()=>{setSearch("");setResults([]);searchRef.current?.focus();}}><Icon name="x" size={18}/></button>}
+      {search && <button className="absolute right-3 top-1/2 -translate-y-1/2 btn-ghost !p-2 !min-h-0" onClick={()=>{setSearch("");setResults([]);searchRef.current?.focus();}} aria-label="ล้างคำค้น"><Icon name="x" size={18}/></button>}
     </div>
   );
 
@@ -1732,7 +1827,7 @@ function POSView() {
                 <div className="font-display text-2xl">ตะกร้า</div>
                 <div className="text-xs text-muted mt-0.5">{cart.length} รายการ · {totalQty} ชิ้น</div>
               </div>
-              <button className="btn-ghost !p-2" onClick={()=>setCartOpen(false)}><Icon name="x" size={20}/></button>
+              <button className="btn-ghost !p-2" onClick={()=>setCartOpen(false)} aria-label="ปิดตะกร้า"><Icon name="x" size={20}/></button>
             </div>
             {CartContent(true)}
           </div>
@@ -1819,14 +1914,14 @@ function ProductsView() {
   const addBrand = async (name) => {
     const t = (name||"").trim(); if (!t) return null;
     const { data, error } = await sb.from('brands').insert({ name: t }).select().single();
-    if (error) { toast.push("เพิ่มแบรนด์ไม่ได้: "+error.message, 'error'); return null; }
+    if (error) { toast.push("เพิ่มแบรนด์ไม่ได้: " + mapError(error), 'error'); return null; }
     setBrands(b => [...b, data].sort((a,b)=>a.name.localeCompare(b.name)));
     return data.id;
   };
   const addCategory = async (name) => {
     const t = (name||"").trim(); if (!t) return null;
     const { data, error } = await sb.from('categories').insert({ name: t }).select().single();
-    if (error) { toast.push("เพิ่มหมวดไม่ได้: "+error.message, 'error'); return null; }
+    if (error) { toast.push("เพิ่มหมวดไม่ได้: " + mapError(error), 'error'); return null; }
     setCategories(c => [...c, data].sort((a,b)=>a.name.localeCompare(b.name)));
     return data.id;
   };
@@ -1865,7 +1960,7 @@ function ProductsView() {
           <div className="col-span-1 text-right">คงเหลือ</div>
         </div>
         <div className="flex-1 overflow-y-auto min-h-0">
-          {loading && <div className="p-6 text-muted text-sm flex items-center gap-2"><span className="spinner"/>กำลังโหลด...</div>}
+          {loading && <SkeletonRows n={8} label="กำลังโหลดสินค้า" />}
           {!loading && rows.length===0 && <div className="p-6 text-muted text-sm">ไม่พบสินค้า</div>}
           {rows.map(p => (
             <div key={p.id} className="grid grid-cols-12 px-4 py-3.5 items-center border-b hairline last:border-0 hover:bg-white/40 cursor-pointer transition-colors" onClick={()=>setEditing(p)}>
@@ -2015,11 +2110,27 @@ function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand,
       setTimeout(()=>barcodeRef.current?.focus(), 0);
     }
   };
+  // Client-side validation. Server still enforces the same rules (NOT NULL,
+  // CHECK constraints, RLS) — this is just to surface the failure locally
+  // before we round-trip to Supabase.
+  const validate = () => {
+    if (!draft.name || !draft.name.trim()) return 'กรุณากรอกชื่อรุ่น';
+    if (!draft.barcode || !draft.barcode.trim()) return 'กรุณาสแกนหรือพิมพ์บาร์โค้ด';
+    if (draft.list_price != null && Number(draft.list_price) < 0) return 'ราคาป้ายต้องไม่ติดลบ';
+    if (draft.cost_price != null && Number(draft.cost_price) < 0) return 'ราคาทุนต้องไม่ติดลบ';
+    return null;
+  };
+  const tryToast = useToast();
+  const handleSave = () => {
+    const reason = validate();
+    if (reason) { tryToast.push(reason, 'error'); return; }
+    onSave(draft);
+  };
   return (
     <Modal open={!!draft} onClose={onClose} title={draft.id?"แก้ไขสินค้า":"เพิ่มสินค้าใหม่"}
       footer={<>
         <button className="btn-secondary" onClick={onClose}>ยกเลิก</button>
-        <button className="btn-primary" onClick={()=>onSave(draft)}><Icon name="check" size={16}/>บันทึก</button>
+        <button className="btn-primary" onClick={handleSave}><Icon name="check" size={16}/>บันทึก</button>
       </>}>
       <div className="space-y-4">
         <div>
@@ -2184,7 +2295,7 @@ function SalesView() {
       setDetail(null);
       load();
     } catch (e) {
-      toast.push("ยกเลิกบิลไม่ได้: " + e.message, 'error');
+      toast.push("ยกเลิกบิลไม่ได้: " + mapError(e), 'error');
     } finally { setVoiding(false); voidLockRef.current = false; }
   };
 
@@ -2234,7 +2345,7 @@ function SalesView() {
 
       {/* Desktop — grouped by day */}
       <div className="hidden lg:block space-y-4">
-        {loading && <div className="card-canvas p-6 text-muted text-sm">กำลังโหลด...</div>}
+        {loading && <div className="card-canvas overflow-hidden"><SkeletonRows n={6} label="กำลังโหลดบิล" /></div>}
         {!loading && orders.length===0 && <div className="card-canvas p-6 text-muted text-sm">ไม่พบบิลในช่วงเวลานี้</div>}
         {!loading && groupedByDay.map(g => (
           <div key={g.day} className="card-canvas overflow-hidden">
@@ -2435,14 +2546,14 @@ function AddProductModal({ open, onClose, onAdded }) {
   const addBrand = async (name) => {
     const t = (name||"").trim(); if (!t) return null;
     const { data, error } = await sb.from('brands').insert({ name: t }).select().single();
-    if (error) { toast.push("เพิ่มแบรนด์ไม่ได้: "+error.message, 'error'); return null; }
+    if (error) { toast.push("เพิ่มแบรนด์ไม่ได้: " + mapError(error), 'error'); return null; }
     setBrands(b => [...b, data].sort((a,b)=>a.name.localeCompare(b.name)));
     return data.id;
   };
   const addCategory = async (name) => {
     const t = (name||"").trim(); if (!t) return null;
     const { data, error } = await sb.from('categories').insert({ name: t }).select().single();
-    if (error) { toast.push("เพิ่มหมวดไม่ได้: "+error.message, 'error'); return null; }
+    if (error) { toast.push("เพิ่มหมวดไม่ได้: " + mapError(error), 'error'); return null; }
     setCategories(c => [...c, data].sort((a,b)=>a.name.localeCompare(b.name)));
     return data.id;
   };
@@ -2757,7 +2868,7 @@ function StockMovementForm({ kind }) {
       if (costPctMode !== 'persist') { setCostPctEnabled(false); setCostPct(58); setCostPctMode('once'); }
       setAttemptedSubmit(false); setConfirmOpen(false);
     } catch (e) {
-      toast.push("บันทึกไม่ได้: " + e.message, 'error');
+      toast.push("บันทึกไม่ได้: " + mapError(e), 'error');
     } finally { setSubmitting(false); submitLockRef.current = false; }
   };
 
