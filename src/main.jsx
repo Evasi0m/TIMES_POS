@@ -2762,7 +2762,7 @@ function StockMovementForm({ kind }) {
   const computeAutoPrice = (p, pctEnabled, pct) => {
     if (kind === 'return') return Number(p.retail_price) || 0;
     if (pctEnabled && (kind === 'receive' || kind === 'claim')) {
-      return Math.round(((Number(p.retail_price) || 0) * (Number(pct) || 0)) / 100);
+      return Math.round(((Number(p.retail_price) || 0) * (100 - (Number(pct) || 0))) / 100);
     }
     // Default for receive/claim: show retail price (ราคาป้าย) as starting point
     return Number(p.retail_price) || 0;
@@ -2792,7 +2792,7 @@ function StockMovementForm({ kind }) {
     setItems(it => it.map(l => {
       if (l.manualPrice) return l;
       const auto = costPctEnabled
-        ? Math.round((Number(l.retail_price)||0) * (Number(costPct)||0) / 100)
+        ? Math.round((Number(l.retail_price)||0) * (100 - (Number(costPct)||0)) / 100)
         : (Number(l.retail_price)||0);
       return { ...l, unit_price: auto };
     }));
@@ -2982,7 +2982,7 @@ function StockMovementForm({ kind }) {
                 )}
               </div>
               {costPctEnabled && (
-                <div className="text-[11px] text-muted mt-1.5">เปิดอยู่: เมื่อเพิ่มรายการใหม่จะคำนวณราคา = ราคาป้าย × {costPct}% (รายการที่แก้ราคาเองจะคงค่าเดิม)</div>
+                <div className="text-[11px] text-muted mt-1.5">เปิดอยู่: เมื่อเพิ่มรายการใหม่จะคำนวณราคา = ราคาป้าย − {costPct}% (รายการที่แก้ราคาเองจะคงค่าเดิม)</div>
               )}
             </div>
           )}
@@ -3009,7 +3009,7 @@ function StockMovementForm({ kind }) {
                           ? `แก้เอง · ${(l.unit_price / l.retail_price * 100).toFixed(1)}% ของ ${fmtTHB(l.retail_price)}`
                           : 'แก้เอง')
                       : (costPctEnabled && (kind==='receive'||kind==='claim'))
-                        ? `${costPct}% ของ ${fmtTHB(l.retail_price)}`
+                        ? `ลด ${costPct}% จาก ${fmtTHB(l.retail_price)}`
                         : (Number(l.retail_price) > 0 ? `ราคาป้าย ${fmtTHB(l.retail_price)}` : '')}
                   </div>
                   <div className="text-sm font-medium">{fmtTHB(applyDiscounts(l.unit_price,l.quantity,l.discount1_value,l.discount1_type,l.discount2_value,l.discount2_type))}</div>
