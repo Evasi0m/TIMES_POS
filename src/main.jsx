@@ -116,11 +116,19 @@ const CHANNELS = [
   { v: "facebook", label: "Facebook" },
 ];
 const PAYMENTS = [
-  { v: "cash",     label: "เงินสด" },
   { v: "transfer", label: "โอนเงิน" },
   { v: "card",     label: "บัตร" },
+  { v: "paylater", label: "ผ่อน" },
   { v: "cod",      label: "เก็บปลายทาง" },
 ];
+// Channels whose platform fees make grand_total ≠ shop revenue.
+// For these, the cashier records net_received separately for the P&L.
+const ECOMMERCE_CHANNELS = new Set(['tiktok', 'shopee', 'lazada']);
+// Payments where the platform-deducted total is known immediately at sale
+// time. Pay-later (delay 1–2d) and COD (delay until courier remits) aren't.
+const NET_RECEIVED_REQUIRED_PAYMENTS = new Set(['transfer', 'card']);
+const requiresNetReceived = (channel, payment) =>
+  ECOMMERCE_CHANNELS.has(channel) && NET_RECEIVED_REQUIRED_PAYMENTS.has(payment);
 const UNITS = ["เรือน", "เส้น", "ก้อน", "ใบ"];
 const RETURN_REASONS = ["ชำรุด", "ผิดรุ่น/ผิดสี", "ลูกค้าเปลี่ยนใจ", "ขายผิดราคา", "อื่นๆ"];
 const VAT_RATE_DEFAULT = 7;
@@ -699,7 +707,8 @@ function SettingsModal({ open, onClose }) {
 /* =========================================================
    RECEIPT — 100mm thermal sticker layout
 ========================================================= */
-const PAYMENT_LABELS = { cash: 'เงินสด', transfer: 'โอนเงิน', card: 'บัตร', cod: 'เก็บปลายทาง' };
+// 'cash' kept for legacy bills that haven't been migrated; the dropdown no longer offers it.
+const PAYMENT_LABELS = { cash: 'เงินสด', transfer: 'โอนเงิน', card: 'บัตร', paylater: 'ผ่อน', cod: 'เก็บปลายทาง' };
 const CHANNEL_LABELS = { store: 'หน้าร้าน', tiktok: 'TikTok', shopee: 'Shopee', lazada: 'Lazada', facebook: 'Facebook' };
 
 function Receipt({ order, items, shop, variant = 'receipt' }) {
@@ -1471,8 +1480,11 @@ function POSView() {
   const [searching, setSearching] = useState(false);
   const [cart, setCart] = useState([]);
   const [channel, setChannel] = useState("tiktok");
-  const [payment, setPayment] = useState("cash");
+  const [payment, setPayment] = useState("transfer");
   const [netPrice, setNetPrice] = useState("");
+  // Money the shop actually receives from the platform (e-commerce only).
+  // Empty string = not entered yet; gets fallback to grand_total in P&L.
+  const [netReceived, setNetReceived] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const { render: cartSheetRender, closing: cartSheetClosing } = useMountedToggle(cartOpen, 220);
@@ -1537,6 +1549,10 @@ function POSView() {
     if (submitLockRef.current) return; // hard guard against double-submit
     if (!cart.length) { toast.push("ไม่มีสินค้าในตะกร้า", "error"); return; }
     if (taxInvoice && !buyer.name.trim()) { toast.push("กรุณากรอกชื่อผู้ซื้อสำหรับใบกำกับภาษี", 'error'); return; }
+    if (requiresNetReceived(channel, payment) && (netReceived === "" || Number(netReceived) <= 0)) {
+      toast.push("กรุณากรอก 'เงินที่ร้านค้าได้รับ' (ช่องทาง e-commerce + ชำระทันที)", 'error');
+      return;
+    }
     submitLockRef.current = true;
     setSubmitting(true);
     try {
@@ -1554,6 +1570,11 @@ function POSView() {
         buyer_tax_id:  taxInvoice ? (buyer.taxId.trim()   || null) : null,
         buyer_address: taxInvoice ? (buyer.address.trim() || null) : null,
         notes: notes.trim() || null,
+        // Only persist net_received for e-commerce sales — for store/facebook
+        // grand_total IS the revenue, so this stays null.
+        net_received: ECOMMERCE_CHANNELS.has(channel) && netReceived !== "" && Number(netReceived) > 0
+          ? roundMoney(Number(netReceived))
+          : null,
       };
       const itemsPayload = cart.map(l => ({
         product_id: l.product_id, product_name: l.product_name,
@@ -1589,8 +1610,8 @@ function POSView() {
         }
       }
 
-      setCart([]); setNetPrice("");
-      setChannel("tiktok"); setPayment("cash"); setCartOpen(false);
+      setCart([]); setNetPrice(""); setNetReceived("");
+      setChannel("tiktok"); setPayment("transfer"); setCartOpen(false);
       setNotes(""); setShowNotes(false);
       setTaxInvoice(false); setBuyer({ name: "", taxId: "", address: "", invoiceNo: "" });
     } catch (err) {
@@ -1745,6 +1766,37 @@ function POSView() {
             onChange={e=>setNetPrice(e.target.value)}
           />
         </div>
+
+        {ECOMMERCE_CHANNELS.has(channel) && (
+          <div className="mb-3 fade-in">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] uppercase tracking-wider text-muted">
+                เงินที่ร้านค้าได้รับ
+                {requiresNetReceived(channel, payment)
+                  ? <span className="text-error ml-1">*</span>
+                  : <span className="text-muted-soft ml-1">(ทีหลังก็ได้)</span>}
+              </label>
+              {netReceived !== "" && Number(netReceived) > 0 && grand > 0 && (
+                <span className="text-[10px] text-muted-soft tabular-nums">
+                  ค่าธรรมเนียม {((grand - Number(netReceived)) / grand * 100).toFixed(1)}%
+                </span>
+              )}
+            </div>
+            <input
+              type="number"
+              inputMode="decimal"
+              className="input mt-1 !h-10 !rounded-xl !py-2 !text-sm"
+              placeholder={requiresNetReceived(channel, payment)
+                ? `ยอดที่ ${CHANNEL_LABELS[channel]||channel} โอนเข้าร้าน (บาท)`
+                : 'รู้ทีหลังก็มาแก้ในหน้าขายได้'}
+              value={netReceived}
+              onChange={e=>setNetReceived(e.target.value)}
+            />
+            <div className="text-[10px] text-muted-soft mt-1">
+              ใช้คำนวณกำไร — ไม่แสดงในใบเสร็จลูกค้า
+            </div>
+          </div>
+        )}
 
         {/* Tax invoice + Notes toggles */}
         <div className="flex gap-2 mb-3">
@@ -2245,6 +2297,9 @@ function SalesView() {
   const voidLockRef = useRef(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [voiding, setVoiding] = useState(false);
+  const [editNet, setEditNet] = useState(false); // toggles inline net_received editor
+  const [netDraft, setNetDraft] = useState("");
+  const [savingNet, setSavingNet] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -2282,6 +2337,30 @@ function SalesView() {
   const openDetail = async (order) => {
     const { data } = await sb.from('sale_order_items').select('*').eq('sale_order_id', order.id);
     setDetail({ order, items: data || [] });
+    setEditNet(false);
+    setNetDraft(order.net_received != null ? String(order.net_received) : "");
+  };
+
+  const saveNetReceived = async () => {
+    if (!detail) return;
+    const raw = String(netDraft).trim();
+    const value = raw === "" ? null : Math.max(0, Number(raw));
+    if (raw !== "" && !Number.isFinite(value)) {
+      toast.push("กรอกตัวเลขเท่านั้น", "error");
+      return;
+    }
+    setSavingNet(true);
+    try {
+      const { error } = await sb.from('sale_orders')
+        .update({ net_received: value }).eq('id', detail.order.id);
+      if (error) throw error;
+      toast.push(value == null ? "ลบค่าเงินที่ได้รับแล้ว" : `บันทึกเงินที่ได้รับ ${fmtTHB(value)}`, 'success');
+      setDetail(d => d ? { ...d, order: { ...d.order, net_received: value } } : d);
+      setOrders(list => list.map(o => o.id === detail.order.id ? { ...o, net_received: value } : o));
+      setEditNet(false);
+    } catch (e) {
+      toast.push("บันทึกไม่ได้: " + mapError(e), 'error');
+    } finally { setSavingNet(false); }
   };
 
   const voidSale = async () => {
@@ -2386,7 +2465,12 @@ function SalesView() {
                 <div className="col-span-2 text-sm tabular-nums">{new Date(o.sale_date).toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"})} น.</div>
                 <div className="col-span-2"><span className="badge-pill">{CHANNELS.find(c=>c.v===o.channel)?.label || '—'}</span></div>
                 <div className="col-span-3 text-sm text-muted">{PAYMENTS.find(p=>p.v===o.payment_method)?.label || '—'}</div>
-                <div className={"col-span-3 text-right font-medium tabular-nums " + (o.status==='voided'?'line-through':'')}>{fmtTHB(o.grand_total)}</div>
+                <div className={"col-span-3 text-right tabular-nums " + (o.status==='voided'?'line-through':'')}>
+                  <div className="font-medium">{fmtTHB(o.grand_total)}</div>
+                  {ECOMMERCE_CHANNELS.has(o.channel) && o.net_received != null && (
+                    <div className="text-[10px] text-muted-soft">ได้รับ {fmtTHB(o.net_received)}</div>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -2421,6 +2505,9 @@ function SalesView() {
                   </div>
                   <div className="text-right flex-shrink-0">
                     <div className={"font-display text-lg leading-none tabular-nums " + (o.status==='voided'?'line-through':'')}>{fmtTHB(o.grand_total)}</div>
+                    {ECOMMERCE_CHANNELS.has(o.channel) && o.net_received != null && (
+                      <div className="text-[10px] text-muted-soft mt-0.5 tabular-nums">ได้รับ {fmtTHB(o.net_received)}</div>
+                    )}
                   </div>
                   <Icon name="chevron-r" size={16} className="text-muted-soft"/>
                 </div>
@@ -2501,6 +2588,44 @@ function SalesView() {
                 <div className="flex justify-between text-muted-soft text-xs"><span>VAT {detail.order.vat_rate}%</span><span className="tabular-nums">{fmtTHB(detail.order.vat_amount)}</span></div>
               </>)}
               <div className="flex justify-between font-display text-2xl pt-2"><span>ยอดสุทธิ</span><span className="tabular-nums">{fmtTHB(detail.order.grand_total)}</span></div>
+              {ECOMMERCE_CHANNELS.has(detail.order.channel) && (
+                <div className="mt-2 pt-2 border-t hairline">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm">
+                      <div className="text-muted text-xs uppercase tracking-wider">เงินที่ร้านได้รับ</div>
+                      <div className="text-[10px] text-muted-soft">ใช้คำนวณกำไร · ไม่แสดงในใบเสร็จ</div>
+                    </div>
+                    {!editNet ? (
+                      <div className="flex items-center gap-2">
+                        <span className="font-display text-xl tabular-nums">
+                          {detail.order.net_received != null ? fmtTHB(detail.order.net_received) : <span className="text-muted-soft text-sm font-sans">— ยังไม่ได้กรอก —</span>}
+                        </span>
+                        {isAdmin && detail.order.status==='active' && (
+                          <button className="btn-secondary !py-1.5 !px-2.5 !text-xs" onClick={()=>{ setNetDraft(detail.order.net_received != null ? String(detail.order.net_received) : ""); setEditNet(true); }}>
+                            <Icon name="edit" size={12}/> แก้ไข
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number" inputMode="decimal" autoFocus
+                          className="input !h-9 !w-32 !rounded-lg !py-1 !text-sm text-right tabular-nums"
+                          placeholder="0"
+                          value={netDraft}
+                          onChange={e=>setNetDraft(e.target.value)}
+                        />
+                        <button className="btn-primary !py-1.5 !px-3 !text-xs" onClick={saveNetReceived} disabled={savingNet}>
+                          {savingNet ? '...' : 'บันทึก'}
+                        </button>
+                        <button className="btn-secondary !py-1.5 !px-2.5 !text-xs" onClick={()=>setEditNet(false)} disabled={savingNet}>
+                          ยกเลิก
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -3250,16 +3375,21 @@ function DashboardView() {
     const { from, to } = dateRange;
 
     const [rangeQ, lowQ] = await Promise.all([
-      sb.from('sale_orders').select('id, grand_total, channel').eq('status','active')
+      sb.from('sale_orders').select('id, grand_total, channel, net_received').eq('status','active')
         .gte('sale_date', startOfDayBangkok(from)).lte('sale_date', endOfDayBangkok(to)),
       sb.from('products').select('id,name,current_stock').lt('current_stock', 5).gt('current_stock', -1).order('current_stock', { ascending: true }).limit(8),
     ]);
 
     const rangeRows = rangeQ.data || [];
-    const rangeTotal = rangeRows.reduce((s,r)=>s+Number(r.grand_total||0),0);
+    // For e-commerce sales the actual shop revenue is net_received (after platform fee).
+    // Fallback to grand_total when net_received hasn't been entered yet.
+    const revenueOf = (r) => (ECOMMERCE_CHANNELS.has(r.channel) && r.net_received != null)
+      ? Number(r.net_received)
+      : Number(r.grand_total) || 0;
+    const rangeTotal = rangeRows.reduce((s,r)=>s+revenueOf(r),0);
 
     const chMap = {};
-    rangeRows.forEach(r=>{ const k = r.channel||'store'; chMap[k]=(chMap[k]||0)+Number(r.grand_total||0); });
+    rangeRows.forEach(r=>{ const k = r.channel||'store'; chMap[k]=(chMap[k]||0)+revenueOf(r); });
     setByChannel(Object.entries(chMap).map(([k,v])=>({ channel:k, total:v })));
 
     setStats({ rangeCount: rangeRows.length, rangeTotal });
@@ -3439,7 +3569,7 @@ function ProfitLossView() {
     try {
       // 1) Sales in range (active only)
       const { data: orders } = await sb.from('sale_orders')
-        .select('id, sale_date, channel, grand_total, subtotal')
+        .select('id, sale_date, channel, grand_total, subtotal, net_received')
         .eq('status', 'active')
         .gte('sale_date', startOfDayBangkok(from))
         .lte('sale_date', endOfDayBangkok(to))
@@ -3491,8 +3621,13 @@ function ProfitLossView() {
         const lines = itemsByOrder[o.id] || [];
         const lineRevenues = lines.map(it => applyDiscounts(it.unit_price, it.quantity, it.discount1_value, it.discount1_type, it.discount2_value, it.discount2_type));
         const subtotalCalc = lineRevenues.reduce((s,x)=>s+x, 0);
-        // distribute order-level discount: ratio = grand_total / subtotalCalc
-        const ratio = subtotalCalc > 0 ? (Number(o.grand_total)||0) / subtotalCalc : 1;
+        // For e-commerce sales, real revenue = net_received (after platform fees);
+        // for store/facebook (or e-commerce without net_received yet), revenue = grand_total.
+        const revenueBase = (ECOMMERCE_CHANNELS.has(o.channel) && o.net_received != null)
+          ? Number(o.net_received)
+          : Number(o.grand_total) || 0;
+        // distribute order-level discount + platform fee proportionally per line.
+        const ratio = subtotalCalc > 0 ? revenueBase / subtotalCalc : 1;
         const saleTs = new Date(o.sale_date).getTime();
 
         lines.forEach((it, idx) => {

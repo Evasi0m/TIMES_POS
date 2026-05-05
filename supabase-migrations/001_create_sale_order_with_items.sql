@@ -39,7 +39,7 @@ BEGIN
     subtotal, total_after_discount, grand_total,
     vat_rate, vat_amount, price_includes_vat,
     tax_invoice_no, buyer_name, buyer_tax_id, buyer_address,
-    notes
+    notes, net_received
   )
   SELECT
     COALESCE((p_header->>'sale_date')::timestamptz, now()),
@@ -57,7 +57,8 @@ BEGIN
     NULLIF(p_header->>'buyer_name', ''),
     NULLIF(p_header->>'buyer_tax_id', ''),
     NULLIF(p_header->>'buyer_address', ''),
-    NULLIF(p_header->>'notes', '')
+    NULLIF(p_header->>'notes', ''),
+    NULLIF(p_header->>'net_received', '')::numeric
   RETURNING id INTO v_order_id;
 
   -- Insert all line items.
