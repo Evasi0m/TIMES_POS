@@ -4900,6 +4900,26 @@ function App() {
     if (!allowed.includes(view)) setView('pos');
   }, [session, role, view]);
 
+  // Global UX: auto-select content on focus for numeric/decimal inputs so the
+  // user doesn't have to manually delete the placeholder "0" or previous value
+  // before typing a new one. Scoped to type="number" and inputMode numeric/decimal
+  // to avoid disturbing free-text fields (search, names, notes, barcodes).
+  // Opt-out: add data-no-select-on-focus to skip a specific input.
+  useEffect(() => {
+    const handler = (e) => {
+      const t = e.target;
+      if (!(t instanceof HTMLInputElement)) return;
+      if (t.dataset.noSelectOnFocus != null) return;
+      const im = (t.inputMode || '').toLowerCase();
+      const shouldSelect = t.type === 'number' || im === 'numeric' || im === 'decimal';
+      if (!shouldSelect) return;
+      // Defer so iOS/Safari doesn't drop the selection during focus handoff.
+      setTimeout(() => { try { t.select(); } catch {} }, 0);
+    };
+    document.addEventListener('focusin', handler);
+    return () => document.removeEventListener('focusin', handler);
+  }, []);
+
   if (session === undefined) return <div className="min-h-screen flex items-center justify-center gap-3 text-muted"><span className="spinner lg"/>กำลังโหลด...</div>;
   if (!session) return <ToastProvider><DialogProvider><LoginScreen /></DialogProvider></ToastProvider>;
 
