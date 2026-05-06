@@ -2898,6 +2898,10 @@ function ProductsView() {
   const [categories, setCategories] = useState([]);
   const [filterBrand, setFilterBrand] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
+  // latestCostMap[product_id] = { unit_price, receive_date } from the most
+  // recent active receive batch — surfaces "current cost" alongside the catalog
+  // cost_price so the user can spot drift without opening each product.
+  const [latestCostMap, setLatestCostMap] = useState({});
 
   const loadTaxonomy = useCallback(async () => {
     const [b, c] = await Promise.all([
@@ -2921,8 +2925,34 @@ function ProductsView() {
     if (filterCategory) query = query.eq('category_id', filterCategory);
     const { data, error } = await query;
     if (error) toast.push("โหลดสินค้าไม่ได้", "error");
-    setRows(data || []);
+    const products = data || [];
+    setRows(products);
     setLoading(false);
+
+    // Fire-and-forget: fetch latest receive cost per product. Any failure
+    // here just leaves latestCostMap empty — the table still renders.
+    const pids = products.map(p => p.id);
+    if (pids.length) {
+      try {
+        const { data: rd } = await sb.from('receive_order_items')
+          .select('product_id, unit_price, receive_orders!inner(receive_date, voided_at)')
+          .in('product_id', pids)
+          .is('receive_orders.voided_at', null);
+        const map = {};
+        (rd || []).forEach(r => {
+          const date = r.receive_orders?.receive_date;
+          if (!date) return;
+          const ts = new Date(date).getTime();
+          const cur = map[r.product_id];
+          if (!cur || ts > cur.ts) {
+            map[r.product_id] = { unit_price: Number(r.unit_price)||0, receive_date: date, ts };
+          }
+        });
+        setLatestCostMap(map);
+      } catch { /* non-fatal */ }
+    } else {
+      setLatestCostMap({});
+    }
   }, [q, filterBrand, filterCategory]);
 
   useEffect(()=>{ loadTaxonomy(); }, [loadTaxonomy]);
@@ -3007,26 +3037,50 @@ function ProductsView() {
       {/* Desktop table */}
       <div className="hidden lg:flex lg:flex-col lg:flex-1 lg:min-h-0 card-canvas overflow-hidden">
         <div className="grid grid-cols-12 px-4 py-3 text-xs uppercase tracking-wider text-muted border-b hairline bg-surface-soft flex-shrink-0">
-          <div className="col-span-4">ชื่อรุ่น</div>
-          <div className="col-span-3">บาร์โค้ด</div>
-          <div className="col-span-2 text-right">ทุน</div>
+          <div className="col-span-3">ชื่อรุ่น</div>
+          <div className="col-span-2">บาร์โค้ด</div>
+          <div className="col-span-2 text-right" title="ทุนตั้งต้น (catalog)">ทุนตั้งต้น</div>
+          <div className="col-span-2 text-right" title="ทุนจากบิลรับเข้าล่าสุด">ทุนล่าสุด</div>
           <div className="col-span-2 text-right">ราคาป้าย</div>
           <div className="col-span-1 text-right">คงเหลือ</div>
         </div>
         <div className="flex-1 overflow-y-auto min-h-0">
           {loading && <SkeletonRows n={8} label="กำลังโหลดสินค้า" />}
           {!loading && rows.length===0 && <div className="p-6 text-muted text-sm">ไม่พบสินค้า</div>}
-          {rows.map(p => (
-            <div key={p.id} className="grid grid-cols-12 px-4 py-3.5 items-center border-b hairline last:border-0 hover:bg-white/40 cursor-pointer transition-colors" onClick={()=>setEditing(p)}>
-              <div className="col-span-4 font-medium truncate">{p.name}</div>
-              <div className="col-span-3 font-mono text-sm text-muted truncate">{p.barcode||'—'}</div>
-              <div className="col-span-2 text-right text-muted tabular-nums">{fmtTHB(p.cost_price)}</div>
-              <div className="col-span-2 text-right font-medium tabular-nums">{fmtTHB(p.retail_price)}</div>
-              <div className="col-span-1 text-right">
-                <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':p.current_stock<5?'!bg-warning/15 !text-[#8a6500]':'')}>{p.current_stock}</span>
+          {rows.map(p => {
+            const lc = latestCostMap[p.id];
+            const drift = lc ? lc.unit_price - Number(p.cost_price||0) : 0;
+            const driftPct = (lc && Number(p.cost_price||0) > 0) ? (drift / Number(p.cost_price) * 100) : 0;
+            const showDrift = lc && Math.abs(drift) >= 0.01;
+            return (
+              <div key={p.id} className="grid grid-cols-12 px-4 py-3.5 items-center border-b hairline last:border-0 hover:bg-white/40 cursor-pointer transition-colors" onClick={()=>setEditing(p)}>
+                <div className="col-span-3 font-medium truncate">{p.name}</div>
+                <div className="col-span-2 font-mono text-sm text-muted truncate">{p.barcode||'—'}</div>
+                <div className="col-span-2 text-right text-muted-soft tabular-nums">{fmtTHB(p.cost_price)}</div>
+                <div className="col-span-2 text-right tabular-nums">
+                  {lc ? (
+                    <div>
+                      <div className="font-medium text-ink">{fmtTHB(lc.unit_price)}</div>
+                      <div className="text-[10px] text-muted-soft mt-0.5 flex items-center justify-end gap-1">
+                        <span>{fmtThaiDateShort(lc.receive_date)}</span>
+                        {showDrift && (
+                          <span className={"px-1 rounded font-medium " + (drift > 0 ? 'bg-error/10 text-error' : 'bg-success/15 text-[#2c6b3a]')}>
+                            {drift > 0 ? '↑' : '↓'} {Math.abs(driftPct).toFixed(0)}%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-muted-soft text-xs" title="ยังไม่เคยรับเข้า">—</span>
+                  )}
+                </div>
+                <div className="col-span-2 text-right font-medium tabular-nums">{fmtTHB(p.retail_price)}</div>
+                <div className="col-span-1 text-right">
+                  <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':p.current_stock<5?'!bg-warning/15 !text-[#8a6500]':'')}>{p.current_stock}</span>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -3034,27 +3088,48 @@ function ProductsView() {
       <div className="lg:hidden space-y-2">
         {loading && <div className="p-4 text-muted text-sm flex items-center gap-2"><span className="spinner"/>กำลังโหลด...</div>}
         {!loading && rows.length===0 && <div className="p-4 text-muted text-sm">ไม่พบสินค้า</div>}
-        {rows.map(p => (
-          <div key={p.id} className="card-canvas pressable p-3.5 flex items-center gap-3" onClick={()=>setEditing(p)}>
-            <div className="flex-1 min-w-0">
-              <div className="font-medium truncate">{p.name}</div>
-              <div className="font-mono text-xs text-muted truncate mt-0.5">{p.barcode||'—'}</div>
-              {(brandName(p.brand_id) || catName(p.category_id)) && (
-                <div className="text-xs text-muted-soft mt-0.5 truncate">
-                  {[brandName(p.brand_id), catName(p.category_id)].filter(Boolean).join(' · ')}
+        {rows.map(p => {
+          const lc = latestCostMap[p.id];
+          const drift = lc ? lc.unit_price - Number(p.cost_price||0) : 0;
+          const driftPct = (lc && Number(p.cost_price||0) > 0) ? (drift / Number(p.cost_price) * 100) : 0;
+          const showDrift = lc && Math.abs(drift) >= 0.01;
+          return (
+            <div key={p.id} className="card-canvas pressable p-3.5 flex items-center gap-3" onClick={()=>setEditing(p)}>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium truncate">{p.name}</div>
+                <div className="font-mono text-xs text-muted truncate mt-0.5">{p.barcode||'—'}</div>
+                {(brandName(p.brand_id) || catName(p.category_id)) && (
+                  <div className="text-xs text-muted-soft mt-0.5 truncate">
+                    {[brandName(p.brand_id), catName(p.category_id)].filter(Boolean).join(' · ')}
+                  </div>
+                )}
+                <div className="flex items-center gap-2 mt-1.5">
+                  <span className="font-display text-lg leading-none tabular-nums">{fmtTHB(p.retail_price)}</span>
+                  <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':p.current_stock<5?'!bg-warning/15 !text-[#8a6500]':'')}>คงเหลือ {p.current_stock}</span>
                 </div>
-              )}
-              <div className="flex items-center gap-2 mt-1.5">
-                <span className="font-display text-lg leading-none tabular-nums">{fmtTHB(p.retail_price)}</span>
-                <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':p.current_stock<5?'!bg-warning/15 !text-[#8a6500]':'')}>คงเหลือ {p.current_stock}</span>
+                <div className="flex items-center gap-2 mt-1 text-xs">
+                  <span className="text-muted-soft">ทุน:</span>
+                  <span className="text-muted-soft tabular-nums">ตั้งต้น {fmtTHB(p.cost_price)}</span>
+                  {lc && (
+                    <>
+                      <span className="text-muted-soft">·</span>
+                      <span className="font-medium tabular-nums">ล่าสุด {fmtTHB(lc.unit_price)}</span>
+                      {showDrift && (
+                        <span className={"px-1 rounded text-[10px] font-medium " + (drift > 0 ? 'bg-error/10 text-error' : 'bg-success/15 text-[#2c6b3a]')}>
+                          {drift > 0 ? '↑' : '↓'}{Math.abs(driftPct).toFixed(0)}%
+                        </span>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="flex-shrink-0 inline-flex items-center gap-1 text-xs text-muted">
+                <Icon name="edit" size={14}/>
+                <span>แก้ไข</span>
               </div>
             </div>
-            <div className="flex-shrink-0 inline-flex items-center gap-1 text-xs text-muted">
-              <Icon name="edit" size={14}/>
-              <span>แก้ไข</span>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <ProductEditor editing={editing} onClose={()=>setEditing(null)} onSave={save}
@@ -3128,6 +3203,136 @@ function StockHistoryPanel({ productId }) {
               </div>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ProductCostHistory — shows the full receive history (date + supplier + cost)
+   for a single product. Used inside ProductEditor (edit mode) so the user can
+   see why "ทุน" in reports may differ from the catalog's cost_price.
+   - Pulls receive_order_items joined to receive_orders (active only).
+   - Sticky-header scrollable table + free-text filter on supplier/invoice.
+   - Read-only; no DB writes. */
+function ProductCostHistory({ productId }) {
+  const [rows, setRows] = useState(null);   // null = loading
+  const [query, setQuery] = useState('');
+
+  useEffect(() => {
+    if (!productId) return;
+    let cancel = false;
+    (async () => {
+      setRows(null);
+      const { data } = await sb.from('receive_order_items')
+        .select('quantity, unit_price, receive_orders!inner(id, receive_date, supplier_name, supplier_invoice_no, voided_at)')
+        .eq('product_id', productId)
+        .is('receive_orders.voided_at', null);
+      if (cancel) return;
+      const list = (data || [])
+        .map(r => ({
+          id: r.receive_orders?.id,
+          date: r.receive_orders?.receive_date,
+          supplier: r.receive_orders?.supplier_name || '',
+          invoice: r.receive_orders?.supplier_invoice_no || '',
+          qty: Number(r.quantity) || 0,
+          unit_price: Number(r.unit_price) || 0,
+        }))
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      setRows(list);
+    })();
+    return () => { cancel = true; };
+  }, [productId]);
+
+  const filtered = useMemo(() => {
+    if (!rows) return null;
+    const q = query.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(r =>
+      (r.supplier || '').toLowerCase().includes(q) ||
+      (r.invoice  || '').toLowerCase().includes(q)
+    );
+  }, [rows, query]);
+
+  // Weighted-average cost across ALL active receive batches (not filtered) —
+  // gives the user a single "average buy cost" reference. Filtered list still
+  // shows the matching subset; the avg always reflects the whole picture.
+  const avg = useMemo(() => {
+    if (!rows || !rows.length) return null;
+    let totalQty = 0, totalCost = 0;
+    rows.forEach(r => { totalQty += r.qty; totalCost += r.qty * r.unit_price; });
+    return totalQty > 0 ? totalCost / totalQty : null;
+  }, [rows]);
+
+  return (
+    <div className="rounded-xl border hairline bg-white/60 overflow-hidden">
+      <div className="px-4 py-3 border-b hairline-soft bg-surface-soft">
+        <div className="flex items-center gap-2">
+          <Icon name="trend-up" size={14} className="text-muted"/>
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted">ประวัติต้นทุน (บิลรับเข้า)</span>
+          {rows && <span className="badge-pill !text-[10px] ml-auto">{rows.length} บิล</span>}
+        </div>
+        <div className="mt-2 flex items-start gap-2 text-[11px] text-muted leading-relaxed">
+          <Icon name="info" size={12} className="text-muted-soft flex-shrink-0 mt-0.5"/>
+          <div>รายงานกำไรจะใช้ทุนตามวันที่บิลรับเข้าโดยอัตโนมัติ — ทุนในช่อง "ราคาทุน" ด้านบนเป็นค่าตั้งต้น/override สำหรับการขายในอนาคตเมื่อยังไม่มีบิลรับเข้าใหม่</div>
+        </div>
+      </div>
+
+      {rows && rows.length > 0 && (
+        <div className="px-4 py-2 border-b hairline-soft">
+          <div className="relative">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-muted-soft"><Icon name="search" size={13}/></span>
+            <input
+              className="input !h-8 !text-xs !pl-7"
+              placeholder="ค้นหาผู้ขาย / เลขบิล…"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Table */}
+      <div className="max-h-[280px] overflow-y-auto">
+        {rows === null && (
+          <div className="p-4 text-xs text-muted flex items-center gap-2"><span className="spinner"/>กำลังโหลด…</div>
+        )}
+        {rows && rows.length === 0 && (
+          <div className="p-4 text-xs text-muted-soft">ยังไม่มีประวัติรับเข้า</div>
+        )}
+        {rows && rows.length > 0 && (
+          <table className="w-full text-xs">
+            <thead className="sticky top-0 bg-surface-soft border-b hairline-soft text-muted text-[10px] uppercase tracking-wider">
+              <tr>
+                <th className="text-left px-3 py-2 font-medium">วันที่</th>
+                <th className="text-left px-3 py-2 font-medium">ผู้ขาย</th>
+                <th className="text-left px-3 py-2 font-medium">เลขบิล</th>
+                <th className="text-right px-3 py-2 font-medium">จำนวน</th>
+                <th className="text-right px-3 py-2 font-medium">ทุน/หน่วย</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 && (
+                <tr><td colSpan={5} className="p-4 text-center text-muted-soft">ไม่พบรายการที่ตรงคำค้น</td></tr>
+              )}
+              {filtered.map((r, i) => (
+                <tr key={`${r.id}-${i}`} className="border-b hairline-soft last:border-0 hover:bg-white/60">
+                  <td className="px-3 py-2 whitespace-nowrap">{fmtThaiDateShort(r.date)}</td>
+                  <td className="px-3 py-2 truncate max-w-[120px]" title={r.supplier}>{r.supplier || '—'}</td>
+                  <td className="px-3 py-2 font-mono text-[10px] truncate max-w-[120px] text-muted" title={r.invoice}>{r.invoice || '—'}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{r.qty}</td>
+                  <td className="px-3 py-2 text-right tabular-nums font-medium">{fmtTHB(r.unit_price)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {avg != null && (
+        <div className="px-4 py-2 border-t hairline-soft bg-white/40 text-xs text-muted flex items-center justify-between">
+          <span>ทุนเฉลี่ย (ถ่วงน้ำหนักด้วยจำนวน)</span>
+          <span className="font-semibold text-ink tabular-nums">{fmtTHB(avg)}</span>
         </div>
       )}
     </div>
@@ -3444,22 +3649,25 @@ function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand,
           ) : (
             // EDIT mode — cost editable (running average override), stock read-only.
             // current_stock can only change via create_stock_movement_with_items RPC.
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={fieldLabel}>ราคาทุน</label>
-                <input type="number" inputMode="decimal" className="input mt-1 tabular-nums"
-                  value={draft.cost_price||0} onChange={e=>set('cost_price', Number(e.target.value))} />
-              </div>
-              <div>
-                <label className={fieldLabel}>คงเหลือ</label>
-                <div className="mt-1 input !flex items-center justify-between !cursor-not-allowed opacity-80 bg-surface-soft">
-                  <span className="font-display text-lg tabular-nums">{draft.current_stock||0}</span>
-                  <span className="text-xs text-muted-soft">read-only</span>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={fieldLabel}>ราคาทุน (ตั้งต้น)</label>
+                  <input type="number" inputMode="decimal" className="input mt-1 tabular-nums"
+                    value={draft.cost_price||0} onChange={e=>set('cost_price', Number(e.target.value))} />
                 </div>
-                <div className="text-xs text-muted-soft mt-1 leading-snug">
-                  ปรับสต็อกผ่านหน้า <span className="font-medium">รับเข้า / ส่งเคลม / คืน</span>
+                <div>
+                  <label className={fieldLabel}>คงเหลือ</label>
+                  <div className="mt-1 input !flex items-center justify-between !cursor-not-allowed opacity-80 bg-surface-soft">
+                    <span className="font-display text-lg tabular-nums">{draft.current_stock||0}</span>
+                    <span className="text-xs text-muted-soft">read-only</span>
+                  </div>
+                  <div className="text-xs text-muted-soft mt-1 leading-snug">
+                    ปรับสต็อกผ่านหน้า <span className="font-medium">รับเข้า / ส่งเคลม / คืน</span>
+                  </div>
                 </div>
               </div>
+              <ProductCostHistory productId={draft.id}/>
             </div>
           )}
         </div>
