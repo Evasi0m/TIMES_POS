@@ -1153,3 +1153,75 @@
   @media (min-width: 1024px) {
     .scan-inline-btn { display: none; }
   }
+
+  /* ==========  MOBILE CART SHEET  ==========
+     Three-section layout (header / items / bill+checkout) so the items list
+     keeps a real share of the viewport instead of getting squeezed by a long
+     footer. The bill section toggles between a one-tap-to-expand summary bar
+     and an inline form. Checkout is always visible at the bottom. */
+  .cart-sheet-mobile {
+    width: 100%;
+    max-height: 92vh;
+    border-top-left-radius: 1.25rem;
+    border-top-right-radius: 1.25rem;
+    /* Hard cap so we never clip the iOS notch/status bar. */
+    margin-top: env(safe-area-inset-top, 0);
+  }
+  .cart-sheet-header {
+    padding: 0.5rem 1.25rem 0.75rem;
+    border-bottom: 1px solid rgba(180, 168, 148, 0.30);
+    background: linear-gradient(180deg, rgba(255,254,252,0.96), rgba(250,249,245,0.86));
+  }
+  /* Items list: flex-1 fill, but with a sane minimum so the user never loses
+     sight of what they're paying for even when the bill panel is expanded. */
+  .cart-items-area {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    min-height: 22vh;
+    padding: 0.75rem;
+  }
+  /* Bill section wraps both states (collapsed bar + expanded form). */
+  .cart-bill-section {
+    flex-shrink: 0;
+    border-top: 1px solid rgba(180, 168, 148, 0.30);
+    background: rgba(250, 249, 245, 0.55);
+  }
+  .cart-bill-collapsed {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    text-align: left;
+    transition: background-color 0.15s var(--ease-out);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .cart-bill-collapsed:hover { background: rgba(255, 254, 252, 0.6); }
+  .cart-bill-collapsed:active { background: rgba(204, 120, 92, 0.06); }
+  .cart-bill-collapsed-summary {
+    flex: 1;
+    min-width: 0;
+  }
+  .cart-bill-expanded {
+    padding: 0.75rem 1rem 0.5rem;
+    max-height: 55vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    animation: billExpand 200ms var(--ease-out);
+  }
+  @keyframes billExpand {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  /* Sticky checkout bar — total + pay button. backdrop-blur lets the items
+     show through subtly while keeping the CTA legible. */
+  .cart-checkout-sticky {
+    flex-shrink: 0;
+    padding: 0.75rem 1rem max(0.75rem, env(safe-area-inset-bottom, 0));
+    border-top: 1px solid rgba(180, 168, 148, 0.30);
+    background: linear-gradient(180deg, rgba(255, 254, 252, 0.92), rgba(250, 249, 245, 0.96));
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    box-shadow: 0 -4px 12px -6px rgba(20, 20, 19, 0.08);
+  }
