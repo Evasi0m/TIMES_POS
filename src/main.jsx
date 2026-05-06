@@ -1056,12 +1056,12 @@ function FontSizePickerInline() {
 const PAYMENT_LABELS = { cash: 'เงินสด', transfer: 'โอนเงิน', card: 'บัตร', paylater: 'ผ่อน', cod: 'เก็บปลายทาง' };
 const CHANNEL_LABELS = { store: 'หน้าร้าน', tiktok: 'TikTok', shopee: 'Shopee', lazada: 'Lazada', facebook: 'Facebook' };
 
-function Receipt({ order, items, shop, variant = 'receipt' }) {
+function Receipt({ order, items, shop, variant = 'receipt', theme = 'classic' }) {
   const isInvoice = variant === 'tax_invoice';
   const exVat = Number(order.grand_total||0) - Number(order.vat_amount||0);
   return (
-    <div className="receipt-100mm receipt-print">
-      <div className="r-center">
+    <div className={"receipt-100mm receipt-print r-theme-" + theme}>
+      <div className="r-header">
         <div className="r-shop">{shop?.shop_name || 'TIMES'}</div>
         {shop?.shop_address && <div className="r-addr">{shop.shop_address}</div>}
         {shop?.shop_phone   && <div className="r-addr">โทร {shop.shop_phone} (คุณตุ๋ม)</div>}
@@ -1069,7 +1069,7 @@ function Receipt({ order, items, shop, variant = 'receipt' }) {
       </div>
 
       <hr className="r-double"/>
-      <div className="r-center r-title">{isInvoice ? 'ใบกำกับภาษี / ใบเสร็จรับเงิน' : 'ใบเสร็จรับเงิน'}</div>
+      <div className="r-title">{isInvoice ? 'ใบกำกับภาษี / ใบเสร็จรับเงิน' : 'ใบเสร็จรับเงิน'}</div>
       <hr className="r-hr"/>
 
       <div className="r-meta">
@@ -1129,12 +1129,14 @@ function Receipt({ order, items, shop, variant = 'receipt' }) {
       </>)}
 
       <hr className="r-hr"/>
-      <div className="r-center r-sm" style={{fontWeight:600}}>กรณี คืน/เคลมสินค้า</div>
-      <div className="r-center r-sm">กรุณาแนบใบเสร็จกลับมาด้วยค่ะ</div>
+      <div className="r-claim-note">
+        <div className="r-bold r-sm">กรณี คืน/เคลมสินค้า</div>
+        <div className="r-sm">กรุณาแนบใบเสร็จกลับมาด้วยค่ะ</div>
+      </div>
 
       <hr className="r-hr"/>
-      <div className="r-center r-footer">{shop?.receipt_footer || 'ขอบคุณที่ใช้บริการ'}</div>
-      <div className="r-center r-xs" style={{marginTop: '3mm', opacity: 0.55}}>พิมพ์ {fmtDateTime(new Date().toISOString())}</div>
+      <div className="r-footer">{shop?.receipt_footer || 'ขอบคุณที่ใช้บริการ'}</div>
+      <div className="r-printed-at">พิมพ์ {fmtDateTime(new Date().toISOString())}</div>
     </div>
   );
 }
@@ -1142,11 +1144,29 @@ function Receipt({ order, items, shop, variant = 'receipt' }) {
 /* =========================================================
    RECEIPT MODAL — preview + print
 ========================================================= */
+// Visual themes for the printable receipt. Persisted in localStorage so the
+// shop's preference survives reloads. Keep IDs in sync with CSS classes
+// (`.r-theme-classic`, `.r-theme-minimal`, `.r-theme-modern`).
+const RECEIPT_THEMES = [
+  { id: 'classic', label: 'คลาสสิก', hint: 'เส้นประ · สไตล์ใบเสร็จร้านดั้งเดิม' },
+  { id: 'minimal', label: 'มินิมอล', hint: 'เส้นเรียบบาง · สะอาดตา' },
+  { id: 'modern',  label: 'โมเดิร์น', hint: 'แท่งดำเด่น · ตัวเลขโดดเด่น' },
+];
+const RECEIPT_THEME_KEY = 'times_pos.receipt_theme';
+
 function ReceiptModal({ open, onClose, orderId }) {
   const { shop } = useShop();
   const [order, setOrder] = useState(null);
   const [items, setItems] = useState([]);
   const [variant, setVariant] = useState('receipt');
+  const [theme, setThemeState] = useState(() => {
+    try { return localStorage.getItem(RECEIPT_THEME_KEY) || 'classic'; }
+    catch { return 'classic'; }
+  });
+  const setTheme = (t) => {
+    setThemeState(t);
+    try { localStorage.setItem(RECEIPT_THEME_KEY, t); } catch { /* private mode etc. */ }
+  };
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -1193,9 +1213,32 @@ function ReceiptModal({ open, onClose, orderId }) {
               </button>
             </div>
           )}
+
+          {/* Theme picker — persists to localStorage. Shown above the preview
+              so the user sees the change immediately. Hidden from print via
+              the wrapping Modal which already has .no-print on its chrome. */}
+          <div className="mb-3">
+            <div className="text-[11px] uppercase tracking-wider text-muted mb-1.5 px-0.5">รูปแบบใบเสร็จ</div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {RECEIPT_THEMES.map(t => {
+                const active = theme === t.id;
+                return (
+                  <button key={t.id} type="button" onClick={()=>setTheme(t.id)}
+                    title={t.hint}
+                    className={"py-2 px-2 rounded-md text-xs font-medium border transition leading-tight " + (active
+                      ? "bg-primary text-on-primary border-primary shadow-sm"
+                      : "bg-white text-muted border-hairline hover:text-ink hover:border-primary/40")}>
+                    <div>{t.label}</div>
+                    <div className={"text-[10px] mt-0.5 font-normal " + (active ? "opacity-80" : "text-muted-soft")}>{t.hint}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="bg-surface-soft p-3 rounded-lg overflow-auto">
             <div className="mx-auto" style={{width:'100mm'}}>
-              <Receipt order={order} items={items} shop={shop} variant={variant}/>
+              <Receipt order={order} items={items} shop={shop} variant={variant} theme={theme}/>
             </div>
           </div>
           <div className="text-xs text-muted-soft mt-2 text-center">ตัวอย่าง — กด "พิมพ์" เพื่อส่งไปเครื่องพิมพ์สติ๊กเกอร์ความร้อน 100มม.</div>
