@@ -211,9 +211,76 @@ const Icon = ({ name, size = 20, className = "", strokeWidth = 1.75, color }) =>
     case "camera":    return <svg {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3.5"/></svg>;
     case "flashlight":return <svg {...p}><path d="M18 6 6 18"/><path d="M14 4h6v6"/><path d="M10 20H4v-6"/><circle cx="12" cy="12" r="2"/></svg>;
     case "flip-cam":  return <svg {...p}><path d="M3 7h4l2-3h6l2 3h4v12H3z"/><path d="m9 13 3-3 3 3"/><path d="M12 10v6"/></svg>;
+    case "settings":  return <svg {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>;
     default: return null;
   }
 };
+
+/* =========================================================
+   FONT SIZE — UX-50+ accessibility setting
+   - Persisted in localStorage so the choice survives reloads.
+   - Applied on script load (before first render) so the very first paint
+     is already at the user's preferred size — no flash of wrong size.
+   - Sets inline font-size on <html>; rem-based Tailwind classes scale.
+========================================================= */
+const FONT_SIZE_KEY = 'ux.fontSize';
+const FONT_SIZES = [
+  { id: 'sm', label: 'ปกติ',    px: 16 },
+  { id: 'lg', label: 'ใหญ่',    px: 18 },
+  { id: 'xl', label: 'ใหญ่มาก', px: 20 },
+];
+const getFontSize = () => {
+  try {
+    const v = localStorage.getItem(FONT_SIZE_KEY);
+    return FONT_SIZES.some(s => s.id === v) ? v : 'sm';
+  } catch { return 'sm'; }
+};
+const applyFontSize = (id) => {
+  const size = FONT_SIZES.find(s => s.id === id) || FONT_SIZES[0];
+  if (typeof document !== 'undefined') {
+    document.documentElement.style.fontSize = `${size.px}px`;
+    document.documentElement.dataset.fontSize = size.id;
+  }
+};
+// Apply immediately on script load — runs once before any component renders.
+applyFontSize(getFontSize());
+function useFontSize() {
+  const [id, setId] = useState(getFontSize);
+  const setSize = useCallback((newId) => {
+    try { localStorage.setItem(FONT_SIZE_KEY, newId); } catch {}
+    applyFontSize(newId);
+    setId(newId);
+  }, []);
+  return [id, setSize];
+}
+// Compact 3-button picker. Pass `align="start|center"` to control wrap.
+function FontSizePicker() {
+  const [size, setSize] = useFontSize();
+  return (
+    <div className="rounded-lg bg-surface-soft p-1.5 border hairline">
+      <div className="text-xs text-muted-soft uppercase tracking-wider px-1 pb-1 inline-flex items-center gap-1">
+        <Icon name="edit" size={12}/> ขนาดตัวอักษร
+      </div>
+      <div className="flex gap-1">
+        {FONT_SIZES.map(s => (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => setSize(s.id)}
+            className={"flex-1 px-2 py-2 rounded-md font-medium transition border " +
+              (size === s.id
+                ? "bg-primary text-on-primary border-primary shadow-sm"
+                : "bg-white text-muted border-hairline hover:text-ink hover:bg-white/90")}
+            aria-pressed={size === s.id}
+            style={{ fontSize: s.px === 16 ? '12px' : s.px === 18 ? '14px' : '16px' }}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /* =========================================================
    TOAST
@@ -221,25 +288,28 @@ const Icon = ({ name, size = 20, className = "", strokeWidth = 1.75, color }) =>
 const ToastCtx = React.createContext({ push: ()=>{} });
 // Phase 4.1: each toast carries a `closing` flag flipped ~200ms before unmount,
 // so the .toast-out keyframe gets a chance to play before React removes the node.
+// UX-50+: errors stay on screen ~2x longer than info/success so older users have
+// enough time to read them before they disappear.
 function ToastProvider({ children }) {
   const [list, setList] = useState([]);
   const push = useCallback((msg, type='info') => {
     const id = Date.now()+Math.random();
     setList(l => [...l, { id, msg, type, closing: false }]);
-    // Stage 1 (3300ms): mark closing → triggers .toast-out keyframe.
-    setTimeout(() => setList(l => l.map(t => t.id === id ? { ...t, closing: true } : t)), 3300);
-    // Stage 2 (3500ms): unmount once exit animation has played out.
-    setTimeout(() => setList(l => l.filter(t => t.id !== id)), 3500);
+    const visibleMs = type === 'error' ? 6500 : 3300;
+    // Stage 1: mark closing → triggers .toast-out keyframe.
+    setTimeout(() => setList(l => l.map(t => t.id === id ? { ...t, closing: true } : t)), visibleMs);
+    // Stage 2: unmount once exit animation has played out.
+    setTimeout(() => setList(l => l.filter(t => t.id !== id)), visibleMs + 200);
   }, []);
   return (
     <ToastCtx.Provider value={{ push }}>
       {children}
       <div className="fixed bottom-20 lg:bottom-6 right-4 lg:right-6 z-[120] space-y-2 max-w-[calc(100vw-32px)]">
         {list.map(t => (
-          <div key={t.id} className={"px-4 py-3 rounded-lg shadow-2xl text-sm flex items-center gap-2 " +
+          <div key={t.id} className={"px-4 py-3 rounded-lg shadow-2xl text-base flex items-center gap-2.5 " +
               (t.closing ? "toast-out " : "toast-in ") +
               (t.type==='error'?'bg-error text-white':t.type==='success'?'bg-[#1f3d27] text-white':'bg-surface-dark text-on-dark')}>
-            <Icon name={t.type==='error'?'alert':t.type==='success'?'check':'alert'} size={16} strokeWidth={2.2}/>
+            <Icon name={t.type==='error'?'alert':t.type==='success'?'check':'alert'} size={20} strokeWidth={2.2}/>
             <span>{t.msg}</span>
           </div>
         ))}
@@ -538,7 +608,7 @@ function BarcodeScannerModal({ open, onClose, onScan, mode = 'single', title }) 
               : 'วางบาร์โค้ดในกรอบเพื่อสแกน'}
           </span>
           {mode === 'continuous' && hits.length > 0 && (
-            <span className="font-mono text-[11px] opacity-90 truncate max-w-[55%]" title={hits[0].code}>
+            <span className="font-mono text-xs opacity-90 truncate max-w-[55%]" title={hits[0].code}>
               ✓ {hits[0].code}
             </span>
           )}
@@ -771,7 +841,7 @@ function DatePicker({ value, onChange, mode = 'single', placeholder = 'เลื
           </div>
           <div className="grid grid-cols-7 gap-0.5 mb-1">
             {TH_WEEKDAYS.map((w,i) => (
-              <div key={i} className={"text-center text-[11px] py-1 font-medium " + ((i===0||i===6)?"text-primary/70":"text-muted")}>{w}</div>
+              <div key={i} className={"text-center text-xs py-1 font-medium " + ((i===0||i===6)?"text-primary/70":"text-muted")}>{w}</div>
             ))}
           </div>
           <div className="grid grid-cols-7 gap-0.5" onMouseLeave={()=>setHoverIso(null)}>
@@ -834,25 +904,38 @@ function ShopProvider({ children }) {
 }
 
 /* =========================================================
-   SETTINGS MODAL — edit shop_settings
+   UNIFIED APP SETTINGS MODAL
+   - Section 1: การแสดงผล (FontSizePicker) — visible to ALL users
+   - Section 2: ข้อมูลร้าน (shop fields for receipt/invoice) — admin only
+   Replaces both the old SettingsModal and the inline FontSizePicker in
+   the sidebar footer / mobile drawer.
 ========================================================= */
-function SettingsModal({ open, onClose }) {
+function AppSettingsModal({ open, onClose }) {
   const toast = useToast();
   const { shop, refreshShop } = useShop();
+  const role = useRole();
+  const isAdmin = role === 'admin';
   const [draft, setDraft] = useState(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { if (open && shop) setDraft({ ...shop }); }, [open, shop]);
-  if (!draft) return null;
-  const set = (k,v) => setDraft(d => ({ ...d, [k]: v }));
+  const [shopOpen, setShopOpen] = useState(false);
+
+  useEffect(() => {
+    if (open && shop) setDraft({ ...shop });
+    if (!open) setShopOpen(false);
+  }, [open, shop]);  
+
+  const set = (k, v) => setDraft(d => ({ ...d, [k]: v }));
+
   const save = async () => {
+    if (!isAdmin || !draft) return;
     setBusy(true);
     const { error } = await sb.from('shop_settings').update({
-      shop_name: (draft.shop_name||'').trim() || 'TIMES',
-      shop_address: draft.shop_address?.trim() || null,
-      shop_phone: draft.shop_phone?.trim() || null,
-      shop_tax_id: draft.shop_tax_id?.trim() || null,
-      receipt_footer: draft.receipt_footer?.trim() || null,
-      updated_at: new Date().toISOString(),
+      shop_name:      (draft.shop_name||'').trim() || 'TIMES',
+      shop_address:   draft.shop_address?.trim()  || null,
+      shop_phone:     draft.shop_phone?.trim()    || null,
+      shop_tax_id:    draft.shop_tax_id?.trim()   || null,
+      receipt_footer: draft.receipt_footer?.trim()|| null,
+      updated_at:     new Date().toISOString(),
     }).eq('id', 1);
     setBusy(false);
     if (error) { toast.push("บันทึกไม่ได้: " + mapError(error), 'error'); return; }
@@ -860,41 +943,109 @@ function SettingsModal({ open, onClose }) {
     await refreshShop();
     onClose();
   };
+
   return (
-    <Modal open={open} onClose={onClose} title="ตั้งค่าร้าน"
+    <Modal open={open} onClose={onClose} title="การตั้งค่า"
       footer={<>
-        <button className="btn-secondary" onClick={onClose}>ยกเลิก</button>
-        <button className="btn-primary" onClick={save} disabled={busy}>
-          {busy ? <span className="spinner"/> : <Icon name="check" size={16}/>}
-          บันทึก
+        <button className="btn-secondary" onClick={onClose}>
+          {isAdmin ? 'ยกเลิก' : 'ปิด'}
         </button>
+        {isAdmin && (
+          <button className="btn-primary" onClick={save} disabled={busy}>
+            {busy ? <span className="spinner"/> : <Icon name="check" size={16}/>}
+            บันทึก
+          </button>
+        )}
       </>}>
-      <div className="space-y-4">
-        <div className="text-xs text-muted">ข้อมูลส่วนนี้จะแสดงบนใบเสร็จและใบกำกับภาษี</div>
+      <div className="space-y-6">
+
+        {/* ── Section 1: ขนาดตัวอักษร (all users) ── */}
         <div>
-          <label className="text-xs uppercase tracking-wider text-muted">ชื่อร้าน *</label>
-          <input className="input mt-1" value={draft.shop_name||""} onChange={e=>set('shop_name', e.target.value)} />
-        </div>
-        <div>
-          <label className="text-xs uppercase tracking-wider text-muted">ที่อยู่</label>
-          <textarea className="input mt-1" rows="2" value={draft.shop_address||""} onChange={e=>set('shop_address', e.target.value)} placeholder="เช่น 123 ห้างสรรพสินค้า ABC ชั้น 2" />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs uppercase tracking-wider text-muted">เบอร์โทร</label>
-            <input className="input mt-1 font-mono" value={draft.shop_phone||""} onChange={e=>set('shop_phone', e.target.value)} placeholder="02-xxx-xxxx" />
+          <div className="text-xs font-semibold uppercase tracking-wider text-muted mb-3 flex items-center gap-1.5">
+            <Icon name="edit" size={13}/>
+            การแสดงผล
           </div>
-          <div>
-            <label className="text-xs uppercase tracking-wider text-muted">เลขผู้เสียภาษี</label>
-            <input className="input mt-1 font-mono" value={draft.shop_tax_id||""} onChange={e=>set('shop_tax_id', e.target.value)} placeholder="13 หลัก" />
+          <div className="rounded-xl bg-surface-soft border hairline p-3">
+            <div className="text-sm text-ink mb-2">ขนาดตัวอักษร</div>
+            <FontSizePickerInline />
           </div>
         </div>
-        <div>
-          <label className="text-xs uppercase tracking-wider text-muted">ข้อความท้ายใบเสร็จ</label>
-          <input className="input mt-1" value={draft.receipt_footer||""} onChange={e=>set('receipt_footer', e.target.value)} placeholder="เช่น ขอบคุณที่ใช้บริการ" />
-        </div>
+
+        {/* ── Section 2: ข้อมูลร้าน (admin only, collapsible) ── */}
+        {isAdmin && draft && (
+          <div className="border-t hairline pt-4">
+            <button
+              type="button"
+              onClick={() => setShopOpen(o => !o)}
+              className="w-full flex items-center justify-between gap-2 group"
+            >
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted flex items-center gap-1.5">
+                <Icon name="store" size={13}/>
+                ข้อมูลร้าน
+              </span>
+              <Icon
+                name={shopOpen ? 'chevron-u' : 'chevron-d'}
+                size={16}
+                className="text-muted-soft group-hover:text-muted transition"
+              />
+            </button>
+
+            {shopOpen && (
+              <div className="mt-3 space-y-4 fade-in">
+                <div className="text-xs text-muted">ข้อมูลส่วนนี้จะแสดงบนใบเสร็จและใบกำกับภาษี</div>
+                <div>
+                  <label className="text-xs uppercase tracking-wider text-muted">ชื่อร้าน *</label>
+                  <input className="input mt-1" value={draft.shop_name||""} onChange={e=>set('shop_name', e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-xs uppercase tracking-wider text-muted">ที่อยู่</label>
+                  <textarea className="input mt-1" rows="2" value={draft.shop_address||""} onChange={e=>set('shop_address', e.target.value)} placeholder="เช่น 123 ห้างสรรพสินค้า ABC ชั้น 2" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs uppercase tracking-wider text-muted">เบอร์โทร</label>
+                    <input className="input mt-1 font-mono" value={draft.shop_phone||""} onChange={e=>set('shop_phone', e.target.value)} placeholder="02-xxx-xxxx" />
+                  </div>
+                  <div>
+                    <label className="text-xs uppercase tracking-wider text-muted">เลขผู้เสียภาษี</label>
+                    <input className="input mt-1 font-mono" value={draft.shop_tax_id||""} onChange={e=>set('shop_tax_id', e.target.value)} placeholder="13 หลัก" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs uppercase tracking-wider text-muted">ข้อความท้ายใบเสร็จ</label>
+                  <input className="input mt-1" value={draft.receipt_footer||""} onChange={e=>set('receipt_footer', e.target.value)} placeholder="เช่น ขอบคุณที่ใช้บริการ" />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
       </div>
     </Modal>
+  );
+}
+// Inline variant used inside AppSettingsModal — wider layout, bigger buttons.
+function FontSizePickerInline() {
+  const [size, setSize] = useFontSize();
+  return (
+    <div className="flex gap-2">
+      {FONT_SIZES.map(s => (
+        <button
+          key={s.id}
+          type="button"
+          onClick={() => setSize(s.id)}
+          aria-pressed={size === s.id}
+          className={"flex-1 py-2.5 rounded-lg font-medium transition border text-sm " + (
+            size === s.id
+              ? "bg-primary text-on-primary border-primary shadow-sm"
+              : "bg-white text-muted border-hairline hover:text-ink hover:bg-white/80"
+          )}
+          style={{ fontSize: s.px === 16 ? '13px' : s.px === 18 ? '15px' : '17px' }}
+        >
+          {s.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -1422,7 +1573,7 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               <div className="text-xs uppercase tracking-wider text-muted">รายการสินค้า ({items.length})</div>
               <span
-                className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/15 text-muted-soft font-medium"
+                className="text-xs px-1.5 py-0.5 rounded-full bg-muted/15 text-muted-soft font-medium"
                 title="แก้ไขรายการ/จำนวนไม่ได้ — ต้องยกเลิกบิลแล้วทำใหม่"
               >
                 แก้ไขไม่ได้
@@ -1563,17 +1714,15 @@ function Sidebar({ view, setView, userEmail, onOpenSettings }) {
             onClick={()=>setView(it.k)}
             aria-current={view===it.k ? 'page' : undefined}
           >
-            <Icon name={it.icon} size={18}/>
+            <Icon name={it.icon} size={22} strokeWidth={view===it.k?2.1:1.85}/>
             <span>{it.labelLong}</span>
           </button>
         ))}
       </nav>
       <div className="sidebar-footer p-4 border-t space-y-2">
-        {role === 'admin' && (
-          <button className="btn-settings-sidebar" onClick={onOpenSettings}>
-            <Icon name="edit" size={16}/> ตั้งค่าบิล
-          </button>
-        )}
+        <button className="btn-app-settings-sidebar" onClick={onOpenSettings}>
+          <Icon name="settings" size={16}/> การตั้งค่า
+        </button>
         <div className="sidebar-email text-xs truncate pt-1">
           {userEmail} {role === 'admin' && <span className="text-primary">· admin</span>}
         </div>
@@ -1615,11 +1764,9 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings }) {
             <button className="btn-ghost !p-2" onClick={()=>setOpenMenu(false)} aria-label="ปิดเมนู"><Icon name="x" size={20}/></button>
           </div>
           <div className="p-4 space-y-3">
-            {role === 'admin' && (
-              <button className="btn-secondary w-full" onClick={()=>{ onOpenSettings?.(); }}>
-                <Icon name="edit" size={16}/> ตั้งค่าร้าน
-              </button>
-            )}
+            <button className="btn-secondary w-full" onClick={()=>{ setOpenMenu(false); onOpenSettings?.(); }}>
+              <Icon name="settings" size={16}/> การตั้งค่า
+            </button>
             <div>
               <div className="text-xs uppercase tracking-wider text-muted mb-2">บัญชี</div>
               <div className="text-sm text-ink truncate mb-3">
@@ -1719,6 +1866,7 @@ function PageHeader({ title, subtitle, right }) {
 ========================================================= */
 function POSView() {
   const toast = useToast();
+  const askConfirm = useConfirm();
   const [search, setSearch] = useState("");
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -1849,6 +1997,29 @@ function POSView() {
 
   const updateLine = (idx, patch) => setCart(c => c.map((l,i)=> i===idx?{...l,...patch}:l));
   const removeLine = (idx) => setCart(c => c.filter((_,i)=>i!==idx));
+  // Confirmation wrappers for destructive actions — 50+ users tap by mistake
+  // more often, so always require an explicit confirm before discarding work.
+  const confirmRemoveLine = async (idx) => {
+    const line = cart[idx];
+    if (!line) return;
+    const ok = await askConfirm({
+      title: "ลบสินค้านี้ออกจากตะกร้า?",
+      message: `${line.product_name}${line.quantity>1 ? ` (${line.quantity} ชิ้น)` : ''} จะถูกลบออกจากบิลปัจจุบัน`,
+      okLabel: "ลบ",
+      danger: true,
+    });
+    if (ok) removeLine(idx);
+  };
+  const confirmClearCart = async () => {
+    if (!cart.length) return;
+    const ok = await askConfirm({
+      title: "ล้างตะกร้าทั้งหมด?",
+      message: `สินค้า ${cart.length} รายการ (${totalQty} ชิ้น) จะถูกลบทั้งหมด ไม่สามารถย้อนกลับได้`,
+      okLabel: "ล้างทั้งหมด",
+      danger: true,
+    });
+    if (ok) setCart([]);
+  };
   const lineNet = (l) => applyDiscounts(l.unit_price, l.quantity, l.discount1_value, l.discount1_type, l.discount2_value, l.discount2_type);
   const subtotal = useMemo(()=> cart.reduce((s,l)=> s + lineNet(l), 0), [cart]);
   const netPriceNum = netPrice === "" || netPrice == null ? null : Math.max(0, Math.min(Number(netPrice)||0, subtotal));
@@ -1871,6 +2042,18 @@ function POSView() {
   const netPriceErr     = showErrors && !netPriceFilled;
   const netReceivedErr  = showErrors && !netReceivedOk;
   const buyerNameErr    = showErrors && !buyerNameOk;
+
+  // Human-readable list of what's missing — surfaced as chips under the
+  // disabled checkout button so 50+ users don't have to guess what's wrong.
+  // Order matches `flagMissing` scroll priority.
+  const missingList = useMemo(() => {
+    const m = [];
+    if (cart.length === 0)  m.push('เพิ่มสินค้า');
+    if (!netPriceFilled)    m.push('ราคาที่ลูกค้าจ่าย');
+    if (!netReceivedOk)     m.push('เงินที่ร้านได้รับ');
+    if (!buyerNameOk)       m.push('ชื่อผู้ซื้อ (ใบกำกับ)');
+    return m;
+  }, [cart.length, netPriceFilled, netReceivedOk, buyerNameOk]);
 
   // Clear the error glow as soon as the form becomes valid again.
   useEffect(() => { if (canSubmit && showErrors) setShowErrors(false); }, [canSubmit, showErrors]);
@@ -2008,7 +2191,12 @@ function POSView() {
         </div>
       )}
       {search && searching && <div className="p-6 text-muted text-sm flex-shrink-0">กำลังค้นหา...</div>}
-      {search && !searching && results.length===0 && <div className="p-6 text-muted text-sm flex-shrink-0">ไม่พบสินค้า "{search}"</div>}
+      {search && !searching && results.length===0 && (
+        <div className="p-6 flex-shrink-0">
+          <div className="text-ink font-medium mb-1">ไม่พบสินค้า “{search}”</div>
+          <div className="text-muted text-sm">ลองยิงบาร์โค้ด หรือพิมพ์ชื่อรุ่นสั้นๆ — ถ้ายังไม่มี จะต้องเพิ่มสินค้าใหม่ในเมนู <span className="font-medium text-ink">สินค้า</span> ก่อน</div>
+        </div>
+      )}
       <div className="flex-1 overflow-y-auto min-h-0">
         {results.map((p, idx) => {
           const oos = (Number(p.current_stock)||0) <= 0;
@@ -2045,8 +2233,9 @@ function POSView() {
       <div className="flex-1 overflow-y-auto p-3">
         {!cart.length && (
           <div className="p-8 text-center">
-            <div className="inline-flex w-12 h-12 items-center justify-center rounded-full bg-surface-card text-muted mb-3"><Icon name="cart" size={24}/></div>
-            <div className="text-muted text-sm">ยังไม่มีสินค้า</div>
+            <div className="inline-flex w-14 h-14 items-center justify-center rounded-full bg-surface-card text-muted mb-3"><Icon name="cart" size={28}/></div>
+            <div className="text-ink font-medium">ยังไม่มีสินค้า</div>
+            <div className="text-muted text-sm mt-1">พิมพ์หรือยิงบาร์โค้ดที่ช่องค้นหาด้านซ้าย แล้วแตะสินค้าเพื่อลงตะกร้า</div>
           </div>
         )}
         {cart.map((l, idx) => {
@@ -2058,7 +2247,10 @@ function POSView() {
                   <div className="font-medium text-sm truncate">{l.product_name}</div>
                   <div className="text-xs text-muted font-mono truncate">{l.barcode||''}</div>
                 </div>
-                <button className="text-muted-soft hover:text-error p-1" onClick={()=>removeLine(idx)} aria-label="ลบ"><Icon name="trash" size={16}/></button>
+                <button className="inline-flex items-center gap-1 text-muted hover:text-error active:text-error px-2 py-1.5 rounded-md hover:bg-error/10 text-xs font-medium transition" onClick={()=>confirmRemoveLine(idx)} aria-label="ลบสินค้านี้">
+                  <Icon name="trash" size={16}/>
+                  <span>ลบ</span>
+                </button>
               </div>
               <div className="flex items-center gap-2 mt-2">
                 <div className="flex items-center bg-white/60 backdrop-blur rounded-lg border border-white/50 shadow-sm overflow-hidden">
@@ -2118,16 +2310,16 @@ function POSView() {
 
       <div className={"p-4 lg:p-5 border-t hairline bg-surface-cream-strong flex-shrink-0 " + (shaking ? "shake-error" : "")}>
         {/* Section: ข้อมูลบิล */}
-        <div className="text-[9px] uppercase tracking-[0.12em] text-muted-soft font-medium mb-1.5">ข้อมูลบิล</div>
+        <div className="text-[11px] uppercase tracking-[0.12em] text-muted-soft font-medium mb-1.5">ข้อมูลบิล</div>
         <div className="grid grid-cols-2 gap-2 mb-4">
           <div>
-            <label className="text-[10px] uppercase tracking-wider text-muted">ช่องทาง</label>
+            <label className="text-xs uppercase tracking-wider text-muted">ช่องทาง</label>
             <select className="input mt-1 !h-10 !rounded-xl !py-2 !text-sm" value={channel} onChange={e=>setChannel(e.target.value)}>
               {CHANNELS.map(c=> <option key={c.v} value={c.v}>{c.label}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-[10px] uppercase tracking-wider text-muted">ชำระโดย</label>
+            <label className="text-xs uppercase tracking-wider text-muted">ชำระโดย</label>
             <select className="input mt-1 !h-10 !rounded-xl !py-2 !text-sm" value={payment} onChange={e=>setPayment(e.target.value)}>
               {PAYMENTS.map(p=> <option key={p.v} value={p.v}>{p.label}</option>)}
             </select>
@@ -2135,15 +2327,15 @@ function POSView() {
         </div>
 
         {/* Section: ราคา */}
-        <div className="text-[9px] uppercase tracking-[0.12em] text-muted-soft font-medium mb-1.5">ราคา</div>
+        <div className="text-[11px] uppercase tracking-[0.12em] text-muted-soft font-medium mb-1.5">ราคา</div>
         <div className="mb-3">
           <div className="flex items-center justify-between">
-            <label className="text-[10px] uppercase tracking-wider text-muted inline-flex items-center gap-1.5">
+            <label className="text-xs uppercase tracking-wider text-muted inline-flex items-center gap-1.5">
               <Icon name="credit-card" size={12}/>
               ราคาที่ลูกค้าจ่าย <span className="text-error">*</span>
             </label>
             {discountAmount > 0 && (
-              <span className="text-[10px] text-primary tabular-nums">ส่วนลด −{fmtTHB(discountAmount)}</span>
+              <span className="text-xs text-primary tabular-nums">ส่วนลด −{fmtTHB(discountAmount)}</span>
             )}
           </div>
           <div className={netPriceErr ? "field-error-glow mt-1" : "mt-1"}>
@@ -2157,12 +2349,37 @@ function POSView() {
               onChange={e=>setNetPrice(e.target.value)}
             />
           </div>
+          {/* Quick-fill chips — eliminate manual typing for the common cases:
+              full subtotal, round down to next 10/100. Tap = instant set. */}
+          {subtotal > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {[
+                { label: 'เต็ม', value: subtotal, hint: fmtTHB(subtotal) },
+                { label: 'ปัดลง 10',  value: Math.floor(subtotal / 10)  * 10 },
+                { label: 'ปัดลง 100', value: Math.floor(subtotal / 100) * 100 },
+                { label: 'ลด 50',  value: Math.max(0, subtotal - 50) },
+                { label: 'ลด 100', value: Math.max(0, subtotal - 100) },
+              ].filter(c => c.value > 0).map(c => {
+                const active = netPrice !== '' && Number(netPrice) === c.value;
+                return (
+                  <button key={c.label} type="button" onClick={()=>setNetPrice(String(c.value))}
+                    className={"px-2.5 py-1.5 rounded-md text-xs font-medium border transition tabular-nums " + (
+                      active
+                        ? "bg-primary text-on-primary border-primary shadow-sm"
+                        : "bg-white text-muted border-hairline hover:text-ink hover:bg-white/90"
+                    )}>
+                    {c.label} {c.hint && <span className="opacity-70 ml-0.5">· {c.hint}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {ECOMMERCE_CHANNELS.has(channel) && (
           <div className={"rounded-xl p-3 mb-4 bg-primary/5 border border-primary/15 fade-in " + (netReceivedErr ? "field-error-glow" : "")}>
             <div className="flex items-center justify-between">
-              <label className="text-[10px] uppercase tracking-wider text-primary inline-flex items-center gap-1.5 font-medium">
+              <label className="text-xs uppercase tracking-wider text-primary inline-flex items-center gap-1.5 font-medium">
                 <Icon name="store" size={12}/>
                 เงินที่ร้านได้รับ
                 {requiresNetReceived(channel, payment)
@@ -2170,7 +2387,7 @@ function POSView() {
                   : <span className="text-muted-soft ml-0.5 font-normal normal-case tracking-normal">(ทีหลังได้)</span>}
               </label>
               {netReceived !== "" && Number(netReceived) > 0 && grand > 0 && (
-                <span className="text-[10px] text-muted-soft tabular-nums">
+                <span className="text-xs text-muted-soft tabular-nums">
                   ค่าธรรมเนียม {((grand - Number(netReceived)) / grand * 100).toFixed(1)}%
                 </span>
               )}
@@ -2186,14 +2403,14 @@ function POSView() {
               value={netReceived}
               onChange={e=>setNetReceived(e.target.value)}
             />
-            <div className="text-[10px] text-muted-soft mt-1">
+            <div className="text-xs text-muted-soft mt-1">
               ใช้คำนวณกำไร · ไม่แสดงในใบเสร็จลูกค้า
             </div>
           </div>
         )}
 
         {/* Section: ตัวเลือกเสริม */}
-        <div className="text-[9px] uppercase tracking-[0.12em] text-muted-soft font-medium mb-1.5">ตัวเลือกเสริม</div>
+        <div className="text-[11px] uppercase tracking-[0.12em] text-muted-soft font-medium mb-1.5">ตัวเลือกเสริม</div>
         <div className="flex gap-2 mb-3">
           <button type="button" onClick={()=>setTaxInvoiceModalOpen(true)}
             className={"flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-md text-xs font-medium border transition " + (taxInvoice?"bg-primary text-on-primary border-primary shadow-sm":"bg-white text-muted border-hairline hover:text-ink hover:bg-white/90")}>
@@ -2211,7 +2428,7 @@ function POSView() {
             <Icon name="receipt" size={14} className="text-primary flex-shrink-0"/>
             <div className="flex-1 min-w-0 text-xs">
               <div className="font-medium truncate">{buyer.name || <span className="text-error">— ยังไม่ได้กรอกชื่อ —</span>}</div>
-              <div className="text-muted-soft truncate text-[10px]">
+              <div className="text-muted-soft truncate text-xs">
                 {[buyer.taxId, buyer.invoiceNo].filter(Boolean).join(' · ') || 'แตะเพื่อกรอกข้อมูลเพิ่มเติม'}
               </div>
             </div>
@@ -2236,6 +2453,22 @@ function POSView() {
               {submitting? 'กำลังบันทึก...' : `ชำระเงิน ${fmtTHB(grand)}`}
             </button>
           </div>
+          {/* Missing-field chips — only after a failed submit attempt, so we
+              don't nag the user before they're done filling things in. */}
+          {showErrors && missingList.length > 0 && (
+            <div className="mt-2 p-2.5 rounded-lg bg-error/8 border border-error/20 fade-in">
+              <div className="text-sm font-medium text-error mb-1.5 inline-flex items-center gap-1.5">
+                <Icon name="alert" size={16}/> ยังกรอกไม่ครบ — ต้องกรอก:
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {missingList.map(label => (
+                  <span key={label} className="inline-flex items-center px-2 py-1 rounded-md bg-error/15 text-error text-xs font-medium">
+                    {label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>
@@ -2256,7 +2489,7 @@ function POSView() {
                 <div className="font-display text-2xl">ตะกร้า</div>
                 <div className="text-xs text-muted mt-0.5">{cart.length} รายการ · {totalQty} ชิ้น</div>
               </div>
-              {cart.length>0 && <button className="btn-ghost !text-xs text-muted hover:text-error" onClick={()=>setCart([])}>ล้างตะกร้า</button>}
+              {cart.length>0 && <button className="btn-ghost !text-xs text-muted hover:text-error" onClick={confirmClearCart}>ล้างตะกร้า</button>}
             </div>
             {CartContent()}
           </div>
@@ -2275,7 +2508,7 @@ function POSView() {
           <div className="flex items-center gap-3">
             <div className="relative">
               <Icon name="cart" size={24}/>
-              <span className="absolute -top-2 -right-2 bg-canvas text-ink text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-md">{totalQty}</span>
+              <span className="absolute -top-2 -right-2 bg-canvas text-ink text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-md">{totalQty}</span>
             </div>
             <span className="font-medium text-base">ดูตะกร้า</span>
           </div>
@@ -2304,11 +2537,11 @@ function POSView() {
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <div className="font-display text-xl leading-none">ตะกร้า</div>
-                  <div className="text-[11px] text-muted mt-1">{cart.length} รายการ · {totalQty} ชิ้น</div>
+                  <div className="text-xs text-muted mt-1">{cart.length} รายการ · {totalQty} ชิ้น</div>
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
                   {cart.length > 0 && (
-                    <button className="btn-ghost !text-xs !px-2 !py-1.5 !min-h-0 text-muted hover:!text-error" onClick={()=>setCart([])}>ล้าง</button>
+                    <button className="btn-ghost !text-xs !px-2 !py-1.5 !min-h-0 text-muted hover:!text-error" onClick={confirmClearCart}>ล้าง</button>
                   )}
                   <button className="btn-ghost !p-2 !min-h-0" onClick={()=>setCartOpen(false)} aria-label="ปิดตะกร้า"><Icon name="x" size={20}/></button>
                 </div>
@@ -2319,8 +2552,9 @@ function POSView() {
             <div className="cart-items-area">
               {!cart.length && (
                 <div className="p-8 text-center">
-                  <div className="inline-flex w-12 h-12 items-center justify-center rounded-full bg-surface-card text-muted mb-3"><Icon name="cart" size={24}/></div>
-                  <div className="text-muted text-sm">ยังไม่มีสินค้า</div>
+                  <div className="inline-flex w-14 h-14 items-center justify-center rounded-full bg-surface-card text-muted mb-3"><Icon name="cart" size={28}/></div>
+                  <div className="text-ink font-medium">ยังไม่มีสินค้า</div>
+                  <div className="text-muted text-sm mt-1">ปิดหน้านี้ → ค้นหาหรือสแกนบาร์โค้ด แล้วแตะสินค้าเพื่อลงตะกร้า</div>
                 </div>
               )}
               {cart.map((l, idx) => {
@@ -2332,7 +2566,10 @@ function POSView() {
                         <div className="font-medium text-sm truncate">{l.product_name}</div>
                         <div className="text-xs text-muted font-mono truncate">{l.barcode||''}</div>
                       </div>
-                      <button className="text-muted-soft hover:text-error p-1" onClick={()=>removeLine(idx)} aria-label="ลบ"><Icon name="trash" size={16}/></button>
+                      <button className="inline-flex items-center gap-1 text-muted hover:text-error active:text-error px-2 py-1.5 rounded-md hover:bg-error/10 text-xs font-medium transition" onClick={()=>confirmRemoveLine(idx)} aria-label="ลบสินค้านี้">
+                        <Icon name="trash" size={16}/>
+                        <span>ลบ</span>
+                      </button>
                     </div>
                     <div className="flex items-center gap-2 mt-2">
                       <div className="flex items-center bg-white/60 backdrop-blur rounded-lg border border-white/50 shadow-sm overflow-hidden">
@@ -2395,7 +2632,7 @@ function POSView() {
               {!billExpanded ? (
                 <button type="button" onClick={()=>setBillExpanded(true)} className="cart-bill-collapsed" aria-expanded="false">
                   <div className="cart-bill-collapsed-summary">
-                    <div className="text-[9px] uppercase tracking-[0.12em] text-muted-soft font-medium">รายละเอียดบิล</div>
+                    <div className="text-[11px] uppercase tracking-[0.12em] text-muted-soft font-medium">รายละเอียดบิล</div>
                     <div className="text-sm font-medium truncate mt-0.5">
                       {CHANNEL_LABELS[channel]||channel} · {PAYMENTS.find(p=>p.v===payment)?.label||payment}
                       {netPriceFilled && <span className="text-muted-soft"> · รับ {fmtTHB(Number(netPrice))}</span>}
@@ -2403,7 +2640,7 @@ function POSView() {
                       {notes && <span className="text-muted-soft"> · มีหมายเหตุ</span>}
                     </div>
                     {showErrors && !canSubmit && cart.length>0 && (
-                      <div className="text-[10px] text-error mt-1 inline-flex items-center gap-1">
+                      <div className="text-xs text-error mt-1 inline-flex items-center gap-1">
                         <Icon name="alert" size={10}/> ข้อมูลยังไม่ครบ — แตะเพื่อกรอก
                       </div>
                     )}
@@ -2413,16 +2650,16 @@ function POSView() {
               ) : (
                 <div className="cart-bill-expanded">
                   {/* ข้อมูลบิล */}
-                  <div className="text-[9px] uppercase tracking-[0.12em] text-muted-soft font-medium mb-1.5">ข้อมูลบิล</div>
+                  <div className="text-[11px] uppercase tracking-[0.12em] text-muted-soft font-medium mb-1.5">ข้อมูลบิล</div>
                   <div className="grid grid-cols-2 gap-2 mb-3">
                     <div>
-                      <label className="text-[10px] uppercase tracking-wider text-muted">ช่องทาง</label>
+                      <label className="text-xs uppercase tracking-wider text-muted">ช่องทาง</label>
                       <select className="input mt-1 !h-10 !rounded-xl !py-2 !text-sm" value={channel} onChange={e=>setChannel(e.target.value)}>
                         {CHANNELS.map(c=> <option key={c.v} value={c.v}>{c.label}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="text-[10px] uppercase tracking-wider text-muted">ชำระโดย</label>
+                      <label className="text-xs uppercase tracking-wider text-muted">ชำระโดย</label>
                       <select className="input mt-1 !h-10 !rounded-xl !py-2 !text-sm" value={payment} onChange={e=>setPayment(e.target.value)}>
                         {PAYMENTS.map(p=> <option key={p.v} value={p.v}>{p.label}</option>)}
                       </select>
@@ -2430,15 +2667,15 @@ function POSView() {
                   </div>
 
                   {/* ราคา */}
-                  <div className="text-[9px] uppercase tracking-[0.12em] text-muted-soft font-medium mb-1.5">ราคา</div>
+                  <div className="text-[11px] uppercase tracking-[0.12em] text-muted-soft font-medium mb-1.5">ราคา</div>
                   <div className="mb-3">
                     <div className="flex items-center justify-between">
-                      <label className="text-[10px] uppercase tracking-wider text-muted inline-flex items-center gap-1.5">
+                      <label className="text-xs uppercase tracking-wider text-muted inline-flex items-center gap-1.5">
                         <Icon name="credit-card" size={12}/>
                         ราคาที่ลูกค้าจ่าย <span className="text-error">*</span>
                       </label>
                       {discountAmount > 0 && (
-                        <span className="text-[10px] text-primary tabular-nums">ส่วนลด −{fmtTHB(discountAmount)}</span>
+                        <span className="text-xs text-primary tabular-nums">ส่วนลด −{fmtTHB(discountAmount)}</span>
                       )}
                     </div>
                     <div className={netPriceErr ? "field-error-glow mt-1" : "mt-1"}>
@@ -2452,12 +2689,36 @@ function POSView() {
                         onChange={e=>setNetPrice(e.target.value)}
                       />
                     </div>
+                    {/* Mobile mirror of desktop quick-fill chips. */}
+                    {subtotal > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {[
+                          { label: 'เต็ม', value: subtotal, hint: fmtTHB(subtotal) },
+                          { label: 'ปัดลง 10',  value: Math.floor(subtotal / 10)  * 10 },
+                          { label: 'ปัดลง 100', value: Math.floor(subtotal / 100) * 100 },
+                          { label: 'ลด 50',  value: Math.max(0, subtotal - 50) },
+                          { label: 'ลด 100', value: Math.max(0, subtotal - 100) },
+                        ].filter(c => c.value > 0).map(c => {
+                          const active = netPrice !== '' && Number(netPrice) === c.value;
+                          return (
+                            <button key={c.label} type="button" onClick={()=>setNetPrice(String(c.value))}
+                              className={"px-2.5 py-1.5 rounded-md text-xs font-medium border transition tabular-nums " + (
+                                active
+                                  ? "bg-primary text-on-primary border-primary shadow-sm"
+                                  : "bg-white text-muted border-hairline hover:text-ink hover:bg-white/90"
+                              )}>
+                              {c.label} {c.hint && <span className="opacity-70 ml-0.5">· {c.hint}</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
 
                   {ECOMMERCE_CHANNELS.has(channel) && (
                     <div className={"rounded-xl p-3 mb-3 bg-primary/5 border border-primary/15 fade-in " + (netReceivedErr ? "field-error-glow" : "")}>
                       <div className="flex items-center justify-between">
-                        <label className="text-[10px] uppercase tracking-wider text-primary inline-flex items-center gap-1.5 font-medium">
+                        <label className="text-xs uppercase tracking-wider text-primary inline-flex items-center gap-1.5 font-medium">
                           <Icon name="store" size={12}/>
                           เงินที่ร้านได้รับ
                           {requiresNetReceived(channel, payment)
@@ -2465,7 +2726,7 @@ function POSView() {
                             : <span className="text-muted-soft ml-0.5 font-normal normal-case tracking-normal">(ทีหลังได้)</span>}
                         </label>
                         {netReceived !== "" && Number(netReceived) > 0 && grand > 0 && (
-                          <span className="text-[10px] text-muted-soft tabular-nums">
+                          <span className="text-xs text-muted-soft tabular-nums">
                             ค่าธรรมเนียม {((grand - Number(netReceived)) / grand * 100).toFixed(1)}%
                           </span>
                         )}
@@ -2481,14 +2742,14 @@ function POSView() {
                         value={netReceived}
                         onChange={e=>setNetReceived(e.target.value)}
                       />
-                      <div className="text-[10px] text-muted-soft mt-1">
+                      <div className="text-xs text-muted-soft mt-1">
                         ใช้คำนวณกำไร · ไม่แสดงในใบเสร็จลูกค้า
                       </div>
                     </div>
                   )}
 
                   {/* ตัวเลือกเสริม */}
-                  <div className="text-[9px] uppercase tracking-[0.12em] text-muted-soft font-medium mb-1.5">ตัวเลือกเสริม</div>
+                  <div className="text-[11px] uppercase tracking-[0.12em] text-muted-soft font-medium mb-1.5">ตัวเลือกเสริม</div>
                   <div className="flex gap-2 mb-2">
                     <button type="button" onClick={()=>setTaxInvoiceModalOpen(true)}
                       className={"flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-2 rounded-md text-xs font-medium border transition " + (taxInvoice?"bg-primary text-on-primary border-primary shadow-sm":"bg-white text-muted border-hairline hover:text-ink hover:bg-white/90")}>
@@ -2506,7 +2767,7 @@ function POSView() {
                       <Icon name="receipt" size={14} className="text-primary flex-shrink-0"/>
                       <div className="flex-1 min-w-0 text-xs">
                         <div className="font-medium truncate">{buyer.name || <span className="text-error">— ยังไม่ได้กรอกชื่อ —</span>}</div>
-                        <div className="text-muted-soft truncate text-[10px]">
+                        <div className="text-muted-soft truncate text-xs">
                           {[buyer.taxId, buyer.invoiceNo].filter(Boolean).join(' · ') || 'แตะเพื่อกรอกข้อมูลเพิ่มเติม'}
                         </div>
                       </div>
@@ -2521,8 +2782,8 @@ function POSView() {
                   {/* VAT breakdown */}
                   <div className="border-t hairline pt-2 mt-1">
                     <div className="flex justify-between text-xs text-muted mb-0.5"><span>รวมก่อนลด</span><span className="tabular-nums">{fmtTHB(subtotal)}</span></div>
-                    <div className="flex justify-between text-[11px] text-muted-soft mb-0.5"><span>ก่อนหัก VAT 7%</span><span className="tabular-nums">{fmtTHB(vatBreakdown(grand).exVat)}</span></div>
-                    <div className="flex justify-between text-[11px] text-muted-soft"><span>VAT 7%</span><span className="tabular-nums">{fmtTHB(vatBreakdown(grand).vat)}</span></div>
+                    <div className="flex justify-between text-xs text-muted-soft mb-0.5"><span>ก่อนหัก VAT 7%</span><span className="tabular-nums">{fmtTHB(vatBreakdown(grand).exVat)}</span></div>
+                    <div className="flex justify-between text-xs text-muted-soft"><span>VAT 7%</span><span className="tabular-nums">{fmtTHB(vatBreakdown(grand).vat)}</span></div>
                   </div>
 
                   <button type="button" onClick={()=>setBillExpanded(false)}
@@ -2544,6 +2805,23 @@ function POSView() {
                   {submitting? 'กำลังบันทึก...' : `ชำระเงิน ${fmtTHB(grand)}`}
                 </button>
               </div>
+              {/* Mobile mirror of the desktop missing-field chip list — same data,
+                  rendered under the sticky checkout so 50+ users see exactly
+                  what they still need to fill in. */}
+              {showErrors && missingList.length > 0 && (
+                <div className="mt-2 p-2 rounded-lg bg-error/8 border border-error/20 fade-in">
+                  <div className="text-xs font-medium text-error mb-1 inline-flex items-center gap-1">
+                    <Icon name="alert" size={14}/> ยังกรอกไม่ครบ — ต้องกรอก:
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {missingList.map(label => (
+                      <span key={label} className="inline-flex items-center px-2 py-0.5 rounded-md bg-error/15 text-error text-xs font-medium">
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -2671,8 +2949,10 @@ function ProductsView() {
         if (error) throw error;
         toast.push("บันทึกสินค้าสำเร็จ", "success");
       } else {
-        // New product: stock & cost start at 0; first "รับเข้า" bill seeds them.
-        payload.cost_price = 0;
+        // New product: cost is now captured up-front (validated > 0 in
+        // ProductEditor). Stock still starts at 0 — first "รับเข้า" bill seeds
+        // it via the running-average RPC; since old qty=0, new avg = bill cost.
+        payload.cost_price = Number(p.cost_price) || 0;
         payload.current_stock = 0;
         const { error } = await sb.from('products').insert(payload);
         if (error) throw error;
@@ -2769,7 +3049,10 @@ function ProductsView() {
                 <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':p.current_stock<5?'!bg-warning/15 !text-[#8a6500]':'')}>คงเหลือ {p.current_stock}</span>
               </div>
             </div>
-            <Icon name="chevron-r" size={18} className="text-muted-soft flex-shrink-0"/>
+            <div className="flex-shrink-0 inline-flex items-center gap-1 text-xs text-muted">
+              <Icon name="edit" size={14}/>
+              <span>แก้ไข</span>
+            </div>
           </div>
         ))}
       </div>
@@ -2818,7 +3101,7 @@ function StockHistoryPanel({ productId }) {
         className="w-full flex items-center justify-between px-4 py-3 bg-white/80 hover:bg-surface-soft rounded-xl">
         <span className="flex items-center gap-2 text-sm font-medium">
           <Icon name="trend-up" size={16}/> ประวัติสต็อก
-          {rows && <span className="badge-pill !text-[11px]">{rows.length} รายการ</span>}
+          {rows && <span className="badge-pill !text-xs">{rows.length} รายการ</span>}
         </span>
         <Icon name={open?"chevron-d":"chevron-r"} size={16} className="text-muted"/>
       </button>
@@ -2836,7 +3119,7 @@ function StockHistoryPanel({ productId }) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm flex items-center gap-2">
-                    <span className={"badge-pill !text-[11px] " + (meta.tone==='red'?'!bg-error/10 !text-error':meta.tone==='green'?'!bg-success/15 !text-[#2c6b3a]':'')}>{meta.label}</span>
+                    <span className={"badge-pill !text-xs " + (meta.tone==='red'?'!bg-error/10 !text-error':meta.tone==='green'?'!bg-success/15 !text-[#2c6b3a]':'')}>{meta.label}</span>
                     {m.ref_table && m.ref_id && <span className="text-xs text-muted-soft font-mono">{m.ref_table.replace('_orders','')}#{m.ref_id}</span>}
                   </div>
                   <div className="text-xs text-muted mt-0.5">{fmtDateTime(m.created_at)}</div>
@@ -2851,17 +3134,34 @@ function StockHistoryPanel({ productId }) {
   );
 }
 
-function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand, addCategory }) {
+function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand, addCategory, createHint }) {
   const [draft, setDraft] = useState(null);
   const [barcodeEdit, setBarcodeEdit] = useState(false);
   const [manualApproved, setManualApproved] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [autoPct, setAutoPct] = useState(null);    // last preset % applied
+  const [customPctStr, setCustomPctStr] = useState(''); // raw string in custom input
   const barcodeRef = useRef(null);
   const askPrompt = usePrompt();
   const askConfirm = useConfirm();
-  useEffect(()=>{ setDraft(editing? {...editing} : null); setBarcodeEdit(false); setManualApproved(false); }, [editing]);
+  useEffect(()=>{
+    setDraft(editing? {...editing} : null);
+    setBarcodeEdit(false);
+    setManualApproved(false);
+    setAutoPct(null);
+    setCustomPctStr('');
+  }, [editing]);
   if (!draft) return null;
   const set = (k,v)=> setDraft(d=>({...d,[k]:v}));
+
+  // Cost-calculator helpers (used in CREATE mode only)
+  const COST_PRESETS = [50, 55, 58, 60, 65];
+  const applyCostPct = (pct) => {
+    const r = Number(draft.retail_price) || 0;
+    if (r <= 0) { tryToast.push('กรอกราคาขาย (ป้าย) ก่อน', 'error'); return; }
+    set('cost_price', Math.round(r * (100 - pct) / 100 * 100) / 100);
+    setAutoPct(pct);
+  };
   const onBrandChange = async (val) => {
     if (val === "__new__") {
       const name = await askPrompt({ title: "เพิ่มแบรนด์ใหม่", label: "ชื่อแบรนด์", defaultValue: "" });
@@ -2893,13 +3193,57 @@ function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand,
     if (!draft.barcode || !draft.barcode.trim()) return 'กรุณาสแกนหรือพิมพ์บาร์โค้ด';
     if (draft.list_price != null && Number(draft.list_price) < 0) return 'ราคาป้ายต้องไม่ติดลบ';
     if (draft.cost_price != null && Number(draft.cost_price) < 0) return 'ราคาทุนต้องไม่ติดลบ';
+    // CREATE mode: require positive retail + cost so the catalog never has
+    // a half-set product (cost=0 would silently inflate margins later).
+    if (!draft.id) {
+      if (!(Number(draft.retail_price) > 0)) return 'กรุณากรอกราคาขาย (ป้าย) ให้มากกว่า 0';
+      if (!(Number(draft.cost_price)   > 0)) return 'กรุณากรอกราคาทุน — กดปุ่ม "ลบ 58%" หรือพิมพ์เอง';
+    }
     return null;
   };
   const tryToast = useToast();
-  const handleSave = () => {
+  const [saving, setSaving] = useState(false);
+  const handleSave = async () => {
+    if (saving) return;
     const reason = validate();
     if (reason) { tryToast.push(reason, 'error'); return; }
-    onSave(draft);
+
+    // ── Duplicate guard (barcode + name) ─────────────────────────────
+    // Catalog must never have two rows sharing barcode or name; otherwise
+    // POS scan / search becomes ambiguous and stock-movement attribution
+    // breaks. We check client-side first so the user gets a clear Thai
+    // message; the DB unique constraint (if any) remains the safety net.
+    setSaving(true);
+    try {
+      const name = (draft.name || '').trim();
+      const barcode = (draft.barcode || '').trim();
+
+      // 1) Barcode duplicate — exact match
+      let bq = sb.from('products').select('id, name').eq('barcode', barcode).limit(1);
+      if (draft.id) bq = bq.neq('id', draft.id);
+      const { data: bDup, error: bErr } = await bq;
+      if (bErr) throw bErr;
+      if (bDup && bDup.length) {
+        tryToast.push(`บาร์โค้ดนี้ถูกใช้กับรุ่น "${bDup[0].name}" อยู่แล้ว`, 'error');
+        return;
+      }
+
+      // 2) Name duplicate — case-insensitive exact match (no wildcards)
+      let nq = sb.from('products').select('id, barcode').ilike('name', name).limit(1);
+      if (draft.id) nq = nq.neq('id', draft.id);
+      const { data: nDup, error: nErr } = await nq;
+      if (nErr) throw nErr;
+      if (nDup && nDup.length) {
+        tryToast.push(`ชื่อรุ่น "${name}" ซ้ำกับสินค้าที่มีอยู่ (barcode: ${nDup[0].barcode || '—'})`, 'error');
+        return;
+      }
+
+      await onSave(draft);
+    } catch (e) {
+      tryToast.push('ตรวจสอบข้อมูลซ้ำไม่สำเร็จ: ' + (e?.message || e), 'error');
+    } finally {
+      setSaving(false);
+    }
   };
   // Live margin % for the pricing section header badge.
   const marginPct = draft.retail_price > 0
@@ -2910,7 +3254,7 @@ function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand,
     marginPct >= 10 ? 'badge-pill !bg-warning/15 !text-[#8a6500]' :
     'badge-pill !bg-error/10 !text-error';
 
-  const labelCls = "text-[9.5px] font-semibold uppercase tracking-[1.5px] text-muted";
+  const labelCls = "text-[11px] font-semibold uppercase tracking-[1.5px] text-muted";
   const fieldLabel = "text-xs uppercase tracking-wider text-muted";
 
   return (
@@ -2918,7 +3262,9 @@ function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand,
     <Modal open={!!draft} onClose={onClose} title={draft.id ? "แก้ไขสินค้า" : "เพิ่มสินค้าใหม่"}
       footer={<>
         <button className="btn-secondary" onClick={onClose}>ยกเลิก</button>
-        <button className="btn-primary" onClick={handleSave}><Icon name="check" size={16}/>บันทึก</button>
+        <button className="btn-primary" onClick={handleSave} disabled={saving}>
+          {saving ? 'กำลังตรวจสอบ…' : <><Icon name="check" size={16}/>บันทึก</>}
+        </button>
       </>}>
 
       <div className="space-y-3">
@@ -3021,14 +3367,78 @@ function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand,
               value={draft.retail_price||0} onChange={e=>set('retail_price', Number(e.target.value))} />
           </div>
           {!draft.id ? (
-            // CREATE mode — stock & cost are derived from the first "รับเข้า" bill,
-            // not entered here. Hiding the inputs forces every stock/cost change to
-            // flow through stock_movements so history stays accurate.
-            <div className="rounded-lg bg-surface-soft border hairline-soft p-3 flex items-start gap-2 text-xs text-muted">
-              <Icon name="info" size={14} className="text-muted-soft flex-shrink-0 mt-0.5"/>
+            // CREATE mode — cost captured here so catalog never has cost=0.
+            // Stock still flows only through stock_movements, so we hide qty.
+            <div className="space-y-3">
+              {/* ── Cost calculator card ── */}
+              <div className="rounded-xl border hairline bg-[#fdf5ef] p-3 space-y-2.5">
+                <div className="text-xs font-semibold text-muted uppercase tracking-wider flex items-center gap-1.5">
+                  <Icon name="credit-card" size={12}/>
+                  คิดต้นทุนจากราคาขาย
+                </div>
+
+                {/* Preset chips */}
+                <div className="flex flex-wrap gap-1.5">
+                  {COST_PRESETS.map(pct => (
+                    <button
+                      key={pct}
+                      type="button"
+                      onClick={() => applyCostPct(pct)}
+                      className={"flex-none px-3 py-2 rounded-lg text-sm font-medium border transition min-w-[56px] text-center " + (
+                        autoPct === pct
+                          ? "bg-primary text-on-primary border-primary shadow-sm"
+                          : "bg-white text-muted border-hairline hover:text-ink hover:border-primary/40"
+                      )}
+                    >
+                      ลด {pct}%
+                    </button>
+                  ))}
+
+                  {/* Custom % input */}
+                  <div className="flex items-center gap-1.5 ml-auto">
+                    <span className="text-xs text-muted whitespace-nowrap">หรือกำหนดเอง</span>
+                    <div className="relative">
+                      <input
+                        type="number" inputMode="decimal"
+                        className="input !h-9 !w-[72px] !text-sm text-center !pr-7 !pl-2"
+                        placeholder="—"
+                        value={customPctStr}
+                        min="1" max="99"
+                        onChange={e => {
+                          setCustomPctStr(e.target.value);
+                          const n = Number(e.target.value);
+                          if (n > 0 && n < 100) applyCostPct(n);
+                        }}
+                      />
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted pointer-events-none">%</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Live preview */}
+                {autoPct != null && Number(draft.retail_price) > 0 && (
+                  <div className="text-xs text-muted bg-white/70 rounded-lg px-3 py-1.5 border hairline-soft tabular-nums">
+                    {fmtTHB(Number(draft.retail_price))} × (100−{autoPct})% = <span className="font-semibold text-ink">{fmtTHB(Math.round(Number(draft.retail_price) * (100 - autoPct) / 100 * 100) / 100)}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Cost input */}
               <div>
-                สต็อกและทุนจะถูกบันทึกเมื่อ <span className="font-medium text-ink">รับเข้าครั้งแรก</span> —
-                หลังบันทึกสินค้านี้แล้ว ไปหน้า <span className="font-medium text-ink">"รับเข้า"</span> เพื่อเพิ่มสต็อก
+                <label className={fieldLabel}>ราคาทุน *</label>
+                <input
+                  type="number" inputMode="decimal"
+                  className="input mt-1 !text-lg !font-display tabular-nums"
+                  placeholder="0"
+                  value={draft.cost_price || ""}
+                  onChange={e=>{ set('cost_price', Number(e.target.value)); }}
+                />
+              </div>
+              <div className="rounded-lg bg-surface-soft border hairline-soft p-3 flex items-start gap-2 text-xs text-muted">
+                <Icon name="info" size={14} className="text-muted-soft flex-shrink-0 mt-0.5"/>
+                <div>
+                  {createHint || <>สต็อกจะถูกบันทึกเมื่อ <span className="font-medium text-ink">รับเข้าครั้งแรก</span> — หลังบันทึกแล้ว ไปหน้า <span className="font-medium text-ink">"รับเข้า"</span> เพื่อเพิ่มสต็อก</>}
+                </div>
               </div>
             </div>
           ) : (
@@ -3044,9 +3454,9 @@ function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand,
                 <label className={fieldLabel}>คงเหลือ</label>
                 <div className="mt-1 input !flex items-center justify-between !cursor-not-allowed opacity-80 bg-surface-soft">
                   <span className="font-display text-lg tabular-nums">{draft.current_stock||0}</span>
-                  <span className="text-[10px] text-muted-soft">read-only</span>
+                  <span className="text-xs text-muted-soft">read-only</span>
                 </div>
-                <div className="text-[10px] text-muted-soft mt-1 leading-snug">
+                <div className="text-xs text-muted-soft mt-1 leading-snug">
                   ปรับสต็อกผ่านหน้า <span className="font-medium">รับเข้า / ส่งเคลม / คืน</span>
                 </div>
               </div>
@@ -3351,12 +3761,12 @@ function SalesView({ onGoPOS }) {
                 <span className="badge-pill">{g.count} บิล</span>
               </div>
               <div className="text-right">
-                <div className="text-[10px] uppercase tracking-wider text-muted">รวมวันนี้</div>
+                <div className="text-xs uppercase tracking-wider text-muted">รวมวันนี้</div>
                 <div className="font-display text-xl tabular-nums">{fmtTHB(g.total)}</div>
               </div>
             </div>
             {/* Column header */}
-            <div className="grid grid-cols-12 px-4 py-2 text-[10px] uppercase tracking-wider text-muted-soft border-b hairline">
+            <div className="grid grid-cols-12 px-4 py-2 text-xs uppercase tracking-wider text-muted-soft border-b hairline">
               <div className="col-span-1">เลขที่บิล</div>
               <div className="col-span-1">เวลา</div>
               <div className="col-span-3">ชื่อสินค้า</div>
@@ -3372,19 +3782,19 @@ function SalesView({ onGoPOS }) {
               <div key={o.id} className={"grid grid-cols-12 px-4 py-3 items-center gap-x-2 border-b hairline last:border-0 hover:bg-white/40 cursor-pointer transition-colors " + (o.status==='voided'?'opacity-60':'')} onClick={()=>openDetail(o)}>
                 <div className="col-span-1 font-mono text-sm flex items-center gap-1 truncate">
                   <span className="truncate">#{o.id}</span>
-                  {o.status==='voided' && <span className="badge-pill !bg-error/10 !text-error !text-[10px]">VOID</span>}
+                  {o.status==='voided' && <span className="badge-pill !bg-error/10 !text-error !text-xs">VOID</span>}
                 </div>
                 <div className="col-span-1 text-sm tabular-nums">{new Date(o.sale_date).toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"})}</div>
                 <div className="col-span-3 text-sm min-w-0">
                   <div className="truncate" title={sm?.productLabel || ''}>{sm?.productLabel ?? <span className="text-muted-soft">—</span>}</div>
-                  {sm?.costApprox && <span className="badge-pill !bg-warning/15 !text-[#8a6500] !text-[10px] mt-0.5">ทุนประมาณ</span>}
+                  {sm?.costApprox && <span className="badge-pill !bg-warning/15 !text-[#8a6500] !text-xs mt-0.5">ทุนประมาณ</span>}
                 </div>
-                <div className="col-span-2"><span className="badge-pill !text-[10px]">{CHANNEL_LABELS[o.channel] || o.channel || '—'}</span></div>
+                <div className="col-span-2"><span className="badge-pill !text-xs">{CHANNEL_LABELS[o.channel] || o.channel || '—'}</span></div>
                 <div className="col-span-1 text-xs text-muted truncate">{PAYMENTS.find(p=>p.v===o.payment_method)?.label || '—'}</div>
                 <div className={"col-span-2 text-right tabular-nums " + (o.status==='voided'?'line-through':'')}>
                   <div className="font-medium">{fmtTHB(o.grand_total)}</div>
                   {ECOMMERCE_CHANNELS.has(o.channel) && o.net_received != null && (
-                    <div className="text-[10px] text-muted-soft">ได้รับ {fmtTHB(o.net_received)}</div>
+                    <div className="text-xs text-muted-soft">ได้รับ {fmtTHB(o.net_received)}</div>
                   )}
                 </div>
                 <div className={"col-span-2 text-right tabular-nums font-medium " + (o.status==='voided' ? 'text-muted-soft line-through' : sm && sm.profit >= 0 ? 'text-ink' : 'text-error')}>
@@ -3429,8 +3839,8 @@ function SalesView({ onGoPOS }) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-xs text-muted">#{o.id}</span>
-                      <span className="badge-pill !text-[10px]">{CHANNEL_LABELS[o.channel] || o.channel || '—'}</span>
-                      {o.status==='voided' && <span className="badge-pill !bg-error/10 !text-error !text-[10px]">VOIDED</span>}
+                      <span className="badge-pill !text-xs">{CHANNEL_LABELS[o.channel] || o.channel || '—'}</span>
+                      {o.status==='voided' && <span className="badge-pill !bg-error/10 !text-error !text-xs">VOIDED</span>}
                     </div>
                     {sm && sm.itemCount > 0 && (
                       <div className="text-sm text-ink mt-1 truncate" title={sm.productLabel}>{sm.productLabel}</div>
@@ -3440,7 +3850,7 @@ function SalesView({ onGoPOS }) {
                   <div className="text-right flex-shrink-0">
                     <div className={"font-display text-lg leading-none tabular-nums " + (o.status==='voided'?'line-through':'')}>{fmtTHB(o.grand_total)}</div>
                     {ECOMMERCE_CHANNELS.has(o.channel) && o.net_received != null && (
-                      <div className="text-[10px] text-muted-soft mt-0.5 tabular-nums">ได้รับ {fmtTHB(o.net_received)}</div>
+                      <div className="text-xs text-muted-soft mt-0.5 tabular-nums">ได้รับ {fmtTHB(o.net_received)}</div>
                     )}
                     {sm && o.status !== 'voided' && (
                       <div className={"text-xs tabular-nums mt-0.5 " + (sm.profit >= 0 ? 'text-success' : 'text-error')}>
@@ -3533,7 +3943,7 @@ function SalesView({ onGoPOS }) {
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-sm">
                       <div className="text-muted text-xs uppercase tracking-wider">เงินที่ร้านได้รับ</div>
-                      <div className="text-[10px] text-muted-soft">ใช้คำนวณกำไร · ไม่แสดงในใบเสร็จ</div>
+                      <div className="text-xs text-muted-soft">ใช้คำนวณกำไร · ไม่แสดงในใบเสร็จ</div>
                     </div>
                     {!editNet ? (
                       <div className="flex items-center gap-2">
@@ -3604,15 +4014,17 @@ function AddProductModal({ open, onClose, onAdded }) {
       const payload = {
         name: p.name, barcode: p.barcode || null,
         cost_price: p.cost_price || 0, retail_price: p.retail_price || 0,
-        current_stock: p.current_stock || 0,
+        current_stock: 0, // stock always flows through stock_movements
         brand_id: p.brand_id || null,
         category_id: p.category_id || null,
       };
-      const { error } = await sb.from('products').insert(payload);
+      // .select().single() so we get the inserted row (with id) back to push
+      // straight into the receive list.
+      const { data, error } = await sb.from('products').insert(payload).select().single();
       if (error) throw error;
-      toast.push("เพิ่มสินค้าใหม่สำเร็จ", "success");
+      toast.push("เพิ่มสินค้าใหม่สำเร็จ — เพิ่มเข้ารายการรับเข้าแล้ว กรอกจำนวนได้เลย", "success");
       handleClose();
-      if (onAdded) onAdded();
+      if (onAdded) onAdded(data);
     } catch (e) {
       toast.push("บันทึกไม่ได้: " + e.message, "error");
     }
@@ -3642,6 +4054,7 @@ function AddProductModal({ open, onClose, onAdded }) {
       categories={categories}
       addBrand={addBrand}
       addCategory={addCategory}
+      createHint={<>บันทึกแล้วสินค้าจะถูกเพิ่มเข้า <span className="font-medium text-ink">รายการรับเข้า</span> ทันที — กรอกจำนวนเพื่อรับสต็อก</>}
     />
   );
 }
@@ -3653,13 +4066,16 @@ function ReceiveView() {
   const [tab, setTab] = useState('receive');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [addProductOpen, setAddProductOpen] = useState(false);
+  // Ref to the active StockMovementForm so AddProductModal can push the
+  // newly-created product straight into "รายการรับเข้า".
+  const formRef = useRef(null);
   const tabs = [
     { k: 'receive', label: 'รับเข้า',         icon: 'package-in',  hint: 'รับสินค้าจากบริษัท · เพิ่มสต็อก' },
     { k: 'claim',   label: 'ส่งเคลม / คืน',   icon: 'package-out', hint: 'ส่งสินค้าคืนบริษัท · หักสต็อก' },
   ];
   const TabGroup = <KindTabs tabs={tabs} current={tab} onChange={setTab} Icon={Icon} />;
   const ActionButtons = (
-    <div className="flex items-center gap-2">
+    <div className="grid grid-cols-2 gap-2">
       <button className="btn-add-product !py-2 !text-sm" onClick={()=>setAddProductOpen(true)}>
         <Icon name="plus" size={15}/> เพิ่มรุ่นสินค้า
       </button>
@@ -3689,9 +4105,17 @@ function ReceiveView() {
           {ActionButtons}
         </div>
         <div className="text-xs text-muted mb-4 ml-1">{tabs.find(t=>t.k===tab).hint}</div>
-        <StockMovementForm key={tab} kind={tab}/>
+        <StockMovementForm key={tab} kind={tab} ref={formRef}/>
         <MovementHistoryModal open={historyOpen} onClose={()=>setHistoryOpen(false)} kind={tab}/>
-        <AddProductModal open={addProductOpen} onClose={()=>setAddProductOpen(false)}/>
+        <AddProductModal
+          open={addProductOpen}
+          onClose={()=>setAddProductOpen(false)}
+          onAdded={(product)=>{
+            // Only push into the receive list when on the "receive" tab —
+            // the claim/return tabs use the same form but a different list.
+            if (tab === 'receive') formRef.current?.addItemFromCreated(product);
+          }}
+        />
       </div>
     </div>
   );
@@ -3723,7 +4147,7 @@ function ReturnView()  {
   );
 }
 
-function StockMovementForm({ kind }) {
+const StockMovementForm = React.forwardRef(function StockMovementForm({ kind }, ref) {
   const toast = useToast();
   const productSearchRef = useRef(null);
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -3838,6 +4262,32 @@ function StockMovementForm({ kind }) {
     // Keep search & results visible so the user can pick another color/variant of the same model
     // without retyping. They can clear via the × button or pick a different search.
   };
+
+  // Imperative API — used by ReceiveView when the user creates a brand-new
+  // product via AddProductModal. We push the new product straight into the
+  // receive list with qty=0 (forces the user to type the actual qty) and use
+  // the cost they just entered as the receive line's unit_price (manualPrice
+  // = true so the costPct auto-recompute effect doesn't override it).
+  React.useImperativeHandle(ref, () => ({
+    addItemFromCreated(p) {
+      if (!p || !p.id) return;
+      setItems(it => {
+        // Dedupe — extremely unlikely on a freshly-created product, but harmless.
+        if (it.some(l => l.product_id === p.id)) return it;
+        return [...it, {
+          _uid: (crypto.randomUUID?.() || `r${Math.random().toString(36).slice(2)}${Date.now()}`),
+          product_id: p.id, product_name: p.name,
+          retail_price: Number(p.retail_price) || 0,
+          cost_price: Number(p.cost_price) || 0,
+          quantity: 0, unit: 'เรือน',
+          unit_price: Number(p.cost_price) || 0,
+          manualPrice: true,
+          discount1_value: 0, discount1_type: null,
+          discount2_value: 0, discount2_type: null,
+        }];
+      });
+    },
+  }), []);
   // Camera scanner — lookup by barcode and add to items on hit.
   // Returns true on confirmed success / false otherwise (mirrors POSView).
   // Stale-frame re-fires are handled by `BarcodeScannerModal.lockedRef`.
@@ -4001,7 +4451,16 @@ function StockMovementForm({ kind }) {
             )}
           </div>
           {!search && <div className="p-6 text-muted text-sm">พิมพ์เพื่อค้นหา แล้วแตะเพื่อเพิ่มรายการ — สามารถเลือกหลายรุ่น/หลายสีติดต่อกันได้โดยไม่ต้องค้นหาใหม่</div>}
-          {search && !results.length && <div className="p-6 text-muted text-sm">ไม่พบสินค้า "{search}"</div>}
+          {search && !results.length && (
+            <div className="p-6 space-y-2">
+              <div className="text-muted text-sm">ไม่พบสินค้า "{search}"</div>
+              {kind === 'receive' && (
+                <div className="text-xs text-muted-soft leading-relaxed">
+                  ยังไม่มีรุ่นนี้ในระบบ? กดปุ่ม <span className="font-medium text-ink">เพิ่มรุ่นสินค้า</span> ด้านบนเพื่อเพิ่มสินค้าใหม่ แล้วระบบจะเพิ่มเข้ารายการรับเข้าให้อัตโนมัติ
+                </div>
+              )}
+            </div>
+          )}
           <div className="max-h-[50vh] lg:max-h-[calc(100vh-380px)] overflow-y-auto">
             {results.map(p => (
               <div key={p.id} className="px-4 py-3 border-b hairline last:border-0 hover:bg-white/40 cursor-pointer flex items-center gap-3 transition-colors" onClick={()=>addItem(p)}>
@@ -4193,7 +4652,7 @@ function StockMovementForm({ kind }) {
       />
     </div>
   );
-}
+});
 
 /* =========================================================
    DASHBOARD VIEW
@@ -4253,7 +4712,7 @@ function DashboardView() {
        "card-primary-mesh text-on-primary")
     }>
       <div className="flex items-center justify-between">
-        <div className={"text-[10px] lg:text-xs uppercase tracking-[1.5px] " + (tone==='dark'?'text-on-dark-soft':tone==='coral'?'opacity-90':'text-muted')}>{label}</div>
+        <div className={"text-xs lg:text-xs uppercase tracking-[1.5px] " + (tone==='dark'?'text-on-dark-soft':tone==='coral'?'opacity-90':'text-muted')}>{label}</div>
         <span className={tone==='dark'?'text-on-dark-soft':tone==='coral'?'opacity-80':'text-muted-soft'}><Icon name={icon} size={18}/></span>
       </div>
       <div className="font-display stat-value tabular-nums mt-2" title={String(value)}>{value}</div>
@@ -4341,7 +4800,7 @@ function DashboardView() {
           <div className="flex items-start justify-between gap-3 mb-3 lg:mb-4">
             <div className="font-display text-xl lg:text-2xl flex items-center gap-2"><Icon name="store" size={20}/> ยอดขายแยกช่องทาง</div>
             <div className="text-right">
-              <div className="text-[10px] uppercase tracking-wider text-on-dark-soft">รวม</div>
+              <div className="text-xs uppercase tracking-wider text-on-dark-soft">รวม</div>
               <div className="font-display text-lg tabular-nums">{fmtTHB(stats.rangeTotal)}</div>
             </div>
           </div>
@@ -4405,13 +4864,13 @@ function DashboardView() {
                       {ch.v==='shopee'   && <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke={m.fg} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 01-8 0"/></svg>}
                       {ch.v==='lazada'   && <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke={m.fg} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 8v7h7"/></svg>}
                       {ch.v==='facebook' && <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill={m.fg}><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg>}
-                      <span className="text-[9px] lg:text-[10px] font-semibold uppercase tracking-wider leading-tight text-right" style={{color:m.fg, opacity:0.5}}>{ch.label}</span>
+                      <span className="text-[11px] lg:text-xs font-semibold uppercase tracking-wider leading-tight text-right" style={{color:m.fg, opacity:0.5}}>{ch.label}</span>
                     </div>
                     <div>
                       <div className={"font-display leading-none tabular-nums " + (big ? "text-5xl lg:text-7xl" : "text-2xl lg:text-3xl")} style={{color:m.fg}}>
                         {ch.share.toFixed(0)}<span className={"font-sans font-normal " + (big ? "text-xl lg:text-2xl" : "text-sm")} style={{opacity:0.45}}>%</span>
                       </div>
-                      <div className={"mt-1 tabular-nums font-medium " + (big ? "text-xs lg:text-sm" : "text-[10px]")} style={{color:m.fg, opacity:0.6}}>
+                      <div className={"mt-1 tabular-nums font-medium " + (big ? "text-xs lg:text-sm" : "text-xs")} style={{color:m.fg, opacity:0.6}}>
                         {fmtTHB(ch.total)}
                       </div>
                     </div>
@@ -4598,7 +5057,7 @@ function ProfitLossView() {
        "card-primary-mesh text-on-primary")
     }>
       <div className="flex items-center justify-between">
-        <div className={"text-[10px] lg:text-xs uppercase tracking-[1.5px] " + (tone==='dark'?'text-on-dark-soft':tone==='coral'?'opacity-90':'text-muted')}>{label}</div>
+        <div className={"text-xs lg:text-xs uppercase tracking-[1.5px] " + (tone==='dark'?'text-on-dark-soft':tone==='coral'?'opacity-90':'text-muted')}>{label}</div>
         <span className={tone==='dark'?'text-on-dark-soft':tone==='coral'?'opacity-80':'text-muted-soft'}><Icon name={icon} size={18}/></span>
       </div>
       <div className="font-display stat-value tabular-nums mt-2" title={String(value)}>{value}</div>
@@ -4697,7 +5156,7 @@ function ProfitLossView() {
         <div className="hidden lg:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-surface-cream-strong/95 backdrop-blur z-10">
-              <tr className="text-[10px] uppercase tracking-wider text-muted">
+              <tr className="text-xs uppercase tracking-wider text-muted">
                 <th className="text-left px-4 py-2 font-medium">บิล</th>
                 <th className="text-left px-2 py-2 font-medium">วันที่</th>
                 <th className="text-left px-2 py-2 font-medium">สินค้า</th>
@@ -4722,9 +5181,9 @@ function ProfitLossView() {
                     <td className="px-2 py-2 text-xs whitespace-nowrap">{fmtThaiDateShort(r.sale_date.slice(0,10))}</td>
                     <td className="px-2 py-2">
                       <div className="truncate max-w-[260px]" title={r.product_name}>{r.product_name}</div>
-                      {r.costSource==='fallback' && <span className="badge-pill !bg-warning/15 !text-[#8a6500] !text-[10px] mt-0.5">ทุนประมาณ</span>}
+                      {r.costSource==='fallback' && <span className="badge-pill !bg-warning/15 !text-[#8a6500] !text-xs mt-0.5">ทุนประมาณ</span>}
                     </td>
-                    <td className="px-2 py-2"><span className="badge-pill !text-[10px]">{CHANNEL_LABELS[r.channel]||r.channel||'—'}</span></td>
+                    <td className="px-2 py-2"><span className="badge-pill !text-xs">{CHANNEL_LABELS[r.channel]||r.channel||'—'}</span></td>
                     <td className="px-2 py-2 text-right tabular-nums">{r.qty}</td>
                     <td className="px-2 py-2 text-right tabular-nums">{fmtTHB(r.lineRevenue)}</td>
                     <td className="px-2 py-2 text-right tabular-nums text-muted">{fmtTHB(r.unitCost)}</td>
@@ -4762,16 +5221,16 @@ function ProfitLossView() {
                     <div className="text-xs text-muted mt-0.5">
                       #{r.sale_id} · {fmtThaiDateShort(r.sale_date.slice(0,10))} · {CHANNEL_LABELS[r.channel]||r.channel||'—'}
                     </div>
-                    {r.costSource==='fallback' && <span className="badge-pill !bg-warning/15 !text-[#8a6500] !text-[10px] mt-1">ทุนประมาณ</span>}
+                    {r.costSource==='fallback' && <span className="badge-pill !bg-warning/15 !text-[#8a6500] !text-xs mt-1">ทุนประมาณ</span>}
                   </div>
                   <div className={"text-right " + (r.profit>=0?"":"text-error")}>
                     <div className="font-display text-base tabular-nums">{r.profit>=0?'+':''}{fmtTHB(r.profit)}</div>
-                    <span className={"inline-block mt-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium tabular-nums " + marginCls}>
+                    <span className={"inline-block mt-0.5 px-1.5 py-0.5 rounded-full text-xs font-medium tabular-nums " + marginCls}>
                       {pct.toFixed(1)}%
                     </span>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-2 mt-2 text-[11px]">
+                <div className="grid grid-cols-3 gap-2 mt-2 text-xs">
                   <div><div className="text-muted-soft">จำนวน</div><div className="tabular-nums">{r.qty}</div></div>
                   <div><div className="text-muted-soft">ขาย</div><div className="tabular-nums">{fmtTHB(r.lineRevenue)}</div></div>
                   <div><div className="text-muted-soft">ทุน</div><div className="tabular-nums">{fmtTHB(r.costTotal)}</div></div>
@@ -4956,7 +5415,7 @@ function App() {
           </main>
         </div>
         <MobileTabBar view={view} setView={setView} />
-        {role === 'admin' && <SettingsModal open={settingsOpen} onClose={()=>setSettingsOpen(false)} />}
+        <AppSettingsModal open={settingsOpen} onClose={()=>setSettingsOpen(false)} />
       </ShopProvider>
       </RoleCtx.Provider>
       </DialogProvider>
