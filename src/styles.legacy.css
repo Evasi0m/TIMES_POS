@@ -119,11 +119,17 @@
   .pressable:active { transform: scale(0.992); transition-duration: .08s; }
 
   /* ==========  BUTTONS  ========== */
+  /* Phase 4.4: outline-offset 2px gives the focus ring breathing room
+     so it reads as a "halo" around the input rather than a hard border. */
   input:focus, select:focus, textarea:focus {
     outline: 3px solid rgba(204, 120, 92, 0.22);
-    outline-offset: 0;
+    outline-offset: 2px;
     border-color: #cc785c !important;
     box-shadow: 0 0 0 3px rgba(204, 120, 92, 0.08);
+  }
+  button:focus-visible, a:focus-visible, [role="button"]:focus-visible {
+    outline: 2px solid rgba(204, 120, 92, 0.55);
+    outline-offset: 2px;
   }
 
   .btn-add-product {
@@ -602,69 +608,158 @@
     border-bottom: 1px solid rgba(180, 168, 148, 0.30);
     box-shadow: 0 -1px 0 rgba(255,255,255,0.7) inset, 0 2px 8px -2px rgba(20,20,19,0.06);
   }
+  /* Phase 5: floating pill bar with center FAB ("ขาย") as a regular flex
+     child. Using flex layout (not absolute positioning) keeps the FAB
+     perfectly centered between the two tab halves regardless of viewport
+     width — no math, no notch geometry to keep in sync. The FAB is lifted
+     visually with a negative top margin while staying in flow. */
+  .mobile-tabbar-wrap {
+    display: flex;
+    justify-content: center;
+    /* Match the floating cart button's `left-4 right-4` gutters so both
+       elements share the same horizontal footprint when stacked. */
+    padding: 0 16px 8px;
+    pointer-events: none; /* let taps fall through to .mobile-tabbar */
+  }
   .mobile-tabbar {
-    background: linear-gradient(135deg, rgba(255, 254, 252, 0.82), rgba(250, 249, 245, 0.68));
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: linear-gradient(135deg, rgba(255, 254, 252, 0.94), rgba(250, 249, 245, 0.86));
     backdrop-filter: blur(40px) saturate(200%);
     -webkit-backdrop-filter: blur(40px) saturate(200%);
-    border: 1px solid rgba(255, 255, 255, 0.55);
-    border-radius: 999px;
-    box-shadow: 
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: 24px;
+    box-shadow:
       0 8px 32px -8px rgba(20, 20, 19, 0.18),
       0 2px 8px -2px rgba(20, 20, 19, 0.08),
       0 1px 0 rgba(255, 255, 255, 0.75) inset,
       0 -1px 0 rgba(180, 168, 148, 0.12) inset;
-    margin: 0 auto 14px;
-    left: 50%;
-    right: auto;
-    transform: translateX(-50%);
-    width: auto;
-    max-width: calc(100% - 32px);
-    padding: 6px;
+    width: 100%;
+    /* No max-width — bar tracks the cart button's full width on all viewports. */
+    padding: 4px;
   }
+
   .tab-btn {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    width: 56px;
-    height: 52px;
-    color: rgba(20, 20, 19, 0.45);
+    gap: 2px;
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 110px;
+    height: 56px;
+    color: rgba(20, 20, 19, 0.55);
     position: relative;
-    border-radius: 999px;
-    transition: color .2s var(--ease-out), transform .15s var(--ease-out);
+    /* Match the bar's outer radius (24) minus the bar's 4px padding so the
+       active pill sits concentric with the bar — feels like a polished inset. */
+    border-radius: 20px;
+    padding: 4px 2px;
+    transition: color .2s var(--ease-out), background-color .2s var(--ease-out);
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
-  .tab-btn::before {
-    content: '';
-    position: absolute;
-    inset: 4px;
-    background: transparent;
-    border-radius: 999px;
-    transition: background .3s var(--ease-out), box-shadow .3s var(--ease-out), transform .3s var(--ease-out);
-    pointer-events: none;
-    transform: scale(0.85);
+  .tab-btn .tab-label {
+    font-size: 10.5px;
+    line-height: 1.1;
+    letter-spacing: 0.02em;
+    font-weight: 500;
+    white-space: nowrap;
   }
-  .tab-btn:hover {
-    color: rgba(20, 20, 19, 0.8);
-  }
-  .tab-btn.active { color: #fff; }
-  .tab-btn.active::before { 
+  .tab-btn:hover { color: rgba(20, 20, 19, 0.85); }
+  .tab-btn.active {
+    color: #fff;
     background: linear-gradient(135deg, #d98874 0%, #cc785c 55%, #b86a4e 100%);
-    box-shadow: 
-      0 4px 12px -2px rgba(204, 120, 92, 0.5),
-      0 2px 4px rgba(204, 120, 92, 0.3),
-      0 1px 0 rgba(255, 255, 255, 0.25) inset;
-    transform: scale(1);
+    box-shadow:
+      0 3px 10px -2px rgba(204, 120, 92, 0.45),
+      0 1px 0 rgba(255, 255, 255, 0.22) inset;
   }
-  .tab-btn:active { transform: scale(0.88); }
+  .tab-btn.active .tab-label { font-weight: 600; }
+  .tab-btn:active { transform: scale(0.94); transition-duration: .08s; }
   .tab-btn svg {
-    position: relative;
-    z-index: 1;
     transition: transform .25s var(--ease-out);
   }
   .tab-btn.active svg {
-    transform: scale(1.05);
+    transform: scale(1.06);
     filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.15));
+  }
+
+  /* FAB — flex sibling to the tab buttons; negative top margin gives a subtle
+     lift while keeping the button in flow. Rounded-square shape matches the
+     tab bar's rounded-pill aesthetic better than a full circle. */
+  .mobile-fab {
+    flex: 0 0 56px;
+    width: 56px;
+    height: 56px;
+    margin: -10px 6px 0;        /* gentle lift, breathing room left/right */
+    border-radius: 18px;        /* rounded square, consistent with .tab-btn */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background: linear-gradient(150deg, #d98874 0%, #cc785c 45%, #b86448 100%);
+    border: 2.5px solid rgba(255, 254, 252, 0.90);
+    box-shadow:
+      0 8px 20px -4px rgba(184, 82, 40, 0.50),
+      0 3px 8px -2px rgba(184, 82, 40, 0.28),
+      0 1px 0 rgba(255, 255, 255, 0.28) inset;
+    cursor: pointer;
+    transition: transform .18s var(--ease-out), box-shadow .25s var(--ease-out);
+    -webkit-tap-highlight-color: transparent;
+    position: relative;
+    overflow: hidden;
+    z-index: 2;
+    animation: fabBounce .42s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .mobile-fab::before {
+    content: "";
+    position: absolute; top: 0; left: 0; right: 0; height: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.20), transparent);
+    pointer-events: none;
+    border-radius: 16px 16px 0 0;
+  }
+  .mobile-fab:hover { transform: translateY(-2px); }
+  .mobile-fab:active { transform: scale(0.94); transition-duration: .08s; }
+  .mobile-fab.active {
+    box-shadow:
+      0 0 0 3px rgba(204, 120, 92, 0.22),
+      0 10px 24px -4px rgba(184, 82, 40, 0.60),
+      0 4px 10px -2px rgba(184, 82, 40, 0.38),
+      0 1px 0 rgba(255, 255, 255, 0.28) inset;
+  }
+  .mobile-fab.has-queue { animation: fabBounce .42s cubic-bezier(0.34, 1.56, 0.64, 1), fabPulse 2.4s ease-in-out 2; }
+
+  .fab-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 20px;
+    text-align: center;
+    border: 2px solid rgba(255, 254, 252, 0.95);
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.45);
+    pointer-events: none;
+    font-variant-numeric: tabular-nums;
+  }
+
+  @keyframes fabBounce {
+    0%   { opacity: 0; transform: translateY(10px) scale(0.6); }
+    60%  { opacity: 1; transform: translateY(0)    scale(1.08); }
+    100% { opacity: 1; transform: translateY(0)    scale(1); }
+  }
+  /* Pulse halo when offline-queue picks up new items. */
+  @keyframes fabPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.45), 0 10px 24px -4px rgba(184, 82, 40, 0.55), 0 4px 10px -2px rgba(184, 82, 40, 0.35), 0 1px 0 rgba(255, 255, 255, 0.32) inset; }
+    50%      { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0), 0 12px 28px -4px rgba(184, 82, 40, 0.65), 0 4px 10px -2px rgba(184, 82, 40, 0.4), 0 1px 0 rgba(255, 255, 255, 0.32) inset; }
   }
 
   /* ==========  STEPPER (qty - / +)  ========== */
@@ -788,6 +883,60 @@
   @keyframes viewIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   .view-fade { animation: viewIn .3s var(--ease-out); }
 
+  /* ==========  PHASE 4 — MICRO-INTERACTIONS  ========== */
+
+  /* 4.1 Toast exit — keep mounted briefly while toastOut runs so
+     dismiss feels gradual instead of pop-out. */
+  @keyframes toastIn  { from { opacity: 0; transform: translateY(8px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  @keyframes toastOut { from { opacity: 1; transform: translateY(0) scale(1); }     to { opacity: 0; transform: translateY(-6px) scale(0.96); } }
+  .toast-in  { animation: toastIn  .22s var(--ease-out); }
+  .toast-out { animation: toastOut .2s var(--ease-out) forwards; pointer-events: none; }
+
+  /* 4.2 List stagger — opt-in via inline `style={{ '--i': i }}`.
+     Apply alongside `.fade-in` (`.stagger.fade-in`) and items animate in sequence. */
+  .stagger { animation-delay: calc(var(--i, 0) * 25ms); animation-fill-mode: backwards; }
+
+  /* 4.6 Shake — used on checkout panel when validation fails.
+     280ms keeps it short enough that nobody waits on an animation. */
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%      { transform: translateX(-4px); }
+    40%      { transform: translateX(4px); }
+    60%      { transform: translateX(-3px); }
+    80%      { transform: translateX(2px); }
+  }
+  .shake-error { animation: shake .28s var(--ease-out); }
+
+  /* 4.5 Ripple — CSS-only press feedback for tap on .pressable.
+     A radial gradient overlay pinned to the element scales out + fades on :active. */
+  .pressable { position: relative; overflow: hidden; }
+  .pressable::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, rgba(204,120,92,0.25) 0%, rgba(204,120,92,0) 60%);
+    opacity: 0;
+    transform: scale(0.6);
+    transition: opacity .35s var(--ease-out), transform .35s var(--ease-out);
+    pointer-events: none;
+    border-radius: inherit;
+  }
+  .pressable:active::after { opacity: 1; transform: scale(1.6); transition-duration: .08s; }
+
+  /* 4.7 View transition cascade — header/summary/list slide in sequentially.
+     Pair with inline style={{ '--i': n }} on each direct child. */
+  @keyframes cascadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .cascade > * {
+    opacity: 0;
+    animation: cascadeIn .32s var(--ease-out) forwards;
+    animation-delay: calc(var(--i, 0) * 60ms);
+  }
+
+  /* 4.8 Skeleton → content cross-fade — apply `.skeleton-out` for
+     the brief 200ms overlap when data arrives. */
+  @keyframes skeletonOut { from { opacity: 1; } to { opacity: 0; } }
+  .skeleton-out { animation: skeletonOut .2s var(--ease-out) forwards; }
+
   /* ==========  HAIRLINE  ========== */
   .hairline { border-color: rgba(230, 223, 216, 0.6); }
 
@@ -847,4 +996,160 @@
       background: #fff !important;
     }
     .no-print { display: none !important; }
+  }
+
+  /* ========================================================================
+     BARCODE SCANNER (camera) — mobile-first overlay used by BarcodeScannerModal.
+     The video sits below an SVG-free CSS reticle; corners + scanning line guide
+     the user. .scanner-reticle--hit briefly tints green to confirm a read.
+     ======================================================================== */
+  .scanner-viewport {
+    position: relative;
+    width: 100%;
+    /* 4:3 portrait-ish frame plays well with EAN-13 horizontal codes. */
+    aspect-ratio: 4 / 5;
+    background: #000;
+    overflow: hidden;
+  }
+  @media (min-width: 1024px) {
+    .scanner-viewport { aspect-ratio: 4 / 3; }
+  }
+  .scanner-video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .scanner-toolbar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    color: #fff;
+    background: linear-gradient(to bottom, rgba(0,0,0,.55), rgba(0,0,0,0));
+  }
+  .scanner-icon-btn {
+    width: 36px; height: 36px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    transition: background-color 0.15s ease, transform 0.15s ease;
+  }
+  .scanner-icon-btn:hover { background: rgba(255,255,255,0.25); }
+  .scanner-icon-btn:active { transform: scale(0.94); }
+  .scanner-icon-btn--active { background: #f5d04a; color: #1a1208; }
+  .scanner-icon-btn--active:hover { background: #ffd957; }
+
+  .scanner-reticle {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    /* Cutout effect: dark vignette OUTSIDE the reticle box. The box itself
+       (280×170) is implied by the corner brackets — the dim layer covers
+       everything; corners visually frame the scan area. */
+    --scan-w: min(78vw, 320px);
+    --scan-h: calc(var(--scan-w) * 0.62);
+  }
+  .scanner-reticle::before {
+    content: "";
+    position: absolute;
+    width: var(--scan-w);
+    height: var(--scan-h);
+    border-radius: 14px;
+    box-shadow: 0 0 0 9999px rgba(0,0,0,0.55);
+    transition: box-shadow 0.2s ease;
+  }
+  .scanner-reticle--hit::before {
+    box-shadow: 0 0 0 9999px rgba(0, 80, 30, 0.35);
+  }
+  .scanner-reticle-corner {
+    position: absolute;
+    width: 22px; height: 22px;
+    border-color: #f5d04a;
+    border-style: solid;
+    border-width: 0;
+    transition: border-color 0.2s ease;
+  }
+  .scanner-reticle--hit .scanner-reticle-corner { border-color: #5fe28b; }
+  .scanner-reticle-corner.tl { top: calc(50% - var(--scan-h) / 2); left: calc(50% - var(--scan-w) / 2); border-top-width: 3px; border-left-width: 3px; border-top-left-radius: 12px; }
+  .scanner-reticle-corner.tr { top: calc(50% - var(--scan-h) / 2); right: calc(50% - var(--scan-w) / 2); border-top-width: 3px; border-right-width: 3px; border-top-right-radius: 12px; }
+  .scanner-reticle-corner.bl { bottom: calc(50% - var(--scan-h) / 2); left: calc(50% - var(--scan-w) / 2); border-bottom-width: 3px; border-left-width: 3px; border-bottom-left-radius: 12px; }
+  .scanner-reticle-corner.br { bottom: calc(50% - var(--scan-h) / 2); right: calc(50% - var(--scan-w) / 2); border-bottom-width: 3px; border-right-width: 3px; border-bottom-right-radius: 12px; }
+  .scanner-reticle-line {
+    position: absolute;
+    width: var(--scan-w);
+    height: 2px;
+    background: linear-gradient(to right, transparent, #f5d04a, transparent);
+    box-shadow: 0 0 8px rgba(245, 208, 74, 0.5);
+    animation: scanLine 1.6s ease-in-out infinite;
+  }
+  @keyframes scanLine {
+    0%   { transform: translateY(calc(var(--scan-h) / -2 + 4px)); opacity: 0.2; }
+    50%  { transform: translateY(calc(var(--scan-h) /  2 - 4px)); opacity: 1; }
+    100% { transform: translateY(calc(var(--scan-h) / -2 + 4px)); opacity: 0.2; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .scanner-reticle-line { animation: none; opacity: 0.6; }
+  }
+  .scanner-status {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    color: #fff;
+    background: rgba(0,0,0,0.75);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+
+  /* Inline camera scan button — sits as a flex sibling of the search input.
+     Explicit 48×48 square; flex layout doesn't reliably honor aspect-ratio
+     when align-self:stretch is set, so we just pin both dimensions.
+     Inputs that pair with this button should use `!py-3 !text-base` so heights
+     align visually. Styled as a compact btn-primary variant. */
+  .scan-inline-btn {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    background: linear-gradient(160deg, #d18467 0%, #cc785c 50%, #c06c50 100%);
+    color: #fff;
+    border: none;
+    box-shadow:
+      0 4px 12px -2px rgba(204, 120, 92, 0.38),
+      0 1px 0 rgba(255, 255, 255, 0.22) inset;
+    transition: transform 0.15s var(--ease-out), box-shadow 0.15s ease, filter 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .scan-inline-btn::before {
+    content: "";
+    position: absolute; top: 0; left: 0; right: 0; height: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.18), transparent);
+    pointer-events: none;
+    border-radius: inherit;
+  }
+  .scan-inline-btn:hover {
+    filter: brightness(1.06);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px -2px rgba(204, 120, 92, 0.48), 0 1px 0 rgba(255,255,255,0.22) inset;
+  }
+  .scan-inline-btn:active { transform: scale(0.94); filter: brightness(0.95); }
+  @media (min-width: 1024px) {
+    .scan-inline-btn { display: none; }
   }

@@ -16,6 +16,14 @@ import {
 } from './lib/offline-queue.js';
 import { onOnlineChange, isOnline } from './lib/online-status.js';
 import { mapError } from './lib/error-map.js';
+import { useNumberTween } from './lib/use-number-tween.js';
+import { useBarcodeScanner, getPreferredFacing, setPreferredFacing } from './lib/use-barcode-scanner.js';
+import { playScanBeep, playScanError, vibrateScan, vibrateError } from './lib/barcode-feedback.js';
+import KindTabs from './components/movement/KindTabs.jsx';
+import CostPercentToggle from './components/movement/CostPercentToggle.jsx';
+import MovementItemsPanel from './components/movement/MovementItemsPanel.jsx';
+import SupplierForm from './components/movement/SupplierForm.jsx';
+import SalePickerForReturn from './components/movement/SalePickerForReturn.jsx';
 import './styles.css';
 
 // `supabase.createClient(...)` from the CDN UMD bundle becomes a one-method
@@ -199,6 +207,9 @@ const Icon = ({ name, size = 20, className = "", strokeWidth = 1.75, color }) =>
     case "arrow-down":return <svg {...p}><path d="M12 4v16"/><path d="M19 13l-7 7-7-7"/></svg>;
     case "store":     return <svg {...p}><path d="M4 4h16l-2 4H6L4 4z"/><path d="M4 8v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/></svg>;
     case "file":      return <svg {...p}><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>;
+    case "camera":    return <svg {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3.5"/></svg>;
+    case "flashlight":return <svg {...p}><path d="M18 6 6 18"/><path d="M14 4h6v6"/><path d="M10 20H4v-6"/><circle cx="12" cy="12" r="2"/></svg>;
+    case "flip-cam":  return <svg {...p}><path d="M3 7h4l2-3h6l2 3h4v12H3z"/><path d="m9 13 3-3 3 3"/><path d="M12 10v6"/></svg>;
     default: return null;
   }
 };
@@ -207,11 +218,16 @@ const Icon = ({ name, size = 20, className = "", strokeWidth = 1.75, color }) =>
    TOAST
 ========================================================= */
 const ToastCtx = React.createContext({ push: ()=>{} });
+// Phase 4.1: each toast carries a `closing` flag flipped ~200ms before unmount,
+// so the .toast-out keyframe gets a chance to play before React removes the node.
 function ToastProvider({ children }) {
   const [list, setList] = useState([]);
   const push = useCallback((msg, type='info') => {
     const id = Date.now()+Math.random();
-    setList(l => [...l, { id, msg, type }]);
+    setList(l => [...l, { id, msg, type, closing: false }]);
+    // Stage 1 (3300ms): mark closing → triggers .toast-out keyframe.
+    setTimeout(() => setList(l => l.map(t => t.id === id ? { ...t, closing: true } : t)), 3300);
+    // Stage 2 (3500ms): unmount once exit animation has played out.
     setTimeout(() => setList(l => l.filter(t => t.id !== id)), 3500);
   }, []);
   return (
@@ -219,7 +235,9 @@ function ToastProvider({ children }) {
       {children}
       <div className="fixed bottom-20 lg:bottom-6 right-4 lg:right-6 z-[120] space-y-2 max-w-[calc(100vw-32px)]">
         {list.map(t => (
-          <div key={t.id} className={"px-4 py-3 rounded-lg shadow-2xl text-sm flex items-center gap-2 fade-in " + (t.type==='error'?'bg-error text-white':t.type==='success'?'bg-[#1f3d27] text-white':'bg-surface-dark text-on-dark')}>
+          <div key={t.id} className={"px-4 py-3 rounded-lg shadow-2xl text-sm flex items-center gap-2 " +
+              (t.closing ? "toast-out " : "toast-in ") +
+              (t.type==='error'?'bg-error text-white':t.type==='success'?'bg-[#1f3d27] text-white':'bg-surface-dark text-on-dark')}>
             <Icon name={t.type==='error'?'alert':t.type==='success'?'check':'alert'} size={16} strokeWidth={2.2}/>
             <span>{t.msg}</span>
           </div>
@@ -349,6 +367,181 @@ function Modal({ open, onClose, title, children, footer, wide }) {
         </div>
         <div className="p-5 overflow-y-auto flex-1">{children}</div>
         {footer && <div className="px-5 py-4 border-t hairline flex justify-end gap-2 flex-shrink-0 pb-safe">{footer}</div>}
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
+   BARCODE SCANNER MODAL — camera-based fallback for mobile/tablet.
+   Desktop still uses USB scanners; this is mobile-only UX.
+
+   - mode='single'      → fires onScan once, then closes.
+   - mode='continuous'  → keeps camera live, fires onScan per accepted code,
+                          shows a hit log; user closes manually.
+   The hook (`useBarcodeScanner`) drives the camera + decoder; this
+   component only handles UI, animation, feedback, and torch/facing toggles.
+========================================================= */
+function BarcodeScannerModal({ open, onClose, onScan, mode = 'single', title }) {
+  const { render, closing } = useMountedToggle(open, 220);
+  const videoRef = useRef(null);
+  const [facing, setFacing] = useState(getPreferredFacing());
+  const [hits, setHits] = useState([]); // continuous mode log: [{code, at}]
+  const [flashHit, setFlashHit] = useState(false);
+  // Latch the latest onScan so the hook closure is stable.
+  const onScanRef = useRef(onScan);
+  useEffect(() => { onScanRef.current = onScan; }, [onScan]);
+  // Persistent lock across modal open/close cycles. The component instance
+  // itself never unmounts (only inner JSX via `render`), so refs survive.
+  // Semantics:
+  //   - On a successful scan we set lockedCode = that code. Subsequent
+  //     detections of the SAME code are silently ignored — the camera is
+  //     still aimed at the just-scanned item and we don't want to fire again
+  //     when the user reopens the modal to scan a DIFFERENT product.
+  //   - The lock auto-releases the moment we detect a DIFFERENT code (=
+  //     user has moved the camera away to a new item) OR after 15 seconds
+  //     have elapsed (safety net so the user is never stuck if they really
+  //     do want to rescan the same barcode in a low-barcode environment).
+  const lockedRef = useRef({ code: null, at: 0 });
+  const LOCK_TIMEOUT_MS = 15000;
+
+  const handleDetect = useCallback(async (code) => {
+    const now = Date.now();
+    const lock = lockedRef.current;
+    // Same code while still locked — ignore silently. No beep, no callback,
+    // so cart quantity never increments by accident.
+    if (lock.code === code && now - lock.at < LOCK_TIMEOUT_MS) return;
+    // Different code seen (or lock expired) — release before processing.
+    if (lock.code !== null) lockedRef.current = { code: null, at: 0 };
+
+    // Forward to consumer. Consumer returns true on confirmed hit (product
+    // found + added) or false on miss/error so we don't lock unmatched codes.
+    let success = true;
+    try {
+      const r = onScanRef.current?.(code);
+      if (r && typeof r.then === 'function') {
+        const awaited = await r;
+        if (awaited === false) success = false;
+      } else if (r === false) {
+        success = false;
+      }
+    } catch { success = false; }
+    if (!success) return; // miss feedback is the consumer's responsibility
+
+    // Confirmed success: feedback + lock + close (single mode).
+    playScanBeep();
+    vibrateScan();
+    setFlashHit(true);
+    setTimeout(() => setFlashHit(false), 240);
+    lockedRef.current = { code, at: Date.now() };
+    if (mode === 'continuous') {
+      setHits(h => [{ code, at: Date.now() }, ...h].slice(0, 4));
+    } else {
+      // single-shot: close after a short delay so the user sees the green flash.
+      setTimeout(() => onClose?.(), 220);
+    }
+  }, [mode, onClose]);
+
+  const { status, torchSupported, torchOn, toggleTorch } = useBarcodeScanner({
+    videoRef,
+    enabled: render,
+    onDetect: handleDetect,
+    facing,
+  });
+
+  const switchCamera = () => {
+    const next = facing === 'environment' ? 'user' : 'environment';
+    setFacing(next);
+    setPreferredFacing(next);
+  };
+
+  if (!render) return null;
+  return (
+    <div
+      className={"fixed inset-0 modal-overlay z-[110] flex items-end lg:items-center justify-center lg:p-6 " + (closing ? "overlay-out" : "overlay-in")}
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title || 'สแกนบาร์โค้ด'}
+        className={"bg-black text-white rounded-t-2xl lg:rounded-2xl shadow-2xl w-full lg:max-w-md max-h-[92vh] flex flex-col overflow-hidden relative " + (closing ? "sheet-out" : "sheet-anim")}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Camera viewport */}
+        <div className="scanner-viewport">
+          <video ref={videoRef} className="scanner-video" playsInline muted/>
+          {/* Reticle overlay */}
+          <div className={"scanner-reticle " + (flashHit ? "scanner-reticle--hit" : "")} aria-hidden="true">
+            <div className="scanner-reticle-corner tl"/>
+            <div className="scanner-reticle-corner tr"/>
+            <div className="scanner-reticle-corner bl"/>
+            <div className="scanner-reticle-corner br"/>
+            <div className="scanner-reticle-line"/>
+          </div>
+
+          {/* Toolbar */}
+          <div className="scanner-toolbar">
+            <div className="font-display text-base">{title || 'สแกนบาร์โค้ด'}</div>
+            <div className="flex items-center gap-1.5">
+              {torchSupported && (
+                <button type="button" onClick={toggleTorch}
+                  className={"scanner-icon-btn " + (torchOn ? "scanner-icon-btn--active" : "")}
+                  aria-label="เปิด/ปิดไฟฉาย">
+                  <Icon name="flashlight" size={18}/>
+                </button>
+              )}
+              <button type="button" onClick={switchCamera} className="scanner-icon-btn" aria-label="สลับกล้อง">
+                <Icon name="flip-cam" size={18}/>
+              </button>
+              <button type="button" onClick={onClose} className="scanner-icon-btn" aria-label="ปิด">
+                <Icon name="x" size={18}/>
+              </button>
+            </div>
+          </div>
+
+          {/* Status overlay (loading / denied / unsupported / error) */}
+          {status !== 'running' && (
+            <div className="scanner-status">
+              {status === 'starting' && (<><span className="spinner"/> กำลังเปิดกล้อง…</>)}
+              {status === 'denied' && (
+                <div className="text-center px-6">
+                  <div className="mb-2"><Icon name="camera" size={36}/></div>
+                  <div className="font-display text-lg mb-1">ไม่ได้รับสิทธิ์ใช้กล้อง</div>
+                  <div className="text-sm opacity-80">เปิด permission กล้องในตั้งค่าเบราว์เซอร์ แล้วลองอีกครั้ง</div>
+                </div>
+              )}
+              {status === 'unsupported' && (
+                <div className="text-center px-6">
+                  <div className="mb-2"><Icon name="alert" size={32}/></div>
+                  <div className="font-display text-lg mb-1">เบราว์เซอร์ไม่รองรับ</div>
+                  <div className="text-sm opacity-80">ลองใช้ Chrome / Safari เวอร์ชันใหม่บนมือถือ</div>
+                </div>
+              )}
+              {status === 'error' && (
+                <div className="text-center px-6">
+                  <div className="mb-2"><Icon name="alert" size={32}/></div>
+                  <div className="font-display text-lg mb-1">เปิดกล้องไม่สำเร็จ</div>
+                  <div className="text-sm opacity-80">ตรวจสอบกล้องบนเครื่องแล้วลองอีกครั้ง</div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Hint / hit log */}
+        <div className="bg-black/60 px-4 py-3 text-xs flex items-center justify-between gap-3 flex-shrink-0">
+          <span className="opacity-80">
+            {mode === 'continuous'
+              ? 'วางบาร์โค้ดในกรอบ — กล้องจะปิดอัตโนมัติเมื่อสแกนสำเร็จ'
+              : 'วางบาร์โค้ดในกรอบเพื่อสแกน'}
+          </span>
+          {mode === 'continuous' && hits.length > 0 && (
+            <span className="font-mono text-[11px] opacity-90 truncate max-w-[55%]" title={hits[0].code}>
+              ✓ {hits[0].code}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1094,7 +1287,10 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
           <button className="btn-secondary !text-error hover:!bg-error/10" onClick={voidIt} disabled={busy}>
             <Icon name="trash" size={16}/> ยกเลิกบิลนี้
           </button>
-          <button className="btn-secondary" onClick={startEdit} disabled={busy}>
+          <button
+            className="btn-secondary" onClick={startEdit} disabled={busy}
+            title="แก้ไขได้เฉพาะข้อมูลส่วนหัว (ไม่รวมรายการสินค้า) — ถ้าต้องแก้รายการ ให้ยกเลิกบิลแล้วทำใหม่"
+          >
             <Icon name="edit" size={16}/> แก้ไข header
           </button>
         </>)}
@@ -1222,7 +1418,15 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
 
           {/* Items (read-only) */}
           <div>
-            <div className="text-xs uppercase tracking-wider text-muted mb-2">รายการสินค้า ({items.length})</div>
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <div className="text-xs uppercase tracking-wider text-muted">รายการสินค้า ({items.length})</div>
+              <span
+                className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/15 text-muted-soft font-medium"
+                title="แก้ไขรายการ/จำนวนไม่ได้ — ต้องยกเลิกบิลแล้วทำใหม่"
+              >
+                แก้ไขไม่ได้
+              </span>
+            </div>
             <div className="card-canvas overflow-hidden">
               {items.map(it => (
                 <div key={it.id} className="px-4 py-2.5 border-b hairline last:border-0 flex items-center gap-3">
@@ -1432,24 +1636,63 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings }) {
   );
 }
 
+// Phase 5 redesign: floating pill bar with a center FAB ("ขาย").
+// - All other tabs sit in two halves around the FAB notch (admin: 3-FAB-3,
+//   cashier: 2-FAB-1) so every menu remains visible without an overflow sheet.
+// - FAB doubles as an offline-queue indicator: a red badge with the pending
+//   sale count appears whenever `onQueueChange` reports >0 queued items.
 function MobileTabBar({ view, setView }) {
   const role = useRole();
-  const items = navForRole(role);
+  const all = navForRole(role);
+  // Pull POS out — it becomes the FAB. Everything else fills the bar halves.
+  const posItem = all.find(it => it.k === 'pos');
+  const others  = all.filter(it => it.k !== 'pos');
+  // Split: balance left vs right (right takes the larger half if odd).
+  const leftCount = Math.floor(others.length / 2);
+  const left  = others.slice(0, leftCount);
+  const right = others.slice(leftCount);
+
+  // Subscribe to queue length so the FAB badge stays accurate while the cashier
+  // navigates around. `onQueueChange` fires once with the baseline on subscribe.
+  const [queued, setQueued] = useState(0);
+  useEffect(() => {
+    const off = onQueueChange?.(setQueued);
+    return () => off?.();
+  }, []);
+
+  const renderTab = (it) => (
+    <button
+      key={it.k}
+      className={"tab-btn pressable " + (view===it.k ? "active" : "")}
+      onClick={()=>setView(it.k)}
+      aria-label={it.label}
+      aria-current={view===it.k ? "page" : undefined}
+      title={it.label}
+    >
+      <Icon name={it.icon} size={20} strokeWidth={view===it.k?2.2:1.8}/>
+      <span className="tab-label">{it.label}</span>
+    </button>
+  );
+
   return (
-    <nav className="lg:hidden fixed bottom-0 z-50 mobile-tabbar pb-safe">
-      <div className="flex items-center justify-center gap-1">
-        {items.map(it => (
-          <button 
-            key={it.k} 
-            className={"tab-btn " + (view===it.k?"active":"")} 
-            onClick={()=>setView(it.k)}
-            aria-label={it.label}
-            aria-current={view===it.k?"page":undefined}
-            title={it.label}
+    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 pb-safe mobile-tabbar-wrap" role="navigation" aria-label="หลัก">
+      <div className="mobile-tabbar">
+        {left.map(renderTab)}
+        {posItem && (
+          <button
+            className={"mobile-fab " + (view==='pos' ? "active " : "") + (queued>0 ? "has-queue" : "")}
+            onClick={()=>setView('pos')}
+            aria-label={posItem.labelLong || posItem.label}
+            aria-current={view==='pos' ? "page" : undefined}
+            title={posItem.labelLong || posItem.label}
           >
-            <Icon name={it.icon} size={24} strokeWidth={view===it.k?2.2:1.8}/>
+            <Icon name="cart" size={28} strokeWidth={2.4}/>
+            {queued > 0 && (
+              <span className="fab-badge" aria-label={`มี ${queued} บิลรอ sync`}>{queued > 99 ? '99+' : queued}</span>
+            )}
           </button>
-        ))}
+        )}
+        {right.map(renderTab)}
       </div>
     </nav>
   );
@@ -1495,6 +1738,7 @@ function POSView() {
   const [buyer, setBuyer] = useState({ name: "", taxId: "", address: "", invoiceNo: "" });
   const [receiptOrderId, setReceiptOrderId] = useState(null); // shows ReceiptModal after sale
   const searchRef = useRef(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const submitLockRef = useRef(false); // prevents double-submit even if React hasn't re-rendered yet
   const netPriceRef = useRef(null);
   const netReceivedRef = useRef(null);
@@ -1502,6 +1746,8 @@ function POSView() {
   // Set to true when user attempts to submit while form invalid — drives
   // the field-error-glow on missing required fields. Auto-clears below.
   const [showErrors, setShowErrors] = useState(false);
+  // Phase 4.6: brief shake animation on the checkout panel when validation fails.
+  const [shaking, setShaking] = useState(false);
   // Modal for tax-invoice details (replaces the previous inline form
   // that bloated the checkout panel).
   const [taxInvoiceModalOpen, setTaxInvoiceModalOpen] = useState(false);
@@ -1572,12 +1818,38 @@ function POSView() {
     });
     searchRef.current?.focus();
   };
+  // Camera scanner — looks up by barcode and adds to cart on hit.
+  // Returns true on confirmed success / false on miss or error so
+  // `BarcodeScannerModal` only locks + plays feedback on real hits.
+  // Stale-frame re-fires (camera still aimed at the just-scanned item when
+  // the user reopens the modal) are handled inside the modal via lockedRef.
+  const handleCameraScan = async (code) => {
+    try {
+      const { data } = await sb.from('products').select('*').eq('barcode', code).limit(1);
+      if (data && data.length) {
+        addToCart(data[0]);
+        setScannerOpen(false);
+        return true;
+      }
+      playScanError(); vibrateError();
+      toast.push(`ไม่พบสินค้าบาร์โค้ด ${code}`, 'error');
+      return false;
+    } catch {
+      playScanError(); vibrateError();
+      toast.push('สแกนไม่สำเร็จ', 'error');
+      return false;
+    }
+  };
+
   const updateLine = (idx, patch) => setCart(c => c.map((l,i)=> i===idx?{...l,...patch}:l));
   const removeLine = (idx) => setCart(c => c.filter((_,i)=>i!==idx));
   const lineNet = (l) => applyDiscounts(l.unit_price, l.quantity, l.discount1_value, l.discount1_type, l.discount2_value, l.discount2_type);
   const subtotal = useMemo(()=> cart.reduce((s,l)=> s + lineNet(l), 0), [cart]);
   const netPriceNum = netPrice === "" || netPrice == null ? null : Math.max(0, Math.min(Number(netPrice)||0, subtotal));
   const grand = netPriceNum == null ? subtotal : netPriceNum;
+  // Phase 4.3: animate the displayed grand from previous value → new value over 250ms
+  // so jumps from ฿0 → ฿X,XXX feel intentional rather than abrupt.
+  const grandTween = useNumberTween(grand, 250);
   const discountAmount = Math.max(0, subtotal - grand);
   const totalQty = useMemo(()=> cart.reduce((s,l)=> s+l.quantity, 0), [cart]);
 
@@ -1602,6 +1874,11 @@ function POSView() {
   // and scrolls the first one into view so they know what's wrong.
   const flagMissing = () => {
     setShowErrors(true);
+    // Phase 4.6: re-trigger by toggling state — `key`-based re-mount isn't worth
+    // the extra plumbing here, a 280ms timeout is good enough.
+    setShaking(false);
+    requestAnimationFrame(() => setShaking(true));
+    setTimeout(() => setShaking(false), 320);
     const first = !netPriceFilled ? netPriceRef.current
                 : !netReceivedOk  ? netReceivedRef.current
                 : !buyerNameOk    ? buyerNameRef.current
@@ -1686,17 +1963,22 @@ function POSView() {
   };
 
   const SearchInput = (
-    <div className="relative">
-      <span className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"><Icon name="search" size={20} strokeWidth={2.25} color="#6b3a26"/></span>
-      <input
-        ref={searchRef}
-        className="input !pl-12 !py-4 !text-base lg:!text-lg"
-        placeholder="สแกนบาร์โค้ด หรือพิมพ์ชื่อรุ่น"
-        value={search}
-        onChange={e=>setSearch(e.target.value)}
-        autoFocus
-      />
-      {search && <button className="absolute right-3 top-1/2 -translate-y-1/2 btn-ghost !p-2 !min-h-0" onClick={()=>{setSearch("");setResults([]);searchRef.current?.focus();}} aria-label="ล้างคำค้น"><Icon name="x" size={18}/></button>}
+    <div className="relative flex items-center gap-2">
+      <div className="relative flex-1">
+        <span className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"><Icon name="search" size={20} strokeWidth={2.25} color="#6b3a26"/></span>
+        <input
+          ref={searchRef}
+          className="input !pl-12 !py-3 !text-base lg:!text-lg"
+          placeholder="สแกนบาร์โค้ด หรือพิมพ์ชื่อรุ่น"
+          value={search}
+          onChange={e=>setSearch(e.target.value)}
+          autoFocus
+        />
+        {search && <button className="absolute right-3 top-1/2 -translate-y-1/2 btn-ghost !p-2 !min-h-0" onClick={()=>{setSearch("");setResults([]);searchRef.current?.focus();}} aria-label="ล้างคำค้น"><Icon name="x" size={18}/></button>}
+      </div>
+      <button type="button" className="scan-inline-btn" onClick={()=>setScannerOpen(true)} aria-label="สแกนด้วยกล้อง">
+        <Icon name="camera" size={20}/>
+      </button>
     </div>
   );
 
@@ -1714,11 +1996,13 @@ function POSView() {
       {search && searching && <div className="p-6 text-muted text-sm flex-shrink-0">กำลังค้นหา...</div>}
       {search && !searching && results.length===0 && <div className="p-6 text-muted text-sm flex-shrink-0">ไม่พบสินค้า "{search}"</div>}
       <div className="flex-1 overflow-y-auto min-h-0">
-        {results.map(p => {
+        {results.map((p, idx) => {
           const oos = (Number(p.current_stock)||0) <= 0;
           return (
           <div key={p.id}
-            className={"px-4 lg:px-5 py-3.5 border-b hairline last:border-0 flex items-center gap-3 transition-colors " + (oos ? "opacity-60 cursor-not-allowed" : "hover:bg-white/40 cursor-pointer")}
+            // Phase 4.2: stagger via --i so search results glide in instead of popping all at once.
+            style={{ '--i': Math.min(idx, 12) }}
+            className={"fade-in stagger px-4 lg:px-5 py-3.5 border-b hairline last:border-0 flex items-center gap-3 transition-colors " + (oos ? "opacity-60 cursor-not-allowed" : "hover:bg-white/40 cursor-pointer")}
             onClick={oos ? undefined : ()=>addToCart(p)}>
             <div className="flex-1 min-w-0">
               <div className="font-medium text-ink truncate text-base">{p.name}</div>
@@ -1754,7 +2038,7 @@ function POSView() {
         {cart.map((l, idx) => {
           const expanded = expandedDisc[idx];
           return (
-            <div key={l.product_id} className="glass-soft rounded-lg p-3 mb-2 hover-lift fade-in">
+            <div key={l.product_id} style={{ '--i': Math.min(idx, 8) }} className="glass-soft rounded-lg p-3 mb-2 hover-lift fade-in stagger">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm truncate">{l.product_name}</div>
@@ -1818,7 +2102,7 @@ function POSView() {
         })}
       </div>
 
-      <div className="p-4 lg:p-5 border-t hairline bg-surface-cream-strong flex-shrink-0">
+      <div className={"p-4 lg:p-5 border-t hairline bg-surface-cream-strong flex-shrink-0 " + (shaking ? "shake-error" : "")}>
         {/* Section: ข้อมูลบิล */}
         <div className="text-[9px] uppercase tracking-[0.12em] text-muted-soft font-medium mb-1.5">ข้อมูลบิล</div>
         <div className="grid grid-cols-2 gap-2 mb-4">
@@ -1929,7 +2213,7 @@ function POSView() {
           <div className="flex justify-between text-sm text-muted mb-1"><span>รวมก่อนลด</span><span className="tabular-nums">{fmtTHB(subtotal)}</span></div>
           <div className="flex justify-between text-xs text-muted-soft mb-1"><span>ก่อนหัก VAT 7%</span><span className="tabular-nums">{fmtTHB(vatBreakdown(grand).exVat)}</span></div>
           <div className="flex justify-between text-xs text-muted-soft mb-2"><span>VAT 7%</span><span className="tabular-nums">{fmtTHB(vatBreakdown(grand).vat)}</span></div>
-          <div className="flex justify-between font-display text-3xl mb-3"><span>รวม</span><span className="tabular-nums">{fmtTHB(grand)}</span></div>
+          <div className="flex justify-between font-display text-3xl mb-3"><span>รวม</span><span className="tabular-nums">{fmtTHB(grandTween)}</span></div>
 
           {/* Wrapper catches clicks while the inner button is disabled,
               so we can flag missing fields and scroll the user to them. */}
@@ -1981,7 +2265,7 @@ function POSView() {
             </div>
             <span className="font-medium text-base">ดูตะกร้า</span>
           </div>
-          <span className="font-display text-2xl tabular-nums">{fmtTHB(grand)}</span>
+          <span className="font-display text-2xl tabular-nums">{fmtTHB(grandTween)}</span>
         </button>
       )}
 
@@ -2057,6 +2341,15 @@ function POSView() {
 
       {/* Receipt modal — opens after successful sale */}
       <ReceiptModal open={!!receiptOrderId} onClose={()=>setReceiptOrderId(null)} orderId={receiptOrderId}/>
+
+      {/* Camera barcode scanner — mobile/tablet only (FAB and inline button hidden on desktop). */}
+      <BarcodeScannerModal
+        open={scannerOpen}
+        onClose={()=>setScannerOpen(false)}
+        onScan={handleCameraScan}
+        mode="continuous"
+        title="สแกนสินค้าเข้าตะกร้า"
+      />
     </>
   );
 }
@@ -2260,9 +2553,9 @@ function StockHistoryPanel({ productId }) {
   };
 
   return (
-    <div className="border hairline rounded-md mt-4">
+    <div className="border hairline rounded-xl bg-white/80">
       <button type="button" onClick={toggle}
-        className="w-full flex items-center justify-between px-4 py-3 hover:bg-surface-soft rounded-md">
+        className="w-full flex items-center justify-between px-4 py-3 bg-white/80 hover:bg-surface-soft rounded-xl">
         <span className="flex items-center gap-2 text-sm font-medium">
           <Icon name="trend-up" size={16}/> ประวัติสต็อก
           {rows && <span className="badge-pill !text-[11px]">{rows.length} รายการ</span>}
@@ -2302,6 +2595,7 @@ function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand,
   const [draft, setDraft] = useState(null);
   const [barcodeEdit, setBarcodeEdit] = useState(false);
   const [manualApproved, setManualApproved] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const barcodeRef = useRef(null);
   const askPrompt = usePrompt();
   const askConfirm = useConfirm();
@@ -2347,101 +2641,179 @@ function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand,
     if (reason) { tryToast.push(reason, 'error'); return; }
     onSave(draft);
   };
+  // Live margin % for the pricing section header badge.
+  const marginPct = draft.retail_price > 0
+    ? ((draft.retail_price - (draft.cost_price || 0)) / draft.retail_price * 100)
+    : null;
+  const marginBadgeClass = marginPct == null ? '' :
+    marginPct >= 30 ? 'badge-pill !bg-success/15 !text-success' :
+    marginPct >= 10 ? 'badge-pill !bg-warning/15 !text-[#8a6500]' :
+    'badge-pill !bg-error/10 !text-error';
+
+  const labelCls = "text-[9.5px] font-semibold uppercase tracking-[1.5px] text-muted";
+  const fieldLabel = "text-xs uppercase tracking-wider text-muted";
+
   return (
-    <Modal open={!!draft} onClose={onClose} title={draft.id?"แก้ไขสินค้า":"เพิ่มสินค้าใหม่"}
+    <>
+    <Modal open={!!draft} onClose={onClose} title={draft.id ? "แก้ไขสินค้า" : "เพิ่มสินค้าใหม่"}
       footer={<>
         <button className="btn-secondary" onClick={onClose}>ยกเลิก</button>
         <button className="btn-primary" onClick={handleSave}><Icon name="check" size={16}/>บันทึก</button>
       </>}>
-      <div className="space-y-4">
-        <div>
-          <label className="text-xs uppercase tracking-wider text-muted">ชื่อรุ่น</label>
-          <input className="input mt-1" value={draft.name||""} onChange={e=>set('name', e.target.value)} />
+
+      <div className="space-y-3">
+
+        {/* ── ข้อมูลสินค้า ── */}
+        <div className="rounded-xl border hairline p-4">
+          <div className="mb-3">
+            <div className="inline-flex items-center gap-1.5 bg-ink/[0.06] rounded-md px-2 py-1">
+              <Icon name="box" size={12} className="text-muted"/>
+              <span className={labelCls}>ข้อมูลสินค้า</span>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <div>
+              <label className={fieldLabel}>ชื่อรุ่น</label>
+              <input className="input mt-1" value={draft.name||""} onChange={e=>set('name', e.target.value)} />
+            </div>
+            <div>
+              <label className={fieldLabel + " flex items-center gap-2"}>
+                บาร์โค้ด
+                {draft.id && !barcodeEdit && (
+                  <button type="button" className="inline-flex items-center gap-1 text-xs text-[#6b3a26] bg-[#6b3a26]/10 hover:bg-[#6b3a26]/20 px-2 py-0.5 rounded-md transition-colors normal-case tracking-normal font-medium" onClick={()=>{ setBarcodeEdit(true); setTimeout(()=>barcodeRef.current?.focus(), 50); }}>
+                    <Icon name="barcode" size={11}/> แก้ไข Barcode
+                  </button>
+                )}
+                {draft.id && barcodeEdit && (
+                  <span className="inline-flex items-center gap-1 text-xs text-success normal-case tracking-normal font-medium">
+                    <Icon name="barcode" size={11}/> พร้อมสแกน
+                  </span>
+                )}
+                {!draft.id && (
+                  <span className="inline-flex items-center gap-1 text-muted-soft normal-case tracking-normal font-normal text-xs">
+                    <Icon name="barcode" size={12}/> สแกน หรือ พิมพ์
+                  </span>
+                )}
+                {/* Mobile-only camera scan button — desktop hides via .scan-inline-btn @media. */}
+                <button type="button" className="scan-inline-btn ml-auto !h-11 !w-11" onClick={()=>setScannerOpen(true)} aria-label="สแกนด้วยกล้อง">
+                  <Icon name="camera" size={16}/>
+                </button>
+              </label>
+              <input
+                ref={barcodeRef}
+                className={"input mt-1 font-mono" + (draft.id && !barcodeEdit ? " opacity-60 cursor-not-allowed" : "")}
+                placeholder="วางหัวอ่านแล้วสแกน หรือพิมพ์ตรงนี้..."
+                inputMode="text"
+                autoFocus={!draft.id}
+                readOnly={!!(draft.id && !barcodeEdit)}
+                value={draft.barcode||""}
+                onChange={e=>set('barcode', e.target.value)}
+                onMouseDown={e=>{ if (draft.id && barcodeEdit && !manualApproved) { e.preventDefault(); confirmManualBarcode(); } }}
+                onTouchStart={e=>{ if (draft.id && barcodeEdit && !manualApproved) { e.preventDefault(); confirmManualBarcode(); } }}
+              />
+            </div>
+          </div>
         </div>
-        <div>
-          <label className="text-xs uppercase tracking-wider text-muted flex items-center gap-2">
-            บาร์โค้ด
-            {draft.id && !barcodeEdit && (
-              <button type="button" className="inline-flex items-center gap-1 text-xs text-[#6b3a26] bg-[#6b3a26]/10 hover:bg-[#6b3a26]/20 px-2 py-0.5 rounded-md transition-colors normal-case tracking-normal font-medium" onClick={()=>{ setBarcodeEdit(true); setTimeout(()=>barcodeRef.current?.focus(), 50); }}>
-                <Icon name="barcode" size={11}/> แก้ไข Barcode
-              </button>
+
+        {/* ── หมวดหมู่ ── */}
+        <div className="rounded-xl border hairline bg-surface-soft p-4">
+          <div className="mb-3">
+            <div className="inline-flex items-center gap-1.5 bg-ink/[0.06] rounded-md px-2 py-1">
+              <Icon name="tag" size={12} className="text-muted"/>
+              <span className={labelCls}>หมวดหมู่</span>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={fieldLabel}>แบรนด์</label>
+              <select className="input mt-1" value={draft.brand_id||""} onChange={e=>onBrandChange(e.target.value)}>
+                <option value="">— ไม่ระบุ —</option>
+                {brands.map(b=> <option key={b.id} value={b.id}>{b.name}</option>)}
+                <option value="__new__">+ เพิ่มแบรนด์ใหม่…</option>
+              </select>
+            </div>
+            <div>
+              <label className={fieldLabel}>หมวดหมู่</label>
+              <select className="input mt-1" value={draft.category_id||""} onChange={e=>onCatChange(e.target.value)}>
+                <option value="">— ไม่ระบุ —</option>
+                {categories.map(c=> <option key={c.id} value={c.id}>{c.name}</option>)}
+                <option value="__new__">+ เพิ่มหมวดใหม่…</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* ── ราคา & สต็อก ── */}
+        <div className="rounded-xl border hairline p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="inline-flex items-center gap-1.5 bg-ink/[0.06] rounded-md px-2 py-1">
+              <Icon name="credit-card" size={12} className="text-muted"/>
+              <span className={labelCls}>ราคา & สต็อก</span>
+            </div>
+            {marginPct != null && (
+              <span className={marginBadgeClass}>กำไร {marginPct.toFixed(0)}%</span>
             )}
-            {draft.id && barcodeEdit && (
-              <span className="inline-flex items-center gap-1 text-xs text-success normal-case tracking-normal font-medium">
-                <Icon name="barcode" size={11}/> พร้อมสแกน — สแกนเพื่อเปลี่ยน
-              </span>
-            )}
-            {!draft.id && (
-              <span className="inline-flex items-center gap-1 text-muted-soft normal-case tracking-normal font-normal">
-                <Icon name="barcode" size={12}/> สแกน หรือ พิมพ์
-              </span>
-            )}
-          </label>
-          <input
-            ref={barcodeRef}
-            className={"input mt-1 font-mono" + (draft.id && !barcodeEdit ? " opacity-60 cursor-not-allowed" : "")}
-            placeholder="วางหัวอ่านแล้วสแกน หรือพิมพ์ตรงนี้..."
-            inputMode="text"
-            autoFocus={!draft.id}
-            readOnly={!!(draft.id && !barcodeEdit)}
-            value={draft.barcode||""}
-            onChange={e=>set('barcode', e.target.value)}
-            onMouseDown={e=>{
-              if (draft.id && barcodeEdit && !manualApproved) {
-                e.preventDefault();
-                confirmManualBarcode();
-              }
-            }}
-            onTouchStart={e=>{
-              if (draft.id && barcodeEdit && !manualApproved) {
-                e.preventDefault();
-                confirmManualBarcode();
-              }
-            }}
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs uppercase tracking-wider text-muted">แบรนด์</label>
-            <select className="input mt-1" value={draft.brand_id||""} onChange={e=>onBrandChange(e.target.value)}>
-              <option value="">— ไม่ระบุ —</option>
-              {brands.map(b=> <option key={b.id} value={b.id}>{b.name}</option>)}
-              <option value="__new__">+ เพิ่มแบรนด์ใหม่...</option>
-            </select>
           </div>
-          <div>
-            <label className="text-xs uppercase tracking-wider text-muted">หมวดหมู่</label>
-            <select className="input mt-1" value={draft.category_id||""} onChange={e=>onCatChange(e.target.value)}>
-              <option value="">— ไม่ระบุ —</option>
-              {categories.map(c=> <option key={c.id} value={c.id}>{c.name}</option>)}
-              <option value="__new__">+ เพิ่มหมวดใหม่...</option>
-            </select>
+          {/* ราคาป้าย — primary field, larger text */}
+          <div className="mb-3">
+            <label className={fieldLabel}>ราคาขาย (ป้าย)</label>
+            <input type="number" inputMode="decimal" className="input mt-1 !text-lg !font-display !tabular-nums"
+              value={draft.retail_price||0} onChange={e=>set('retail_price', Number(e.target.value))} />
+          </div>
+          {/* ราคาทุน + คงเหลือ */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={fieldLabel}>ราคาทุน</label>
+              <input type="number" inputMode="decimal" className="input mt-1 tabular-nums"
+                value={draft.cost_price||0} onChange={e=>set('cost_price', Number(e.target.value))} />
+            </div>
+            <div>
+              <label className={fieldLabel}>คงเหลือ</label>
+              <div className="flex items-center gap-1 mt-1">
+                <button type="button" className="stepper-btn flex-shrink-0 rounded-lg border hairline"
+                  onClick={()=>set('current_stock', Math.max(0, (draft.current_stock||0) - 1))}>
+                  <Icon name="minus" size={15}/>
+                </button>
+                <input type="number" inputMode="numeric" className="input !text-center tabular-nums flex-1 !px-1"
+                  value={draft.current_stock||0} onChange={e=>set('current_stock', Number(e.target.value))} />
+                <button type="button" className="stepper-btn flex-shrink-0 rounded-lg border hairline"
+                  onClick={()=>set('current_stock', (draft.current_stock||0) + 1)}>
+                  <Icon name="plus" size={15}/>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <label className="text-xs uppercase tracking-wider text-muted">ราคาทุน</label>
-            <input type="number" inputMode="decimal" className="input mt-1" value={draft.cost_price||0} onChange={e=>set('cost_price', Number(e.target.value))} />
+
+        {/* ── ประวัติสต็อก (edit mode only) ── */}
+        {draft.id && (
+          <div className="rounded-xl border hairline bg-surface-soft p-4">
+            <StockHistoryPanel productId={draft.id}/>
           </div>
-          <div>
-            <label className="text-xs uppercase tracking-wider text-muted">ราคาป้าย</label>
-            <input type="number" inputMode="decimal" className="input mt-1" value={draft.retail_price||0} onChange={e=>set('retail_price', Number(e.target.value))} />
-          </div>
-          <div>
-            <label className="text-xs uppercase tracking-wider text-muted">คงเหลือ</label>
-            <input type="number" inputMode="numeric" className="input mt-1" value={draft.current_stock||0} onChange={e=>set('current_stock', Number(e.target.value))} />
-          </div>
-        </div>
-        {draft.id && <StockHistoryPanel productId={draft.id}/>}
+        )}
       </div>
     </Modal>
+    {/* Camera scanner — single-shot. Editing existing products requires the
+        explicit "แก้ไข Barcode" gate first to avoid accidental overwrites. */}
+    <BarcodeScannerModal
+      open={scannerOpen}
+      onClose={()=>setScannerOpen(false)}
+      mode="single"
+      title="สแกนบาร์โค้ดสินค้า"
+      onScan={(code)=>{
+        if (draft.id && !barcodeEdit) return false; // shouldn't happen — button gated, but be safe
+        set('barcode', code);
+        return true;
+      }}
+    />
+    </>
   );
 }
 
 /* =========================================================
    SALES HISTORY VIEW
 ========================================================= */
-function SalesView() {
+function SalesView({ onGoPOS }) {
   const toast = useToast();
   const askPrompt = usePrompt();
   const isAdmin = useIsAdmin();
@@ -2451,10 +2823,20 @@ function SalesView() {
   const [channel, setChannel] = useState("");
   const [excludeVoided, setExcludeVoided] = useState(true);
   const [orders, setOrders] = useState([]);
+  // Per-order summary: { [orderId]: { productLabel, profit, itemCount, costApprox } }
+  // Computed in load() by joining sale_order_items + receive_order_items + products.
+  const [orderSummary, setOrderSummary] = useState({});
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
   const voidLockRef = useRef(false);
-  const [filterOpen, setFilterOpen] = useState(false);
+  // Phase 3.4: default-expanded so first-time users discover filters; auto-collapses
+  // after a range pick (see handleRangeChange below).
+  const [filterOpen, setFilterOpen] = useState(true);
+  // Phase 3.4: pick-then-collapse handler.
+  const handleRangeChange = (next) => {
+    setRange(next);
+    if (next?.from && next?.to) setFilterOpen(false);
+  };
   const [voiding, setVoiding] = useState(false);
   const [editNet, setEditNet] = useState(false); // toggles inline net_received editor
   const [netDraft, setNetDraft] = useState("");
@@ -2472,7 +2854,93 @@ function SalesView() {
     if (excludeVoided) q = q.eq('status', 'active');
     const { data, error } = await q;
     if (error) toast.push("โหลดไม่ได้", "error");
-    setOrders(data || []);
+    const ordersList = data || [];
+    setOrders(ordersList);
+
+    // Compute per-order product summary + profit (mirrors ProfitLossView).
+    if (ordersList.length) {
+      try {
+        const orderIds = ordersList.map(o => o.id);
+        const { data: itemsData } = await sb.from('sale_order_items')
+          .select('*').in('sale_order_id', orderIds);
+        const items = itemsData || [];
+        const pids = [...new Set(items.map(i => i.product_id).filter(Boolean))];
+
+        let recvRows = [];
+        if (pids.length) {
+          const { data: rd } = await sb.from('receive_order_items')
+            .select('product_id, unit_price, receive_orders!inner(receive_date, voided_at)')
+            .in('product_id', pids).is('receive_orders.voided_at', null);
+          recvRows = rd || [];
+        }
+        const recvMap = {};
+        recvRows.forEach(r => {
+          const date = r.receive_orders?.receive_date;
+          if (!date) return;
+          (recvMap[r.product_id] ||= []).push({ date: new Date(date).getTime(), unit_price: Number(r.unit_price)||0 });
+        });
+        Object.values(recvMap).forEach(arr => arr.sort((a,b)=>b.date-a.date));
+
+        const prodMap = {};
+        if (pids.length) {
+          const { data: prods } = await sb.from('products').select('id, cost_price').in('id', pids);
+          (prods||[]).forEach(p => { prodMap[p.id] = Number(p.cost_price)||0; });
+        }
+
+        const itemsByOrder = {};
+        items.forEach(it => { (itemsByOrder[it.sale_order_id] ||= []).push(it); });
+
+        const summary = {};
+        for (const o of ordersList) {
+          const lines = itemsByOrder[o.id] || [];
+          const lineRevenues = lines.map(it => applyDiscounts(
+            it.unit_price, it.quantity,
+            it.discount1_value, it.discount1_type,
+            it.discount2_value, it.discount2_type,
+          ));
+          const subtotalCalc = lineRevenues.reduce((s,x)=>s+x, 0);
+          const revenueBase = (ECOMMERCE_CHANNELS.has(o.channel) && o.net_received != null)
+            ? Number(o.net_received)
+            : Number(o.grand_total) || 0;
+          const ratio = subtotalCalc > 0 ? revenueBase / subtotalCalc : 1;
+          const saleTs = new Date(o.sale_date).getTime();
+          let totalProfit = 0;
+          let costApprox = false;
+          lines.forEach((it, idx) => {
+            const qty = Number(it.quantity)||0;
+            const lineRev = lineRevenues[idx] * ratio;
+            let unitCost = 0;
+            if (it.product_id) {
+              const list = recvMap[it.product_id];
+              if (list && list.length) {
+                const found = list.find(r => r.date <= saleTs);
+                if (found) unitCost = found.unit_price;
+                else { unitCost = prodMap[it.product_id] || 0; costApprox = true; }
+              } else {
+                unitCost = prodMap[it.product_id] || 0;
+                costApprox = true;
+              }
+            }
+            totalProfit += lineRev - unitCost * qty;
+          });
+          const productLabel = lines.length === 0 ? '—'
+            : lines.length === 1 ? (lines[0].product_name || '—')
+            : `${lines[0].product_name || '—'} +${lines.length - 1}`;
+          summary[o.id] = {
+            productLabel,
+            profit: o.status === 'voided' ? 0 : totalProfit,
+            itemCount: lines.length,
+            costApprox,
+          };
+        }
+        setOrderSummary(summary);
+      } catch (e) {
+        console.error('orderSummary load failed', e);
+        setOrderSummary({});
+      }
+    } else {
+      setOrderSummary({});
+    }
     setLoading(false);
   }, [from, to, channel, excludeVoided]);
 
@@ -2554,7 +3022,7 @@ function SalesView() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="text-xs uppercase tracking-wider text-muted">ช่วงวันที่</label>
-          <DatePicker mode="range" value={range} onChange={setRange} placeholder="เลือกช่วงวันที่" className="mt-1"/>
+          <DatePicker mode="range" value={range} onChange={handleRangeChange} placeholder="เลือกช่วงวันที่" className="mt-1"/>
         </div>
         <div>
           <label className="text-xs uppercase tracking-wider text-muted">ช่องทาง</label>
@@ -2594,7 +3062,16 @@ function SalesView() {
       {/* Desktop — grouped by day */}
       <div className="hidden lg:block space-y-4">
         {loading && <div className="card-canvas overflow-hidden"><SkeletonRows n={6} label="กำลังโหลดบิล" /></div>}
-        {!loading && orders.length===0 && <div className="card-canvas p-6 text-muted text-sm">ไม่พบบิลในช่วงเวลานี้</div>}
+        {!loading && orders.length===0 && (
+          <div className="card-canvas p-8 text-center">
+            <div className="text-muted text-sm">ไม่พบบิลในช่วงเวลานี้</div>
+            {onGoPOS && (
+              <button className="btn-primary mt-4 !py-2.5 !px-5" onClick={onGoPOS}>
+                <Icon name="cart" size={16}/> เริ่มขายใหม่
+              </button>
+            )}
+          </div>
+        )}
         {!loading && groupedByDay.map(g => (
           <div key={g.day} className="card-canvas overflow-hidden">
             {/* Day header */}
@@ -2611,27 +3088,42 @@ function SalesView() {
             </div>
             {/* Column header */}
             <div className="grid grid-cols-12 px-4 py-2 text-[10px] uppercase tracking-wider text-muted-soft border-b hairline">
-              <div className="col-span-2">เลขที่บิล</div>
-              <div className="col-span-2">เวลา</div>
+              <div className="col-span-1">เลขที่บิล</div>
+              <div className="col-span-1">เวลา</div>
+              <div className="col-span-3">ชื่อสินค้า</div>
               <div className="col-span-2">ช่องทาง</div>
-              <div className="col-span-3">ชำระ</div>
-              <div className="col-span-3 text-right">ยอดสุทธิ</div>
+              <div className="col-span-1">ชำระ</div>
+              <div className="col-span-2 text-right">ยอดสุทธิ</div>
+              <div className="col-span-2 text-right">กำไร</div>
             </div>
             {/* Rows */}
-            {g.list.map(o => (
-              <div key={o.id} className={"grid grid-cols-12 px-4 py-3 items-center border-b hairline last:border-0 hover:bg-white/40 cursor-pointer transition-colors " + (o.status==='voided'?'opacity-60':'')} onClick={()=>openDetail(o)}>
-                <div className="col-span-2 font-mono text-sm flex items-center gap-2">#{o.id}{o.status==='voided' && <span className="badge-pill !bg-error/10 !text-error !text-[10px]">VOIDED</span>}</div>
-                <div className="col-span-2 text-sm tabular-nums">{new Date(o.sale_date).toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"})} น.</div>
-                <div className="col-span-2"><span className="badge-pill">{CHANNELS.find(c=>c.v===o.channel)?.label || '—'}</span></div>
-                <div className="col-span-3 text-sm text-muted">{PAYMENTS.find(p=>p.v===o.payment_method)?.label || '—'}</div>
-                <div className={"col-span-3 text-right tabular-nums " + (o.status==='voided'?'line-through':'')}>
+            {g.list.map(o => {
+              const sm = orderSummary[o.id];
+              return (
+              <div key={o.id} className={"grid grid-cols-12 px-4 py-3 items-center gap-x-2 border-b hairline last:border-0 hover:bg-white/40 cursor-pointer transition-colors " + (o.status==='voided'?'opacity-60':'')} onClick={()=>openDetail(o)}>
+                <div className="col-span-1 font-mono text-sm flex items-center gap-1 truncate">
+                  <span className="truncate">#{o.id}</span>
+                  {o.status==='voided' && <span className="badge-pill !bg-error/10 !text-error !text-[10px]">VOID</span>}
+                </div>
+                <div className="col-span-1 text-sm tabular-nums">{new Date(o.sale_date).toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"})}</div>
+                <div className="col-span-3 text-sm min-w-0">
+                  <div className="truncate" title={sm?.productLabel || ''}>{sm?.productLabel ?? <span className="text-muted-soft">—</span>}</div>
+                  {sm?.costApprox && <span className="badge-pill !bg-warning/15 !text-[#8a6500] !text-[10px] mt-0.5">ทุนประมาณ</span>}
+                </div>
+                <div className="col-span-2"><span className="badge-pill !text-[10px]">{CHANNEL_LABELS[o.channel] || o.channel || '—'}</span></div>
+                <div className="col-span-1 text-xs text-muted truncate">{PAYMENTS.find(p=>p.v===o.payment_method)?.label || '—'}</div>
+                <div className={"col-span-2 text-right tabular-nums " + (o.status==='voided'?'line-through':'')}>
                   <div className="font-medium">{fmtTHB(o.grand_total)}</div>
                   {ECOMMERCE_CHANNELS.has(o.channel) && o.net_received != null && (
                     <div className="text-[10px] text-muted-soft">ได้รับ {fmtTHB(o.net_received)}</div>
                   )}
                 </div>
+                <div className={"col-span-2 text-right tabular-nums font-medium " + (o.status==='voided' ? 'text-muted-soft line-through' : sm && sm.profit >= 0 ? 'text-ink' : 'text-error')}>
+                  {sm == null ? <span className="text-muted-soft">—</span> : (sm.profit >= 0 ? '+' : '') + fmtTHB(sm.profit)}
+                </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         ))}
       </div>
@@ -2639,7 +3131,16 @@ function SalesView() {
       {/* Mobile — grouped by day */}
       <div className="lg:hidden space-y-4">
         {loading && <div className="p-4 text-muted text-sm flex items-center gap-2"><span className="spinner"/>กำลังโหลด...</div>}
-        {!loading && orders.length===0 && <div className="p-4 text-muted text-sm">ไม่พบบิลในช่วงเวลานี้</div>}
+        {!loading && orders.length===0 && (
+          <div className="p-6 text-center">
+            <div className="text-muted text-sm">ไม่พบบิลในช่วงเวลานี้</div>
+            {onGoPOS && (
+              <button className="btn-primary mt-3 !py-2 !px-4" onClick={onGoPOS}>
+                <Icon name="cart" size={16}/> เริ่มขายใหม่
+              </button>
+            )}
+          </div>
+        )}
         {!loading && groupedByDay.map(g => (
           <div key={g.day}>
             {/* Sticky day header */}
@@ -2652,14 +3153,19 @@ function SalesView() {
               <span className="font-display text-base tabular-nums">{fmtTHB(g.total)}</span>
             </div>
             <div className="space-y-2">
-              {g.list.map(o => (
+              {g.list.map(o => {
+                const sm = orderSummary[o.id];
+                return (
                 <div key={o.id} className={"card-canvas pressable p-3.5 flex items-center gap-3 " + (o.status==='voided'?'opacity-60':'')} onClick={()=>openDetail(o)}>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-xs text-muted">#{o.id}</span>
-                      <span className="badge-pill">{CHANNELS.find(c=>c.v===o.channel)?.label || '—'}</span>
+                      <span className="badge-pill !text-[10px]">{CHANNEL_LABELS[o.channel] || o.channel || '—'}</span>
                       {o.status==='voided' && <span className="badge-pill !bg-error/10 !text-error !text-[10px]">VOIDED</span>}
                     </div>
+                    {sm && sm.itemCount > 0 && (
+                      <div className="text-sm text-ink mt-1 truncate" title={sm.productLabel}>{sm.productLabel}</div>
+                    )}
                     <div className="text-xs text-muted mt-1 tabular-nums">{new Date(o.sale_date).toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"})} น. · {PAYMENTS.find(p=>p.v===o.payment_method)?.label || '—'}</div>
                   </div>
                   <div className="text-right flex-shrink-0">
@@ -2667,10 +3173,16 @@ function SalesView() {
                     {ECOMMERCE_CHANNELS.has(o.channel) && o.net_received != null && (
                       <div className="text-[10px] text-muted-soft mt-0.5 tabular-nums">ได้รับ {fmtTHB(o.net_received)}</div>
                     )}
+                    {sm && o.status !== 'voided' && (
+                      <div className={"text-xs tabular-nums mt-0.5 " + (sm.profit >= 0 ? 'text-success' : 'text-error')}>
+                        {sm.profit >= 0 ? '+' : ''}{fmtTHB(sm.profit)}
+                      </div>
+                    )}
                   </div>
                   <Icon name="chevron-r" size={16} className="text-muted-soft"/>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ))}
@@ -2876,17 +3388,7 @@ function ReceiveView() {
     { k: 'receive', label: 'รับเข้า',         icon: 'package-in',  hint: 'รับสินค้าจากบริษัท · เพิ่มสต็อก' },
     { k: 'claim',   label: 'ส่งเคลม / คืน',   icon: 'package-out', hint: 'ส่งสินค้าคืนบริษัท · หักสต็อก' },
   ];
-  const TabGroup = (
-    <div className="inline-flex glass-soft rounded-xl p-1 shadow-sm">
-      {tabs.map(t => (
-        <button key={t.k}
-          className={"px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-all " + (tab===t.k?"bg-white text-ink shadow-md ring-1 ring-hairline":"text-muted hover:text-ink hover:bg-white/40")}
-          onClick={()=>setTab(t.k)}>
-          <Icon name={t.icon} size={16}/> {t.label}
-        </button>
-      ))}
-    </div>
-  );
+  const TabGroup = <KindTabs tabs={tabs} current={tab} onChange={setTab} Icon={Icon} />;
   const ActionButtons = (
     <div className="flex items-center gap-2">
       <button className="btn-add-product !py-2 !text-sm" onClick={()=>setAddProductOpen(true)}>
@@ -2955,6 +3457,7 @@ function ReturnView()  {
 function StockMovementForm({ kind }) {
   const toast = useToast();
   const productSearchRef = useRef(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [date, setDate] = useState(todayISO());
   const [channel, setChannel] = useState("store");
   const [items, setItems] = useState([]);
@@ -3066,6 +3569,26 @@ function StockMovementForm({ kind }) {
     // Keep search & results visible so the user can pick another color/variant of the same model
     // without retyping. They can clear via the × button or pick a different search.
   };
+  // Camera scanner — lookup by barcode and add to items on hit.
+  // Returns true on confirmed success / false otherwise (mirrors POSView).
+  // Stale-frame re-fires are handled by `BarcodeScannerModal.lockedRef`.
+  const handleCameraScan = async (code) => {
+    try {
+      const { data } = await sb.from('products').select('*').eq('barcode', code).limit(1);
+      if (data && data.length) {
+        addItem(data[0]);
+        setScannerOpen(false);
+        return true;
+      }
+      playScanError(); vibrateError();
+      toast.push(`ไม่พบสินค้าบาร์โค้ด ${code}`, 'error');
+      return false;
+    } catch {
+      playScanError(); vibrateError();
+      toast.push('สแกนไม่สำเร็จ', 'error');
+      return false;
+    }
+  };
   const upd = (i, patch) => setItems(it => it.map((x,j)=>j===i?{...x,...patch}:x));
   const updPrice = (i, val) => setItems(it => it.map((x,j)=>j===i?{...x, unit_price: Number(val)||0, manualPrice: true}:x));
   const rm = (i) => setItems(it => it.filter((_,j)=>j!==i));
@@ -3090,8 +3613,11 @@ function StockMovementForm({ kind }) {
     if (kind === 'receive' || kind === 'claim') {
       m.supplier = !supplierName.trim();
     }
+    if (kind === 'claim') {
+      m.claimReason = !returnReason; // reuse returnReason state for claim_reason
+    }
     return m;
-  }, [kind, date, supplierName]);
+  }, [kind, date, supplierName, returnReason]);
 
   const autoInvoiceNo = () => {
     const d = new Date();
@@ -3176,25 +3702,30 @@ function StockMovementForm({ kind }) {
       <div className="lg:col-span-7 space-y-4 lg:space-y-0 lg:flex lg:flex-col lg:gap-4">
         <div className="card-canvas overflow-hidden lg:flex lg:flex-col">
           <div className="p-3 lg:p-4 border-b hairline">
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"><Icon name="search" size={20} strokeWidth={2.25} color="#6b3a26"/></span>
-              <input
-                ref={productSearchRef}
-                className="input !pl-12 !py-3 !text-base"
-                placeholder={
-                  kind==='receive' ? "ค้นหาสินค้าที่จะรับเข้า (ชื่อรุ่น / บาร์โค้ด)" :
-                  kind==='claim'   ? "ค้นหาสินค้าที่จะส่งเคลม/คืนบริษัท (ชื่อรุ่น / บาร์โค้ด)" :
-                                     "ค้นหาสินค้าที่ลูกค้าคืน (ชื่อรุ่น / บาร์โค้ด)"
-                }
-                value={search}
-                onChange={e=>setSearch(e.target.value)}
-                autoFocus
-              />
-              {search && (
-                <button className="absolute right-3 top-1/2 -translate-y-1/2 btn-ghost !p-2 !min-h-0" onClick={()=>{setSearch("");setResults([]);}} aria-label="ล้างคำค้น">
-                  <Icon name="x" size={18}/>
-                </button>
-              )}
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"><Icon name="search" size={20} strokeWidth={2.25} color="#6b3a26"/></span>
+                <input
+                  ref={productSearchRef}
+                  className="input !pl-12 !py-3 !text-base"
+                  placeholder={
+                    kind==='receive' ? "ค้นหาสินค้าที่จะรับเข้า (ชื่อรุ่น / บาร์โค้ด)" :
+                    kind==='claim'   ? "ค้นหาสินค้าที่จะส่งเคลม/คืนบริษัท (ชื่อรุ่น / บาร์โค้ด)" :
+                                       "ค้นหาสินค้าที่ลูกค้าคืน (ชื่อรุ่น / บาร์โค้ด)"
+                  }
+                  value={search}
+                  onChange={e=>setSearch(e.target.value)}
+                  autoFocus
+                />
+                {search && (
+                  <button className="absolute right-3 top-1/2 -translate-y-1/2 btn-ghost !p-2 !min-h-0" onClick={()=>{setSearch("");setResults([]);}} aria-label="ล้างคำค้น">
+                    <Icon name="x" size={18}/>
+                  </button>
+                )}
+              </div>
+              <button type="button" className="scan-inline-btn" onClick={()=>setScannerOpen(true)} aria-label="สแกนด้วยกล้อง">
+                <Icon name="camera" size={20}/>
+              </button>
             </div>
             {results.length>0 && (
               <div className="text-xs text-muted-soft mt-2">เลือกได้หลายรายการ — รายการค้นหาจะอยู่จนกว่าจะกด ×</div>
@@ -3232,75 +3763,23 @@ function StockMovementForm({ kind }) {
 
           {/* Cost % toggle (receive + claim) */}
           {(kind==='receive' || kind==='claim') && (
-            <div className="px-4 lg:px-5 py-3 border-b hairline bg-white/40">
-              <div className="flex items-center justify-between gap-3 select-none">
-                <button
-                  type="button"
-                  className="flex items-center gap-2 cursor-pointer"
-                  onClick={()=>{
-                    if (costPctEnabled) { setCostPctEnabled(false); setCostPctMode('once'); }
-                    else { setCostPctChooserOpen(true); }
-                  }}
-                >
-                  <span className={"relative flex items-center justify-center w-5 h-5 rounded border transition-colors " + (costPctEnabled?"bg-primary border-primary":"bg-canvas border-hairline")}>
-                    {costPctEnabled && <Icon name="check" size={13} className="text-white" strokeWidth={2.5}/>}
-                  </span>
-                  <span className="text-sm font-medium">คำนวณทุนจากราคาป้าย</span>
-                  {costPctEnabled && costPctMode==='persist' && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/15 text-primary font-medium">เปิดตลอด</span>
-                  )}
-                </button>
-                {costPctEnabled && (
-                  <span className="flex items-center gap-1.5">
-                    <input
-                      type="number" min="1" max="100" inputMode="numeric"
-                      className="input !h-9 !w-20 !rounded-lg !py-1 !text-sm text-right"
-                      value={costPct}
-                      onChange={e=>{
-                        const v = Number(e.target.value)||0;
-                        setCostPct(Math.max(1, Math.min(100, v)));
-                      }}
-                    />
-                    <span className="text-sm text-muted">%</span>
-                  </span>
-                )}
-              </div>
-              {costPctEnabled && (
-                <div className="text-[11px] text-muted mt-1.5">เปิดอยู่: เมื่อเพิ่มรายการใหม่จะคำนวณราคา = ราคาป้าย − {costPct}% (รายการที่แก้ราคาเองจะคงค่าเดิม)</div>
-              )}
-            </div>
+            <CostPercentToggle
+              Icon={Icon} fmtTHB={fmtTHB}
+              enabled={costPctEnabled} value={costPct} mode={costPctMode}
+              onToggleOff={()=>{ setCostPctEnabled(false); setCostPctMode('once'); }}
+              onOpenChooser={()=>setCostPctChooserOpen(true)}
+              onChangeValue={(v)=>setCostPct(v)}
+              sampleRetailPrice={items[0]?.retail_price}
+            />
           )}
 
-          <div className="max-h-[40vh] lg:max-h-[42vh] overflow-y-auto p-3">
-            {!items.length && <div className="p-6 text-center text-muted text-sm">ยังไม่มีรายการ</div>}
-            {items.map((l, i) => (
-              <div key={l._uid || i} className="glass-soft rounded-lg p-3 mb-2 hover-lift fade-in">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="font-medium text-sm flex-1 truncate">{l.product_name}</div>
-                  <button className="text-muted-soft hover:text-error p-1" onClick={()=>rm(i)}><Icon name="trash" size={14}/></button>
-                </div>
-                <div className="grid grid-cols-12 gap-2 mt-2">
-                  <input type="number" inputMode="numeric" min="1" className="input !py-1.5 !text-xs col-span-3" value={l.quantity} onChange={e=>upd(i,{quantity:Math.max(1,Number(e.target.value)||1)})}/>
-                  <select className="input !py-1.5 !text-xs col-span-3" value={l.unit} onChange={e=>upd(i,{unit:e.target.value})}>
-                    {UNITS.map(u=><option key={u} value={u}>{u}</option>)}
-                  </select>
-                  <input type="number" inputMode="decimal" className="input !py-1.5 !text-xs col-span-6 text-right" value={l.unit_price} onChange={e=>updPrice(i,e.target.value)}/>
-                </div>
-                <div className="flex items-center justify-between mt-2">
-                  <div className="text-[10px] text-muted-soft">
-                    {l.manualPrice
-                      ? (Number(l.retail_price) > 0
-                          ? `แก้เอง · ${(l.unit_price / l.retail_price * 100).toFixed(1)}% ของ ${fmtTHB(l.retail_price)}`
-                          : 'แก้เอง')
-                      : (costPctEnabled && (kind==='receive'||kind==='claim'))
-                        ? `ลด ${costPct}% จาก ${fmtTHB(l.retail_price)}`
-                        : (Number(l.retail_price) > 0 ? `ราคาป้าย ${fmtTHB(l.retail_price)}` : '')}
-                  </div>
-                  <div className="text-sm font-medium">{fmtTHB(applyDiscounts(l.unit_price,l.quantity,l.discount1_value,l.discount1_type,l.discount2_value,l.discount2_type))}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <MovementItemsPanel
+            Icon={Icon} fmtTHB={fmtTHB} applyDiscounts={applyDiscounts} UNITS={UNITS}
+            items={items} kind={kind}
+            costPctEnabled={costPctEnabled} costPct={costPct}
+            onUpdItem={upd} onUpdPrice={updPrice} onRemoveItem={rm}
+            showItemsError={attemptedSubmit && !items.length}
+          />
 
           {/* BILL DETAILS — moved from left panel */}
           <div className="p-4 lg:p-5 border-t hairline bg-white/30 space-y-3">
@@ -3321,112 +3800,34 @@ function StockMovementForm({ kind }) {
             </div>
 
             {(kind==='receive' || kind==='claim') && (
-              <>
-                <div className={"rounded-xl" + errCls('supplier')}>
-                  <label className="text-xs uppercase tracking-wider text-muted">{supplierLabel}</label>
-                  <div className="grid grid-cols-2 gap-2 mt-1.5">
-                    {SUPPLIERS.map(s => (
-                      <button key={s} type="button" onClick={()=>setSupplierName(s)}
-                        className={"py-2.5 px-3 rounded-lg text-sm font-medium border transition-all text-center " + (supplierName===s ? "bg-primary text-on-primary border-primary shadow-md" : "glass-soft text-ink hover:bg-white/60 hover-lift")}>
-                        {supplierName===s && <Icon name="check" size={14} className="inline mr-1.5" strokeWidth={2.5}/>}
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {kind==='claim' && (
-                  <div>
-                    <label className="text-xs uppercase tracking-wider text-muted">เหตุผลที่ส่งคืน</label>
-                    <select className="input mt-1 !h-10" value={returnReason} onChange={e=>setReturnReason(e.target.value)}>
-                      <option value="">— เลือก —</option>
-                      {CLAIM_REASONS.map(r=><option key={r} value={r}>{r}</option>)}
-                    </select>
-                  </div>
-                )}
-                <div>
-                  <label className="text-xs uppercase tracking-wider text-muted">{invoiceLabel} <span className="text-muted-soft normal-case tracking-normal">(ไม่บังคับ — ไม่กรอกจะใช้วันเวลาเป็นเลขบิล)</span></label>
-                  <input className="input mt-1 !h-10 font-mono" placeholder={kind==='receive'?"เว้นว่างเพื่อสร้างอัตโนมัติ":"เช่น CLM-2026-0001 หรือ Tracking no."} value={supplierInvoiceNo} onChange={e=>setSupplierInvoiceNo(e.target.value)} />
-                </div>
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <span className={"relative flex items-center justify-center w-5 h-5 rounded border transition-colors " + (hasVat?"bg-primary border-primary":"bg-canvas border-hairline")}>
-                    <input type="checkbox" className="sr-only" checked={hasVat} onChange={e=>setHasVat(e.target.checked)} />
-                    {hasVat && <Icon name="check" size={13} className="text-white" strokeWidth={2.5}/>}
-                  </span>
-                  <span className="text-sm">{kind==='receive'?'รวม VAT 7% (มี input VAT เคลมได้)':'รวม VAT 7% (กลับรายการ input VAT)'}</span>
-                </label>
-              </>
+              <SupplierForm
+                Icon={Icon} kind={kind}
+                SUPPLIERS={SUPPLIERS} CLAIM_REASONS={CLAIM_REASONS}
+                supplierName={supplierName} setSupplierName={setSupplierName}
+                supplierInvoiceNo={supplierInvoiceNo} setSupplierInvoiceNo={setSupplierInvoiceNo}
+                hasVat={hasVat} setHasVat={setHasVat}
+                returnReason={returnReason} setReturnReason={setReturnReason}
+                errCls={errCls}
+              />
             )}
 
             {kind==='return' && (
-              <div>
-                <label className="text-xs uppercase tracking-wider text-muted mb-1.5 block">บิลขายต้นฉบับ</label>
-                <div className="flex gap-1 mb-2">
-                  <button type="button" onClick={()=>{setOrigSaleMode('search'); setSelectedSale(null); setOrigSaleId(""); setSaleSearch("");}}
-                    className={"flex-1 py-2 px-3 rounded-lg text-xs font-medium border transition-all " + (origSaleMode==='search' ? "bg-primary text-on-primary border-primary" : "glass-soft text-muted hover:text-ink")}>
-                    <Icon name="search" size={13} className="inline mr-1"/>ค้นหาบิล
-                  </button>
-                  <button type="button" onClick={()=>{
-                    if (items.length === 0) {
-                      toast.push("กรุณาเลือกสินค้าก่อน", 'error');
-                      productSearchRef.current?.focus();
-                      return;
-                    }
-                    setOrigSaleMode('manual'); setSelectedSale(null); setOrigSaleId(""); setSaleSearch("");
-                  }}
-                    className={"flex-1 py-2 px-3 rounded-lg text-xs font-medium border transition-all " + (origSaleMode==='manual' ? "bg-primary text-on-primary border-primary" : "glass-soft text-muted hover:text-ink")}>
-                    <Icon name="edit" size={13} className="inline mr-1"/>กรอกเองหรือไม่ทราบเลขบิล
-                  </button>
-                </div>
-
-                {origSaleMode==='search' && !selectedSale && (
-                  <div>
-                    <input className="input !h-10 font-mono" placeholder="พิมพ์เลขบิล เช่น 60590" value={saleSearch} onChange={e=>setSaleSearch(e.target.value)} autoFocus/>
-                    {saleSearching && <div className="p-3 text-sm text-muted flex gap-2"><span className="spinner"/>กำลังโหลด...</div>}
-                    {!saleSearching && (
-                      <div className="mt-1 card-canvas overflow-hidden max-h-52 overflow-y-auto">
-                        {saleResults.length===0 && <div className="p-4 text-sm text-muted text-center">ไม่พบบิล</div>}
-                        {saleResults.map(s => (
-                          <button key={s.id} type="button" onClick={()=>selectSale(s)}
-                            className="w-full text-left px-3 py-2.5 border-b hairline last:border-0 hover:bg-white/50 transition-colors flex items-center justify-between gap-2">
-                            <div>
-                              <div className="font-mono text-sm font-semibold">#{s.id}</div>
-                              <div className="text-xs text-muted mt-0.5">{CHANNEL_LABELS[s.channel]||s.channel}</div>
-                            </div>
-                            <div className="text-right flex-shrink-0">
-                              <div className="text-sm font-medium tabular-nums">{fmtTHB(s.grand_total)}</div>
-                              <div className="text-xs text-muted">{fmtThaiDateShort(s.sale_date?.slice(0,10))}</div>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {origSaleMode==='search' && selectedSale && (
-                  <div className="flex items-start gap-2">
-                    <div className="flex-1 card-canvas p-3 rounded-xl">
-                      <div className="flex justify-between items-center">
-                        <span className="font-mono text-sm font-semibold text-ink">บิล #{selectedSale.id}</span>
-                        <span className="text-xs text-muted">{fmtThaiDateShort(selectedSale.sale_date?.slice(0,10))}</span>
-                      </div>
-                      <div className="text-xs text-muted mt-0.5">{CHANNEL_LABELS[selectedSale.channel]||selectedSale.channel} · {fmtTHB(selectedSale.grand_total)}</div>
-                      <div className="text-[10px] text-primary mt-1 flex items-center gap-1"><Icon name="check" size={11}/>วันที่และช่องทางถูกกรอกอัตโนมัติแล้ว</div>
-                    </div>
-                    <button type="button" onClick={()=>{ setSelectedSale(null); setSaleSearch(""); setOrigSaleId(""); }}
-                      className="btn-ghost !p-2.5 !min-h-0 text-muted hover:text-error mt-0.5" title="ล้างบิลที่เลือก">
-                      <Icon name="x" size={16}/>
-                    </button>
-                  </div>
-                )}
-
-                {origSaleMode==='manual' && (
-                  <div className="flex items-center gap-2">
-                    <input className="input !h-10 font-mono flex-1" placeholder="เลขบิล (ไม่บังคับ)" inputMode="numeric" value={origSaleId} onChange={e=>setOrigSaleId(e.target.value.replace(/\D/g,''))}/>
-                    {origSaleId && <button type="button" onClick={()=>setOrigSaleId("")} className="btn-ghost !p-2.5 !min-h-0 text-muted"><Icon name="x" size={16}/></button>}
-                  </div>
-                )}
-              </div>
+              <SalePickerForReturn
+                Icon={Icon} fmtTHB={fmtTHB} fmtThaiDateShort={fmtThaiDateShort}
+                CHANNEL_LABELS={CHANNEL_LABELS}
+                items={items}
+                origSaleMode={origSaleMode} setOrigSaleMode={setOrigSaleMode}
+                selectedSale={selectedSale}
+                saleSearch={saleSearch} setSaleSearch={setSaleSearch}
+                saleResults={saleResults} saleSearching={saleSearching}
+                origSaleId={origSaleId} setOrigSaleId={setOrigSaleId}
+                onSelectSale={selectSale}
+                onClearSale={()=>{ setSelectedSale(null); setSaleSearch(""); setOrigSaleId(""); }}
+                onWantManualButNoItems={()=>{
+                  toast.push("กรุณาเลือกสินค้าก่อน", 'error');
+                  productSearchRef.current?.focus();
+                }}
+              />
             )}
 
             <div>
@@ -3512,6 +3913,15 @@ function StockMovementForm({ kind }) {
           </button>
         </div>
       </Modal>
+
+      {/* Camera barcode scanner — continuous mode (matches POS UX). */}
+      <BarcodeScannerModal
+        open={scannerOpen}
+        onClose={()=>setScannerOpen(false)}
+        onScan={handleCameraScan}
+        mode="continuous"
+        title={kind==='receive' ? 'สแกนสินค้าที่รับเข้า' : kind==='claim' ? 'สแกนสินค้าที่ส่งคืน' : 'สแกนสินค้าที่ลูกค้าคืน'}
+      />
     </div>
   );
 }
@@ -3622,19 +4032,19 @@ function DashboardView() {
         {loading && <span className="spinner text-muted"/>}
       </div>
 
-      <div className="px-4 lg:px-10 space-y-4 lg:space-y-8 pb-8">
+      <div className="px-4 lg:px-10 space-y-4 lg:space-y-8 pb-8 cascade">
 
       {!stats ? (
         <div className="text-muted text-sm flex items-center gap-3"><span className="spinner"/>กำลังโหลดข้อมูล...</div>
       ) : (<>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4" style={{ '--i': 0 }}>
           <StatCard tone="canvas" label="ยอดขายรวม" value={fmtTHB(stats.rangeTotal)} sub={`${stats.rangeCount} บิล`} icon="trend-up"/>
           <StatCard tone="cream"  label="จำนวนบิล" value={stats.rangeCount} sub={rangeLabel} icon="receipt"/>
           <StatCard tone="dark"   label="เฉลี่ยต่อบิล" value={stats.rangeCount? fmtTHB(stats.rangeTotal/stats.rangeCount):'—'} sub={rangeLabel} icon="credit-card"/>
           <StatCard tone="coral"  label="สต็อกใกล้หมด" value={lowStock.length} sub="รายการ (น้อยกว่า 5)" icon="alert"/>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6" style={{ '--i': 1 }}>
           <div className="lg:col-span-7 card-canvas p-4 lg:p-6">
             <div className="font-display text-xl lg:text-2xl mb-3 lg:mb-4 flex items-center gap-2"><Icon name="trend-up" size={20}/> สินค้าขายดีในช่วงนี้</div>
             {!topProducts.length && <div className="text-muted text-sm">ยังไม่มียอดขายในช่วงที่เลือก</div>}
@@ -3658,7 +4068,7 @@ function DashboardView() {
           </div>
         </div>
 
-        <div className="card-dark p-4 lg:p-6">
+        <div className="card-dark p-4 lg:p-6" style={{ '--i': 2 }}>
           <div className="flex items-start justify-between gap-3 mb-3 lg:mb-4">
             <div className="font-display text-xl lg:text-2xl flex items-center gap-2"><Icon name="store" size={20}/> ยอดขายแยกช่องทาง</div>
             <div className="text-right">
@@ -3667,8 +4077,49 @@ function DashboardView() {
             </div>
           </div>
           {!channelSorted.length && <div className="text-on-dark-soft text-sm">ยังไม่มียอดขายในช่วงที่เลือก</div>}
+
+          {/* Mobile — horizontal bar list (Phase 3.1): readable labels + amounts on small screens */}
           {channelSorted.length>0 && (
-            <div className="grid grid-cols-4 gap-2 lg:gap-3" style={{gridAutoRows:'110px'}}>
+            <div className="lg:hidden space-y-2.5">
+              {channelSorted.map(ch => {
+                const m = CH_META[ch.v] || { bg:'#f3f4f6', fg:'#111827', border:'rgba(0,0,0,0.1)' };
+                return (
+                  <div key={ch.v} className="flex items-center gap-3">
+                    <div
+                      className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center"
+                      style={{ background: m.bg, border: `1px solid ${m.border}` }}
+                    >
+                      {ch.v==='store'    && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={m.fg} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7h18v13a1 1 0 01-1 1H4a1 1 0 01-1-1V7z"/><path d="M3 7 5.5 3h13L21 7"/><path d="M9 21V13h6v8"/></svg>}
+                      {ch.v==='tiktok'   && <svg width="18" height="18" viewBox="0 0 24 24" fill={m.fg}><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 00-.79-.05 6.34 6.34 0 000 12.68 6.34 6.34 0 006.33-6.34V7.83a8.16 8.16 0 004.77 1.52V5.9a4.85 4.85 0 01-1-.21z"/></svg>}
+                      {ch.v==='shopee'   && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={m.fg} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 01-8 0"/></svg>}
+                      {ch.v==='lazada'   && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={m.fg} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 8v7h7"/></svg>}
+                      {ch.v==='facebook' && <svg width="18" height="18" viewBox="0 0 24 24" fill={m.fg}><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline justify-between gap-2 mb-1">
+                        <span className="text-sm font-medium text-on-dark truncate">{ch.label}</span>
+                        <span className="text-xs text-on-dark-soft tabular-nums flex-shrink-0">
+                          <span className="font-medium text-on-dark">{ch.share.toFixed(0)}%</span>
+                          <span className="mx-1.5 opacity-40">·</span>
+                          {fmtTHB(ch.total)}
+                        </span>
+                      </div>
+                      <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{ width: `${Math.max(2, ch.share)}%`, background: m.bg, boxShadow: `0 0 0 1px ${m.border} inset` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Desktop — masonry tiles */}
+          {channelSorted.length>0 && (
+            <div className="hidden lg:grid grid-cols-4 gap-2 lg:gap-3" style={{gridAutoRows:'110px'}}>
               {channelSorted.map((ch, idx) => {
                 const big = idx === 0;
                 const m = CH_META[ch.v] || { bg:'#f3f4f6', fg:'#111827', border:'rgba(0,0,0,0.1)' };
@@ -3915,10 +4366,13 @@ function ProfitLossView() {
 
       <div className="px-4 py-4 lg:px-10 lg:py-8 space-y-4 lg:space-y-6">
 
-      {/* Disclaimer */}
-      <div className="rounded-xl border-2 border-dashed border-red-300/70 bg-red-50/40 px-4 py-2.5 text-xs lg:text-sm text-red-700/80">
-        # คำนวณกำไรแบบถูกต้อง ตั้งแต่ มิถุนายน 2026 เป็นต้นไป
-      </div>
+      {/* Disclaimer (Phase 3.3): only show when range includes pre-June-2026 dates,
+          since cost data was incomplete then and the calc may be approximate. */}
+      {dateRange.from < '2026-06-01' && (
+        <div className="rounded-xl border-2 border-dashed border-red-300/70 bg-red-50/40 px-4 py-2.5 text-xs lg:text-sm text-red-700/80">
+          ข้อมูลก่อน <span className="font-medium">มิถุนายน 2026</span> อาจคำนวณกำไรไม่แม่นยำ — ทุนของบางรายการเป็นค่าประมาณ
+        </div>
+      )}
 
       {/* Mobile date controls */}
       <div className="flex flex-wrap items-center gap-2 lg:hidden">
@@ -3989,7 +4443,7 @@ function ProfitLossView() {
             </thead>
             <tbody>
               {!loading && !pageRows.length && (
-                <tr><td colSpan="10" className="text-center text-muted py-8">ไม่มีข้อมูล</td></tr>
+                <tr><td colSpan="10" className="text-center text-muted py-8">ไม่มีบิลในช่วงที่เลือก ลองขยายช่วงวันที่หรือเปลี่ยนตัวกรอง</td></tr>
               )}
               {pageRows.map((r, i) => {
                 const pct = r.lineRevenue > 0 ? (r.profit / r.lineRevenue) * 100 : 0;
@@ -4021,9 +4475,16 @@ function ProfitLossView() {
 
         {/* Mobile cards */}
         <div className="lg:hidden p-3 space-y-2">
-          {!loading && !pageRows.length && <div className="text-center text-muted text-sm py-8">ไม่มีข้อมูล</div>}
+          {!loading && !pageRows.length && <div className="text-center text-muted text-sm py-8">ไม่มีบิลในช่วงที่เลือก<br/>ลองขยายช่วงวันที่หรือเปลี่ยนตัวกรอง</div>}
           {pageRows.map((r,i) => {
             const pct = r.lineRevenue > 0 ? (r.profit / r.lineRevenue) * 100 : 0;
+            // Phase 3.2: color-code margin so cashiers can scan profitability at a glance.
+            // >30% green · 10–30% yellow · <10% (incl. negative) red.
+            const marginCls = r.profit < 0 || pct < 10
+              ? 'bg-error/15 text-error'
+              : pct < 30
+                ? 'bg-[#b45309]/15 text-[#92400e]'
+                : 'bg-[#1f3d27]/12 text-[#1f3d27]';
             return (
               <div key={`${r.sale_id}-${r.product_id || r.product_name}-${i}`} className="glass-soft rounded-lg p-3">
                 <div className="flex items-start justify-between gap-2">
@@ -4036,7 +4497,9 @@ function ProfitLossView() {
                   </div>
                   <div className={"text-right " + (r.profit>=0?"":"text-error")}>
                     <div className="font-display text-base tabular-nums">{r.profit>=0?'+':''}{fmtTHB(r.profit)}</div>
-                    <div className="text-[10px] text-muted">{pct.toFixed(1)}%</div>
+                    <span className={"inline-block mt-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium tabular-nums " + marginCls}>
+                      {pct.toFixed(1)}%
+                    </span>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2 mt-2 text-[11px]">
@@ -4189,13 +4652,13 @@ function App() {
         <OfflineBanner />
         <div className="lg:flex">
           <Sidebar view={view} setView={setView} userEmail={session.user?.email} onOpenSettings={()=>setSettingsOpen(true)}/>
-          <main className="flex-1 min-h-screen pb-16 lg:pb-0 lg:pl-64">
+          <main className="flex-1 min-h-screen pb-24 lg:pb-0 lg:pl-64">
             <MobileTopBar title={titles[view].t} userEmail={session.user?.email} onLogout={()=>sb.auth.signOut()} onOpenSettings={()=>setSettingsOpen(true)}/>
             {!['dashboard','receive','return','pnl'].includes(view) && <PageHeader title={titles[view].t} subtitle={titles[view].s} />}
             <div key={view} className="view-fade">
               {view==='pos' && <POSView />}
               {view==='products' && <ProductsView />}
-              {view==='sales' && <SalesView />}
+              {view==='sales' && <SalesView onGoPOS={()=>setView('pos')} />}
               {view==='receive' && role==='admin' && <ReceiveView />}
               {view==='return' && <ReturnView />}
               {view==='dashboard' && role==='admin' && <DashboardView />}
