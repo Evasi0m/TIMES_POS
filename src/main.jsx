@@ -1496,6 +1496,42 @@ function POSView() {
   const [receiptOrderId, setReceiptOrderId] = useState(null); // shows ReceiptModal after sale
   const searchRef = useRef(null);
   const submitLockRef = useRef(false); // prevents double-submit even if React hasn't re-rendered yet
+  const netPriceRef = useRef(null);
+  const netReceivedRef = useRef(null);
+  const buyerNameRef = useRef(null);
+  // Set to true when user attempts to submit while form invalid — drives
+  // the field-error-glow on missing required fields. Auto-clears below.
+  const [showErrors, setShowErrors] = useState(false);
+  // Modal for tax-invoice details (replaces the previous inline form
+  // that bloated the checkout panel).
+  const [taxInvoiceModalOpen, setTaxInvoiceModalOpen] = useState(false);
+  // Refs for the swipe-down-to-close gesture on the mobile cart sheet.
+  const sheetRef = useRef(null);
+  const sheetDragStartY = useRef(null);
+  const sheetDragOffset = useRef(0);
+  const onSheetDragStart = (e) => {
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    sheetDragStartY.current = e.clientY;
+    sheetDragOffset.current = 0;
+    if (sheetRef.current) sheetRef.current.style.transition = 'none';
+  };
+  const onSheetDragMove = (e) => {
+    if (sheetDragStartY.current == null) return;
+    const dy = Math.max(0, e.clientY - sheetDragStartY.current);
+    sheetDragOffset.current = dy;
+    if (sheetRef.current) sheetRef.current.style.transform = `translateY(${dy}px)`;
+  };
+  const onSheetDragEnd = () => {
+    if (sheetDragStartY.current == null) return;
+    sheetDragStartY.current = null;
+    const shouldClose = sheetDragOffset.current > 80;
+    sheetDragOffset.current = 0;
+    if (sheetRef.current) {
+      sheetRef.current.style.transition = 'transform 200ms ease-out';
+      sheetRef.current.style.transform = 'translateY(0)';
+    }
+    if (shouldClose) setCartOpen(false);
+  };
 
   useEffect(() => {
     if (!search.trim()) { setResults([]); return; }
@@ -1550,7 +1586,29 @@ function POSView() {
   const netPriceFilled = netPrice !== "" && Number(netPrice) > 0;
   const netReceivedOk  = !requiresNetReceived(channel, payment)
     || (netReceived !== "" && Number(netReceived) > 0);
-  const canSubmit = !submitting && cart.length > 0 && netPriceFilled && netReceivedOk;
+  const buyerNameOk    = !taxInvoice || !!buyer.name.trim();
+  const canSubmit = !submitting && cart.length > 0 && netPriceFilled && netReceivedOk && buyerNameOk;
+
+  // Per-field error flags — only show after the user attempted to submit.
+  const netPriceErr     = showErrors && !netPriceFilled;
+  const netReceivedErr  = showErrors && !netReceivedOk;
+  const buyerNameErr    = showErrors && !buyerNameOk;
+
+  // Clear the error glow as soon as the form becomes valid again.
+  useEffect(() => { if (canSubmit && showErrors) setShowErrors(false); }, [canSubmit, showErrors]);
+
+  // Called when user clicks the submit button while it's disabled
+  // (the wrapping div catches the click). Highlights missing fields
+  // and scrolls the first one into view so they know what's wrong.
+  const flagMissing = () => {
+    setShowErrors(true);
+    const first = !netPriceFilled ? netPriceRef.current
+                : !netReceivedOk  ? netReceivedRef.current
+                : !buyerNameOk    ? buyerNameRef.current
+                : null;
+    first?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    first?.focus?.({ preventScroll: true });
+  };
 
   const submit = async () => {
     if (submitLockRef.current) return; // hard guard against double-submit
@@ -1722,12 +1780,30 @@ function POSView() {
                 <div className="text-xs text-muted flex-1 tabular-nums">@ {fmtTHB(l.unit_price)}</div>
                 <div className="text-right font-medium text-sm tabular-nums">{fmtTHB(lineNet(l))}</div>
               </div>
-              <button className="mt-2 text-xs text-muted hover:text-primary inline-flex items-center gap-1" onClick={()=>setExpandedDisc(s=>({...s,[idx]:!expanded}))}>
-                <Icon name="tag" size={12}/> ส่วนลดต่อชิ้น <Icon name={expanded?"chevron-d":"chevron-r"} size={12}/>
-              </button>
+              {(() => {
+                const hasDisc = (Number(l.discount1_value)||0) > 0 || (Number(l.discount2_value)||0) > 0;
+                return (
+                  <button
+                    type="button"
+                    className={"mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition " + (
+                      expanded
+                        ? "bg-primary/15 text-primary border-primary/30"
+                        : hasDisc
+                          ? "bg-primary/10 text-primary border-primary/20 hover:bg-primary/15"
+                          : "bg-white/60 text-muted border-hairline hover:text-primary hover:bg-white"
+                    )}
+                    onClick={()=>setExpandedDisc(s=>({...s,[idx]:!expanded}))}
+                    aria-expanded={expanded}
+                  >
+                    <Icon name="tag" size={12}/>
+                    {hasDisc ? 'ส่วนลดที่ตั้งไว้' : 'เพิ่มส่วนลด'}
+                    <Icon name={expanded?"chevron-d":"chevron-r"} size={12}/>
+                  </button>
+                );
+              })()}
               {expanded && (
                 <div className="grid grid-cols-12 gap-1 mt-2 fade-in">
-                  <input type="number" inputMode="numeric" className="input !h-8 !rounded-lg !py-1 !text-xs col-span-4" placeholder="ลด 1" value={l.discount1_value||""} onChange={e=>updateLine(idx,{discount1_value:Number(e.target.value)||0, discount1_type: l.discount1_type||'baht'})}/>
+                  <input type="number" inputMode="numeric" autoFocus className="input !h-8 !rounded-lg !py-1 !text-xs col-span-4" placeholder="ลด 1" value={l.discount1_value||""} onChange={e=>updateLine(idx,{discount1_value:Number(e.target.value)||0, discount1_type: l.discount1_type||'baht'})}/>
                   <select className="input !h-8 !rounded-lg !py-1 !text-xs col-span-2" value={l.discount1_type||""} onChange={e=>updateLine(idx,{discount1_type:e.target.value||null})}>
                     <option value="">—</option><option value="baht">฿</option><option value="percent">%</option>
                   </select>
@@ -1743,7 +1819,9 @@ function POSView() {
       </div>
 
       <div className="p-4 lg:p-5 border-t hairline bg-surface-cream-strong flex-shrink-0">
-        <div className="grid grid-cols-2 gap-2 mb-3">
+        {/* Section: ข้อมูลบิล */}
+        <div className="text-[9px] uppercase tracking-[0.12em] text-muted-soft font-medium mb-1.5">ข้อมูลบิล</div>
+        <div className="grid grid-cols-2 gap-2 mb-4">
           <div>
             <label className="text-[10px] uppercase tracking-wider text-muted">ช่องทาง</label>
             <select className="input mt-1 !h-10 !rounded-xl !py-2 !text-sm" value={channel} onChange={e=>setChannel(e.target.value)}>
@@ -1758,33 +1836,40 @@ function POSView() {
           </div>
         </div>
 
+        {/* Section: ราคา */}
+        <div className="text-[9px] uppercase tracking-[0.12em] text-muted-soft font-medium mb-1.5">ราคา</div>
         <div className="mb-3">
           <div className="flex items-center justify-between">
-            <label className="text-[10px] uppercase tracking-wider text-muted">
+            <label className="text-[10px] uppercase tracking-wider text-muted inline-flex items-center gap-1.5">
+              <Icon name="credit-card" size={12}/>
               ราคาที่ลูกค้าจ่าย <span className="text-error">*</span>
             </label>
             {discountAmount > 0 && (
               <span className="text-[10px] text-primary tabular-nums">ส่วนลด −{fmtTHB(discountAmount)}</span>
             )}
           </div>
-          <input
-            type="number"
-            inputMode="decimal"
-            className="input mt-1 !h-10 !rounded-xl !py-2 !text-sm"
-            placeholder={subtotal>0 ? fmtTHB(subtotal) : "ราคาที่ลูกค้าจ่ายจริง"}
-            value={netPrice}
-            onChange={e=>setNetPrice(e.target.value)}
-          />
+          <div className={netPriceErr ? "field-error-glow mt-1" : "mt-1"}>
+            <input
+              ref={netPriceRef}
+              type="number"
+              inputMode="decimal"
+              className="input !h-10 !rounded-xl !py-2 !text-sm"
+              placeholder={subtotal>0 ? fmtTHB(subtotal) : "ราคาที่ลูกค้าจ่ายจริง"}
+              value={netPrice}
+              onChange={e=>setNetPrice(e.target.value)}
+            />
+          </div>
         </div>
 
         {ECOMMERCE_CHANNELS.has(channel) && (
-          <div className="mb-3 fade-in">
+          <div className={"rounded-xl p-3 mb-4 bg-primary/5 border border-primary/15 fade-in " + (netReceivedErr ? "field-error-glow" : "")}>
             <div className="flex items-center justify-between">
-              <label className="text-[10px] uppercase tracking-wider text-muted">
-                เงินที่ร้านค้าได้รับ
+              <label className="text-[10px] uppercase tracking-wider text-primary inline-flex items-center gap-1.5 font-medium">
+                <Icon name="store" size={12}/>
+                เงินที่ร้านได้รับ
                 {requiresNetReceived(channel, payment)
-                  ? <span className="text-error ml-1">*</span>
-                  : <span className="text-muted-soft ml-1">(ทีหลังก็ได้)</span>}
+                  ? <span className="text-error ml-0.5">*</span>
+                  : <span className="text-muted-soft ml-0.5 font-normal normal-case tracking-normal">(ทีหลังได้)</span>}
               </label>
               {netReceived !== "" && Number(netReceived) > 0 && grand > 0 && (
                 <span className="text-[10px] text-muted-soft tabular-nums">
@@ -1793,6 +1878,7 @@ function POSView() {
               )}
             </div>
             <input
+              ref={netReceivedRef}
               type="number"
               inputMode="decimal"
               className="input mt-1 !h-10 !rounded-xl !py-2 !text-sm"
@@ -1803,14 +1889,15 @@ function POSView() {
               onChange={e=>setNetReceived(e.target.value)}
             />
             <div className="text-[10px] text-muted-soft mt-1">
-              ใช้คำนวณกำไร — ไม่แสดงในใบเสร็จลูกค้า
+              ใช้คำนวณกำไร · ไม่แสดงในใบเสร็จลูกค้า
             </div>
           </div>
         )}
 
-        {/* Tax invoice + Notes toggles */}
+        {/* Section: ตัวเลือกเสริม */}
+        <div className="text-[9px] uppercase tracking-[0.12em] text-muted-soft font-medium mb-1.5">ตัวเลือกเสริม</div>
         <div className="flex gap-2 mb-3">
-          <button type="button" onClick={()=>setTaxInvoice(v=>!v)}
+          <button type="button" onClick={()=>setTaxInvoiceModalOpen(true)}
             className={"flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-md text-xs font-medium border transition " + (taxInvoice?"bg-primary text-on-primary border-primary shadow-sm":"bg-white text-muted border-hairline hover:text-ink hover:bg-white/90")}>
             <Icon name={taxInvoice?"check":"plus"} size={13}/> ใบกำกับภาษี
           </button>
@@ -1821,29 +1908,37 @@ function POSView() {
         </div>
 
         {taxInvoice && (
-          <div className="bg-white border hairline rounded-md p-3 mb-3 space-y-2 fade-in shadow-sm">
-            <div className="text-[10px] uppercase tracking-wider text-muted">ข้อมูลผู้ซื้อ (ใบกำกับภาษี)</div>
-            <input className="input !py-2 !text-sm" placeholder="ชื่อผู้ซื้อ / บริษัท *" value={buyer.name} onChange={e=>setBuyer(b=>({...b,name:e.target.value}))}/>
-            <div className="grid grid-cols-2 gap-2">
-              <input className="input !py-2 !text-sm font-mono" placeholder="เลขผู้เสียภาษี 13 หลัก" inputMode="numeric" value={buyer.taxId} onChange={e=>setBuyer(b=>({...b,taxId:e.target.value}))}/>
-              <input className="input !py-2 !text-sm" placeholder="เลขใบกำกับ" value={buyer.invoiceNo} onChange={e=>setBuyer(b=>({...b,invoiceNo:e.target.value}))}/>
+          <button type="button" onClick={()=>setTaxInvoiceModalOpen(true)}
+            className={"w-full text-left bg-white border rounded-md p-2.5 mb-3 fade-in flex items-center gap-2 hover:bg-white/80 transition " + (buyerNameErr ? "border-error" : "hairline")}>
+            <Icon name="receipt" size={14} className="text-primary flex-shrink-0"/>
+            <div className="flex-1 min-w-0 text-xs">
+              <div className="font-medium truncate">{buyer.name || <span className="text-error">— ยังไม่ได้กรอกชื่อ —</span>}</div>
+              <div className="text-muted-soft truncate text-[10px]">
+                {[buyer.taxId, buyer.invoiceNo].filter(Boolean).join(' · ') || 'แตะเพื่อกรอกข้อมูลเพิ่มเติม'}
+              </div>
             </div>
-            <textarea className="input !py-2 !text-sm" rows="2" placeholder="ที่อยู่" value={buyer.address} onChange={e=>setBuyer(b=>({...b,address:e.target.value}))}/>
-          </div>
+            <Icon name="edit" size={12} className="text-muted-soft flex-shrink-0"/>
+          </button>
         )}
 
         {showNotes && (
           <textarea className="input !py-2 !text-sm mb-3 fade-in" rows="2" placeholder="หมายเหตุบนบิล (เช่น ลูกค้ามีรอยขีดข่วน, รอของลอตต่อ)" value={notes} onChange={e=>setNotes(e.target.value)}/>
         )}
 
-        <div className="flex justify-between text-sm text-muted mb-1"><span>รวมก่อนลด</span><span className="tabular-nums">{fmtTHB(subtotal)}</span></div>
-        <div className="flex justify-between text-xs text-muted-soft mb-1"><span>ก่อนหัก VAT 7%</span><span className="tabular-nums">{fmtTHB(vatBreakdown(grand).exVat)}</span></div>
-        <div className="flex justify-between text-xs text-muted-soft mb-2"><span>VAT 7%</span><span className="tabular-nums">{fmtTHB(vatBreakdown(grand).vat)}</span></div>
-        <div className="flex justify-between font-display text-3xl mb-3"><span>รวม</span><span className="tabular-nums">{fmtTHB(grand)}</span></div>
+        <div className="border-t hairline pt-3">
+          <div className="flex justify-between text-sm text-muted mb-1"><span>รวมก่อนลด</span><span className="tabular-nums">{fmtTHB(subtotal)}</span></div>
+          <div className="flex justify-between text-xs text-muted-soft mb-1"><span>ก่อนหัก VAT 7%</span><span className="tabular-nums">{fmtTHB(vatBreakdown(grand).exVat)}</span></div>
+          <div className="flex justify-between text-xs text-muted-soft mb-2"><span>VAT 7%</span><span className="tabular-nums">{fmtTHB(vatBreakdown(grand).vat)}</span></div>
+          <div className="flex justify-between font-display text-3xl mb-3"><span>รวม</span><span className="tabular-nums">{fmtTHB(grand)}</span></div>
 
-        <button className="btn-primary w-full !py-3 !text-base" disabled={!canSubmit} onClick={submit}>
-          {submitting? 'กำลังบันทึก...' : `ชำระเงิน ${fmtTHB(grand)}`}
-        </button>
+          {/* Wrapper catches clicks while the inner button is disabled,
+              so we can flag missing fields and scroll the user to them. */}
+          <div onClick={!canSubmit ? flagMissing : undefined}>
+            <button className="btn-primary w-full !py-3 !text-base" disabled={!canSubmit} onClick={submit}>
+              {submitting? 'กำลังบันทึก...' : `ชำระเงิน ${fmtTHB(grand)}`}
+            </button>
+          </div>
+        </div>
       </div>
     </>
   );
@@ -1893,18 +1988,72 @@ function POSView() {
       {/* MOBILE CART SHEET */}
       {cartSheetRender && (
         <div className={"lg:hidden fixed inset-0 modal-overlay z-[100] flex items-end " + (cartSheetClosing?"overlay-out":"overlay-in")} onClick={()=>setCartOpen(false)}>
-          <div className={"w-full max-h-[92vh] rounded-t-2xl flex flex-col card-cream " + (cartSheetClosing?"sheet-out":"sheet-anim")} onClick={e=>e.stopPropagation()}>
-            <div className="px-5 py-4 border-b hairline flex items-center justify-between flex-shrink-0">
-              <div>
-                <div className="font-display text-2xl">ตะกร้า</div>
-                <div className="text-xs text-muted mt-0.5">{cart.length} รายการ · {totalQty} ชิ้น</div>
+          <div ref={sheetRef} className={"w-full max-h-[92vh] rounded-t-2xl flex flex-col card-cream " + (cartSheetClosing?"sheet-out":"sheet-anim")} onClick={e=>e.stopPropagation()}>
+            {/* Drag-handle header — pointerdown here begins swipe-to-close;
+                tapping the bar/handle gives a clear visual affordance. */}
+            <div
+              className="px-5 pt-2.5 pb-3 border-b hairline flex-shrink-0 cursor-grab active:cursor-grabbing touch-none select-none"
+              onPointerDown={onSheetDragStart}
+              onPointerMove={onSheetDragMove}
+              onPointerUp={onSheetDragEnd}
+              onPointerCancel={onSheetDragEnd}
+            >
+              <div className="w-10 h-1 rounded-full bg-muted-soft/40 mx-auto mb-2.5" aria-hidden="true"/>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-display text-2xl">ตะกร้า</div>
+                  <div className="text-xs text-muted mt-0.5">{cart.length} รายการ · {totalQty} ชิ้น</div>
+                </div>
+                <button className="btn-ghost !p-2" onClick={()=>setCartOpen(false)} aria-label="ปิดตะกร้า"><Icon name="x" size={20}/></button>
               </div>
-              <button className="btn-ghost !p-2" onClick={()=>setCartOpen(false)} aria-label="ปิดตะกร้า"><Icon name="x" size={20}/></button>
             </div>
             {CartContent(true)}
           </div>
         </div>
       )}
+
+      {/* Tax-invoice details — opens from the "ใบกำกับภาษี" button.
+          Saving sets taxInvoice=true; "ลบใบกำกับ" clears the flag and
+          all buyer fields. */}
+      <Modal open={taxInvoiceModalOpen} onClose={()=>setTaxInvoiceModalOpen(false)}
+        title="ข้อมูลใบกำกับภาษี"
+        footer={<>
+          {taxInvoice && (
+            <button className="btn-secondary !text-error hover:!bg-error/10" onClick={()=>{
+              setTaxInvoice(false);
+              setBuyer({ name: "", taxId: "", address: "", invoiceNo: "" });
+              setTaxInvoiceModalOpen(false);
+            }}>
+              <Icon name="trash" size={14}/> ลบใบกำกับ
+            </button>
+          )}
+          <button className="btn-secondary" onClick={()=>setTaxInvoiceModalOpen(false)}>ปิด</button>
+          <button className="btn-primary" disabled={!buyer.name.trim()} onClick={()=>{
+            setTaxInvoice(true);
+            setTaxInvoiceModalOpen(false);
+          }}>บันทึก</button>
+        </>}>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs uppercase tracking-wider text-muted">ชื่อผู้ซื้อ / บริษัท <span className="text-error">*</span></label>
+            <input className="input mt-1" autoFocus placeholder="เช่น บริษัท ABC จำกัด" value={buyer.name} onChange={e=>setBuyer(b=>({...b,name:e.target.value}))}/>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted">เลขผู้เสียภาษี</label>
+              <input className="input mt-1 font-mono" inputMode="numeric" placeholder="13 หลัก" value={buyer.taxId} onChange={e=>setBuyer(b=>({...b,taxId:e.target.value}))}/>
+            </div>
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted">เลขใบกำกับ</label>
+              <input className="input mt-1" placeholder="INV-XXXX" value={buyer.invoiceNo} onChange={e=>setBuyer(b=>({...b,invoiceNo:e.target.value}))}/>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs uppercase tracking-wider text-muted">ที่อยู่</label>
+            <textarea className="input mt-1" rows="3" placeholder="ที่อยู่ผู้ซื้อ (พิมพ์ในใบเสร็จ)" value={buyer.address} onChange={e=>setBuyer(b=>({...b,address:e.target.value}))}/>
+          </div>
+        </div>
+      </Modal>
 
       {/* Receipt modal — opens after successful sale */}
       <ReceiptModal open={!!receiptOrderId} onClose={()=>setReceiptOrderId(null)} orderId={receiptOrderId}/>
