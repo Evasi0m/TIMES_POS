@@ -625,7 +625,7 @@
       0 1px 0 rgba(255, 255, 255, 0.75) inset,
       0 -1px 0 rgba(180, 168, 148, 0.12) inset;
     width: 100%;
-    /* No max-width — bar tracks the cart button's full width on all viewports. */
+    max-width: 480px;
     padding: 4px;
   }
 
@@ -637,7 +637,6 @@
     gap: 2px;
     flex: 1 1 0;
     min-width: 0;
-    max-width: 110px;
     height: 56px;
     color: rgba(20, 20, 19, 0.55);
     position: relative;
