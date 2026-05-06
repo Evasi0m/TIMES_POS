@@ -184,7 +184,7 @@ const Icon = ({ name, size = 20, className = "", strokeWidth = 1.75, color }) =>
     case "package-in":  return <svg {...p}><path d="M12 3l9 5v10l-9 5-9-5V8l9-5z"/><path d="M12 8v10"/><path d="M8 12l4-4 4 4"/></svg>;
     case "package-out": return <svg {...p}><path d="M12 3l9 5v10l-9 5-9-5V8l9-5z"/><path d="M12 8v10"/><path d="M8 16l4 4 4-4"/></svg>;
     case "dashboard": return <svg {...p}><rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/></svg>;
-    case "search":    return <svg {...p}><circle cx="11" cy="11" r="7.5"/><path d="m16.5 16.5 4.5 4.5"/><circle cx="14.5" cy="7.5" r="1" fill="currentColor" opacity="0.3"/></svg>;
+    case "search":    return <svg {...p}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>;
     case "plus":      return <svg {...p}><path d="M12 5v14M5 12h14"/></svg>;
     case "minus":     return <svg {...p}><path d="M5 12h14"/></svg>;
     case "x":         return <svg {...p}><path d="M18 6 6 18M6 6l12 12"/></svg>;
@@ -1881,7 +1881,7 @@ function Sidebar({ view, setView, userEmail, onOpenSettings }) {
     <aside className="sidebar hidden lg:flex w-64 flex-col">
       <div className="sidebar-header px-6 py-6 flex items-center gap-3 border-b">
         <img src="icons/logo_web3_512.png" alt="TIMES logo" style={{width:41,height:41,objectFit:'contain'}} />
-        <div style={{fontFamily:"'Jost', sans-serif", fontWeight:600, color:'#faf9f5'}} className="text-2xl leading-none self-center">TIMES</div>
+        <div style={{fontFamily:"'Jost', sans-serif", fontWeight:600}} className="text-2xl leading-none self-center">TIMES</div>
       </div>
       <nav className="p-3 flex-1 overflow-y-auto" aria-label="เมนูหลัก">
         {items.map(it => (
@@ -1915,7 +1915,7 @@ function Sidebar({ view, setView, userEmail, onOpenSettings }) {
 /* =========================================================
    MOBILE TOP BAR + BOTTOM TABS
 ========================================================= */
-function MobileTopBar({ title, userEmail, onLogout, onOpenSettings }) {
+function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, view, setView }) {
   const [openMenu, setOpenMenu] = useState(false);
   const role = useRole();
   const { render: drawerRender, closing: drawerClosing } = useMountedToggle(openMenu, 220);
@@ -1941,8 +1941,27 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings }) {
             <div className="font-display text-xl">เมนู</div>
             <button className="btn-ghost !p-2" onClick={()=>setOpenMenu(false)} aria-label="ปิดเมนู"><Icon name="x" size={20}/></button>
           </div>
-          <div className="p-4 space-y-3">
-            <button className="btn-secondary w-full" onClick={()=>{ setOpenMenu(false); onOpenSettings?.(); }}>
+          <div className="p-4 space-y-4">
+            {role === 'admin' && (
+              <div>
+                <div className="text-xs uppercase tracking-wider text-muted mb-2">รายงาน</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    className={"btn-secondary !justify-start gap-2" + (view==='dashboard' ? " !border-primary !text-primary" : "")}
+                    onClick={()=>{ setView('dashboard'); setOpenMenu(false); }}
+                  >
+                    <Icon name="dashboard" size={16}/> ภาพรวม
+                  </button>
+                  <button
+                    className={"btn-secondary !justify-start gap-2" + (view==='pnl' ? " !border-primary !text-primary" : "")}
+                    onClick={()=>{ setView('pnl'); setOpenMenu(false); }}
+                  >
+                    <Icon name="trend-up" size={16}/> กำไร
+                  </button>
+                </div>
+              </div>
+            )}
+            <button className="btn-app-settings-sidebar" onClick={()=>{ setOpenMenu(false); onOpenSettings?.(); }}>
               <Icon name="settings" size={16}/> การตั้งค่า
             </button>
             <div>
@@ -1950,7 +1969,7 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings }) {
               <div className="text-sm text-ink truncate mb-3">
                 {userEmail} {role === 'admin' && <span className="text-primary">· admin</span>}
               </div>
-              <button className="btn-secondary w-full" onClick={onLogout}>
+              <button className="btn-danger-sidebar" onClick={onLogout}>
                 <Icon name="logout" size={16}/> ออกจากระบบ
               </button>
             </div>
@@ -1972,7 +1991,8 @@ function MobileTabBar({ view, setView }) {
   const all = navForRole(role);
   // Pull POS out — it becomes the FAB. Everything else fills the bar halves.
   const posItem = all.find(it => it.k === 'pos');
-  const others  = all.filter(it => it.k !== 'pos');
+  // 'dashboard' and 'pnl' moved to the MobileTopBar drawer menu.
+  const others  = all.filter(it => it.k !== 'pos' && it.k !== 'dashboard' && it.k !== 'pnl');
   // Split: balance left vs right (right takes the larger half if odd).
   const leftCount = Math.floor(others.length / 2);
   const left  = others.slice(0, leftCount);
@@ -5787,7 +5807,7 @@ function App() {
         <div className="lg:flex">
           <Sidebar view={view} setView={setView} userEmail={session.user?.email} onOpenSettings={()=>setSettingsOpen(true)}/>
           <main className="flex-1 min-h-screen pb-24 lg:pb-0 lg:pl-64">
-            <MobileTopBar title={titles[view].t} userEmail={session.user?.email} onLogout={()=>sb.auth.signOut()} onOpenSettings={()=>setSettingsOpen(true)}/>
+            <MobileTopBar title={titles[view].t} userEmail={session.user?.email} onLogout={()=>sb.auth.signOut()} onOpenSettings={()=>setSettingsOpen(true)} view={view} setView={setView}/>
             {!['dashboard','receive','return','pnl'].includes(view) && <PageHeader title={titles[view].t} subtitle={titles[view].s} />}
             <div key={view} className="view-fade">
               {view==='pos' && <POSView />}
