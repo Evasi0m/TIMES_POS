@@ -1060,8 +1060,8 @@
     margin: 4mm 4mm 2mm;
     font-size: 11px;
     font-weight: 700;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
+    letter-spacing: 0.04em;   /* wide letter-spacing breaks Thai vowel placement */
+    text-transform: none;
   }
   .receipt-100mm.r-theme-modern .r-meta,
   .receipt-100mm.r-theme-modern .r-items,

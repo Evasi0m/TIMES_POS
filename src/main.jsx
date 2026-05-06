@@ -904,8 +904,136 @@ function ShopProvider({ children }) {
 }
 
 /* =========================================================
+   APP FONT SELECTOR
+   Applies a font across the entire UI EXCEPT the receipt
+   (.receipt-100mm has its own hardcoded Sarabun rule which wins by
+   higher specificity, so receipt output is always unaffected).
+   Persisted in localStorage; applied via a dynamically-injected
+   <style> tag so it survives page refreshes instantly (no FOUC).
+========================================================= */
+const APP_FONT_KEY = 'times_pos.app_font';
+const APP_FONTS = [
+  {
+    id: 'default',
+    label: 'Default',
+    desc: 'Taviraj — serif อ่อนโยน',
+    sample: 'สวัสดี ฿299',
+    googleUrl: null, // already loaded in index.html
+    css: { family: "'Taviraj', serif", body: 400, display: 600, light: 500, italic: true },
+  },
+  {
+    id: 'kanit',
+    label: 'Kanit',
+    desc: 'Sans-serif ทันสมัย กลม',
+    sample: 'สวัสดี ฿299',
+    googleUrl: 'https://fonts.googleapis.com/css2?family=Kanit:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&display=swap',
+    css: { family: "'Kanit', sans-serif", body: 300, display: 600, light: 400, italic: true },
+  },
+  {
+    id: 'google-sans',
+    label: 'Google Sans',
+    desc: 'Clean modern — อ่านง่าย',
+    sample: 'สวัสดี ฿299',
+    googleUrl: 'https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap',
+    css: { family: "'Google Sans', sans-serif", body: 400, display: 700, light: 500, italic: false },
+  },
+  {
+    id: 'trirong',
+    label: 'Trirong',
+    desc: 'Serif งดงาม หรูหรา',
+    sample: 'สวัสดี ฿299',
+    googleUrl: 'https://fonts.googleapis.com/css2?family=Trirong:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&display=swap',
+    css: { family: "'Trirong', serif", body: 300, display: 600, light: 400, italic: true },
+  },
+];
+
+function applyAppFont(fontId) {
+  const font = APP_FONTS.find(f => f.id === fontId) || APP_FONTS[0];
+  // ── Google Fonts <link> (non-default fonts only) ──
+  const LINK_ID = 'times-app-font-link';
+  let link = document.getElementById(LINK_ID);
+  if (font.googleUrl) {
+    if (!link) {
+      link = document.createElement('link');
+      link.id = LINK_ID;
+      link.rel = 'stylesheet';
+      document.head.appendChild(link);
+    }
+    if (link.href !== font.googleUrl) link.href = font.googleUrl;
+  } else {
+    link?.remove();
+  }
+  // ── Injected CSS override (after static CSS → wins without !important) ──
+  const STYLE_ID = 'times-app-font-style';
+  let style = document.getElementById(STYLE_ID);
+  if (!style) {
+    style = document.createElement('style');
+    style.id = STYLE_ID;
+    document.head.appendChild(style);
+  }
+  const { family, body, display, light } = font.css;
+  // Receipt is excluded automatically: `.receipt-100mm` has class-level
+  // font-family override (higher specificity than element selectors).
+  style.textContent = [
+    `body{font-family:${family};font-weight:${body};}`,
+    `input,select,textarea,button{font-family:${family};}`,
+    `.font-display{font-family:${family};font-weight:${display};}`,
+    `.font-display-light{font-family:${family};font-weight:${light};}`,
+  ].join('');
+}
+
+// Apply saved font immediately at module load so there is no FOUC.
+try { const _f = localStorage.getItem(APP_FONT_KEY); if (_f) applyAppFont(_f); } catch {}
+
+function useAppFont() {
+  const [fontId, _setFontId] = useState(() => {
+    try { return localStorage.getItem(APP_FONT_KEY) || 'default'; } catch { return 'default'; }
+  });
+  const setFontId = useCallback((id) => {
+    _setFontId(id);
+    try { localStorage.setItem(APP_FONT_KEY, id); } catch {}
+    applyAppFont(id);
+  }, []);
+  return [fontId, setFontId];
+}
+
+function FontPickerInline() {
+  const [fontId, setFontId] = useAppFont();
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {APP_FONTS.map(f => {
+        const active = fontId === f.id;
+        return (
+          <button
+            key={f.id}
+            type="button"
+            onClick={() => setFontId(f.id)}
+            className={"rounded-lg border p-2.5 text-left transition-colors " + (active
+              ? "bg-primary/10 border-primary"
+              : "bg-white border-hairline hover:border-primary/30")}
+          >
+            <div style={{ fontFamily: f.css.family, fontWeight: f.css.display }}
+              className={"text-base leading-tight " + (active ? "text-primary" : "text-ink")}>
+              {f.label}
+            </div>
+            <div style={{ fontFamily: f.css.family, fontWeight: f.css.body }}
+              className="text-[11px] text-muted mt-0.5 leading-snug">
+              {f.desc}
+            </div>
+            <div style={{ fontFamily: f.css.family, fontWeight: f.css.body }}
+              className="text-sm mt-2 text-ink tabular-nums">
+              {f.sample}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* =========================================================
    UNIFIED APP SETTINGS MODAL
-   - Section 1: การแสดงผล (FontSizePicker) — visible to ALL users
+   - Section 1: การแสดงผล (FontSizePicker + FontPicker) — visible to ALL users
    - Section 2: ข้อมูลร้าน (shop fields for receipt/invoice) — admin only
    Replaces both the old SettingsModal and the inline FontSizePicker in
    the sidebar footer / mobile drawer.
@@ -959,15 +1087,22 @@ function AppSettingsModal({ open, onClose }) {
       </>}>
       <div className="space-y-6">
 
-        {/* ── Section 1: ขนาดตัวอักษร (all users) ── */}
+        {/* ── Section 1: การแสดงผล — ขนาดตัวอักษร + ฟอนต์ (all users) ── */}
         <div>
           <div className="text-xs font-semibold uppercase tracking-wider text-muted mb-3 flex items-center gap-1.5">
             <Icon name="edit" size={13}/>
             การแสดงผล
           </div>
-          <div className="rounded-xl bg-surface-soft border hairline p-3">
-            <div className="text-sm text-ink mb-2">ขนาดตัวอักษร</div>
-            <FontSizePickerInline />
+          <div className="rounded-xl bg-surface-soft border hairline p-3 space-y-4">
+            <div>
+              <div className="text-sm text-ink mb-2">ขนาดตัวอักษร</div>
+              <FontSizePickerInline />
+            </div>
+            <div className="border-t hairline-soft pt-3">
+              <div className="text-sm text-ink mb-1">ฟอนต์</div>
+              <div className="text-[11px] text-muted-soft mb-2">ใช้กับทุกหน้า — ยกเว้นใบเสร็จ</div>
+              <FontPickerInline />
+            </div>
           </div>
         </div>
 
@@ -1062,7 +1197,7 @@ function Receipt({ order, items, shop, variant = 'receipt', theme = 'classic' })
   return (
     <div className={"receipt-100mm receipt-print r-theme-" + theme}>
       <div className="r-header">
-        <div className="r-shop">{shop?.shop_name || 'TIMES'}</div>
+        <div className="r-shop" style={theme==='modern'?{fontFamily:"Jost, sans-serif"}:{}}>{shop?.shop_name || 'TIMES'}</div>
         {shop?.shop_address && <div className="r-addr">{shop.shop_address}</div>}
         {shop?.shop_phone   && <div className="r-addr">โทร {shop.shop_phone} (คุณตุ๋ม)</div>}
         {isInvoice && shop?.shop_tax_id && <div className="r-addr">เลขผู้เสียภาษี {shop.shop_tax_id}</div>}
@@ -1160,8 +1295,8 @@ function ReceiptModal({ open, onClose, orderId }) {
   const [items, setItems] = useState([]);
   const [variant, setVariant] = useState('receipt');
   const [theme, setThemeState] = useState(() => {
-    try { return localStorage.getItem(RECEIPT_THEME_KEY) || 'classic'; }
-    catch { return 'classic'; }
+    try { return localStorage.getItem(RECEIPT_THEME_KEY) || 'modern'; }
+    catch { return 'modern'; }
   });
   const setTheme = (t) => {
     setThemeState(t);
