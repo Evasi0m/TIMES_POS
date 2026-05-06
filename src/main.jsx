@@ -5809,6 +5809,7 @@ function App() {
   );
 }
 
-const root = ReactDOM.createRoot(document.getElementById("root"));
-root.render(<App />);
+const _container = document.getElementById("root");
+if (!_container._reactRoot) _container._reactRoot = ReactDOM.createRoot(_container);
+_container._reactRoot.render(<App />);
 
