@@ -3141,9 +3141,11 @@ function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand,
   const [scannerOpen, setScannerOpen] = useState(false);
   const [autoPct, setAutoPct] = useState(null);    // last preset % applied
   const [customPctStr, setCustomPctStr] = useState(''); // raw string in custom input
+  const [saving, setSaving] = useState(false);
   const barcodeRef = useRef(null);
   const askPrompt = usePrompt();
   const askConfirm = useConfirm();
+  const tryToast = useToast();
   useEffect(()=>{
     setDraft(editing? {...editing} : null);
     setBarcodeEdit(false);
@@ -3201,8 +3203,6 @@ function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand,
     }
     return null;
   };
-  const tryToast = useToast();
-  const [saving, setSaving] = useState(false);
   const handleSave = async () => {
     if (saving) return;
     const reason = validate();
