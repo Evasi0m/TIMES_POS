@@ -211,6 +211,9 @@ const Icon = ({ name, size = 20, className = "", strokeWidth = 1.75, color }) =>
     case "camera":    return <svg {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3.5"/></svg>;
     case "flashlight":return <svg {...p}><path d="M18 6 6 18"/><path d="M14 4h6v6"/><path d="M10 20H4v-6"/><circle cx="12" cy="12" r="2"/></svg>;
     case "flip-cam":  return <svg {...p}><path d="M3 7h4l2-3h6l2 3h4v12H3z"/><path d="m9 13 3-3 3 3"/><path d="M12 10v6"/></svg>;
+    case "zap":       return <svg {...p}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>;
+    case "user":      return <svg {...p}><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/></svg>;
+    case "wallet":    return <svg {...p}><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M16 12h4"/><circle cx="17" cy="12" r="0.5" fill="currentColor"/></svg>;
     case "settings":  return <svg {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>;
     default: return null;
   }
@@ -810,7 +813,7 @@ function DatePicker({ value, onChange, mode = 'single', placeholder = 'เลื
 
   return (
     <div className={"relative " + className} ref={ref}>
-      <button type="button" onClick={()=>setOpen(o=>!o)} className="input flex items-center gap-2.5 text-left hover:bg-white/95 transition-colors">
+      <button type="button" onClick={()=>setOpen(o=>!o)} className="input flex items-center gap-2.5 text-left hover:bg-white/95 transition-colors !h-10">
         <Icon name="calendar" size={18} className="text-body flex-shrink-0" strokeWidth={2}/>
         <span className={(mode==='single'?value:value?.from) ? "text-ink truncate" : "text-muted-soft truncate"}>{display}</span>
         <Icon name="chevron-d" size={16} className={"ml-auto text-muted flex-shrink-0 transition-transform " + (open?"rotate-180":"")}/>
@@ -2611,12 +2614,14 @@ function POSView() {
         <div className="text-[11px] uppercase tracking-[0.12em] text-muted-soft font-medium mb-1.5">ตัวเลือกเสริม</div>
         <div className="flex gap-2 mb-3">
           <button type="button" onClick={()=>setTaxInvoiceModalOpen(true)}
-            className={"flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-md text-xs font-medium border transition " + (taxInvoice?"bg-primary text-on-primary border-primary shadow-sm":"bg-white text-muted border-hairline hover:text-ink hover:bg-white/90")}>
+            className={"flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-md text-xs font-medium border transition " + (taxInvoice?"text-white":"bg-white text-muted border-hairline hover:text-ink hover:bg-white/90")}
+            style={taxInvoice ? { background: 'linear-gradient(180deg, rgba(204,120,92,0.85) 0%, rgba(184,100,72,0.92) 100%)', borderColor: 'rgba(255,255,255,0.18)', boxShadow: '0 2px 8px rgba(184,100,72,0.35), 0 1px 0 rgba(255,255,255,0.18) inset' } : {}}>
             <Icon name={taxInvoice?"check":"plus"} size={13}/> ใบกำกับภาษี
           </button>
           <button type="button" onClick={()=>setShowNotes(v=>!v)}
-            className={"flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-md text-xs font-medium border transition " + (showNotes||notes?"bg-white text-ink border-primary/40 shadow-sm":"bg-white text-muted border-hairline hover:text-ink")}>
-            <Icon name="edit" size={13}/> หมายเหตุ {notes && <span className="w-1.5 h-1.5 bg-primary rounded-full"/>}
+            className={"flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-md text-xs font-medium border transition " + (showNotes||notes?"text-white":"bg-white text-muted border-hairline hover:text-ink")}
+            style={showNotes||notes ? { background: 'linear-gradient(180deg, rgba(204,120,92,0.85) 0%, rgba(184,100,72,0.92) 100%)', borderColor: 'rgba(255,255,255,0.18)', boxShadow: '0 2px 8px rgba(184,100,72,0.35), 0 1px 0 rgba(255,255,255,0.18) inset' } : {}}>
+            <Icon name="edit" size={13}/> หมายเหตุ {notes && <span className="w-1.5 h-1.5 bg-white/70 rounded-full"/>}
           </button>
         </div>
 
@@ -2950,12 +2955,14 @@ function POSView() {
                   <div className="text-[11px] uppercase tracking-[0.12em] text-muted-soft font-medium mb-1.5">ตัวเลือกเสริม</div>
                   <div className="flex gap-2 mb-2">
                     <button type="button" onClick={()=>setTaxInvoiceModalOpen(true)}
-                      className={"flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-2 rounded-md text-xs font-medium border transition " + (taxInvoice?"bg-primary text-on-primary border-primary shadow-sm":"bg-white text-muted border-hairline hover:text-ink hover:bg-white/90")}>
+                      className={"flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-2 rounded-md text-xs font-medium border transition " + (taxInvoice?"text-white":"bg-white text-muted border-hairline hover:text-ink hover:bg-white/90")}
+                      style={taxInvoice ? { background: 'linear-gradient(180deg, rgba(204,120,92,0.85) 0%, rgba(184,100,72,0.92) 100%)', borderColor: 'rgba(255,255,255,0.18)', boxShadow: '0 2px 8px rgba(184,100,72,0.35), 0 1px 0 rgba(255,255,255,0.18) inset' } : {}}>
                       <Icon name={taxInvoice?"check":"plus"} size={13}/> ใบกำกับภาษี
                     </button>
                     <button type="button" onClick={()=>setShowNotes(v=>!v)}
-                      className={"flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-2 rounded-md text-xs font-medium border transition " + (showNotes||notes?"bg-white text-ink border-primary/40 shadow-sm":"bg-white text-muted border-hairline hover:text-ink")}>
-                      <Icon name="edit" size={13}/> หมายเหตุ {notes && <span className="w-1.5 h-1.5 bg-primary rounded-full"/>}
+                      className={"flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-2 rounded-md text-xs font-medium border transition " + (showNotes||notes?"text-white":"bg-white text-muted border-hairline hover:text-ink")}
+                      style={showNotes||notes ? { background: 'linear-gradient(180deg, rgba(204,120,92,0.85) 0%, rgba(184,100,72,0.92) 100%)', borderColor: 'rgba(255,255,255,0.18)', boxShadow: '0 2px 8px rgba(184,100,72,0.35), 0 1px 0 rgba(255,255,255,0.18) inset' } : {}}>
+                      <Icon name="edit" size={13}/> หมายเหตุ {notes && <span className="w-1.5 h-1.5 bg-white/70 rounded-full"/>}
                     </button>
                   </div>
 
@@ -4282,7 +4289,7 @@ function SalesView({ onGoPOS }) {
             </button>
           )}
           {detail && (
-            <button className="btn-secondary" onClick={()=>setReprintId(detail.order.id)}>
+            <button className="btn-secondary" style={{ background: 'linear-gradient(180deg, rgba(204,120,92,0.85) 0%, rgba(184,100,72,0.92) 100%)', color: '#fff', borderColor: 'rgba(255,255,255,0.18)', boxShadow: '0 2px 8px rgba(184,100,72,0.35), 0 1px 0 rgba(255,255,255,0.18) inset' }} onClick={()=>setReprintId(detail.order.id)}>
               <Icon name="receipt" size={16}/> พิมพ์ใบเสร็จ
             </button>
           )}
@@ -4968,7 +4975,7 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind }, 
               {kind==='return' && (
                 <div>
                   <label className="text-xs uppercase tracking-wider text-muted">ช่องทางที่ลูกค้าคืน</label>
-                  <select className="input mt-1 !h-10" value={channel} onChange={e=>setChannel(e.target.value)}>
+                  <select className="input mt-1 !h-10 !py-1.5" value={channel} onChange={e=>setChannel(e.target.value)}>
                     {CHANNELS.map(c=><option key={c.v} value={c.v}>{c.label}</option>)}
                   </select>
                 </div>
@@ -5335,6 +5342,391 @@ function DashboardView() {
 }
 
 /* =========================================================
+   SHOP EXPENSES — store-level operating expenses (electricity,
+   rent, staff salaries+commission, packaging, plus user-defined
+   "อื่นๆ"). Stored in `shop_expenses` table, separated from
+   product cost so the PnL view can split them clearly.
+========================================================= */
+const EXPENSE_CATEGORIES = [
+  { key: 'electricity',  label: 'ค่าไฟ',                  icon: 'zap'         },
+  { key: 'rent',         label: 'ค่าเช่าร้าน',             icon: 'store'       },
+  { key: 'staff_1',      label: 'ค่าพนักงาน คนที่ 1',     icon: 'user', staff: true },
+  { key: 'staff_2',      label: 'ค่าพนักงาน คนที่ 2',     icon: 'user', staff: true },
+  { key: 'shipping_box', label: 'ค่ากล่องพัสดุ',          icon: 'box'         },
+  { key: 'tape',         label: 'ค่าเทป',                 icon: 'tag'         },
+];
+const EXPENSE_CAT_MAP = Object.fromEntries(EXPENSE_CATEGORIES.map(c => [c.key, c]));
+
+const THAI_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+function fmtThaiYearMonth(yyyymm) {
+  if (!yyyymm) return '';
+  const [y, m] = yyyymm.split('-').map(Number);
+  return `${THAI_MONTHS[m-1]} ${y + 543}`;
+}
+
+// Compute final amount for a staff category given its base+commission% and the month's sales total.
+function staffComputed(d, monthSales) {
+  const base = Number(d?.base_salary) || 0;
+  const pct  = Number(d?.commission_pct) || 0;
+  return base + (pct / 100) * (Number(monthSales) || 0);
+}
+
+function ShopExpensesModal({ open, onClose, initialMonth, onChanged }) {
+  const toast = useToast();
+  const askConfirm = useConfirm();
+  const [month, setMonth] = useState(initialMonth);            // 'YYYY-MM'
+  const [draft, setDraft] = useState({});                      // category -> {id?, amount, base_salary, commission_pct}
+  const [others, setOthers] = useState([]);                    // [{id?, label, amount, sort_order}]
+  const [monthSales, setMonthSales] = useState(0);             // for staff commission preview
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Sync initialMonth on open
+  useEffect(() => { if (open) setMonth(initialMonth); }, [open, initialMonth]);
+
+  // Load expenses + monthly sales when month changes
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const periodMonth = `${month}-01`;
+        const { data: rows, error } = await sb.from('shop_expenses')
+          .select('*').eq('period_month', periodMonth);
+        if (error) throw error;
+        if (cancelled) return;
+        const draftMap = {};
+        const otherList = [];
+        (rows || []).forEach(r => {
+          if (r.category === 'other') {
+            otherList.push({
+              id: r.id,
+              label: r.label || '',
+              amount: Number(r.amount) || 0,
+              sort_order: r.sort_order || 0,
+            });
+          } else {
+            draftMap[r.category] = {
+              id: r.id,
+              amount: Number(r.amount) || 0,
+              base_salary: r.base_salary != null ? Number(r.base_salary) : null,
+              commission_pct: r.commission_pct != null ? Number(r.commission_pct) : null,
+            };
+          }
+        });
+        setDraft(draftMap);
+        setOthers(otherList.sort((a,b) => a.sort_order - b.sort_order));
+
+        // Sales total for this month — used to preview staff commission
+        const [y, m] = month.split('-').map(Number);
+        const startDate = `${month}-01`;
+        const endDate = new Date(y, m, 0);     // last day of month (m is 1-12, day 0 = last of m-1+1)
+        const endIso = `${y}-${String(m).padStart(2,'0')}-${String(endDate.getDate()).padStart(2,'0')}`;
+        const { data: salesRows } = await sb.from('sale_orders')
+          .select('grand_total, net_received, channel')
+          .eq('status', 'active')
+          .gte('sale_date', startOfDayBangkok(startDate))
+          .lte('sale_date', endOfDayBangkok(endIso));
+        if (cancelled) return;
+        let total = 0;
+        (salesRows || []).forEach(o => {
+          const v = (ECOMMERCE_CHANNELS.has(o.channel) && o.net_received != null)
+            ? Number(o.net_received) : Number(o.grand_total) || 0;
+          total += v;
+        });
+        setMonthSales(total);
+      } catch (e) {
+        if (!cancelled) toast.push('โหลดข้อมูลไม่สำเร็จ: ' + mapError(e), 'error');
+      } finally { if (!cancelled) setLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [open, month]);
+
+  const setCat = (key, patch) => setDraft(d => ({ ...d, [key]: { ...(d[key] || {}), ...patch } }));
+  const addOther = () => setOthers(o => [...o, { label: '', amount: 0 }]);
+  const setOther = (idx, patch) => setOthers(o => o.map((x, i) => i === idx ? { ...x, ...patch } : x));
+  const rmOther  = (idx)        => setOthers(o => o.filter((_, i) => i !== idx));
+
+  const monthTotal = useMemo(() => {
+    let t = 0;
+    EXPENSE_CATEGORIES.forEach(c => {
+      const d = draft[c.key]; if (!d) return;
+      if (c.staff) t += staffComputed(d, monthSales);
+      else t += Number(d.amount) || 0;
+    });
+    others.forEach(o => { t += Number(o.amount) || 0; });
+    return t;
+  }, [draft, others, monthSales]);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const periodMonth = `${month}-01`;
+      const upserts = [];
+      const deletes = [];
+
+      // Fixed categories — empty rows are deleted (so user can clear)
+      for (const c of EXPENSE_CATEGORIES) {
+        const d = draft[c.key];
+        if (!d) continue;
+        const isEmpty = c.staff
+          ? (!Number(d.base_salary) && !Number(d.commission_pct))
+          : (!Number(d.amount));
+        if (isEmpty) {
+          if (d.id) deletes.push(d.id);
+          continue;
+        }
+        upserts.push({
+          ...(d.id ? { id: d.id } : {}),
+          period_month: periodMonth,
+          category: c.key,
+          amount: c.staff ? staffComputed(d, monthSales) : Number(d.amount) || 0,
+          base_salary: c.staff ? (Number(d.base_salary) || 0) : null,
+          commission_pct: c.staff ? (Number(d.commission_pct) || 0) : null,
+        });
+      }
+
+      // Others — empty rows dropped
+      others.forEach((o, idx) => {
+        const isEmpty = !o.label?.trim() && !Number(o.amount);
+        if (isEmpty) {
+          if (o.id) deletes.push(o.id);
+          return;
+        }
+        upserts.push({
+          ...(o.id ? { id: o.id } : {}),
+          period_month: periodMonth,
+          category: 'other',
+          label: o.label?.trim() || 'รายการอื่น',
+          amount: Number(o.amount) || 0,
+          sort_order: idx,
+        });
+      });
+
+      // Find DB rows that no longer appear → delete (user removed them in UI)
+      const { data: existingRows } = await sb.from('shop_expenses').select('id').eq('period_month', periodMonth);
+      const upsertIds = new Set(upserts.filter(u => u.id).map(u => u.id));
+      (existingRows || []).forEach(r => { if (!upsertIds.has(r.id)) deletes.push(r.id); });
+
+      const uniqDeletes = [...new Set(deletes)];
+      if (uniqDeletes.length) {
+        const { error } = await sb.from('shop_expenses').delete().in('id', uniqDeletes);
+        if (error) throw error;
+      }
+      if (upserts.length) {
+        const { error } = await sb.from('shop_expenses').upsert(upserts, { onConflict: 'id' });
+        if (error) throw error;
+      }
+
+      toast.push('บันทึกค่าใช้จ่ายสำเร็จ', 'success');
+      onChanged?.();
+      onClose();
+    } catch (e) {
+      toast.push('บันทึกไม่สำเร็จ: ' + mapError(e), 'error');
+    } finally { setSaving(false); }
+  }
+
+  // Apply current category's value to every month that has any shop_expenses record (plus current month).
+  async function applyToAllMonths(categoryKey) {
+    const c = EXPENSE_CAT_MAP[categoryKey];
+    const d = draft[categoryKey];
+    if (!d) { toast.push('กรอกค่าก่อนกดปุ่มนี้', 'error'); return; }
+    const ok = await askConfirm({
+      title: 'ใช้กับทุกเดือน?',
+      message: `ค่า "${c.label}" จะถูกบันทึกทับในทุกเดือนที่มีข้อมูลค่าใช้จ่ายอยู่ และเดือนนี้`,
+      confirmText: 'ยืนยัน',
+    });
+    if (!ok) return;
+    setSaving(true);
+    try {
+      const { data: monthsRows } = await sb.from('shop_expenses').select('period_month');
+      const monthSet = new Set((monthsRows || []).map(r => r.period_month));
+      monthSet.add(`${month}-01`);
+      const allMonths = [...monthSet];
+
+      const { data: existing } = await sb.from('shop_expenses')
+        .select('id, period_month').in('period_month', allMonths).eq('category', categoryKey);
+      const idByMonth = {};
+      (existing || []).forEach(r => { idByMonth[r.period_month] = r.id; });
+
+      const rows = allMonths.map(pm => ({
+        ...(idByMonth[pm] ? { id: idByMonth[pm] } : {}),
+        period_month: pm,
+        category: categoryKey,
+        // For staff: amount is recomputed per-month at display time using that month's sales.
+        // We store the snapshot-amount of CURRENT month for backward-compat, but PnL view will
+        // recompute using base_salary + commission_pct against each month's actual sales.
+        amount: c.staff ? staffComputed(d, 0) : Number(d.amount) || 0,
+        base_salary: c.staff ? (Number(d.base_salary) || 0) : null,
+        commission_pct: c.staff ? (Number(d.commission_pct) || 0) : null,
+      }));
+      const { error } = await sb.from('shop_expenses').upsert(rows, { onConflict: 'id' });
+      if (error) throw error;
+      toast.push(`ปรับใช้กับ ${allMonths.length} เดือนแล้ว`, 'success');
+      onChanged?.();
+    } catch (e) {
+      toast.push('ทำไม่สำเร็จ: ' + mapError(e), 'error');
+    } finally { setSaving(false); }
+  }
+
+  // 24 months back, 6 months forward — covers most realistic backdating
+  const monthOptions = useMemo(() => {
+    const arr = [];
+    const t = new Date();
+    for (let i = -24; i <= 6; i++) {
+      const d = new Date(t.getFullYear(), t.getMonth() + i, 1);
+      arr.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+    }
+    return arr.reverse();
+  }, []);
+
+  const labelCls = 'text-xs font-semibold uppercase tracking-wider text-muted';
+
+  return (
+    <Modal open={open} onClose={onClose} wide title="ค่าใช้จ่ายร้านค้า"
+      footer={<>
+        <div className="flex-1 text-sm hidden sm:block">
+          <span className="text-muted">รวมเดือนนี้:</span>{' '}
+          <span className="font-display text-xl tabular-nums">{fmtTHB(monthTotal)}</span>
+        </div>
+        <button className="btn-secondary" onClick={onClose} disabled={saving}>ยกเลิก</button>
+        <button className="btn-primary" onClick={save} disabled={saving || loading}>
+          {saving ? 'กำลังบันทึก…' : <><Icon name="check" size={16}/>บันทึก</>}
+        </button>
+      </>}>
+      <div className="space-y-3">
+        {/* Month selector */}
+        <div className="rounded-xl border hairline p-3 flex items-center gap-3">
+          <Icon name="calendar" size={16} className="text-muted flex-shrink-0"/>
+          <div className="text-sm font-medium flex-1">เดือนที่บันทึก</div>
+          <select className="input !py-1.5 !text-sm !h-9" style={{width:'auto'}}
+            value={month} onChange={e=>setMonth(e.target.value)} disabled={loading||saving}>
+            {monthOptions.map(m => <option key={m} value={m}>{fmtThaiYearMonth(m)}</option>)}
+          </select>
+        </div>
+
+        {loading && (
+          <div className="text-center py-8 text-muted text-sm flex items-center justify-center gap-2">
+            <span className="spinner"/> กำลังโหลด…
+          </div>
+        )}
+
+        {!loading && (
+          <>
+            {EXPENSE_CATEGORIES.map(c => (
+              <ExpenseRow key={c.key} category={c} value={draft[c.key] || {}}
+                onChange={patch => setCat(c.key, patch)}
+                monthSales={monthSales}
+                onApplyAll={() => applyToAllMonths(c.key)}
+                disabled={saving}/>
+            ))}
+
+            {/* Others — user-defined unlimited rows */}
+            <div className="rounded-xl border hairline p-4">
+              <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
+                <div className="inline-flex items-center gap-1.5 bg-ink/[0.06] rounded-md px-2 py-1">
+                  <Icon name="edit" size={12} className="text-muted"/>
+                  <span className={labelCls}>ค่าใช้จ่ายอื่นๆ</span>
+                </div>
+                <button type="button" className="btn-add-product !py-1.5 !text-xs" onClick={addOther} disabled={saving}>
+                  <Icon name="plus" size={13}/> เพิ่มรายการ
+                </button>
+              </div>
+              {others.length === 0 ? (
+                <div className="text-center py-3 text-muted-soft text-xs">— ยังไม่มีรายการอื่น —</div>
+              ) : (
+                <div className="space-y-2">
+                  {others.map((o, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input className="input !py-2 !text-sm flex-1"
+                        placeholder="ชื่อรายการ เช่น ค่าน้ำ, ค่าอินเทอร์เน็ต" value={o.label}
+                        onChange={e=>setOther(idx, { label: e.target.value })} disabled={saving}/>
+                      <input type="number" inputMode="decimal" className="input !py-2 !text-sm text-right tabular-nums"
+                        style={{width:'120px'}} placeholder="0.00" value={o.amount || ''}
+                        onChange={e=>setOther(idx, { amount: e.target.value })} disabled={saving}/>
+                      <button type="button" className="btn-ghost !p-2 text-muted hover:text-error"
+                        onClick={()=>rmOther(idx)} aria-label="ลบรายการ" disabled={saving}>
+                        <Icon name="trash" size={16}/>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Mobile total */}
+            <div className="rounded-xl border hairline bg-surface-soft p-3 text-sm sm:hidden flex justify-between">
+              <span className="text-muted">รวมเดือนนี้:</span>
+              <span className="font-display text-lg tabular-nums">{fmtTHB(monthTotal)}</span>
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+function ExpenseRow({ category, value, onChange, monthSales, onApplyAll, disabled }) {
+  const labelCls = 'text-xs font-semibold uppercase tracking-wider text-muted';
+  const Header = (
+    <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
+      <div className="inline-flex items-center gap-1.5 bg-ink/[0.06] rounded-md px-2 py-1">
+        <Icon name={category.icon} size={12} className="text-muted"/>
+        <span className={labelCls}>{category.label}</span>
+      </div>
+      <button type="button"
+        className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-all bg-[#6b3a26]/10 text-[#6b3a26] border-[#6b3a26]/20 hover:bg-[#6b3a26]/20 hover:border-[#6b3a26]/40 hover-lift disabled:opacity-40 disabled:hover:bg-[#6b3a26]/10"
+        onClick={onApplyAll} disabled={disabled}>
+        <Icon name="calendar" size={12}/>ใช้กับทุกเดือน
+      </button>
+    </div>
+  );
+
+  if (category.staff) {
+    const total = staffComputed(value, monthSales);
+    const hasInput = value.base_salary || value.commission_pct;
+    return (
+      <div className="rounded-xl border hairline p-4">
+        {Header}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs uppercase tracking-wider text-muted">ฐานเงินเดือน (บาท)</label>
+            <input type="number" inputMode="decimal" className="input mt-1 !py-2 !h-10 tabular-nums"
+              placeholder="0.00" value={value.base_salary ?? ''}
+              onChange={e=>onChange({ base_salary: e.target.value })} disabled={disabled}/>
+          </div>
+          <div>
+            <label className="text-xs uppercase tracking-wider text-muted">ค่าคอม % จากยอดขาย</label>
+            <input type="number" inputMode="decimal" step="0.01" className="input mt-1 !py-2 !h-10 tabular-nums"
+              placeholder="0.00" value={value.commission_pct ?? ''}
+              onChange={e=>onChange({ commission_pct: e.target.value })} disabled={disabled}/>
+          </div>
+        </div>
+        {hasInput && (
+          <div className="mt-3 pt-3 border-t hairline text-xs flex flex-wrap items-center justify-between gap-2 text-muted">
+            <span>ยอดขายเดือนนี้ {fmtTHB(monthSales)} → คอม {Number(value.commission_pct||0).toFixed(2)}% = {fmtTHB((Number(value.commission_pct||0)/100) * monthSales)}</span>
+            <span className="font-medium text-ink">รวม {fmtTHB(total)}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border hairline p-4">
+      {Header}
+      <div className="flex items-center gap-2">
+        <input type="number" inputMode="decimal" className="input !py-2 !h-10 flex-1 tabular-nums"
+          placeholder="0.00" value={value.amount ?? ''}
+          onChange={e=>onChange({ amount: e.target.value })} disabled={disabled}/>
+        <span className="text-sm text-muted flex-shrink-0">บาท</span>
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
    PROFIT / LOSS VIEW
 ========================================================= */
 function ProfitLossView() {
@@ -5346,6 +5738,11 @@ function ProfitLossView() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 50;
+
+  // Shop-level expenses (electricity, rent, staff, etc.) — kept fully separate from product cost
+  const [shopExpModalOpen, setShopExpModalOpen] = useState(false);
+  const [shopExpReload, setShopExpReload] = useState(0);
+  const [shopExp, setShopExp] = useState({ total: 0, breakdown: [], hasData: false });
 
   useEffect(()=>{ (async ()=>{
     setLoading(true);
@@ -5457,6 +5854,69 @@ function ProfitLossView() {
     } finally { setLoading(false); }
   })(); }, [dateRange.from, dateRange.to]);
 
+  // Shop-expenses fetch — looks up rows whose period_month overlaps the selected range,
+  // and for staff categories, computes commission against actual sales of that month within range.
+  useEffect(() => { (async () => {
+    const { from, to } = dateRange;
+    const fromMonth = `${from.slice(0,7)}-01`;
+    const toMonth   = `${to.slice(0,7)}-01`;
+    try {
+      const { data: expRows } = await sb.from('shop_expenses')
+        .select('*').gte('period_month', fromMonth).lte('period_month', toMonth);
+      const list = expRows || [];
+      if (!list.length) { setShopExp({ total: 0, breakdown: [], hasData: false }); return; }
+
+      // For staff: need monthly sales within range to compute commission accurately
+      const monthsSet = new Set(list.map(r => r.period_month));
+      const monthlySales = {};
+      for (const pm of monthsSet) {
+        const [yy, mm] = pm.split('-').map(Number);
+        const lastDay = new Date(yy, mm, 0).getDate();
+        const monthEnd = `${yy}-${String(mm).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+        const startDay = pm > from ? pm : from;
+        const endDay   = monthEnd < to ? monthEnd : to;
+        const { data: oList } = await sb.from('sale_orders')
+          .select('grand_total, net_received, channel')
+          .eq('status', 'active')
+          .gte('sale_date', startOfDayBangkok(startDay))
+          .lte('sale_date', endOfDayBangkok(endDay));
+        let s = 0;
+        (oList || []).forEach(o => {
+          const v = (ECOMMERCE_CHANNELS.has(o.channel) && o.net_received != null)
+            ? Number(o.net_received) : Number(o.grand_total) || 0;
+          s += v;
+        });
+        monthlySales[pm] = s;
+      }
+
+      // Aggregate by category (sum across months in range). 'other' rows distinct by label.
+      const map = {};
+      let total = 0;
+      list.forEach(r => {
+        let amt;
+        if (r.category === 'staff_1' || r.category === 'staff_2') {
+          const sales = monthlySales[r.period_month] || 0;
+          amt = (Number(r.base_salary) || 0) + (Number(r.commission_pct) || 0) / 100 * sales;
+        } else {
+          amt = Number(r.amount) || 0;
+        }
+        total += amt;
+        const k = r.category === 'other' ? `other:${r.label||''}` : r.category;
+        const display = r.category === 'other'
+          ? (r.label || 'รายการอื่น')
+          : (EXPENSE_CAT_MAP[r.category]?.label || r.category);
+        const icon = r.category === 'other' ? 'edit' : (EXPENSE_CAT_MAP[r.category]?.icon || 'tag');
+        if (!map[k]) map[k] = { key: k, label: display, icon, amount: 0, isOther: r.category === 'other' };
+        map[k].amount += amt;
+      });
+      const breakdown = Object.values(map).sort((a, b) => b.amount - a.amount);
+      setShopExp({ total, breakdown, hasData: total > 0 });
+    } catch (e) {
+      console.error('shop expenses fetch failed', e);
+      setShopExp({ total: 0, breakdown: [], hasData: false });
+    }
+  })(); }, [dateRange.from, dateRange.to, shopExpReload]);
+
   // Filtered rows (channel + search)
   const filtered = useMemo(()=>{
     return rows.filter(r => {
@@ -5525,11 +5985,21 @@ function ProfitLossView() {
 
   const DateControls = (
     <>
+      <button type="button" className="btn-secondary !py-2.5" onClick={()=>setShopExpModalOpen(true)}
+        title="บันทึกค่าใช้จ่ายร้านค้า">
+        <Icon name="wallet" size={16}/>
+        <span>ค่าใช้จ่ายร้านค้า</span>
+        {shopExp.hasData && <span className="ml-1 text-xs tabular-nums opacity-70">· {fmtTHB(shopExp.total)}</span>}
+      </button>
       <DatePicker mode="range" value={dateRange} onChange={setDateRange} placeholder="เลือกช่วงวันที่" className="w-64"/>
       {loading && <span className="spinner text-muted ml-2"/>}
     </>
   );
+
+  // Real net profit = product gross profit − shop operating expenses (only when expenses exist)
+  const netRealProfit = agg.profit - shopExp.total;
   return (
+    <>
     <div>
       {/* Desktop header */}
       <header className="hidden lg:flex px-10 pt-10 pb-6 items-end justify-between border-b hairline gap-4">
@@ -5556,13 +6026,62 @@ function ProfitLossView() {
         {DateControls}
       </div>
 
-      {/* Stat cards */}
+      {/* Stat cards — when shop expenses exist, "กำไรสุทธิ" becomes "กำไรขั้นต้น"
+          and a separate breakdown section below shows real net profit after operating costs. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
         <StatCard tone="canvas" label="ยอดขายสุทธิ" value={fmtTHB(agg.revenue)} sub={rangeLabel} icon="trend-up"/>
-        <StatCard tone="cream"  label="ต้นทุนรวม" value={fmtTHB(agg.cost)} sub={`${filtered.length} รายการ`} icon="package-in"/>
-        <StatCard tone={agg.profit>=0?"dark":"coral"} label="กำไรสุทธิ" value={fmtTHB(agg.profit)} sub={agg.profit>=0?"กำไร":"ขาดทุน"} icon="trend-up"/>
+        <StatCard tone="cream"  label="ต้นทุนสินค้า" value={fmtTHB(agg.cost)} sub={`${filtered.length} รายการ`} icon="package-in"/>
+        <StatCard tone={agg.profit>=0?"dark":"coral"}
+          label={shopExp.hasData ? "กำไรขั้นต้น" : "กำไรสุทธิ"}
+          value={fmtTHB(agg.profit)}
+          sub={shopExp.hasData ? "ก่อนหักค่าใช้จ่ายร้าน" : (agg.profit>=0?"กำไร":"ขาดทุน")} icon="trend-up"/>
         <StatCard tone="coral"  label="Margin" value={`${agg.margin.toFixed(1)}%`} sub="กำไร / ยอดขาย" icon="tag"/>
       </div>
+
+      {/* Shop expenses breakdown — only when at least one month in range has data */}
+      {shopExp.hasData && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:gap-4">
+          {/* Breakdown card (spans 2 cols on desktop) */}
+          <div className="lg:col-span-2 card-canvas p-4 lg:p-6">
+            <div className="flex items-center justify-between mb-3 lg:mb-4 gap-2 flex-wrap">
+              <div className="font-display text-xl lg:text-2xl flex items-center gap-2">
+                <Icon name="wallet" size={20}/> ค่าใช้จ่ายร้านค้า
+              </div>
+              <button type="button" className="btn-ghost !py-1.5 !px-3 !text-xs" onClick={()=>setShopExpModalOpen(true)}>
+                <Icon name="edit" size={13}/> แก้ไข
+              </button>
+            </div>
+            <div className="space-y-2">
+              {shopExp.breakdown.map(b => (
+                <div key={b.key} className="flex items-center gap-3 py-1.5 border-b hairline-soft last:border-0">
+                  <Icon name={b.icon} size={14} className="text-muted flex-shrink-0"/>
+                  <div className="flex-1 min-w-0 text-sm truncate">
+                    {b.label}
+                    {b.isOther && <span className="ml-1.5 text-[10px] uppercase tracking-wider text-muted-soft">อื่นๆ</span>}
+                  </div>
+                  <div className="font-display text-base tabular-nums">{fmtTHB(b.amount)}</div>
+                </div>
+              ))}
+              <div className="flex items-center gap-3 pt-2 mt-1 border-t hairline">
+                <div className="flex-1 text-sm font-medium">รวมค่าใช้จ่ายร้านค้า</div>
+                <div className="font-display text-xl tabular-nums">{fmtTHB(shopExp.total)}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Real net profit card */}
+          <div className={"rounded-lg p-4 lg:p-6 flex flex-col justify-center " + (netRealProfit>=0 ? "card-dark" : "card-primary-mesh text-on-primary")}>
+            <div className={"flex items-center justify-between " + (netRealProfit>=0 ? "" : "")}>
+              <div className={"text-xs uppercase tracking-[1.5px] " + (netRealProfit>=0 ? "text-on-dark-soft" : "opacity-90")}>กำไรสุทธิจริง</div>
+              <span className={netRealProfit>=0 ? "text-on-dark-soft" : "opacity-80"}><Icon name="trend-up" size={18}/></span>
+            </div>
+            <div className="font-display stat-value tabular-nums mt-2" title={String(netRealProfit)}>{fmtTHB(netRealProfit)}</div>
+            <div className={"text-xs mt-1 " + (netRealProfit>=0 ? "text-on-dark-soft" : "opacity-90")}>
+              กำไรขั้นต้น − ค่าใช้จ่ายร้าน
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Top 10 */}
       <div className="card-canvas p-4 lg:p-6">
@@ -5708,6 +6227,14 @@ function ProfitLossView() {
       </div>
       </div>
     </div>
+
+    <ShopExpensesModal
+      open={shopExpModalOpen}
+      onClose={()=>setShopExpModalOpen(false)}
+      initialMonth={(dateRange.from || todayISO()).slice(0,7)}
+      onChanged={()=>setShopExpReload(k=>k+1)}
+    />
+    </>
   );
 }
 

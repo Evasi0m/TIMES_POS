@@ -46,18 +46,20 @@ export default function SalePickerForReturn({
         <button
           type="button"
           onClick={() => { setOrigSaleMode('search'); onClearSale(); }}
-          className={"flex-1 py-2 px-3 rounded-lg text-xs font-medium border transition-all " +
-            (origSaleMode === 'search' ? "bg-primary text-on-primary border-primary" : "glass-soft text-muted hover:text-ink")}
+          className={"flex-1 py-2 px-3 rounded-lg text-xs font-medium border transition-all inline-flex items-center justify-center gap-1 " +
+            (origSaleMode === 'search' ? "text-white" : "glass-soft text-muted hover:text-ink")}
+          style={origSaleMode === 'search' ? { background: 'linear-gradient(180deg, rgba(204,120,92,0.85) 0%, rgba(184,100,72,0.92) 100%)', borderColor: 'rgba(255,255,255,0.18)', boxShadow: '0 2px 8px rgba(184,100,72,0.35), 0 1px 0 rgba(255,255,255,0.18) inset' } : {}}
         >
-          <Icon name="search" size={13} className="inline mr-1" />ค้นหาบิล
+          <Icon name="search" size={13} />ค้นหาบิล
         </button>
         <button
           type="button"
           onClick={goManual}
-          className={"flex-1 py-2 px-3 rounded-lg text-xs font-medium border transition-all " +
-            (origSaleMode === 'manual' ? "bg-primary text-on-primary border-primary" : "glass-soft text-muted hover:text-ink")}
+          className={"flex-1 py-2 px-3 rounded-lg text-xs font-medium border transition-all inline-flex items-center justify-center gap-1 " +
+            (origSaleMode === 'manual' ? "text-white" : "glass-soft text-muted hover:text-ink")}
+          style={origSaleMode === 'manual' ? { background: 'linear-gradient(180deg, rgba(204,120,92,0.85) 0%, rgba(184,100,72,0.92) 100%)', borderColor: 'rgba(255,255,255,0.18)', boxShadow: '0 2px 8px rgba(184,100,72,0.35), 0 1px 0 rgba(255,255,255,0.18) inset' } : {}}
         >
-          <Icon name="edit" size={13} className="inline mr-1" />กรอกเองหรือไม่ทราบเลขบิล
+          <Icon name="edit" size={13} />กรอกเองหรือไม่ทราบเลขบิล
         </button>
       </div>
 
