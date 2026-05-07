@@ -359,6 +359,24 @@
       inset 0 0 0 1px rgba(255,255,255,0.10),
       0 14px 34px -14px rgba(204, 120, 92, 0.60);
   }
+  /* Teal liquid-glass — used for the "real net profit" card so it stands
+     out from card-dark / card-primary-mesh / card-cream / card-canvas. */
+  .card-teal {
+    background:
+      radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.24), transparent 34%),
+      radial-gradient(circle at 88% 20%, rgba(168, 230, 207, 0.32), transparent 36%),
+      radial-gradient(circle at 50% 110%, rgba(40, 110, 96, 0.34), transparent 44%),
+      linear-gradient(135deg, #5db8a6 0%, #459886 58%, #2f6e5e 100%);
+    color: #faf9f5;
+    border: 1px solid rgba(255,255,255,0.45);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.35) inset,
+      0 -1px 0 rgba(30, 80, 68, 0.22) inset,
+      inset 0 0 0 1px rgba(255,255,255,0.10),
+      0 14px 34px -14px rgba(56, 142, 122, 0.55);
+  }
   .card-dark-tile {
     background:
       radial-gradient(circle at 12% 10%, rgba(204, 120, 92, 0.16), transparent 36%),

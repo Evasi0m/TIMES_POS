@@ -6069,14 +6069,20 @@ function ProfitLossView() {
             </div>
           </div>
 
-          {/* Real net profit card */}
-          <div className={"rounded-lg p-4 lg:p-6 flex flex-col justify-center " + (netRealProfit>=0 ? "card-dark" : "card-primary-mesh text-on-primary")}>
-            <div className={"flex items-center justify-between " + (netRealProfit>=0 ? "" : "")}>
-              <div className={"text-xs uppercase tracking-[1.5px] " + (netRealProfit>=0 ? "text-on-dark-soft" : "opacity-90")}>กำไรสุทธิจริง</div>
-              <span className={netRealProfit>=0 ? "text-on-dark-soft" : "opacity-80"}><Icon name="trend-up" size={18}/></span>
-            </div>
-            <div className="font-display stat-value tabular-nums mt-2" title={String(netRealProfit)}>{fmtTHB(netRealProfit)}</div>
-            <div className={"text-xs mt-1 " + (netRealProfit>=0 ? "text-on-dark-soft" : "opacity-90")}>
+          {/* Real net profit — unique teal liquid-glass card (positive) /
+              coral mesh (loss). All text centered. */}
+          <div className={"rounded-lg p-4 lg:p-6 flex flex-col items-center justify-center text-center " +
+              (netRealProfit>=0 ? "card-teal" : "card-primary-mesh text-on-primary")}>
+            <span className={"inline-flex items-center justify-center w-9 h-9 rounded-full " +
+                (netRealProfit>=0
+                  ? "bg-white/15 ring-1 ring-white/25"
+                  : "bg-white/20 ring-1 ring-white/30")}>
+              <Icon name="trend-up" size={18}/>
+            </span>
+            <div className={"text-xs uppercase tracking-[1.5px] mt-3 " +
+                (netRealProfit>=0 ? "opacity-85" : "opacity-90")}>กำไรสุทธิจริง</div>
+            <div className="font-display stat-value tabular-nums mt-1" title={String(netRealProfit)}>{fmtTHB(netRealProfit)}</div>
+            <div className={"text-xs mt-1 " + (netRealProfit>=0 ? "opacity-80" : "opacity-90")}>
               กำไรขั้นต้น − ค่าใช้จ่ายร้าน
             </div>
           </div>
