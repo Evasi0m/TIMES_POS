@@ -181,8 +181,8 @@ const Icon = ({ name, size = 20, className = "", strokeWidth = 1.75, color }) =>
     case "box":       return <svg {...p}><rect x="2" y="8" width="20" height="13" rx="1"/><path d="M2 8 4 3h16l2 5"/><path d="M9 13h6"/></svg>;
     case "receipt":   return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>;
     case "package":   return <svg {...p}><path d="M12 3l9 5v10l-9 5-9-5V8l9-5z"/><path d="M12 12l9-5"/><path d="M12 12v10"/></svg>;
-    case "package-in":  return <svg {...p}><path d="M12 3l9 5v10l-9 5-9-5V8l9-5z"/><path d="M12 8v10"/><path d="M8 12l4-4 4 4"/></svg>;
-    case "package-out": return <svg {...p}><path d="M12 3l9 5v10l-9 5-9-5V8l9-5z"/><path d="M12 8v10"/><path d="M8 16l4 4 4-4"/></svg>;
+    case "package-in":  return <svg {...p}><path d="M12 20V4"/><path d="M5 11l7-7 7 7"/></svg>;
+    case "package-out": return <svg {...p}><path d="M12 4v16"/><path d="M19 13l-7 7-7-7"/></svg>;
     case "dashboard": return <svg {...p}><rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/></svg>;
     case "search":    return <svg {...p}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>;
     case "plus":      return <svg {...p}><path d="M12 5v14M5 12h14"/></svg>;
@@ -4289,63 +4289,109 @@ function SalesView({ onGoPOS }) {
           <button className="btn-secondary" onClick={()=>setDetail(null)}>ปิด</button>
         </>}>
         {detail && (
-          <div>
+          <div className="space-y-3">
+
+            {/* voided banner */}
             {detail.order.status==='voided' && (
-              <div className="mb-4 p-3 rounded-md bg-error/10 text-error text-sm flex items-start gap-2">
+              <div className="p-3 rounded-xl bg-error/10 text-error text-sm flex items-start gap-2">
                 <Icon name="alert" size={16} className="mt-0.5 flex-shrink-0"/>
                 <div>
                   <div className="font-medium">บิลนี้ถูกยกเลิกแล้ว</div>
-                  <div className="text-xs mt-1">{fmtDateTime(detail.order.voided_at)}{detail.order.void_reason? ` · ${detail.order.void_reason}`:''}</div>
+                  <div className="text-xs mt-1">{fmtDateTime(detail.order.voided_at)}{detail.order.void_reason?` · ${detail.order.void_reason}`:''}</div>
                 </div>
               </div>
             )}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4 text-sm">
-              <div><div className="text-muted text-xs uppercase">วันที่</div><div className="mt-0.5">{fmtDateTime(detail.order.sale_date)}</div></div>
-              <div><div className="text-muted text-xs uppercase">ช่องทาง</div><div className="mt-0.5">{CHANNELS.find(c=>c.v===detail.order.channel)?.label||'—'}</div></div>
-              <div><div className="text-muted text-xs uppercase">ชำระ</div><div className="mt-0.5">{PAYMENTS.find(p=>p.v===detail.order.payment_method)?.label||'—'}</div></div>
+
+            {/* ── ข้อมูลบิล ── */}
+            <div className="rounded-xl border hairline p-4">
+              <div className="mb-3">
+                <div className="inline-flex items-center gap-1.5 bg-ink/[0.06] rounded-md px-2 py-1">
+                  <Icon name="receipt" size={12} className="text-muted"/>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted">ข้อมูลบิล</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-muted mb-0.5">วันที่</div>
+                  <div>{fmtDateTime(detail.order.sale_date)}</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-muted mb-0.5">ช่องทาง</div>
+                  <div>{CHANNELS.find(c=>c.v===detail.order.channel)?.label||'—'}</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-muted mb-0.5">ชำระ</div>
+                  <div>{PAYMENTS.find(p=>p.v===detail.order.payment_method)?.label||'—'}</div>
+                </div>
+              </div>
+              {detail.order.notes && (
+                <div className="mt-3 pt-3 border-t hairline text-sm">
+                  <div className="text-xs uppercase tracking-wider text-muted mb-1">หมายเหตุ</div>
+                  <div className="whitespace-pre-wrap">{detail.order.notes}</div>
+                </div>
+              )}
             </div>
 
+            {/* ── ใบกำกับภาษี ── */}
             {(detail.order.tax_invoice_no || detail.order.buyer_name) && (
-              <div className="mb-4 p-3 rounded-md bg-surface-card text-sm">
-                <div className="text-muted text-xs uppercase tracking-wider mb-1">ใบกำกับภาษี</div>
-                {detail.order.tax_invoice_no && <div className="font-mono text-xs">เลขที่ {detail.order.tax_invoice_no}</div>}
-                {detail.order.buyer_name && <div>{detail.order.buyer_name}</div>}
-                {detail.order.buyer_tax_id && <div className="font-mono text-xs text-muted">TAX ID {detail.order.buyer_tax_id}</div>}
-                {detail.order.buyer_address && <div className="text-xs text-muted mt-1">{detail.order.buyer_address}</div>}
+              <div className="rounded-xl border hairline bg-surface-soft p-4">
+                <div className="mb-3">
+                  <div className="inline-flex items-center gap-1.5 bg-ink/[0.06] rounded-md px-2 py-1">
+                    <Icon name="edit" size={12} className="text-muted"/>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted">ใบกำกับภาษี</span>
+                  </div>
+                </div>
+                <div className="space-y-1 text-sm">
+                  {detail.order.tax_invoice_no && <div className="font-mono text-xs">เลขที่ {detail.order.tax_invoice_no}</div>}
+                  {detail.order.buyer_name && <div>{detail.order.buyer_name}</div>}
+                  {detail.order.buyer_tax_id && <div className="font-mono text-xs text-muted">TAX ID {detail.order.buyer_tax_id}</div>}
+                  {detail.order.buyer_address && <div className="text-xs text-muted">{detail.order.buyer_address}</div>}
+                </div>
               </div>
             )}
 
-            <div className="border-t hairline">
-              {detail.items.map(it => (
-                <div key={it.id} className="py-2 border-b hairline-soft flex justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="font-medium text-sm truncate">{it.product_name}</div>
-                    <div className="text-xs text-muted">{it.quantity} × {fmtTHB(it.unit_price)}
-                      {it.discount1_value? ` − ${it.discount1_value}${it.discount1_type==='percent'?'%':'฿'}`:''}
-                      {it.discount2_value? ` − ${it.discount2_value}${it.discount2_type==='percent'?'%':'฿'}`:''}
-                    </div>
-                  </div>
-                  <div className="font-medium flex-shrink-0 tabular-nums">{fmtTHB(applyDiscounts(it.unit_price, it.quantity, it.discount1_value, it.discount1_type, it.discount2_value, it.discount2_type))}</div>
+            {/* ── รายการสินค้า ── */}
+            <div className="rounded-xl border hairline p-4">
+              <div className="mb-3">
+                <div className="inline-flex items-center gap-1.5 bg-ink/[0.06] rounded-md px-2 py-1">
+                  <Icon name="box" size={12} className="text-muted"/>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted">รายการสินค้า</span>
                 </div>
-              ))}
+              </div>
+              <div className="divide-y hairline">
+                {detail.items.map(it => (
+                  <div key={it.id} className="py-2.5 flex justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm truncate">{it.product_name}</div>
+                      <div className="text-xs text-muted mt-0.5">{it.quantity} × {fmtTHB(it.unit_price)}
+                        {it.discount1_value?` − ${it.discount1_value}${it.discount1_type==='percent'?'%':'฿'}`:''}
+                        {it.discount2_value?` − ${it.discount2_value}${it.discount2_type==='percent'?'%':'฿'}`:''}
+                      </div>
+                    </div>
+                    <div className="font-medium flex-shrink-0 tabular-nums text-sm">{fmtTHB(applyDiscounts(it.unit_price, it.quantity, it.discount1_value, it.discount1_type, it.discount2_value, it.discount2_type))}</div>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            {detail.order.notes && (
-              <div className="mt-3 text-sm text-body bg-surface-soft rounded-md p-3">
-                <div className="text-xs uppercase tracking-wider text-muted mb-1">หมายเหตุ</div>
-                {detail.order.notes}
+            {/* ── ยอดเงิน ── */}
+            <div className="rounded-xl border hairline bg-surface-soft p-4">
+              <div className="mb-3">
+                <div className="inline-flex items-center gap-1.5 bg-ink/[0.06] rounded-md px-2 py-1">
+                  <Icon name="credit-card" size={12} className="text-muted"/>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted">ยอดเงิน</span>
+                </div>
               </div>
-            )}
-
-            <div className="mt-4 space-y-1 text-sm">
-              <div className="flex justify-between text-muted"><span>รวมก่อนลด</span><span className="tabular-nums">{fmtTHB(detail.order.subtotal)}</span></div>
-              {Number(detail.order.vat_amount)>0 && (<>
-                <div className="flex justify-between text-muted-soft text-xs"><span>ก่อนหัก VAT {detail.order.vat_rate}%</span><span className="tabular-nums">{fmtTHB(Number(detail.order.grand_total)-Number(detail.order.vat_amount))}</span></div>
-                <div className="flex justify-between text-muted-soft text-xs"><span>VAT {detail.order.vat_rate}%</span><span className="tabular-nums">{fmtTHB(detail.order.vat_amount)}</span></div>
-              </>)}
-              <div className="flex justify-between font-display text-2xl pt-2"><span>ยอดสุทธิ</span><span className="tabular-nums">{fmtTHB(detail.order.grand_total)}</span></div>
+              <div className="space-y-1.5 text-sm">
+                <div className="flex justify-between text-muted"><span>รวมก่อนลด</span><span className="tabular-nums">{fmtTHB(detail.order.subtotal)}</span></div>
+                {Number(detail.order.vat_amount)>0 && (<>
+                  <div className="flex justify-between text-muted-soft text-xs"><span>ก่อนหัก VAT {detail.order.vat_rate}%</span><span className="tabular-nums">{fmtTHB(Number(detail.order.grand_total)-Number(detail.order.vat_amount))}</span></div>
+                  <div className="flex justify-between text-muted-soft text-xs"><span>VAT {detail.order.vat_rate}%</span><span className="tabular-nums">{fmtTHB(detail.order.vat_amount)}</span></div>
+                </>)}
+                <div className="flex justify-between font-display text-2xl pt-2 border-t hairline"><span>ยอดสุทธิ</span><span className="tabular-nums">{fmtTHB(detail.order.grand_total)}</span></div>
+              </div>
               {ECOMMERCE_CHANNELS.has(detail.order.channel) && (
-                <div className="mt-2 pt-2 border-t hairline">
+                <div className="mt-3 pt-3 border-t hairline">
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-sm">
                       <div className="text-muted text-xs uppercase tracking-wider">เงินที่ร้านได้รับ</div>
@@ -4364,25 +4410,21 @@ function SalesView({ onGoPOS }) {
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
-                        <input
-                          type="number" inputMode="decimal" autoFocus
+                        <input type="number" inputMode="decimal" autoFocus
                           className="input !h-9 !w-32 !rounded-lg !py-1 !text-sm text-right tabular-nums"
-                          placeholder="0"
-                          value={netDraft}
-                          onChange={e=>setNetDraft(e.target.value)}
+                          placeholder="0" value={netDraft} onChange={e=>setNetDraft(e.target.value)}
                         />
                         <button className="btn-primary !py-1.5 !px-3 !text-xs" onClick={saveNetReceived} disabled={savingNet}>
                           {savingNet ? '...' : 'บันทึก'}
                         </button>
-                        <button className="btn-secondary !py-1.5 !px-2.5 !text-xs" onClick={()=>setEditNet(false)} disabled={savingNet}>
-                          ยกเลิก
-                        </button>
+                        <button className="btn-secondary !py-1.5 !px-2.5 !text-xs" onClick={()=>setEditNet(false)} disabled={savingNet}>ยกเลิก</button>
                       </div>
                     )}
                   </div>
                 </div>
               )}
             </div>
+
           </div>
         )}
       </Modal>
