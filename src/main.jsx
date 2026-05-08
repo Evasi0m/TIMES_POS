@@ -7,6 +7,7 @@
 // "Vite builds + tests run" without rewriting the whole app at once.
 import React from 'react';
 import * as ReactDOM from 'react-dom/client';
+import { createPortal } from 'react-dom';
 import { createClient } from '@supabase/supabase-js';
 import { registerSW } from 'virtual:pwa-register';
 import {
@@ -1173,13 +1174,13 @@ function FontSizePickerInline() {
 const PAYMENT_LABELS = { cash: 'เงินสด', transfer: 'โอนเงิน', card: 'บัตร', paylater: 'ผ่อน', cod: 'เก็บปลายทาง' };
 const CHANNEL_LABELS = { store: 'หน้าร้าน', tiktok: 'TikTok', shopee: 'Shopee', lazada: 'Lazada', facebook: 'Facebook' };
 
-function Receipt({ order, items, shop, variant = 'receipt', theme = 'classic' }) {
+function Receipt({ order, items, shop, variant = 'receipt', paperWidth = 100 }) {
   const isInvoice = variant === 'tax_invoice';
   const exVat = Number(order.grand_total||0) - Number(order.vat_amount||0);
   return (
-    <div className={"receipt-100mm receipt-print r-theme-" + theme}>
+    <div className={"receipt-100mm receipt-print r-paper-" + paperWidth + " r-theme-minimal"}>
       <div className="r-header">
-        <div className="r-shop" style={theme==='modern'?{fontFamily:"Jost, sans-serif"}:{}}>{shop?.shop_name || 'TIMES'}</div>
+        <div className="r-shop">{shop?.shop_name || 'TIMES'}</div>
         {shop?.shop_address && <div className="r-addr">{shop.shop_address}</div>}
         {shop?.shop_phone   && <div className="r-addr">โทร {shop.shop_phone} (คุณตุ๋ม)</div>}
         {isInvoice && shop?.shop_tax_id && <div className="r-addr">เลขผู้เสียภาษี {shop.shop_tax_id}</div>}
@@ -1261,30 +1262,49 @@ function Receipt({ order, items, shop, variant = 'receipt', theme = 'classic' })
 /* =========================================================
    RECEIPT MODAL — preview + print
 ========================================================= */
-// Visual themes for the printable receipt. Persisted in localStorage so the
-// shop's preference survives reloads. Keep IDs in sync with CSS classes
-// (`.r-theme-classic`, `.r-theme-minimal`, `.r-theme-modern`).
-const RECEIPT_THEMES = [
-  { id: 'classic', label: 'คลาสสิก', hint: 'เส้นประ · สไตล์ใบเสร็จร้านดั้งเดิม' },
-  { id: 'minimal', label: 'มินิมอล', hint: 'เส้นเรียบบาง · สะอาดตา' },
-  { id: 'modern',  label: 'โมเดิร์น', hint: 'แท่งดำเด่น · ตัวเลขโดดเด่น' },
+// Receipt visual style is locked to 'minimal' (clean thin lines, mono
+// numbers). Classic + modern variants were removed when the shop
+// settled on this single look — see git history if you need them back.
+const RECEIPT_PAPER_KEY = 'times_pos.receipt_paper';
+// Common thermal-sticker widths. 100mm matches the original deployment;
+// 80mm + 58mm cover the most common alternative thermal printers in
+// Thailand. Numbers are millimetres — used both for the CSS class
+// (.r-paper-80) and for the dynamic @page size injection at print time.
+const RECEIPT_PAPERS = [
+  { id: 100, label: '100 มม.', hint: 'สติ๊กเกอร์ใหญ่' },
+  { id: 80,  label: '80 มม.',  hint: 'thermal มาตรฐาน' },
+  { id: 58,  label: '58 มม.',  hint: 'เครื่องเล็ก/พกพา' },
 ];
-const RECEIPT_THEME_KEY = 'times_pos.receipt_theme';
 
 function ReceiptModal({ open, onClose, orderId }) {
   const { shop } = useShop();
   const [order, setOrder] = useState(null);
   const [items, setItems] = useState([]);
   const [variant, setVariant] = useState('receipt');
-  const [theme, setThemeState] = useState(() => {
-    try { return localStorage.getItem(RECEIPT_THEME_KEY) || 'modern'; }
-    catch { return 'modern'; }
+  const [paperWidth, setPaperState] = useState(() => {
+    try { return Number(localStorage.getItem(RECEIPT_PAPER_KEY)) || 100; }
+    catch { return 100; }
   });
-  const setTheme = (t) => {
-    setThemeState(t);
-    try { localStorage.setItem(RECEIPT_THEME_KEY, t); } catch { /* private mode etc. */ }
+  const setPaperWidth = (w) => {
+    setPaperState(w);
+    try { localStorage.setItem(RECEIPT_PAPER_KEY, String(w)); } catch { /* */ }
   };
   const [loading, setLoading] = useState(false);
+
+  // Inject a dynamic `@page` rule that matches the chosen paper width.
+  // `@page { size: ... }` is global to the document, so this lives in
+  // the <head> and updates whenever the user picks a new width.
+  // Removed on unmount so other modals (if any added later) don't see
+  // a stale rule.
+  useEffect(() => {
+    if (!open) return;
+    const styleEl = document.createElement('style');
+    styleEl.id = 'receipt-page-size';
+    styleEl.textContent =
+      `@media print { @page { size: ${paperWidth}mm auto; margin: 0; } }`;
+    document.head.appendChild(styleEl);
+    return () => { styleEl.remove(); };
+  }, [open, paperWidth]);
 
   useEffect(() => {
     if (!open || !orderId) return;
@@ -1319,7 +1339,7 @@ function ReceiptModal({ open, onClose, orderId }) {
       {!loading && order && (
         <div>
           {canTaxInvoice && (
-            <div className="flex gap-2 mb-3">
+            <div className="flex gap-2 mb-3 no-print">
               <button type="button" onClick={()=>setVariant('receipt')}
                 className={"flex-1 py-2 px-3 rounded-md text-sm font-medium border transition " + (variant==='receipt' ? "bg-primary text-on-primary border-primary" : "bg-white text-muted border-hairline hover:text-ink")}>
                 ใบเสร็จรับเงิน
@@ -1331,35 +1351,49 @@ function ReceiptModal({ open, onClose, orderId }) {
             </div>
           )}
 
-          {/* Theme picker — persists to localStorage. Shown above the preview
-              so the user sees the change immediately. Hidden from print via
-              the wrapping Modal which already has .no-print on its chrome. */}
-          <div className="mb-3">
-            <div className="text-[11px] uppercase tracking-wider text-muted mb-1.5 px-0.5">รูปแบบใบเสร็จ</div>
+          {/* Paper-width picker — dictates both the on-screen preview
+              width and the @page size emitted to the printer. */}
+          <div className="mb-3 no-print">
+            <div className="text-[11px] uppercase tracking-wider text-muted mb-1.5 px-0.5">ขนาดกระดาษ</div>
             <div className="grid grid-cols-3 gap-1.5">
-              {RECEIPT_THEMES.map(t => {
-                const active = theme === t.id;
+              {RECEIPT_PAPERS.map(p => {
+                const active = paperWidth === p.id;
                 return (
-                  <button key={t.id} type="button" onClick={()=>setTheme(t.id)}
-                    title={t.hint}
+                  <button key={p.id} type="button" onClick={()=>setPaperWidth(p.id)}
+                    title={p.hint}
                     className={"py-2 px-2 rounded-md text-xs font-medium border transition leading-tight " + (active
                       ? "bg-primary text-on-primary border-primary shadow-sm"
                       : "bg-white text-muted border-hairline hover:text-ink hover:border-primary/40")}>
-                    <div>{t.label}</div>
-                    <div className={"text-[10px] mt-0.5 font-normal " + (active ? "opacity-80" : "text-muted-soft")}>{t.hint}</div>
+                    <div>{p.label}</div>
+                    <div className={"text-[10px] mt-0.5 font-normal " + (active ? "opacity-80" : "text-muted-soft")}>{p.hint}</div>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          <div className="bg-surface-soft p-3 rounded-lg overflow-auto">
-            <div className="mx-auto" style={{width:'100mm'}}>
-              <Receipt order={order} items={items} shop={shop} variant={variant} theme={theme}/>
+          {/* On-screen preview. Wrapped in `no-print` so the modal copy
+              of the receipt doesn't compete with the portaled print
+              copy below — every browser then prints exactly one page. */}
+          <div className="bg-surface-soft p-3 rounded-lg overflow-auto no-print">
+            <div className="mx-auto" style={{width: paperWidth + 'mm'}}>
+              <Receipt order={order} items={items} shop={shop} variant={variant} paperWidth={paperWidth}/>
             </div>
           </div>
-          <div className="text-xs text-muted-soft mt-2 text-center">ตัวอย่าง — กด "พิมพ์" เพื่อส่งไปเครื่องพิมพ์สติ๊กเกอร์ความร้อน 100มม.</div>
+          <div className="text-xs text-muted-soft mt-2 text-center no-print">ตัวอย่าง — กด "พิมพ์" เพื่อส่งไปเครื่องพิมพ์สติ๊กเกอร์ความร้อน {paperWidth}มม.</div>
         </div>
+      )}
+
+      {/* Print portal: a single Receipt rendered as a direct child of
+          <body>. Print CSS hides every other body child via simple
+          `body > *:not(.receipt-print-portal)` (no `:has()` needed —
+          works in every browser back to 2018). On screen it's hidden
+          via `display: none`. */}
+      {!loading && order && createPortal(
+        <div className="receipt-print-portal">
+          <Receipt order={order} items={items} shop={shop} variant={variant} paperWidth={paperWidth}/>
+        </div>,
+        document.body
       )}
     </Modal>
   );

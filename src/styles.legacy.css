@@ -1305,12 +1305,10 @@
   }
 
   /* ==========  RECEIPT (100mm thermal sticker)  ==========
-     Three themes selectable from the print modal:
-       .r-theme-classic — original (dashed lines, centered, retail-feel)
-       .r-theme-minimal — thin solid lines, generous whitespace, mono numbers
-       .r-theme-modern  — black header bar + inverted grand total band
-     All themes inherit the base layout below; theme classes override
-     selected properties only. Print-safe: pure black on white only. */
+     Single visual style: `.r-theme-minimal` — thin solid lines,
+     generous whitespace, mono numbers. Classic + modern variants were
+     removed per shop request (see git history if you need them back).
+     Print-safe: pure black on white only. */
   .receipt-100mm {
     width: 100mm;
     max-width: 100mm;
@@ -1350,7 +1348,7 @@
     line-height: 1.55;
     padding: 6mm 4.5mm;
   }
-  .receipt-100mm.r-theme-minimal .r-shop   { font-size: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+  .receipt-100mm.r-theme-minimal .r-shop   { font-family: 'Jost', sans-serif; font-size: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
   .receipt-100mm.r-theme-minimal .r-addr   { color: #555; }
   .receipt-100mm.r-theme-minimal .r-title  { font-size: 11px; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: #333; }
   .receipt-100mm.r-theme-minimal .r-hr     { border-top: 0.5px solid #d0d0d0; margin: 8px 0; }
@@ -1367,102 +1365,72 @@
   .receipt-100mm.r-theme-minimal .r-footer { font-weight: 500; letter-spacing: 0.04em; }
   .receipt-100mm.r-theme-minimal .r-claim-note { color: #444; }
 
-  /* ── Theme: MODERN ── black header bar + inverted grand total band.
-     Browsers strip backgrounds on print by default — `print-color-adjust:
-     exact` forces the black bands to render. Required for both screen
-     preview and the thermal printer to show identical output. */
-  .receipt-100mm.r-theme-modern {
-    padding: 0;
-    font-size: 12px;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-  .receipt-100mm.r-theme-modern .r-header,
-  .receipt-100mm.r-theme-modern .r-grand {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-  .receipt-100mm.r-theme-modern .r-header {
-    background: #000;
-    color: #fff;
-    padding: 5mm 4mm 4mm;
-    margin: 0;
-  }
-  .receipt-100mm.r-theme-modern .r-shop {
-    font-size: 19px;
-    font-weight: 800;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-  .receipt-100mm.r-theme-modern .r-addr { color: #d4d4d4; font-size: 9.5px; }
-  .receipt-100mm.r-theme-modern .r-double:first-of-type { display: none; } /* the black band replaces the divider */
-  .receipt-100mm.r-theme-modern .r-title {
-    margin: 4mm 4mm 2mm;
+  /* Receipt paper-width variants. The base layout (.receipt-100mm) is
+     fixed at 100mm; these overrides retarget the width + scale typography
+     for narrower thermal printers. Both screen-preview and print use
+     these classes — what you see is what prints. */
+  .receipt-100mm.r-paper-100 { width: 100mm; max-width: 100mm; }
+  .receipt-100mm.r-paper-80  {
+    width: 80mm; max-width: 80mm;
     font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.04em;   /* wide letter-spacing breaks Thai vowel placement */
-    text-transform: none;
+    padding: 4mm 3mm;
   }
-  .receipt-100mm.r-theme-modern .r-meta,
-  .receipt-100mm.r-theme-modern .r-items,
-  .receipt-100mm.r-theme-modern .r-totals,
-  .receipt-100mm.r-theme-modern .r-claim-note,
-  .receipt-100mm.r-theme-modern .r-footer,
-  .receipt-100mm.r-theme-modern .r-printed-at,
-  .receipt-100mm.r-theme-modern > div:not(.r-header) {
-    margin-left: 4mm;
-    margin-right: 4mm;
+  .receipt-100mm.r-paper-80 .r-shop  { font-size: 16px; }
+  .receipt-100mm.r-paper-80 .r-grand { font-size: 14px; }
+  .receipt-100mm.r-paper-58  {
+    width: 58mm; max-width: 58mm;
+    font-size: 10px;
+    line-height: 1.4;
+    padding: 3mm 2mm;
   }
-  .receipt-100mm.r-theme-modern .r-hr     { border-top: 1px solid #000; margin: 6px 4mm; }
-  .receipt-100mm.r-theme-modern .r-double { border-top: 2px solid #000; margin: 6px 4mm; }
-  .receipt-100mm.r-theme-modern .r-row,
-  .receipt-100mm.r-theme-modern .r-line,
-  .receipt-100mm.r-theme-modern .r-grand {
-    font-variant-numeric: tabular-nums;
-  }
-  .receipt-100mm.r-theme-modern .r-name { font-weight: 700; }
-  .receipt-100mm.r-theme-modern .r-grand {
-    background: #000;
-    color: #fff;
-    padding: 3mm 4mm;
-    margin: 4px -4mm 0;
-    font-size: 16px;
-    font-weight: 800;
-    letter-spacing: 0.02em;
-  }
-  .receipt-100mm.r-theme-modern .r-totals .r-double { display: none; }
-  .receipt-100mm.r-theme-modern .r-claim-note {
-    border: 1px solid #000;
-    padding: 2mm 3mm;
-    margin-top: 4mm;
-    margin-bottom: 2mm;
-    text-align: left;
-  }
-  .receipt-100mm.r-theme-modern .r-claim-note .r-bold { letter-spacing: 0.05em; text-transform: uppercase; }
-  .receipt-100mm.r-theme-modern .r-footer {
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    font-size: 11px;
-    margin-top: 4mm;
-    padding-bottom: 2mm;
-  }
-  .receipt-100mm.r-theme-modern .r-printed-at { padding-bottom: 4mm; }
+  .receipt-100mm.r-paper-58 .r-shop  { font-size: 13px; }
+  .receipt-100mm.r-paper-58 .r-title { font-size: 11px; }
+  .receipt-100mm.r-paper-58 .r-grand { font-size: 12px; }
+  .receipt-100mm.r-paper-58 .r-line  { font-size: 9.5px; }
+  .receipt-100mm.r-paper-58 .r-name  { font-size: 10px; }
+  .receipt-100mm.r-paper-58 .r-addr  { font-size: 8.5px; white-space: normal; }
+
+  /* Print portal — a copy of the receipt mounted as a direct child of
+     <body> by ReceiptModal via React.createPortal. On screen it's
+     invisible (the modal already shows a preview); during print it's
+     the only thing the browser paginates, because every other body
+     child gets `display: none`. This avoids the multi-blank-page bug
+     that `visibility: hidden` produced (hidden elements still occupy
+     layout, so the printer paginated 4–5 empty pages after the
+     receipt). Plain `body > *:not(...)` selectors — no `:has()` needed,
+     so it works in 100% of browsers. */
+  .receipt-print-portal { display: none; }
 
   @media print {
+    /* @page size is injected dynamically by ReceiptModal so it tracks
+       the user's chosen paper width (58 / 80 / 100mm). A fallback rule
+       keeps things sane if the dynamic style hasn't mounted yet. */
     @page { size: 100mm auto; margin: 0; }
-    html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
-    body * { visibility: hidden !important; }
-    .receipt-print, .receipt-print * { visibility: visible !important; }
-    .receipt-print {
+    html, body {
+      background: #fff !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      height: auto !important;
+      min-height: 0 !important;
+      overflow: visible !important;
+    }
+    /* Hide every body subtree EXCEPT the print portal. The original POS
+       app (modal, sidebar, sales history table, etc) all live under
+       #root, which we hide entirely. */
+    body > *:not(.receipt-print-portal) { display: none !important; }
+    .receipt-print-portal {
       display: block !important;
-      position: absolute !important;
-      left: 0 !important; top: 0 !important;
-      width: 100mm !important;
+      position: static !important;
+      width: auto !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    .receipt-print-portal .receipt-100mm {
       box-shadow: none !important;
       border: 0 !important;
       background: #fff !important;
+      margin: 0 !important;
     }
-    .no-print { display: none !important; }
   }
 
   /* ========================================================================
