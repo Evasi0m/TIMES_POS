@@ -999,6 +999,140 @@ function FontPickerInline() {
 }
 
 /* =========================================================
+   APP THEME SWITCHER
+
+   Persisted in localStorage; applied via the `[data-theme]`
+   attribute on <html>, which themes.css matches against.
+   Default = `claude` (no overrides; legacy aesthetic stays
+   pixel-perfect). Each non-default theme may also lazy-load
+   a Google Font when first activated.
+========================================================= */
+const APP_THEME_KEY = 'times_pos.app_theme';
+const APP_THEMES = [
+  {
+    id: 'claude',
+    label: 'Claude',
+    desc: 'Liquid glass · Coral · Taviraj serif (ค่าเริ่มต้น)',
+    accent: '#cc785c',
+    surface: 'linear-gradient(135deg, #faf9f5 0%, #efe9de 100%)',
+    ink: '#141413',
+    fontFamily: "'Taviraj', serif",
+    googleUrl: null,
+  },
+  {
+    id: 'apple',
+    label: 'Apple',
+    desc: 'Museum gallery · Action Blue · System sans',
+    accent: '#0066cc',
+    surface: '#f5f5f7',
+    ink: '#1d1d1f',
+    fontFamily: "'Inter', -apple-system, system-ui, sans-serif",
+    googleUrl: 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap',
+  },
+];
+
+function applyAppTheme(themeId) {
+  const theme = APP_THEMES.find(t => t.id === themeId) || APP_THEMES[0];
+  // ── Set the [data-theme] attribute that themes.css selectors match ──
+  // Default ("claude") gets no attribute so legacy CSS is untouched.
+  if (theme.id === 'claude') {
+    document.documentElement.removeAttribute('data-theme');
+  } else {
+    document.documentElement.setAttribute('data-theme', theme.id);
+  }
+  // ── Lazy-load the theme's Google Font (only on first activation) ──
+  const LINK_ID = 'times-app-theme-font';
+  let link = document.getElementById(LINK_ID);
+  if (theme.googleUrl) {
+    if (!link) {
+      link = document.createElement('link');
+      link.id = LINK_ID;
+      link.rel = 'stylesheet';
+      document.head.appendChild(link);
+    }
+    if (link.href !== theme.googleUrl) link.href = theme.googleUrl;
+  } else {
+    link?.remove();
+  }
+}
+
+// Apply saved theme immediately at module load — prevents FOUC where the
+// page would briefly render in the default theme before React hydrates.
+try { const _t = localStorage.getItem(APP_THEME_KEY); if (_t) applyAppTheme(_t); } catch {}
+
+function useAppTheme() {
+  const [themeId, _setThemeId] = useState(() => {
+    try { return localStorage.getItem(APP_THEME_KEY) || 'claude'; } catch { return 'claude'; }
+  });
+  const setThemeId = useCallback((id) => {
+    _setThemeId(id);
+    try { localStorage.setItem(APP_THEME_KEY, id); } catch {}
+    applyAppTheme(id);
+  }, []);
+  return [themeId, setThemeId];
+}
+
+// Inline preview card for each theme — mirrors FontPickerInline shape but
+// with a small mock UI (canvas + button + label) so the user can feel
+// the difference at a glance before committing.
+function ThemePickerInline() {
+  const [themeId, setThemeId] = useAppTheme();
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {APP_THEMES.map(t => {
+        const active = themeId === t.id;
+        return (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setThemeId(t.id)}
+            className={"rounded-xl border p-3 text-left transition-colors " + (active
+              ? "bg-primary/10 border-primary"
+              : "bg-white border-hairline hover:border-primary/30")}
+          >
+            {/* Mini-preview — a tiny mock of canvas + button using the
+                theme's own colours so each card looks distinct. */}
+            <div
+              className="rounded-lg p-3 mb-2 flex items-center justify-between gap-2 overflow-hidden"
+              style={{
+                background: t.surface,
+                border: t.id === 'apple' ? '1px solid #e0e0e0' : '1px solid rgba(180, 168, 148, 0.35)',
+              }}
+            >
+              <div style={{ fontFamily: t.fontFamily, color: t.ink, fontWeight: 600, fontSize: 14, letterSpacing: t.id === 'apple' ? '-0.02em' : '-0.01em' }}>
+                Aa สวัสดี
+              </div>
+              <div
+                style={{
+                  background: t.accent,
+                  color: '#fff',
+                  fontFamily: t.fontFamily,
+                  fontSize: 11,
+                  fontWeight: t.id === 'apple' ? 400 : 500,
+                  padding: t.id === 'apple' ? '4px 12px' : '4px 10px',
+                  borderRadius: t.id === 'apple' ? 9999 : 7,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {t.id === 'apple' ? 'Buy' : 'ซื้อ'}
+              </div>
+            </div>
+            <div style={{ fontFamily: t.fontFamily, fontWeight: 600, color: active ? t.accent : '#141413' }}
+              className="text-sm leading-tight">
+              {t.label}
+              {active && <span className="ml-1 text-[10px] uppercase tracking-wider">· ใช้งานอยู่</span>}
+            </div>
+            <div className="text-[11px] text-muted mt-0.5 leading-snug">
+              {t.desc}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* =========================================================
    PAYLATER FORMULA SETTINGS — editable constants for the
    "คำนวณอัตโนมัติ" estimator. Save is gated by PIN to keep
    accidental edits away (the actual security boundary is the
@@ -1355,6 +1489,7 @@ function AppSettingsModal({ open, onClose }) {
   // the nav doesn't show locked/unreachable items. Order here = display order.
   const TABS = [
     { id: 'display',  label: 'การแสดงผล',  icon: 'edit',       adminOnly: false },
+    { id: 'theme',    label: 'ธีม',         icon: 'palette',    adminOnly: false },
     { id: 'shop',     label: 'ข้อมูลร้าน',  icon: 'store',      adminOnly: true  },
     { id: 'telegram', label: 'Telegram',     icon: 'zap',        adminOnly: true  },
     { id: 'paylater', label: 'สูตรคำนวณ',    icon: 'calculator', adminOnly: true  },
@@ -1418,6 +1553,19 @@ function AppSettingsModal({ open, onClose }) {
               <div className="text-sm text-ink mb-1 font-medium">ฟอนต์</div>
               <div className="text-[11px] text-muted-soft mb-2">ใช้กับทุกหน้า — ยกเว้นใบเสร็จ</div>
               <FontPickerInline />
+            </div>
+          </div>
+        )}
+
+        {/* ── Tab: ธีม ── */}
+        {activeTab === 'theme' && (
+          <div className="space-y-4 fade-in">
+            <div>
+              <div className="text-sm text-ink mb-1 font-medium">ธีมของหน้าเว็บ</div>
+              <div className="text-[11px] text-muted-soft mb-3">
+                เปลี่ยนหน้าตา ปุ่ม การ์ด และตัวอักษรของแอปทั้งหมด — บันทึกไว้ที่เครื่องนี้เท่านั้น
+              </div>
+              <ThemePickerInline />
             </div>
           </div>
         )}

@@ -135,19 +135,43 @@ export default function TelegramSettings({ toast }) {
       return;
     }
     setBusy((b) => ({ ...b, test: true }));
-    const r = await callEdge({ test: true });
-    setBusy((b) => ({ ...b, test: false }));
-    if (r?.ok) toast?.push?.('ส่ง Telegram สำเร็จ ✅ ดูที่ chat ของคุณ', 'success');
-    else       toast?.push?.('ส่งไม่สำเร็จ: ' + (r?.error || 'unknown'), 'error');
+    try {
+      // Call Telegram directly from the browser — Telegram's API supports CORS,
+      // and this avoids any edge-function deploy/CORS issues for a simple test send.
+      const tgToken = draft.telegram_bot_token.trim();
+      const tgChat  = draft.telegram_chat_id.trim();
+      const res = await fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: tgChat,
+          text: '✅ <b>เชื่อมต่อ Telegram สำเร็จ</b>\nร้าน TIMES POS · ทดสอบส่งข้อความ',
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+        }),
+      });
+      const json = await res.json();
+      if (json.ok) toast?.push?.('ส่ง Telegram สำเร็จ ✅ ดูที่ chat ของคุณ', 'success');
+      else         toast?.push?.('ส่งไม่สำเร็จ: ' + (json.description || 'unknown'), 'error');
+    } catch (e) {
+      toast?.push?.('Network error: ' + e.message, 'error');
+    } finally {
+      setBusy((b) => ({ ...b, test: false }));
+    }
   };
 
   const previewYesterday = async () => {
     setBusy((b) => ({ ...b, preview: true }));
     setPreviewText(null);
-    const r = await callEdge({ preview: true });
-    setBusy((b) => ({ ...b, preview: false }));
-    if (r?.ok) setPreviewText(r.text);
-    else       toast?.push?.('Preview ล้มเหลว: ' + (r?.error || 'unknown'), 'error');
+    try {
+      const r = await callEdge({ preview: true });
+      if (r?.ok) setPreviewText(r.text);
+      else       toast?.push?.('Preview ล้มเหลว: ' + (r?.error || 'unknown'), 'error');
+    } catch (e) {
+      toast?.push?.('Network error: ' + e.message, 'error');
+    } finally {
+      setBusy((b) => ({ ...b, preview: false }));
+    }
   };
 
   if (secret === null) return <div className="skeleton h-32 rounded" />;

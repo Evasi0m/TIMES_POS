@@ -29,6 +29,12 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
@@ -240,6 +246,10 @@ async function sendTelegram(token: string, chatId: string, text: string) {
 }
 
 Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: CORS });
+  }
+
   const supa = createClient(SUPABASE_URL, SERVICE_ROLE, {
     auth: { persistSession: false },
   });
@@ -254,7 +264,7 @@ Deno.serve(async (req: Request) => {
     .from('shop_secrets').select('*').eq('id', 1).maybeSingle();
   if (secErr) {
     return new Response(JSON.stringify({ ok: false, error: secErr.message }), {
-      status: 500, headers: { 'Content-Type': 'application/json' },
+      status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 
@@ -267,7 +277,7 @@ Deno.serve(async (req: Request) => {
   const isManual = !!(opts.test || opts.preview || opts.date);
   if (!isManual && !secret?.daily_summary_enabled) {
     return new Response(JSON.stringify({ ok: true, skipped: 'disabled' }), {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
   if (!isManual) {
@@ -275,7 +285,7 @@ Deno.serve(async (req: Request) => {
     const nowBkkHour = new Date(Date.now() + BKK_OFFSET_MIN * 60000).getUTCHours();
     if (nowBkkHour !== (secret?.daily_summary_hour ?? 21)) {
       return new Response(JSON.stringify({ ok: true, skipped: 'wrong-hour', expected: secret?.daily_summary_hour, got: nowBkkHour }), {
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
   }
@@ -284,18 +294,18 @@ Deno.serve(async (req: Request) => {
   if (opts.test) {
     if (!token || !chatId) {
       return new Response(JSON.stringify({ ok: false, error: 'missing token or chat_id' }), {
-        status: 400, headers: { 'Content-Type': 'application/json' },
+        status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
     try {
       const body = await sendTelegram(token, chatId,
         '✅ <b>เชื่อมต่อ Telegram สำเร็จ</b>\nร้าน TIMES POS · ทดสอบส่งข้อความ');
       return new Response(JSON.stringify({ ok: true, telegram: body }), {
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     } catch (err) {
       return new Response(JSON.stringify({ ok: false, error: String(err) }), {
-        status: 502, headers: { 'Content-Type': 'application/json' },
+        status: 502, headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
   }
@@ -307,13 +317,13 @@ Deno.serve(async (req: Request) => {
 
   if (opts.preview) {
     return new Response(JSON.stringify({ ok: true, text, numbers }), {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 
   if (!token || !chatId) {
     return new Response(JSON.stringify({ ok: false, error: 'missing token or chat_id' }), {
-      status: 400, headers: { 'Content-Type': 'application/json' },
+      status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 
@@ -324,7 +334,7 @@ Deno.serve(async (req: Request) => {
       last_summary_error: null,
     }).eq('id', 1);
     return new Response(JSON.stringify({ ok: true, sent: true, text }), {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   } catch (err) {
     const msg = String(err);
@@ -332,7 +342,7 @@ Deno.serve(async (req: Request) => {
       last_summary_error: msg.slice(0, 500),
     }).eq('id', 1);
     return new Response(JSON.stringify({ ok: false, error: msg }), {
-      status: 502, headers: { 'Content-Type': 'application/json' },
+      status: 502, headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 });
