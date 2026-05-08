@@ -1309,86 +1309,86 @@
      generous whitespace, mono numbers. Classic + modern variants were
      removed per shop request (see git history if you need them back).
      Print-safe: pure black on white only. */
+  /* Base layout. Sizes here are the 'classic' defaults; the minimal
+     theme below overrides most of them — sizes were bumped ~+15–25%
+     and weights pushed 1 step heavier so EPSON TM-T82 thermal printers
+     produce crisp, high-contrast glyphs (thin strokes render as dotty
+     artifacts on 180dpi thermal heads). */
+  /* Width is 76mm — sized for the EPSON TM-T82 (and most 80mm thermal
+     printers), whose physical print head only reaches ~72mm of the
+     80mm paper roll. Going wider causes both edges to be sliced off
+     when the printer scales the page down. The legacy class name
+     `.receipt-100mm` is kept for git stability; "100mm" is now a
+     historical artefact, not the actual width. */
   .receipt-100mm {
-    width: 100mm;
-    max-width: 100mm;
+    width: 76mm;
+    max-width: 76mm;
     font-family: 'Sarabun', sans-serif;
-    font-size: 12px;
-    line-height: 1.45;
+    font-size: 13px;
+    line-height: 1.4;
     color: #000;
     background: #fff;
-    padding: 5mm 4mm;
+    padding: 4mm 3mm;
     box-sizing: border-box;
   }
   .receipt-100mm .r-header     { text-align: center; }
-  .receipt-100mm .r-title      { text-align: center; font-size: 13px; font-weight: 700; margin: 4px 0; }
+  .receipt-100mm .r-title      { text-align: center; font-size: 14px; font-weight: 700; margin: 4px 0; }
   .receipt-100mm .r-claim-note { text-align: center; }
-  .receipt-100mm .r-footer     { text-align: center; font-size: 12px; font-weight: 600; margin-top: 2px; }
-  .receipt-100mm .r-printed-at { text-align: center; font-size: 10px; margin-top: 3mm; opacity: 0.55; }
-  .receipt-100mm .r-shop  { font-size: 18px; font-weight: 700; letter-spacing: 0.02em; margin-bottom: 2px; }
-  .receipt-100mm .r-addr  { font-size: 9.5px; color: #333; line-height: 1.35; white-space: nowrap; }
+  .receipt-100mm .r-footer     { text-align: center; font-size: 15px; font-weight: 700; margin-top: 2px; }
+  .receipt-100mm .r-printed-at { text-align: center; font-size: 13px; margin-top: 3mm; opacity: 0.85; }
+  .receipt-100mm .r-shop  { font-size: 24px; font-weight: 700; letter-spacing: 0.02em; margin-bottom: 3px; }
+  .receipt-100mm .r-addr  { font-size: 13px; color: #222; line-height: 1.45; }
   .receipt-100mm .r-meta  { margin: 4px 0; }
   .receipt-100mm .r-row   { display: flex; justify-content: space-between; gap: 6px; line-height: 1.5; }
   .receipt-100mm .r-bold  { font-weight: 700; }
   .receipt-100mm .r-hr    { border: 0; border-top: 1.5px dashed #000; margin: 6px 0; }
   .receipt-100mm .r-double{ border: 0; border-top: 2.5px solid #000; margin: 6px 0; }
-  .receipt-100mm .r-sm    { font-size: 11px; }
-  .receipt-100mm .r-xs    { font-size: 10px; }
+  .receipt-100mm .r-sm    { font-size: 12.5px; }
+  .receipt-100mm .r-xs    { font-size: 11px; }
   .receipt-100mm .r-items { margin: 4px 0; }
   .receipt-100mm .r-item  { margin-bottom: 6px; }
   .receipt-100mm .r-item:last-child { margin-bottom: 0; }
-  .receipt-100mm .r-name  { font-weight: 600; font-size: 12.5px; word-break: break-word; line-height: 1.35; margin-bottom: 1px; }
-  .receipt-100mm .r-line  { display: flex; justify-content: space-between; gap: 6px; font-size: 11.5px; }
+  .receipt-100mm .r-name  { font-weight: 700; font-size: 14px; word-break: break-word; line-height: 1.35; margin-bottom: 1px; }
+  .receipt-100mm .r-line  { display: flex; justify-content: space-between; gap: 6px; font-size: 13px; font-weight: 500; }
   .receipt-100mm .r-totals{ margin: 4px 0; }
-  .receipt-100mm .r-grand { font-size: 15px; font-weight: 700; }
+  .receipt-100mm .r-grand { font-size: 18px; font-weight: 800; }
 
-  /* ── Theme: MINIMAL ── thin solid lines, lighter weight, monospace numbers */
+  /* ── Theme: MINIMAL (the only theme shipped) ──
+     Clean thin lines, slightly tighter line-height, mono-style numeric
+     columns. Every size/weight here has been tuned so 180dpi EPSON
+     thermal printers produce crisp output — avoid dropping below 13px
+     for Thai text or the vowel diacritics fall apart. */
   .receipt-100mm.r-theme-minimal {
-    font-size: 11.5px;
-    line-height: 1.55;
-    padding: 6mm 4.5mm;
+    font-size: 13px;
+    line-height: 1.5;
+    padding: 5mm 3.5mm;
   }
-  .receipt-100mm.r-theme-minimal .r-shop   { font-family: 'Jost', sans-serif; font-size: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
-  .receipt-100mm.r-theme-minimal .r-addr   { color: #555; }
-  .receipt-100mm.r-theme-minimal .r-title  { font-size: 11px; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: #333; }
-  .receipt-100mm.r-theme-minimal .r-hr     { border-top: 0.5px solid #d0d0d0; margin: 8px 0; }
-  .receipt-100mm.r-theme-minimal .r-double { border-top: 1px solid #000; margin: 8px 0; }
-  .receipt-100mm.r-theme-minimal .r-row    { line-height: 1.7; }
+  .receipt-100mm.r-theme-minimal .r-shop   { font-family: 'Jost', sans-serif; font-size: 22px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 3px; }
+  .receipt-100mm.r-theme-minimal .r-addr   { font-size: 13px; color: #222; font-weight: 500; line-height: 1.45; }
+  .receipt-100mm.r-theme-minimal .r-title  { font-size: 13px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: #000; }
+  /* Thermal printers render light grey as dithered dots, which looks
+     blurry. Push the hr to near-black so dividers stay crisp lines. */
+  .receipt-100mm.r-theme-minimal .r-hr     { border-top: 0.8px solid #666; margin: 8px 0; }
+  .receipt-100mm.r-theme-minimal .r-double { border-top: 1.5px solid #000; margin: 8px 0; }
+  .receipt-100mm.r-theme-minimal .r-row    { font-weight: 500; line-height: 1.7; }
   .receipt-100mm.r-theme-minimal .r-row > span:last-child,
   .receipt-100mm.r-theme-minimal .r-line > span:last-child,
   .receipt-100mm.r-theme-minimal .r-grand > span:last-child {
     font-family: 'Inter', 'Helvetica Neue', monospace;
     font-variant-numeric: tabular-nums;
   }
-  .receipt-100mm.r-theme-minimal .r-grand  { font-size: 14px; font-weight: 700; padding-top: 2px; }
-  .receipt-100mm.r-theme-minimal .r-name   { font-weight: 500; font-size: 12px; }
-  .receipt-100mm.r-theme-minimal .r-footer { font-weight: 500; letter-spacing: 0.04em; }
-  .receipt-100mm.r-theme-minimal .r-claim-note { color: #444; }
-
-  /* Receipt paper-width variants. The base layout (.receipt-100mm) is
-     fixed at 100mm; these overrides retarget the width + scale typography
-     for narrower thermal printers. Both screen-preview and print use
-     these classes — what you see is what prints. */
-  .receipt-100mm.r-paper-100 { width: 100mm; max-width: 100mm; }
-  .receipt-100mm.r-paper-80  {
-    width: 80mm; max-width: 80mm;
-    font-size: 11px;
-    padding: 4mm 3mm;
-  }
-  .receipt-100mm.r-paper-80 .r-shop  { font-size: 16px; }
-  .receipt-100mm.r-paper-80 .r-grand { font-size: 14px; }
-  .receipt-100mm.r-paper-58  {
-    width: 58mm; max-width: 58mm;
-    font-size: 10px;
-    line-height: 1.4;
-    padding: 3mm 2mm;
-  }
-  .receipt-100mm.r-paper-58 .r-shop  { font-size: 13px; }
-  .receipt-100mm.r-paper-58 .r-title { font-size: 11px; }
-  .receipt-100mm.r-paper-58 .r-grand { font-size: 12px; }
-  .receipt-100mm.r-paper-58 .r-line  { font-size: 9.5px; }
-  .receipt-100mm.r-paper-58 .r-name  { font-size: 10px; }
-  .receipt-100mm.r-paper-58 .r-addr  { font-size: 8.5px; white-space: normal; }
+  .receipt-100mm.r-theme-minimal .r-grand  { font-size: 18px; font-weight: 800; padding-top: 2px; }
+  .receipt-100mm.r-theme-minimal .r-name   { font-weight: 700; font-size: 14px; }
+  .receipt-100mm.r-theme-minimal .r-line   { font-size: 13px; font-weight: 500; }
+  /* Bottom block (claim policy + thank-you + printed-at) — bumped a
+     second time after the first round still looked dotty on the EPSON
+     TM-T82. These three lines are the most common "is this real?"
+     readability complaints from customers, so they're now the largest
+     non-headline text on the receipt. */
+  .receipt-100mm.r-theme-minimal .r-claim-note { font-size: 14px; color: #000; font-weight: 600; line-height: 1.5; }
+  .receipt-100mm.r-theme-minimal .r-claim-note .r-bold { font-weight: 700; }
+  .receipt-100mm.r-theme-minimal .r-footer { font-size: 16px; font-weight: 700; letter-spacing: 0.04em; margin-top: 4px; }
+  .receipt-100mm.r-theme-minimal .r-printed-at { font-size: 13px; opacity: 0.9; font-weight: 500; }
 
   /* Print portal — a copy of the receipt mounted as a direct child of
      <body> by ReceiptModal via React.createPortal. On screen it's
@@ -1402,10 +1402,11 @@
   .receipt-print-portal { display: none; }
 
   @media print {
-    /* @page size is injected dynamically by ReceiptModal so it tracks
-       the user's chosen paper width (58 / 80 / 100mm). A fallback rule
-       keeps things sane if the dynamic style hasn't mounted yet. */
-    @page { size: 100mm auto; margin: 0; }
+    /* Page size matches the EPSON TM-T82's 80mm paper roll. The receipt
+       content itself is 76mm (see `.receipt-100mm`), giving 2mm of
+       safety margin on each side so the print head's physical edge
+       limits don't slice text. */
+    @page { size: 80mm auto; margin: 0; }
     html, body {
       background: #fff !important;
       margin: 0 !important;
@@ -1418,18 +1419,31 @@
        app (modal, sidebar, sales history table, etc) all live under
        #root, which we hide entirely. */
     body > *:not(.receipt-print-portal) { display: none !important; }
+    /* Centre the receipt horizontally on the page. Without this the
+       receipt sits flush-left because the user's printable paper width
+       (often slightly larger than 100mm — e.g. 100mm sticker on a
+       104mm-wide roll, or 80mm thermal head on a 100mm @page) leaves
+       leftover whitespace that all collects on the right edge.
+       `display: flex` + `margin: 0 auto` works whether the printer
+       driver respects `@page size: 100mm` exactly or pads the page out
+       to its native paper width. */
+    body {
+      display: flex !important;
+      justify-content: center !important;
+      align-items: flex-start !important;
+    }
     .receipt-print-portal {
       display: block !important;
       position: static !important;
-      width: auto !important;
-      margin: 0 !important;
+      width: 76mm !important;
+      margin: 0 auto !important;
       padding: 0 !important;
     }
     .receipt-print-portal .receipt-100mm {
       box-shadow: none !important;
       border: 0 !important;
       background: #fff !important;
-      margin: 0 !important;
+      margin: 0 auto !important;
     }
   }
 

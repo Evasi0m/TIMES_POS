@@ -127,9 +127,14 @@ const CHANNELS = [
 const PAYMENTS = [
   { v: "transfer", label: "โอนเงิน" },
   { v: "card",     label: "บัตร" },
-  { v: "paylater", label: "ผ่อน" },
+  { v: "paylater", label: "paylater" },
   { v: "cod",      label: "เก็บปลายทาง" },
 ];
+// Channels where paylater is not a valid payment method (offline / social
+// channels with no installment integration). Filtered out of the dropdown
+// and auto-reset if the cashier switches to one of these channels while
+// 'paylater' is already selected.
+const PAYLATER_BLOCKED_CHANNELS = new Set(["store", "facebook"]);
 // Channels whose platform fees make grand_total ≠ shop revenue.
 // For these, the cashier records net_received separately for the P&L.
 const ECOMMERCE_CHANNELS = new Set(['tiktok', 'shopee', 'lazada']);
@@ -1171,14 +1176,30 @@ function FontSizePickerInline() {
    RECEIPT — 100mm thermal sticker layout
 ========================================================= */
 // 'cash' kept for legacy bills that haven't been migrated; the dropdown no longer offers it.
-const PAYMENT_LABELS = { cash: 'เงินสด', transfer: 'โอนเงิน', card: 'บัตร', paylater: 'ผ่อน', cod: 'เก็บปลายทาง' };
+const PAYMENT_LABELS = { cash: 'เงินสด', transfer: 'โอนเงิน', card: 'บัตร', paylater: 'paylater', cod: 'เก็บปลายทาง' };
 const CHANNEL_LABELS = { store: 'หน้าร้าน', tiktok: 'TikTok', shopee: 'Shopee', lazada: 'Lazada', facebook: 'Facebook' };
 
-function Receipt({ order, items, shop, variant = 'receipt', paperWidth = 100 }) {
+function Receipt({ order, items, shop, variant = 'receipt' }) {
   const isInvoice = variant === 'tax_invoice';
   const exVat = Number(order.grand_total||0) - Number(order.vat_amount||0);
+  // When ANY line has a display override, the receipt's own subtotal is
+  // recomputed from the overridden values — so "รวมก่อนลด" matches what
+  // the customer sees on each line. Bill-level discount line is then
+  // (displayedSubtotal − grand_total), which collapses to zero when the
+  // shopkeeper sets each override to absorb the discount manually.
+  const displayedSubtotal = items.reduce((sum, it) => {
+    if (it.display_unit_price != null) {
+      return sum + Number(it.display_unit_price) * Number(it.quantity || 0);
+    }
+    return sum + applyDiscounts(
+      it.unit_price, it.quantity,
+      it.discount1_value, it.discount1_type,
+      it.discount2_value, it.discount2_type
+    );
+  }, 0);
+  const displayedDiscount = Math.max(0, displayedSubtotal - Number(order.grand_total||0));
   return (
-    <div className={"receipt-100mm receipt-print r-paper-" + paperWidth + " r-theme-minimal"}>
+    <div className="receipt-100mm receipt-print r-theme-minimal">
       <div className="r-header">
         <div className="r-shop">{shop?.shop_name || 'TIMES'}</div>
         {shop?.shop_address && <div className="r-addr">{shop.shop_address}</div>}
@@ -1210,16 +1231,26 @@ function Receipt({ order, items, shop, variant = 'receipt', paperWidth = 100 }) 
 
       <div className="r-items">
         {items.map(it => {
-          const net = applyDiscounts(it.unit_price, it.quantity, it.discount1_value, it.discount1_type, it.discount2_value, it.discount2_type);
+          const hasOverride = it.display_unit_price != null;
+          // Override semantics (per shop spec, see migration 009):
+          //   - shown unit price = display_unit_price
+          //   - per-line discounts are HIDDEN (the override is the
+          //     "final per-unit price the customer sees")
+          //   - line total = override × quantity (clean math)
+          // Without override, render exactly as before.
+          const shownUnit  = hasOverride ? Number(it.display_unit_price) : it.unit_price;
+          const shownTotal = hasOverride
+            ? shownUnit * Number(it.quantity || 0)
+            : applyDiscounts(it.unit_price, it.quantity, it.discount1_value, it.discount1_type, it.discount2_value, it.discount2_type);
           return (
             <div key={it.id} className="r-item">
               <div className="r-name">{it.product_name}</div>
               <div className="r-line">
-                <span>{it.quantity} × {fmtTHB(it.unit_price)}
-                  {it.discount1_value ? ` −${it.discount1_value}${it.discount1_type==='percent'?'%':'฿'}` : ''}
-                  {it.discount2_value ? ` −${it.discount2_value}${it.discount2_type==='percent'?'%':'฿'}` : ''}
+                <span>{it.quantity} × {fmtTHB(shownUnit)}
+                  {!hasOverride && it.discount1_value ? ` −${it.discount1_value}${it.discount1_type==='percent'?'%':'฿'}` : ''}
+                  {!hasOverride && it.discount2_value ? ` −${it.discount2_value}${it.discount2_type==='percent'?'%':'฿'}` : ''}
                 </span>
-                <span>{fmtTHB(net)}</span>
+                <span>{fmtTHB(shownTotal)}</span>
               </div>
             </div>
           );
@@ -1229,9 +1260,9 @@ function Receipt({ order, items, shop, variant = 'receipt', paperWidth = 100 }) 
       <hr className="r-hr"/>
 
       <div className="r-totals">
-        <div className="r-row"><span>รวมก่อนลด</span><span>{fmtTHB(order.subtotal)}</span></div>
-        {Number(order.discount_value)>0 && (
-          <div className="r-row"><span>ส่วนลดบิล</span><span>−{order.discount_value}{order.discount_type==='percent'?'%':'฿'}</span></div>
+        <div className="r-row"><span>รวมก่อนลด</span><span>{fmtTHB(displayedSubtotal)}</span></div>
+        {displayedDiscount > 0 && (
+          <div className="r-row"><span>ส่วนลดบิล</span><span>−{fmtTHB(displayedDiscount)}</span></div>
         )}
         {Number(order.vat_amount)>0 && (<>
           <div className="r-row"><span>ก่อนหัก VAT {order.vat_rate}%</span><span>{fmtTHB(exVat)}</span></div>
@@ -1263,48 +1294,17 @@ function Receipt({ order, items, shop, variant = 'receipt', paperWidth = 100 }) 
    RECEIPT MODAL — preview + print
 ========================================================= */
 // Receipt visual style is locked to 'minimal' (clean thin lines, mono
-// numbers). Classic + modern variants were removed when the shop
-// settled on this single look — see git history if you need them back.
-const RECEIPT_PAPER_KEY = 'times_pos.receipt_paper';
-// Common thermal-sticker widths. 100mm matches the original deployment;
-// 80mm + 58mm cover the most common alternative thermal printers in
-// Thailand. Numbers are millimetres — used both for the CSS class
-// (.r-paper-80) and for the dynamic @page size injection at print time.
-const RECEIPT_PAPERS = [
-  { id: 100, label: '100 มม.', hint: 'สติ๊กเกอร์ใหญ่' },
-  { id: 80,  label: '80 มม.',  hint: 'thermal มาตรฐาน' },
-  { id: 58,  label: '58 มม.',  hint: 'เครื่องเล็ก/พกพา' },
-];
+// numbers) AND paper width is locked to 100mm — the shop uses a single
+// thermal sticker format. Classic/modern themes + 58/80mm variants were
+// removed once these defaults were finalised; see git history if you
+// need them back. The static `@page` rule lives in styles.legacy.css.
 
 function ReceiptModal({ open, onClose, orderId }) {
   const { shop } = useShop();
   const [order, setOrder] = useState(null);
   const [items, setItems] = useState([]);
   const [variant, setVariant] = useState('receipt');
-  const [paperWidth, setPaperState] = useState(() => {
-    try { return Number(localStorage.getItem(RECEIPT_PAPER_KEY)) || 100; }
-    catch { return 100; }
-  });
-  const setPaperWidth = (w) => {
-    setPaperState(w);
-    try { localStorage.setItem(RECEIPT_PAPER_KEY, String(w)); } catch { /* */ }
-  };
   const [loading, setLoading] = useState(false);
-
-  // Inject a dynamic `@page` rule that matches the chosen paper width.
-  // `@page { size: ... }` is global to the document, so this lives in
-  // the <head> and updates whenever the user picks a new width.
-  // Removed on unmount so other modals (if any added later) don't see
-  // a stale rule.
-  useEffect(() => {
-    if (!open) return;
-    const styleEl = document.createElement('style');
-    styleEl.id = 'receipt-page-size';
-    styleEl.textContent =
-      `@media print { @page { size: ${paperWidth}mm auto; margin: 0; } }`;
-    document.head.appendChild(styleEl);
-    return () => { styleEl.remove(); };
-  }, [open, paperWidth]);
 
   useEffect(() => {
     if (!open || !orderId) return;
@@ -1351,36 +1351,15 @@ function ReceiptModal({ open, onClose, orderId }) {
             </div>
           )}
 
-          {/* Paper-width picker — dictates both the on-screen preview
-              width and the @page size emitted to the printer. */}
-          <div className="mb-3 no-print">
-            <div className="text-[11px] uppercase tracking-wider text-muted mb-1.5 px-0.5">ขนาดกระดาษ</div>
-            <div className="grid grid-cols-3 gap-1.5">
-              {RECEIPT_PAPERS.map(p => {
-                const active = paperWidth === p.id;
-                return (
-                  <button key={p.id} type="button" onClick={()=>setPaperWidth(p.id)}
-                    title={p.hint}
-                    className={"py-2 px-2 rounded-md text-xs font-medium border transition leading-tight " + (active
-                      ? "bg-primary text-on-primary border-primary shadow-sm"
-                      : "bg-white text-muted border-hairline hover:text-ink hover:border-primary/40")}>
-                    <div>{p.label}</div>
-                    <div className={"text-[10px] mt-0.5 font-normal " + (active ? "opacity-80" : "text-muted-soft")}>{p.hint}</div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
           {/* On-screen preview. Wrapped in `no-print` so the modal copy
               of the receipt doesn't compete with the portaled print
               copy below — every browser then prints exactly one page. */}
           <div className="bg-surface-soft p-3 rounded-lg overflow-auto no-print">
-            <div className="mx-auto" style={{width: paperWidth + 'mm'}}>
-              <Receipt order={order} items={items} shop={shop} variant={variant} paperWidth={paperWidth}/>
+            <div className="mx-auto" style={{width:'76mm'}}>
+              <Receipt order={order} items={items} shop={shop} variant={variant}/>
             </div>
           </div>
-          <div className="text-xs text-muted-soft mt-2 text-center no-print">ตัวอย่าง — กด "พิมพ์" เพื่อส่งไปเครื่องพิมพ์สติ๊กเกอร์ความร้อน {paperWidth}มม.</div>
+          <div className="text-xs text-muted-soft mt-2 text-center no-print">ตัวอย่าง — กด "พิมพ์" เพื่อส่งไปเครื่องพิมพ์สติ๊กเกอร์ความร้อน 80มม.</div>
         </div>
       )}
 
@@ -1391,7 +1370,7 @@ function ReceiptModal({ open, onClose, orderId }) {
           via `display: none`. */}
       {!loading && order && createPortal(
         <div className="receipt-print-portal">
-          <Receipt order={order} items={items} shop={shop} variant={variant} paperWidth={paperWidth}/>
+          <Receipt order={order} items={items} shop={shop} variant={variant}/>
         </div>,
         document.body
       )}
@@ -2070,6 +2049,75 @@ function PageHeader({ title, subtitle, right }) {
 /* =========================================================
    POS VIEW
 ========================================================= */
+// Per-cart-line "display price" override — shows a different price on
+// the printed receipt without touching the actual unit_price (so cost,
+// profit, stock, VAT, and grand_total stay correct). See migration 009.
+// Visually prominent — sits under the line total on the right side of
+// the cart row (the cashier's eye is already on the price column when
+// adjusting receipt-only display prices). Filled primary chip with
+// border + shadow so it doesn't disappear against the glass-soft card
+// background.
+function DisplayPriceButton({ open, hasDisp, onClick }) {
+  return (
+    <button
+      type="button"
+      className={"inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold border transition shadow-sm whitespace-nowrap " + (
+        open
+          ? "bg-primary text-on-primary border-primary"
+          : hasDisp
+            ? "bg-primary/15 text-primary border-primary/40 hover:bg-primary/25"
+            : "bg-white text-primary border-primary/50 hover:bg-primary/10 hover:border-primary"
+      )}
+      onClick={onClick}
+      aria-expanded={open}
+    >
+      <Icon name="edit" size={12}/>
+      <span>{hasDisp ? 'แก้ราคาในบิล' : 'ราคาในบิล'}</span>
+    </button>
+  );
+}
+
+function DisplayPricePanel({ line, onApply, onClear }) {
+  const [val, setVal] = useState(
+    line.display_unit_price != null ? String(line.display_unit_price) : ""
+  );
+  const apply = () => {
+    const n = Number(val);
+    if (!val || !isFinite(n) || n < 0) return;
+    onApply(roundMoney(n));
+  };
+  return (
+    <div className="mt-2 p-2.5 rounded-lg bg-primary/5 border border-primary/15 fade-in">
+      <div className="text-[11px] text-muted-soft mb-1.5">
+        ราคานี้จะแสดงในใบเสร็จลูกค้าแทน <span className="tabular-nums">฿{fmtTHB(line.unit_price).replace(/^฿/,'')}</span> · ราคาจริงไม่เปลี่ยน · ไม่กระทบกำไร / สต็อก
+      </div>
+      <div className="flex items-center gap-1.5">
+        <input
+          type="number"
+          inputMode="decimal"
+          autoFocus
+          className="input !h-8 !rounded-lg !py-1 !text-xs flex-1"
+          placeholder="ราคาที่จะแสดงในบิล"
+          value={val}
+          onChange={e=>setVal(e.target.value)}
+          onKeyDown={e=>{ if (e.key==='Enter') apply(); }}
+        />
+        <button type="button" onClick={apply}
+          disabled={!val || !isFinite(Number(val)) || Number(val) < 0}
+          className="btn-primary !py-1 !px-2.5 !min-h-0 !text-xs disabled:opacity-50">
+          ยืนยัน
+        </button>
+        {line.display_unit_price != null && (
+          <button type="button" onClick={onClear}
+            className="btn-secondary !py-1 !px-2.5 !min-h-0 !text-xs">
+            ล้าง
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function POSView() {
   const toast = useToast();
   const askConfirm = useConfirm();
@@ -2079,6 +2127,20 @@ function POSView() {
   const [cart, setCart] = useState([]);
   const [channel, setChannel] = useState("tiktok");
   const [payment, setPayment] = useState("transfer");
+  // Hide paylater for channels that don't support it (store / facebook)
+  // and snap an already-selected paylater back to transfer so submit
+  // never carries an invalid combo.
+  const availablePayments = useMemo(
+    () => PAYLATER_BLOCKED_CHANNELS.has(channel)
+      ? PAYMENTS.filter(p => p.v !== 'paylater')
+      : PAYMENTS,
+    [channel]
+  );
+  useEffect(() => {
+    if (PAYLATER_BLOCKED_CHANNELS.has(channel) && payment === 'paylater') {
+      setPayment('transfer');
+    }
+  }, [channel, payment]);
   const [netPrice, setNetPrice] = useState("");
   // Money the shop actually receives from the platform (e-commerce only).
   // Empty string = not entered yet; gets fallback to grand_total in P&L.
@@ -2092,6 +2154,9 @@ function POSView() {
   // missing fields. Desktop ignores this flag entirely.
   const [billExpanded, setBillExpanded] = useState(false);
   const [expandedDisc, setExpandedDisc] = useState({});
+  // Expand state for the per-line "ราคาในบิล" override panel. Independent
+  // of the discount panel — both can be open simultaneously.
+  const [expandedDisp, setExpandedDisp] = useState({});
   const [notes, setNotes] = useState("");
   const [showNotes, setShowNotes] = useState(false);
   const [taxInvoice, setTaxInvoice] = useState(false);
@@ -2171,6 +2236,11 @@ function POSView() {
       return [...c, {
         product_id: p.id, product_name: p.name, barcode: p.barcode,
         quantity: 1, unit_price: Number(p.retail_price)||0,
+        // Override price shown on the printed receipt only. NULL means
+        // "show the real unit_price". See migration 009 for the long-form
+        // explanation; the gist is this field never touches profit, cost,
+        // stock, VAT, or grand_total — purely cosmetic for the receipt.
+        display_unit_price: null,
         discount1_value: 0, discount1_type: null,
         discount2_value: 0, discount2_type: null,
         current_stock: stock,
@@ -2325,6 +2395,11 @@ function POSView() {
       const itemsPayload = cart.map(l => ({
         product_id: l.product_id, product_name: l.product_name,
         quantity: l.quantity, unit_price: roundMoney(l.unit_price),
+        // Override shown on the printed receipt only — null = no override.
+        // See migration 009 + Receipt component for how this is rendered.
+        display_unit_price: l.display_unit_price == null
+          ? null
+          : roundMoney(Number(l.display_unit_price)),
         discount1_value: roundMoney(l.discount1_value || 0), discount1_type: l.discount1_type,
         discount2_value: roundMoney(l.discount2_value || 0), discount2_type: l.discount2_type,
       }));
@@ -2446,6 +2521,8 @@ function POSView() {
         )}
         {cart.map((l, idx) => {
           const expanded = expandedDisc[idx];
+          const dispOpen = expandedDisp[idx];
+          const hasDisp  = l.display_unit_price != null;
           return (
             <div key={l.product_id} style={{ '--i': Math.min(idx, 8) }} className="glass-soft rounded-lg p-3 mb-2 hover-lift fade-in stagger">
               <div className="flex items-start justify-between gap-2">
@@ -2458,45 +2535,67 @@ function POSView() {
                   <span>ลบ</span>
                 </button>
               </div>
-              <div className="flex items-center gap-2 mt-2">
-                <div className="flex items-center bg-white/60 backdrop-blur rounded-lg border border-white/50 shadow-sm overflow-hidden">
-                  <button className="stepper-btn rounded-l-lg text-ink" onClick={()=>updateLine(idx,{quantity:Math.max(1,l.quantity-1)})}><Icon name="minus" size={16}/></button>
-                  <input type="number" min="1" max={l.current_stock||undefined} inputMode="numeric" className="w-12 text-center bg-transparent text-base font-medium border-0 focus:!outline-none focus:!shadow-none py-1" value={l.quantity} onChange={e=>{
-                    const v = Math.max(1, Number(e.target.value)||1);
-                    const cap = Number(l.current_stock)||v;
-                    if (v > cap) toast.push(`เกินสต็อก (${cap} ชิ้น)`, 'error');
-                    updateLine(idx,{quantity: Math.min(v, cap)});
-                  }}/>
-                  <button className="stepper-btn rounded-r-lg text-ink disabled:opacity-40 disabled:cursor-not-allowed" disabled={l.quantity >= (Number(l.current_stock)||l.quantity)} onClick={()=>{
-                    const cap = Number(l.current_stock)||l.quantity;
-                    if (l.quantity >= cap) { toast.push(`เกินสต็อก (${cap} ชิ้น)`, 'error'); return; }
-                    updateLine(idx,{quantity: l.quantity+1});
-                  }}><Icon name="plus" size={16}/></button>
+              <div className="flex items-stretch gap-2 mt-2">
+                {/* Left column: qty stepper on top, "เพิ่มส่วนลด" pill
+                    directly underneath at full column width. Wrapping
+                    them in the same flex column means the pill always
+                    matches the stepper's intrinsic width — no magic
+                    pixel values, scales with font size. */}
+                <div className="flex flex-col gap-1.5 flex-shrink-0">
+                  <div className="flex items-center bg-white/60 backdrop-blur rounded-lg border border-white/50 shadow-sm overflow-hidden">
+                    <button className="stepper-btn rounded-l-lg text-ink" onClick={()=>updateLine(idx,{quantity:Math.max(1,l.quantity-1)})}><Icon name="minus" size={16}/></button>
+                    <input type="number" min="1" max={l.current_stock||undefined} inputMode="numeric" className="w-12 text-center bg-transparent text-base font-medium border-0 focus:!outline-none focus:!shadow-none py-1" value={l.quantity} onChange={e=>{
+                      const v = Math.max(1, Number(e.target.value)||1);
+                      const cap = Number(l.current_stock)||v;
+                      if (v > cap) toast.push(`เกินสต็อก (${cap} ชิ้น)`, 'error');
+                      updateLine(idx,{quantity: Math.min(v, cap)});
+                    }}/>
+                    <button className="stepper-btn rounded-r-lg text-ink disabled:opacity-40 disabled:cursor-not-allowed" disabled={l.quantity >= (Number(l.current_stock)||l.quantity)} onClick={()=>{
+                      const cap = Number(l.current_stock)||l.quantity;
+                      if (l.quantity >= cap) { toast.push(`เกินสต็อก (${cap} ชิ้น)`, 'error'); return; }
+                      updateLine(idx,{quantity: l.quantity+1});
+                    }}><Icon name="plus" size={16}/></button>
+                  </div>
+                  {(() => {
+                    const hasDisc = (Number(l.discount1_value)||0) > 0 || (Number(l.discount2_value)||0) > 0;
+                    return (
+                      <button
+                        type="button"
+                        className={"w-full inline-flex items-center justify-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium border transition whitespace-nowrap " + (
+                          expanded
+                            ? "bg-primary/15 text-primary border-primary/30"
+                            : hasDisc
+                              ? "bg-primary/10 text-primary border-primary/20 hover:bg-primary/15"
+                              : "bg-white/60 text-muted border-hairline hover:text-primary hover:bg-white"
+                        )}
+                        onClick={()=>setExpandedDisc(s=>({...s,[idx]:!expanded}))}
+                        aria-expanded={expanded}
+                      >
+                        <Icon name="tag" size={12}/>
+                        <span>{hasDisc ? 'มีส่วนลด' : 'ส่วนลด'}</span>
+                      </button>
+                    );
+                  })()}
                 </div>
-                <div className="text-xs text-muted flex-1 tabular-nums">@ {fmtTHB(l.unit_price)}</div>
-                <div className="text-right font-medium text-sm tabular-nums">{fmtTHB(lineNet(l))}</div>
+                {/* Price display: real `unit_price` is always shown so the
+                    cashier never loses sight of the actual sticker price.
+                    When a display override is set we strike it through and
+                    surface the override below as a primary-coloured badge. */}
+                <div className="flex-1 min-w-0 self-center">
+                  <div className={"text-xs tabular-nums truncate " + (hasDisp ? "text-muted-soft line-through" : "text-muted")}>@ {fmtTHB(l.unit_price)}</div>
+                  {hasDisp && (
+                    <div className="text-[11px] text-primary tabular-nums truncate font-medium">บิล: {fmtTHB(l.display_unit_price)}</div>
+                  )}
+                </div>
+                {/* Right column: line total on top, "แก้ราคาในบิล" chip
+                    directly underneath so it lives in the cashier's
+                    eyeline when reviewing prices. */}
+                <div className="flex flex-col items-end justify-between gap-1.5 flex-shrink-0">
+                  <div className="font-medium text-sm tabular-nums">{fmtTHB(lineNet(l))}</div>
+                  <DisplayPriceButton open={dispOpen} hasDisp={hasDisp}
+                    onClick={()=>setExpandedDisp(s=>({...s,[idx]:!dispOpen}))} />
+                </div>
               </div>
-              {(() => {
-                const hasDisc = (Number(l.discount1_value)||0) > 0 || (Number(l.discount2_value)||0) > 0;
-                return (
-                  <button
-                    type="button"
-                    className={"mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition " + (
-                      expanded
-                        ? "bg-primary/15 text-primary border-primary/30"
-                        : hasDisc
-                          ? "bg-primary/10 text-primary border-primary/20 hover:bg-primary/15"
-                          : "bg-white/60 text-muted border-hairline hover:text-primary hover:bg-white"
-                    )}
-                    onClick={()=>setExpandedDisc(s=>({...s,[idx]:!expanded}))}
-                    aria-expanded={expanded}
-                  >
-                    <Icon name="tag" size={12}/>
-                    {hasDisc ? 'ส่วนลดที่ตั้งไว้' : 'เพิ่มส่วนลด'}
-                    <Icon name={expanded?"chevron-d":"chevron-r"} size={12}/>
-                  </button>
-                );
-              })()}
               {expanded && (
                 <div className="grid grid-cols-12 gap-1 mt-2 fade-in">
                   <input type="number" inputMode="numeric" autoFocus className="input !h-8 !rounded-lg !py-1 !text-xs col-span-4" placeholder="ลด 1" value={l.discount1_value||""} onChange={e=>updateLine(idx,{discount1_value:Number(e.target.value)||0, discount1_type: l.discount1_type||'baht'})}/>
@@ -2508,6 +2607,11 @@ function POSView() {
                     <option value="">—</option><option value="baht">฿</option><option value="percent">%</option>
                   </select>
                 </div>
+              )}
+              {dispOpen && (
+                <DisplayPricePanel line={l}
+                  onApply={(v)=>{ updateLine(idx,{display_unit_price:v}); setExpandedDisp(s=>({...s,[idx]:false})); }}
+                  onClear={()=>{ updateLine(idx,{display_unit_price:null}); setExpandedDisp(s=>({...s,[idx]:false})); }}/>
               )}
             </div>
           );
@@ -2527,7 +2631,7 @@ function POSView() {
           <div>
             <label className="text-xs uppercase tracking-wider text-muted">ชำระโดย</label>
             <select className="input mt-1 !h-10 !rounded-xl !py-2 !text-sm" value={payment} onChange={e=>setPayment(e.target.value)}>
-              {PAYMENTS.map(p=> <option key={p.v} value={p.v}>{p.label}</option>)}
+              {availablePayments.map(p=> <option key={p.v} value={p.v}>{p.label}</option>)}
             </select>
           </div>
         </div>
@@ -2767,6 +2871,8 @@ function POSView() {
               )}
               {cart.map((l, idx) => {
                 const expanded = expandedDisc[idx];
+                const dispOpen = expandedDisp[idx];
+                const hasDisp  = l.display_unit_price != null;
                 return (
                   <div key={l.product_id} style={{ '--i': Math.min(idx, 8) }} className="glass-soft rounded-lg p-3 mb-2 hover-lift fade-in stagger">
                     <div className="flex items-start justify-between gap-2">
@@ -2779,45 +2885,55 @@ function POSView() {
                         <span>ลบ</span>
                       </button>
                     </div>
-                    <div className="flex items-center gap-2 mt-2">
-                      <div className="flex items-center bg-white/60 backdrop-blur rounded-lg border border-white/50 shadow-sm overflow-hidden">
-                        <button className="stepper-btn rounded-l-lg text-ink" onClick={()=>updateLine(idx,{quantity:Math.max(1,l.quantity-1)})}><Icon name="minus" size={16}/></button>
-                        <input type="number" min="1" max={l.current_stock||undefined} inputMode="numeric" className="w-12 text-center bg-transparent text-base font-medium border-0 focus:!outline-none focus:!shadow-none py-1" value={l.quantity} onChange={e=>{
-                          const v = Math.max(1, Number(e.target.value)||1);
-                          const cap = Number(l.current_stock)||v;
-                          if (v > cap) toast.push(`เกินสต็อก (${cap} ชิ้น)`, 'error');
-                          updateLine(idx,{quantity: Math.min(v, cap)});
-                        }}/>
-                        <button className="stepper-btn rounded-r-lg text-ink disabled:opacity-40 disabled:cursor-not-allowed" disabled={l.quantity >= (Number(l.current_stock)||l.quantity)} onClick={()=>{
-                          const cap = Number(l.current_stock)||l.quantity;
-                          if (l.quantity >= cap) { toast.push(`เกินสต็อก (${cap} ชิ้น)`, 'error'); return; }
-                          updateLine(idx,{quantity: l.quantity+1});
-                        }}><Icon name="plus" size={16}/></button>
+                    <div className="flex items-stretch gap-2 mt-2">
+                      <div className="flex flex-col gap-1.5 flex-shrink-0">
+                        <div className="flex items-center bg-white/60 backdrop-blur rounded-lg border border-white/50 shadow-sm overflow-hidden">
+                          <button className="stepper-btn rounded-l-lg text-ink" onClick={()=>updateLine(idx,{quantity:Math.max(1,l.quantity-1)})}><Icon name="minus" size={16}/></button>
+                          <input type="number" min="1" max={l.current_stock||undefined} inputMode="numeric" className="w-12 text-center bg-transparent text-base font-medium border-0 focus:!outline-none focus:!shadow-none py-1" value={l.quantity} onChange={e=>{
+                            const v = Math.max(1, Number(e.target.value)||1);
+                            const cap = Number(l.current_stock)||v;
+                            if (v > cap) toast.push(`เกินสต็อก (${cap} ชิ้น)`, 'error');
+                            updateLine(idx,{quantity: Math.min(v, cap)});
+                          }}/>
+                          <button className="stepper-btn rounded-r-lg text-ink disabled:opacity-40 disabled:cursor-not-allowed" disabled={l.quantity >= (Number(l.current_stock)||l.quantity)} onClick={()=>{
+                            const cap = Number(l.current_stock)||l.quantity;
+                            if (l.quantity >= cap) { toast.push(`เกินสต็อก (${cap} ชิ้น)`, 'error'); return; }
+                            updateLine(idx,{quantity: l.quantity+1});
+                          }}><Icon name="plus" size={16}/></button>
+                        </div>
+                        {(() => {
+                          const hasDisc = (Number(l.discount1_value)||0) > 0 || (Number(l.discount2_value)||0) > 0;
+                          return (
+                            <button
+                              type="button"
+                              className={"w-full inline-flex items-center justify-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium border transition whitespace-nowrap " + (
+                                expanded
+                                  ? "bg-primary/15 text-primary border-primary/30"
+                                  : hasDisc
+                                    ? "bg-primary/10 text-primary border-primary/20 hover:bg-primary/15"
+                                    : "bg-white/60 text-muted border-hairline hover:text-primary hover:bg-white"
+                              )}
+                              onClick={()=>setExpandedDisc(s=>({...s,[idx]:!expanded}))}
+                              aria-expanded={expanded}
+                            >
+                              <Icon name="tag" size={12}/>
+                              <span>{hasDisc ? 'มีส่วนลด' : 'ส่วนลด'}</span>
+                            </button>
+                          );
+                        })()}
                       </div>
-                      <div className="text-xs text-muted flex-1 tabular-nums">@ {fmtTHB(l.unit_price)}</div>
-                      <div className="text-right font-medium text-sm tabular-nums">{fmtTHB(lineNet(l))}</div>
+                      <div className="flex-1 min-w-0 self-center">
+                        <div className={"text-xs tabular-nums truncate " + (hasDisp ? "text-muted-soft line-through" : "text-muted")}>@ {fmtTHB(l.unit_price)}</div>
+                        {hasDisp && (
+                          <div className="text-[11px] text-primary tabular-nums truncate font-medium">บิล: {fmtTHB(l.display_unit_price)}</div>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end justify-between gap-1.5 flex-shrink-0">
+                        <div className="font-medium text-sm tabular-nums">{fmtTHB(lineNet(l))}</div>
+                        <DisplayPriceButton open={dispOpen} hasDisp={hasDisp}
+                          onClick={()=>setExpandedDisp(s=>({...s,[idx]:!dispOpen}))} />
+                      </div>
                     </div>
-                    {(() => {
-                      const hasDisc = (Number(l.discount1_value)||0) > 0 || (Number(l.discount2_value)||0) > 0;
-                      return (
-                        <button
-                          type="button"
-                          className={"mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition " + (
-                            expanded
-                              ? "bg-primary/15 text-primary border-primary/30"
-                              : hasDisc
-                                ? "bg-primary/10 text-primary border-primary/20 hover:bg-primary/15"
-                                : "bg-white/60 text-muted border-hairline hover:text-primary hover:bg-white"
-                          )}
-                          onClick={()=>setExpandedDisc(s=>({...s,[idx]:!expanded}))}
-                          aria-expanded={expanded}
-                        >
-                          <Icon name="tag" size={12}/>
-                          {hasDisc ? 'ส่วนลดที่ตั้งไว้' : 'เพิ่มส่วนลด'}
-                          <Icon name={expanded?"chevron-d":"chevron-r"} size={12}/>
-                        </button>
-                      );
-                    })()}
                     {expanded && (
                       <div className="grid grid-cols-12 gap-1 mt-2 fade-in">
                         <input type="number" inputMode="numeric" autoFocus className="input !h-8 !rounded-lg !py-1 !text-xs col-span-4" placeholder="ลด 1" value={l.discount1_value||""} onChange={e=>updateLine(idx,{discount1_value:Number(e.target.value)||0, discount1_type: l.discount1_type||'baht'})}/>
@@ -2829,6 +2945,11 @@ function POSView() {
                           <option value="">—</option><option value="baht">฿</option><option value="percent">%</option>
                         </select>
                       </div>
+                    )}
+                    {dispOpen && (
+                      <DisplayPricePanel line={l}
+                        onApply={(v)=>{ updateLine(idx,{display_unit_price:v}); setExpandedDisp(s=>({...s,[idx]:false})); }}
+                        onClear={()=>{ updateLine(idx,{display_unit_price:null}); setExpandedDisp(s=>({...s,[idx]:false})); }}/>
                     )}
                   </div>
                 );
@@ -2869,7 +2990,7 @@ function POSView() {
                     <div>
                       <label className="text-xs uppercase tracking-wider text-muted">ชำระโดย</label>
                       <select className="input mt-1 !h-10 !rounded-xl !py-2 !text-sm" value={payment} onChange={e=>setPayment(e.target.value)}>
-                        {PAYMENTS.map(p=> <option key={p.v} value={p.v}>{p.label}</option>)}
+                        {availablePayments.map(p=> <option key={p.v} value={p.v}>{p.label}</option>)}
                       </select>
                     </div>
                   </div>
