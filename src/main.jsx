@@ -28,6 +28,9 @@ import { NAV, navForRole } from './lib/nav-config.js';
 import {
   EXPENSE_CATEGORIES, EXPENSE_CAT_MAP, staffComputed, realNetProfit,
 } from './lib/expense-calc.js';
+import {
+  estimateNetReceivedTotal,
+} from './lib/money.js';
 import Icon from './components/ui/Icon.jsx';
 import { useRealtimeInvalidate } from './lib/use-realtime-invalidate.js';
 import { useNumberTween } from './lib/use-number-tween.js';
@@ -2118,6 +2121,31 @@ function DisplayPricePanel({ line, onApply, onClear }) {
   );
 }
 
+// "คำนวณอัตโนมัติ" — pre-fills "เงินที่ร้านได้รับ" with an estimate
+// for paylater/COD sales (where the platform's actual deduction isn't
+// known until 1–2 days later). Uses estimateNetReceivedTotal which
+// applies the per-line shop formula. Disabled when cart is empty so
+// the button shape stays stable but doesn't fire on no-op data.
+function NetReceivedAutoButton({ cart, onApply }) {
+  const disabled = !cart || cart.length === 0;
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => onApply(estimateNetReceivedTotal(cart))}
+      title="คำนวณยอดสุทธิหลังหัก fee โดยประมาณ จากราคาป้าย"
+      className={"inline-flex items-center gap-1 h-10 px-3 rounded-xl text-xs font-semibold border whitespace-nowrap transition shadow-sm flex-shrink-0 " + (
+        disabled
+          ? "bg-white/40 text-muted-soft border-hairline cursor-not-allowed"
+          : "bg-primary text-on-primary border-primary hover:opacity-90 active:scale-[0.98]"
+      )}
+    >
+      <Icon name="zap" size={14}/>
+      <span>คำนวณอัตโนมัติ</span>
+    </button>
+  );
+}
+
 function POSView() {
   const toast = useToast();
   const askConfirm = useConfirm();
@@ -2449,7 +2477,21 @@ function POSView() {
           className="input !pl-12 !py-3 !text-base lg:!text-lg"
           placeholder="สแกนบาร์โค้ด หรือพิมพ์ชื่อรุ่น"
           value={search}
-          onChange={e=>setSearch(e.target.value)}
+          onChange={e=>{
+            const v = e.target.value;
+            // Rapid-scan guard: a hand scanner firing before the previous
+            // scan is dispatched can pile multiple barcodes into one
+            // value. If we see >25 chars that are *only* digits (no
+            // brand/model letters), it's not a real query — it's the
+            // scanner running faster than React batching. Clear and warn.
+            if (v.length > 25 && /^\d+$/.test(v)) {
+              setSearch("");
+              setResults([]);
+              toast.push('กรุณาสแกน barcode ช้ากว่านี้', 'error');
+              return;
+            }
+            setSearch(v);
+          }}
           autoFocus
         />
         {search && <button className="absolute right-3 top-1/2 -translate-y-1/2 btn-ghost !p-2 !min-h-0" onClick={()=>{setSearch("");setResults([]);searchRef.current?.focus();}} aria-label="ล้างคำค้น"><Icon name="x" size={18}/></button>}
@@ -2702,17 +2744,23 @@ function POSView() {
                 </span>
               )}
             </div>
-            <input
-              ref={netReceivedRef}
-              type="number"
-              inputMode="decimal"
-              className="input mt-1 !h-10 !rounded-xl !py-2 !text-sm"
-              placeholder={requiresNetReceived(channel, payment)
-                ? `ยอดที่ ${CHANNEL_LABELS[channel]||channel} โอนเข้าร้าน (บาท)`
-                : 'รู้ทีหลังก็มาแก้ในหน้าขายได้'}
-              value={netReceived}
-              onChange={e=>setNetReceived(e.target.value)}
-            />
+            <div className="flex items-stretch gap-2 mt-1">
+              <input
+                ref={netReceivedRef}
+                type="number"
+                inputMode="decimal"
+                className="input !h-10 !rounded-xl !py-2 !text-sm flex-1 min-w-0"
+                placeholder={requiresNetReceived(channel, payment)
+                  ? `ยอดที่ ${CHANNEL_LABELS[channel]||channel} โอนเข้าร้าน (บาท)`
+                  : 'รู้ทีหลังก็มาแก้ในหน้าขายได้'}
+                value={netReceived}
+                onChange={e=>setNetReceived(e.target.value)}
+              />
+              {(payment === 'paylater' || payment === 'cod') && (
+                <NetReceivedAutoButton cart={cart}
+                  onApply={(v)=>{ setNetReceived(String(v)); netReceivedRef.current?.focus(); }}/>
+              )}
+            </div>
             <div className="text-xs text-muted-soft mt-1">
               ใช้คำนวณกำไร · ไม่แสดงในใบเสร็จลูกค้า
             </div>
@@ -3060,17 +3108,23 @@ function POSView() {
                           </span>
                         )}
                       </div>
-                      <input
-                        ref={netReceivedRef}
-                        type="number"
-                        inputMode="decimal"
-                        className="input mt-1 !h-10 !rounded-xl !py-2 !text-sm"
-                        placeholder={requiresNetReceived(channel, payment)
-                          ? `ยอดที่ ${CHANNEL_LABELS[channel]||channel} โอนเข้าร้าน (บาท)`
-                          : 'รู้ทีหลังก็มาแก้ในหน้าขายได้'}
-                        value={netReceived}
-                        onChange={e=>setNetReceived(e.target.value)}
-                      />
+                      <div className="flex items-stretch gap-2 mt-1">
+                        <input
+                          ref={netReceivedRef}
+                          type="number"
+                          inputMode="decimal"
+                          className="input !h-10 !rounded-xl !py-2 !text-sm flex-1 min-w-0"
+                          placeholder={requiresNetReceived(channel, payment)
+                            ? `ยอดที่ ${CHANNEL_LABELS[channel]||channel} โอนเข้าร้าน (บาท)`
+                            : 'รู้ทีหลังก็มาแก้ในหน้าขายได้'}
+                          value={netReceived}
+                          onChange={e=>setNetReceived(e.target.value)}
+                        />
+                        {(payment === 'paylater' || payment === 'cod') && (
+                          <NetReceivedAutoButton cart={cart}
+                            onApply={(v)=>{ setNetReceived(String(v)); netReceivedRef.current?.focus(); }}/>
+                        )}
+                      </div>
                       <div className="text-xs text-muted-soft mt-1">
                         ใช้คำนวณกำไร · ไม่แสดงในใบเสร็จลูกค้า
                       </div>
@@ -3201,8 +3255,21 @@ function POSView() {
         </div>
       </Modal>
 
-      {/* Receipt modal — opens after successful sale */}
-      <ReceiptModal open={!!receiptOrderId} onClose={()=>setReceiptOrderId(null)} orderId={receiptOrderId}/>
+      {/* Receipt modal — opens after successful sale. On close we
+          re-focus the product search input so the cashier can scan the
+          next barcode immediately without hunting for the field. */}
+      <ReceiptModal
+        open={!!receiptOrderId}
+        onClose={()=>{
+          setReceiptOrderId(null);
+          // Defer one frame so the modal's unmount doesn't yank focus away
+          // after we set it (React portals + animated close transition).
+          requestAnimationFrame(() => {
+            searchRef.current?.focus();
+          });
+        }}
+        orderId={receiptOrderId}
+      />
 
       {/* Camera barcode scanner — mobile/tablet only (FAB and inline button hidden on desktop). */}
       <BarcodeScannerModal
