@@ -16,6 +16,19 @@ import {
 } from './lib/offline-queue.js';
 import { onOnlineChange, isOnline } from './lib/online-status.js';
 import { mapError } from './lib/error-map.js';
+import { fetchAll } from './lib/sb-paginate.js';
+import { sb } from './lib/supabase-client.js';
+import {
+  BRAND_RULES, SERIES_RULES, SERIES_SUBS, MATERIAL_MAP, COLOR_MAP, PRICE_PRESETS,
+  classifyBrand, classifySeries, parseCasioModel, enrichProduct,
+  matchSubType, getEffectivePrice, filterProducts, sortProducts,
+} from './lib/product-classify.js';
+import { NAV, navForRole } from './lib/nav-config.js';
+import {
+  EXPENSE_CATEGORIES, EXPENSE_CAT_MAP, staffComputed, realNetProfit,
+} from './lib/expense-calc.js';
+import Icon from './components/ui/Icon.jsx';
+import { useRealtimeInvalidate } from './lib/use-realtime-invalidate.js';
 import { useNumberTween } from './lib/use-number-tween.js';
 import { useBarcodeScanner, getPreferredFacing, setPreferredFacing } from './lib/use-barcode-scanner.js';
 import { playScanBeep, playScanError, vibrateScan, vibrateError } from './lib/barcode-feedback.js';
@@ -24,6 +37,8 @@ import CostPercentToggle from './components/movement/CostPercentToggle.jsx';
 import MovementItemsPanel from './components/movement/MovementItemsPanel.jsx';
 import SupplierForm from './components/movement/SupplierForm.jsx';
 import SalePickerForReturn from './components/movement/SalePickerForReturn.jsx';
+import InsightsView from './views/InsightsView.jsx';
+import TelegramSettings from './components/settings/TelegramSettings.jsx';
 import './styles.css';
 
 // `supabase.createClient(...)` from the CDN UMD bundle becomes a one-method
@@ -74,26 +89,11 @@ window._deleteQueuedSale = deleteQueuedSale;
 //     scripts/build-main.sh        (or copy-paste manually)
 
 
-const SUPABASE_URL = "https://zrymhhkqdcttqsdczfcr.supabase.co";
-const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpyeW1oaGtxZGN0dHFzZGN6ZmNyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3MjYzNDUsImV4cCI6MjA5MzMwMjM0NX0.M414TfDx_nxJRa3hEWMiY7FAsevj5f0HIGQAp-H-8jM";
-
-// Custom storage adapter — chooses localStorage (remember me) vs sessionStorage (clear on browser close)
-// based on the `pos.remember` flag set when the user logs in.
-// Default = remember (localStorage). Reads from both stores so existing sessions survive a flag flip.
-const REMEMBER_KEY = "pos.remember";
-const isRemember = () => localStorage.getItem(REMEMBER_KEY) !== "false";
-const authStorage = {
-  getItem: (k) => localStorage.getItem(k) ?? sessionStorage.getItem(k),
-  setItem: (k, v) => {
-    if (isRemember()) { localStorage.setItem(k, v); sessionStorage.removeItem(k); }
-    else              { sessionStorage.setItem(k, v); localStorage.removeItem(k); }
-  },
-  removeItem: (k) => { localStorage.removeItem(k); sessionStorage.removeItem(k); },
-};
-
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
-  auth: { persistSession: true, autoRefreshToken: true, storage: authStorage }
-});
+// Supabase client + auth-storage adapter live in src/lib/supabase-client.js
+// so non-main.jsx modules (InsightsView, Telegram settings) can import them.
+// The "remember me" flag (pos.remember) still chooses localStorage vs
+// sessionStorage for the auth session.
+const REMEMBER_KEY = 'pos.remember';
 // Hand the client to the SW-aware queue drainer (set up in the prelude above).
 window._sb = sb;
 // Drain on first load too in case the user opened a queued tab while online.
@@ -170,54 +170,6 @@ function applyOrderDiscount(subtotal, value, type) {
   return subtotal;
 }
 
-/* =========================================================
-   SVG ICONS (Lucide-inspired, stroke=currentColor)
-========================================================= */
-const Icon = ({ name, size = 20, className = "", strokeWidth = 1.75, color }) => {
-  const p = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color || "currentColor", strokeWidth, strokeLinecap: "round", strokeLinejoin: "round", className };
-  switch (name) {
-    case "cart":      return <svg {...p}><path d="M2 3h2.5l3 12h11l2.5-8H7"/><circle cx="10.5" cy="19.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="17.5" cy="19.5" r="1.5" fill="currentColor" stroke="none"/></svg>;
-    case "watch":     return <svg {...p}><rect x="6" y="5" width="12" height="14" rx="3"/><path d="M9 5V3h6v2M9 19v2h6v-2"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg>;
-    case "box":       return <svg {...p}><rect x="2" y="8" width="20" height="13" rx="1"/><path d="M2 8 4 3h16l2 5"/><path d="M9 13h6"/></svg>;
-    case "receipt":   return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>;
-    case "package":   return <svg {...p}><path d="M12 3l9 5v10l-9 5-9-5V8l9-5z"/><path d="M12 12l9-5"/><path d="M12 12v10"/></svg>;
-    case "package-in":  return <svg {...p}><path d="M12 20V4"/><path d="M5 11l7-7 7 7"/></svg>;
-    case "package-out": return <svg {...p}><path d="M12 4v16"/><path d="M19 13l-7 7-7-7"/></svg>;
-    case "dashboard": return <svg {...p}><rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/></svg>;
-    case "search":    return <svg {...p}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>;
-    case "plus":      return <svg {...p}><path d="M12 5v14M5 12h14"/></svg>;
-    case "minus":     return <svg {...p}><path d="M5 12h14"/></svg>;
-    case "x":         return <svg {...p}><path d="M18 6 6 18M6 6l12 12"/></svg>;
-    case "trash":     return <svg {...p}><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>;
-    case "logout":    return <svg {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>;
-    case "calendar":  return <svg {...p}><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M16 3v4M8 3v4M4 11h16"/></svg>;
-    case "tag":       return <svg {...p}><path d="M4 4h8l8 8-8 8-8-8V4z"/><circle cx="8" cy="8" r="1.5"/></svg>;
-    case "edit":      return <svg {...p}><path d="M12 20h9M16 3l5 5-9 9H7v-5l9-9z"/></svg>;
-    case "chevron-r": return <svg {...p}><path d="m9 18 6-6-6-6"/></svg>;
-    case "chevron-d": return <svg {...p}><path d="m6 9 6 6 6-6"/></svg>;
-    case "chevron-l": return <svg {...p}><path d="m15 18-6-6 6-6"/></svg>;
-    case "chevron-u": return <svg {...p}><path d="m6 15 6-6 6 6"/></svg>;
-    case "menu":      return <svg {...p}><path d="M3 6h18M3 12h18M3 18h18"/></svg>;
-    case "filter":    return <svg {...p}><path d="M4 4h16l-6 8v6l-4 2v-8L4 4z"/></svg>;
-    case "check":     return <svg {...p}><path d="m20 6-9 9-5-5"/></svg>;
-    case "alert":     return <svg {...p}><path d="M12 2 2 22h20L12 2z"/><path d="M12 9v6M12 17h.01"/></svg>;
-    case "barcode":   return <svg {...p}><path d="M4 7v10M7 7v10M10 7v10M14 7v10M17 7v10M20 7v10"/></svg>;
-    case "credit-card":return <svg {...p}><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 11h20"/></svg>;
-    case "trend-up":  return <svg {...p}><polyline points="4 17 9 12 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg>;
-    case "arrow-up":  return <svg {...p}><path d="M12 20V4"/><path d="M5 11l7-7 7 7"/></svg>;
-    case "arrow-down":return <svg {...p}><path d="M12 4v16"/><path d="M19 13l-7 7-7-7"/></svg>;
-    case "store":     return <svg {...p}><path d="M4 4h16l-2 4H6L4 4z"/><path d="M4 8v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/></svg>;
-    case "file":      return <svg {...p}><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>;
-    case "camera":    return <svg {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3.5"/></svg>;
-    case "flashlight":return <svg {...p}><path d="M18 6 6 18"/><path d="M14 4h6v6"/><path d="M10 20H4v-6"/><circle cx="12" cy="12" r="2"/></svg>;
-    case "flip-cam":  return <svg {...p}><path d="M3 7h4l2-3h6l2 3h4v12H3z"/><path d="m9 13 3-3 3 3"/><path d="M12 10v6"/></svg>;
-    case "zap":       return <svg {...p}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>;
-    case "user":      return <svg {...p}><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/></svg>;
-    case "wallet":    return <svg {...p}><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M16 12h4"/><circle cx="17" cy="12" r="0.5" fill="currentColor"/></svg>;
-    case "settings":  return <svg {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>;
-    default: return null;
-  }
-};
 
 /* =========================================================
    FONT SIZE — UX-50+ accessibility setting
@@ -1049,10 +1001,11 @@ function AppSettingsModal({ open, onClose }) {
   const [draft, setDraft] = useState(null);
   const [busy, setBusy] = useState(false);
   const [shopOpen, setShopOpen] = useState(false);
+  const [telegramOpen, setTelegramOpen] = useState(false);
 
   useEffect(() => {
     if (open && shop) setDraft({ ...shop });
-    if (!open) setShopOpen(false);
+    if (!open) { setShopOpen(false); setTelegramOpen(false); }
   }, [open, shop]);  
 
   const set = (k, v) => setDraft(d => ({ ...d, [k]: v }));
@@ -1153,6 +1106,32 @@ function AppSettingsModal({ open, onClose }) {
                   <label className="text-xs uppercase tracking-wider text-muted">ข้อความท้ายใบเสร็จ</label>
                   <input className="input mt-1" value={draft.receipt_footer||""} onChange={e=>set('receipt_footer', e.target.value)} placeholder="เช่น ขอบคุณที่ใช้บริการ" />
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Section 3: Telegram (admin only, collapsible) ── */}
+        {isAdmin && (
+          <div className="border-t hairline pt-4">
+            <button
+              type="button"
+              onClick={() => setTelegramOpen(o => !o)}
+              className="w-full flex items-center justify-between gap-2 group"
+            >
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted flex items-center gap-1.5">
+                <Icon name="zap" size={13}/>
+                Telegram — สรุปยอดอัตโนมัติ
+              </span>
+              <Icon
+                name={telegramOpen ? 'chevron-u' : 'chevron-d'}
+                size={16}
+                className="text-muted-soft group-hover:text-muted transition"
+              />
+            </button>
+            {telegramOpen && (
+              <div className="mt-3 fade-in">
+                <TelegramSettings toast={toast} />
               </div>
             )}
           </div>
@@ -1446,12 +1425,17 @@ function MovementHistoryModal({ open, onClose, kind }) {
     let cancel = false;
     (async () => {
       setLoading(true);
-      let q = sb.from(meta.table).select('*')
-        .gte(meta.dateField, startOfDayBangkok(range.from))
-        .lte(meta.dateField, endOfDayBangkok(range.to))
-        .order(meta.dateField, { ascending: false });
-      if (excludeVoided) q = q.is('voided_at', null);
-      const { data, error } = await q;
+      // Chunked: a busy month can produce > 1000 movements; the PostgREST
+      // max-rows cap would otherwise silently truncate.
+      const { data, error } = await fetchAll((from, to) => {
+        let q = sb.from(meta.table).select('*')
+          .gte(meta.dateField, startOfDayBangkok(range.from))
+          .lte(meta.dateField, endOfDayBangkok(range.to))
+          .order(meta.dateField, { ascending: false })
+          .range(from, to);
+        if (excludeVoided) q = q.is('voided_at', null);
+        return q;
+      });
       if (!cancel) {
         if (error) toast.push("โหลดไม่ได้: " + mapError(error), 'error');
         setRows(data || []); setLoading(false);
@@ -1856,20 +1840,7 @@ const RoleCtx = React.createContext('cashier');
 const useRole = () => React.useContext(RoleCtx);
 const useIsAdmin = () => useRole() === 'admin';
 
-/* =========================================================
-   NAV CONFIG
-   - `adminOnly` views are hidden from cashiers (P&L exposes cost/profit).
-========================================================= */
-const NAV = [
-  { k: "pos",       label: "ขาย",        labelLong: "ขายสินค้า",          icon: "cart" },
-  { k: "products",  label: "สินค้า",      labelLong: "สินค้า",              icon: "box" },
-  { k: "sales",     label: "ประวัติ",     labelLong: "ประวัติการขาย",       icon: "receipt" },
-  { k: "receive",   label: "รับเข้า",     labelLong: "รับสินค้าจากบริษัท",  icon: "arrow-up",  adminOnly: true },
-  { k: "return",    label: "รับคืน",      labelLong: "รับคืนจากลูกค้า",     icon: "arrow-down" },
-  { k: "dashboard", label: "ภาพรวม",     labelLong: "แดชบอร์ด",           icon: "dashboard", adminOnly: true },
-  { k: "pnl",       label: "กำไร",       labelLong: "กำไร / ขาดทุน",       icon: "trend-up",  adminOnly: true },
-];
-const navForRole = (role) => NAV.filter(it => !it.adminOnly || role === 'admin');
+// Nav config + role filter — extracted to ./lib/nav-config.js
 
 const SUPPLIERS = ["CMG", "SEIKO TH", "ถ่าน", "สาย"];
 const CLAIM_REASONS = ["ชำรุดจากโรงงาน", "ส่งผิดรุ่น", "ส่งผิดจำนวน", "ขายไม่ได้/คืนสต็อก", "อื่นๆ"];
@@ -3091,22 +3062,69 @@ function POSView() {
 }
 
 /* =========================================================
+   PRODUCT FILTER RULES — extracted to src/lib/product-classify.js.
+   See that module for BRAND_RULES, SERIES_RULES, SERIES_SUBS,
+   MATERIAL_MAP, COLOR_MAP, PRICE_PRESETS and pure helpers
+   (classifyBrand, classifySeries, parseCasioModel, enrichProduct,
+   matchSubType, filterProducts, sortProducts).
+========================================================= */
+
+/* =========================================================
    PRODUCTS VIEW
 ========================================================= */
 function ProductsView() {
   const toast = useToast();
-  const [q, setQ] = useState("");
-  const [rows, setRows] = useState([]);
+  // Whole catalog kept in memory + enriched with derived attrs (`_brand`,
+  // `_series`, ...). Dataset is ~6k rows — well within client capacity, and
+  // letting the browser do the filtering keeps chip interactions instant.
+  const [allRows, setAllRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
   const [brands, setBrands] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [filterBrand, setFilterBrand] = useState("");
-  const [filterCategory, setFilterCategory] = useState("");
   // latestCostMap[product_id] = { unit_price, receive_date } from the most
   // recent active receive batch — surfaces "current cost" alongside the catalog
   // cost_price so the user can spot drift without opening each product.
   const [latestCostMap, setLatestCostMap] = useState({});
+  const [sheetOpen, setSheetOpen] = useState(false);
+  // Render only the first N filtered rows; "ดูเพิ่ม" button bumps this. Keeps
+  // initial paint fast even when the brand chip is "ทั้งหมด" (6k items).
+  const [pageSize, setPageSize] = useState(200);
+  // Search input uses a local state so typing stays responsive even when
+  // the catalog is large (~6k rows). The debounced effect below pushes the
+  // text into `filter.query` after a short idle window so the heavy
+  // useMemo over the filtered list doesn't run on every keystroke.
+  const [queryInput, setQueryInput] = useState('');
+  const [filter, setFilter] = useState({
+    query: '',
+    brand: 'all',           // all | casio | citizen | seiko | alba | other
+    series: '',             // gshock | babyg | edifice | protrek | standard (casio only)
+    subType: '',            // SERIES_SUBS[*].id
+    material: '',           // MATERIAL_MAP key
+    color: '',              // COLOR_MAP key '1'..'9'
+    minPrice: 0,
+    maxPrice: 0,
+    inStockOnly: false,
+    sort: 'newest',         // newest | oldest | price-asc | price-desc | name
+  });
+
+  // Debounce: 180ms idle before the typed text becomes a filter input. Short
+  // enough to feel instant, long enough to skip work between keystrokes.
+  // Barcode-length strings (>=8 digits, no dashes/spaces) flush immediately
+  // so a USB scanner's full code triggers the exact-match path on the same
+  // tick — no perceptible "the scanner missed" delay.
+  useEffect(() => {
+    const trimmed = queryInput.trim();
+    const looksLikeBarcode = /^\d{8,}$/.test(trimmed);
+    if (looksLikeBarcode) {
+      setFilter(f => (f.query === queryInput ? f : { ...f, query: queryInput }));
+      return;
+    }
+    const t = setTimeout(() => {
+      setFilter(f => (f.query === queryInput ? f : { ...f, query: queryInput }));
+    }, 180);
+    return () => clearTimeout(t);
+  }, [queryInput]);
 
   const loadTaxonomy = useCallback(async () => {
     const [b, c] = await Promise.all([
@@ -3117,54 +3135,154 @@ function ProductsView() {
     setCategories(c.data || []);
   }, []);
 
-  const load = useCallback(async () => {
+  const loadProducts = useCallback(async () => {
     setLoading(true);
-    let query = sb.from('products').select('*').limit(50);
-    if (q.trim()) {
-      const term = q.trim();
-      query = query.or(`name.ilike.%${term}%,barcode.eq.${term}`);
-    } else {
-      query = query.order('updated_at', { ascending: false });
-    }
-    if (filterBrand)    query = query.eq('brand_id', filterBrand);
-    if (filterCategory) query = query.eq('category_id', filterCategory);
-    const { data, error } = await query;
-    if (error) toast.push("โหลดสินค้าไม่ได้", "error");
-    const products = data || [];
-    setRows(products);
+    // PostgREST enforces a server-side max-rows cap (1000 by default in
+    // Supabase) that .range() cannot override — it just truncates silently.
+    // fetchAll() paginates in 1000-row chunks until a short page comes back.
+    const { data: all, error } = await fetchAll((from, to) =>
+      sb.from('products').select('*').order('id', { ascending: false }).range(from, to)
+    );
+    if (error) toast.push('โหลดสินค้าไม่ได้: ' + (error.message || mapError(error)), 'error');
+    const enriched = (all || []).map(enrichProduct);
+    setAllRows(enriched);
     setLoading(false);
 
-    // Fire-and-forget: fetch latest receive cost per product. Any failure
-    // here just leaves latestCostMap empty — the table still renders.
-    const pids = products.map(p => p.id);
-    if (pids.length) {
+    // Diagnostic: surface products that didn't match any brand rule. Helps
+    // expand BRAND_RULES later without silently bucketing them as "อื่น ๆ".
+    const orphans = enriched.filter(p => p._brand === 'other');
+    if (orphans.length) {
+      // eslint-disable-next-line no-console
+      console.info('[ProductsView] %d products fell into "อื่น ๆ" — sample names:',
+        orphans.length, orphans.slice(0, 20).map(p => p.name));
+    }
+
+    // Latest receive cost per product (chunked because IN() can hold ~1000 ids)
+    const ids = enriched.map(p => p.id).filter(Boolean);
+    if (ids.length) {
       try {
-        const { data: rd } = await sb.from('receive_order_items')
-          .select('product_id, unit_price, receive_orders!inner(receive_date, voided_at)')
-          .in('product_id', pids)
-          .is('receive_orders.voided_at', null);
         const map = {};
-        (rd || []).forEach(r => {
-          const date = r.receive_orders?.receive_date;
-          if (!date) return;
-          const ts = new Date(date).getTime();
-          const cur = map[r.product_id];
-          if (!cur || ts > cur.ts) {
-            map[r.product_id] = { unit_price: Number(r.unit_price)||0, receive_date: date, ts };
-          }
-        });
+        for (let i = 0; i < ids.length; i += 500) {
+          const chunk = ids.slice(i, i + 500);
+          // Each chunk can still return > 1000 receive rows (a 500-product
+          // window with deep history easily produces thousands), so paginate
+          // *within* the chunk too — IN() caps URL length, fetchAll caps rows.
+          const { data: rd } = await fetchAll((fromIdx, toIdx) =>
+            sb.from('receive_order_items')
+              .select('product_id, unit_price, receive_orders!inner(receive_date, voided_at)')
+              .in('product_id', chunk)
+              .is('receive_orders.voided_at', null)
+              .range(fromIdx, toIdx)
+          );
+          (rd || []).forEach(r => {
+            const date = r.receive_orders?.receive_date;
+            if (!date) return;
+            const ts = new Date(date).getTime();
+            const cur = map[r.product_id];
+            if (!cur || ts > cur.ts) {
+              map[r.product_id] = { unit_price: Number(r.unit_price) || 0, receive_date: date, ts };
+            }
+          });
+        }
         setLatestCostMap(map);
-      } catch { /* non-fatal */ }
+      } catch { /* non-fatal — table still renders without "ทุนล่าสุด" */ }
     } else {
       setLatestCostMap({});
     }
-  }, [q, filterBrand, filterCategory]);
+  }, [toast]);
 
-  useEffect(()=>{ loadTaxonomy(); }, [loadTaxonomy]);
-  useEffect(()=>{ const t = setTimeout(load, 200); return ()=>clearTimeout(t); }, [load]);
+  useEffect(() => { loadTaxonomy(); }, [loadTaxonomy]);
+  useEffect(() => { loadProducts(); }, [loadProducts]);
+  // Realtime: another device imported a CSV, finished a sale, or adjusted
+  // stock → re-run the loader so this tab sees the fresh catalog without
+  // a manual refresh. Debounced to batch bulk inserts (CSV import).
+  useRealtimeInvalidate(sb, ['products'], loadProducts);
 
-  const brandName = (id) => brands.find(b=>b.id===id)?.name;
-  const catName   = (id) => categories.find(c=>c.id===id)?.name;
+  const brandName = (id) => brands.find(b => b.id === id)?.name;
+  const catName   = (id) => categories.find(c => c.id === id)?.name;
+
+  // ===== Filter + sort + pagination (all client-side) =====
+  const filtered = useMemo(() => {
+    const d = filterProducts(allRows, filter);
+    return sortProducts(d, filter.sort);
+  }, [allRows, filter]);
+
+  const visibleRows = useMemo(() => filtered.slice(0, pageSize), [filtered, pageSize]);
+
+  // Reset visible page whenever the filter changes — otherwise users would
+  // see "200 of 200" and think the new filter has more matches than it does.
+  useEffect(() => { setPageSize(200); }, [filter]);
+
+  // ===== Cascading state setters (parent change resets children) =====
+  const setBrand   = (b) => setFilter(f => ({ ...f, brand: b,   series: '', subType: '', material: '', color: '' }));
+  const setSeries  = (s) => setFilter(f => ({ ...f, series: s,  subType: '', material: '', color: '' }));
+  const setSubType = (s) => setFilter(f => ({ ...f, subType: s, material: '', color: '' }));
+
+  // ===== Facet counts =====
+  const brandCounts = useMemo(() => {
+    const c = { all: allRows.length };
+    allRows.forEach(p => { c[p._brand] = (c[p._brand] || 0) + 1; });
+    return c;
+  }, [allRows]);
+
+  const seriesCounts = useMemo(() => {
+    if (filter.brand !== 'casio') return {};
+    const c = { __total: 0 };
+    allRows.forEach(p => {
+      if (p._brand !== 'casio') return;
+      c.__total++;
+      if (p._series) c[p._series] = (c[p._series] || 0) + 1;
+    });
+    return c;
+  }, [allRows, filter.brand]);
+
+  const subTypeCounts = useMemo(() => {
+    if (filter.brand !== 'casio' || !filter.series) return {};
+    const subs = SERIES_SUBS[filter.series] || [];
+    if (!subs.length) return {};
+    const base = allRows.filter(p => p._brand === 'casio' && p._series === filter.series);
+    const c = { __total: base.length };
+    subs.forEach(s => { c[s.id] = base.filter(p => matchSubType(p, s)).length; });
+    return c;
+  }, [allRows, filter.brand, filter.series]);
+
+  // Material/color counts respect the currently-applied series + subtype + price
+  // (so the sheet shows "real" availability, not catalog-wide totals).
+  const materialCounts = useMemo(() => {
+    if (filter.brand !== 'casio') return {};
+    const base = filterProducts(allRows, { ...filter, material: '', color: '' });
+    const c = {};
+    base.forEach(p => { if (p._material) c[p._material] = (c[p._material] || 0) + 1; });
+    return c;
+  }, [allRows, filter]);
+
+  const colorCounts = useMemo(() => {
+    if (filter.brand !== 'casio') return {};
+    const base = filterProducts(allRows, { ...filter, color: '' });
+    const c = {};
+    base.forEach(p => { if (p._color) c[p._color] = (c[p._color] || 0) + 1; });
+    return c;
+  }, [allRows, filter]);
+
+  // Active price preset (for highlighting + closing chip)
+  const activePricePreset = PRICE_PRESETS.find(p => p.min === filter.minPrice && p.max === filter.maxPrice);
+
+  // Badge count on the "ตัวกรอง" button (price + material + color + stock)
+  const advancedCount = (filter.material ? 1 : 0) + (filter.color ? 1 : 0)
+    + ((filter.minPrice > 0 || filter.maxPrice > 0) ? 1 : 0)
+    + (filter.inStockOnly ? 1 : 0);
+
+  const hasAnyFilter = !!filter.query || filter.brand !== 'all' || !!filter.series
+    || !!filter.subType || !!filter.material || !!filter.color
+    || filter.minPrice > 0 || filter.maxPrice > 0 || filter.inStockOnly;
+
+  const clearAll = () => {
+    setQueryInput('');
+    setFilter(f => ({
+      query: '', brand: 'all', series: '', subType: '', material: '', color: '',
+      minPrice: 0, maxPrice: 0, inStockOnly: false, sort: f.sort,
+    }));
+  };
 
   const save = async (p) => {
     try {
@@ -3172,21 +3290,18 @@ function ProductsView() {
       // (see StockMovementForm + create_stock_movement_with_items RPC), so we
       // strip current_stock from update payloads and force it to 0 on insert.
       const payload = {
-        name: p.name, barcode: p.barcode||null,
-        retail_price: p.retail_price||0,
+        name: p.name, barcode: p.barcode || null,
+        retail_price: p.retail_price || 0,
         brand_id: p.brand_id || null,
         category_id: p.category_id || null,
       };
       if (p.id) {
-        payload.cost_price = p.cost_price||0; // editable override in edit mode
+        payload.cost_price = p.cost_price || 0;
         payload.updated_at = new Date().toISOString();
         const { error } = await sb.from('products').update(payload).eq('id', p.id);
         if (error) throw error;
         toast.push("บันทึกสินค้าสำเร็จ", "success");
       } else {
-        // New product: cost is now captured up-front (validated > 0 in
-        // ProductEditor). Stock still starts at 0 — first "รับเข้า" bill seeds
-        // it via the running-average RPC; since old qty=0, new avg = bill cost.
         payload.cost_price = Number(p.cost_price) || 0;
         payload.current_stock = 0;
         const { error } = await sb.from('products').insert(payload);
@@ -3194,48 +3309,176 @@ function ProductsView() {
         toast.push("เพิ่มสินค้าสำเร็จ — ไปหน้า \"รับเข้า\" เพื่อเพิ่มสต็อก", "success");
       }
       setEditing(null);
-      load();
+      loadProducts();
     } catch (e) {
       toast.push("บันทึกไม่ได้: " + e.message, "error");
     }
   };
 
   const addBrand = async (name) => {
-    const t = (name||"").trim(); if (!t) return null;
+    const t = (name || "").trim(); if (!t) return null;
     const { data, error } = await sb.from('brands').insert({ name: t }).select().single();
     if (error) { toast.push("เพิ่มแบรนด์ไม่ได้: " + mapError(error), 'error'); return null; }
-    setBrands(b => [...b, data].sort((a,b)=>a.name.localeCompare(b.name)));
+    setBrands(b => [...b, data].sort((a, b) => a.name.localeCompare(b.name)));
     return data.id;
   };
   const addCategory = async (name) => {
-    const t = (name||"").trim(); if (!t) return null;
+    const t = (name || "").trim(); if (!t) return null;
     const { data, error } = await sb.from('categories').insert({ name: t }).select().single();
     if (error) { toast.push("เพิ่มหมวดไม่ได้: " + mapError(error), 'error'); return null; }
-    setCategories(c => [...c, data].sort((a,b)=>a.name.localeCompare(b.name)));
+    setCategories(c => [...c, data].sort((a, b) => a.name.localeCompare(b.name)));
     return data.id;
   };
 
+  const chipCls = (active) =>
+    "px-3 py-1.5 rounded-full text-xs font-medium border transition-all whitespace-nowrap inline-flex items-center gap-1 " +
+    (active
+      ? "bg-ink text-on-dark border-ink shadow-sm"
+      : "bg-white/70 text-muted border-hairline hover:text-ink hover:bg-white");
+
   return (
     <div className="px-4 py-4 lg:px-10 lg:py-6 lg:h-[calc(100vh-180px)] lg:flex lg:flex-col">
-      <div className="mb-3 flex-shrink-0">
-        <div className="relative">
+      {/* Top bar: search + sort + advanced filter button */}
+      <div className="flex flex-col sm:flex-row gap-2 mb-2 flex-shrink-0">
+        <div className="relative flex-1">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted z-10"><Icon name="search" size={18} strokeWidth={2.25}/></span>
-          <input className="input !pl-10" placeholder="ชื่อรุ่น หรือ บาร์โค้ด" value={q} onChange={e=>setQ(e.target.value)} autoFocus />
+          <input className="input !pl-10 w-full" placeholder="ชื่อรุ่น หรือ บาร์โค้ด"
+            value={queryInput} onChange={e=>setQueryInput(e.target.value)} autoFocus />
+          {queryInput && (
+            <button type="button" onClick={()=>{ setQueryInput(''); setFilter(f=>({...f, query: ''})); }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-muted-soft hover:text-ink rounded-md">
+              <Icon name="x" size={14}/>
+            </button>
+          )}
         </div>
+        <select className="input !py-2 !text-sm sm:!w-auto" value={filter.sort}
+          onChange={e=>setFilter(f=>({...f, sort: e.target.value}))}>
+          <option value="newest">ใหม่ล่าสุด</option>
+          <option value="oldest">เก่าสุด</option>
+          <option value="price-asc">ราคา ต่ำ → สูง</option>
+          <option value="price-desc">ราคา สูง → ต่ำ</option>
+          <option value="name">ชื่อรุ่น A-Z</option>
+        </select>
+        <button type="button" className="btn-secondary !py-2 !text-sm sm:!w-auto relative"
+          onClick={()=>setSheetOpen(true)} title="ตัวกรองขั้นสูง (วัสดุ / สี / ราคา / สต็อก)">
+          <Icon name="filter" size={14}/> ตัวกรอง
+          {advancedCount > 0 && (
+            <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-on-primary text-[10px] font-bold tabular-nums">
+              {advancedCount}
+            </span>
+          )}
+        </button>
       </div>
-      <div className="flex flex-wrap gap-2 mb-4 flex-shrink-0">
-        <select className="input !py-2 !text-sm !w-auto" value={filterBrand} onChange={e=>setFilterBrand(e.target.value)}>
-          <option value="">ทุกแบรนด์</option>
-          {brands.map(b=> <option key={b.id} value={b.id}>{b.name}</option>)}
-        </select>
-        <select className="input !py-2 !text-sm !w-auto" value={filterCategory} onChange={e=>setFilterCategory(e.target.value)}>
-          <option value="">ทุกหมวด</option>
-          {categories.map(c=> <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        {(filterBrand||filterCategory) && (
-          <button className="btn-ghost !py-2 !text-sm text-muted" onClick={()=>{setFilterBrand("");setFilterCategory("");}}>
-            <Icon name="x" size={14}/> ล้างตัวกรอง
+
+      {/* Brand chips (top-level facet) */}
+      <div className="flex gap-1.5 mb-2 flex-shrink-0 overflow-x-auto pb-1 -mx-4 px-4 lg:mx-0 lg:px-0 scrollbar-thin">
+        <button type="button" onClick={()=>setBrand('all')} className={chipCls(filter.brand === 'all')}>
+          ทั้งหมด <span className="opacity-60 tabular-nums">{brandCounts.all || 0}</span>
+        </button>
+        {BRAND_RULES.map(b => {
+          const count = brandCounts[b.id] || 0;
+          if (count === 0 && filter.brand !== b.id) return null;
+          return (
+            <button key={b.id} type="button" onClick={()=>setBrand(b.id)} className={chipCls(filter.brand === b.id)}>
+              {b.label} <span className="opacity-60 tabular-nums">{count}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Series chips — only for CASIO */}
+      {filter.brand === 'casio' && (
+        <div className="flex gap-1.5 mb-2 flex-shrink-0 overflow-x-auto pb-1 -mx-4 px-4 lg:mx-0 lg:px-0 scrollbar-thin">
+          <button type="button" onClick={()=>setSeries('')} className={chipCls(!filter.series)}>
+            ทุก Series <span className="opacity-60 tabular-nums">{seriesCounts.__total || 0}</span>
           </button>
+          {SERIES_RULES.map(s => {
+            const count = seriesCounts[s.id] || 0;
+            if (count === 0 && filter.series !== s.id) return null;
+            return (
+              <button key={s.id} type="button" onClick={()=>setSeries(s.id)} className={chipCls(filter.series === s.id)}>
+                {s.label} <span className="opacity-60 tabular-nums">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Sub-type chips — only when current series defines sub-types */}
+      {filter.brand === 'casio' && filter.series && SERIES_SUBS[filter.series] && (
+        <div className="flex gap-1.5 mb-2 flex-shrink-0 overflow-x-auto pb-1 -mx-4 px-4 lg:mx-0 lg:px-0 scrollbar-thin">
+          <button type="button" onClick={()=>setSubType('')} className={chipCls(!filter.subType)}>
+            ทุกประเภท <span className="opacity-60 tabular-nums">{subTypeCounts.__total || 0}</span>
+          </button>
+          {SERIES_SUBS[filter.series].map(s => {
+            const count = subTypeCounts[s.id] || 0;
+            if (count === 0 && filter.subType !== s.id) return null;
+            return (
+              <button key={s.id} type="button" onClick={()=>setSubType(s.id)} className={chipCls(filter.subType === s.id)}>
+                {s.label} <span className="opacity-60 tabular-nums">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Active advanced-filter chips (price / material / color / stock) — closeable */}
+      {(filter.material || filter.color || activePricePreset || filter.minPrice > 0 || filter.maxPrice > 0 || filter.inStockOnly) && (
+        <div className="flex flex-wrap gap-1.5 mb-2 items-center flex-shrink-0">
+          {activePricePreset
+            ? <button type="button" onClick={()=>setFilter(f=>({...f, minPrice:0, maxPrice:0}))}
+                className="px-2.5 py-1 rounded-full text-xs bg-primary/10 text-primary border border-primary/20 inline-flex items-center gap-1.5 hover:bg-primary/20">
+                <Icon name="tag" size={11}/> {activePricePreset.label}
+                <Icon name="x" size={11} className="opacity-70"/>
+              </button>
+            : (filter.minPrice > 0 || filter.maxPrice > 0) && (
+              <button type="button" onClick={()=>setFilter(f=>({...f, minPrice:0, maxPrice:0}))}
+                className="px-2.5 py-1 rounded-full text-xs bg-primary/10 text-primary border border-primary/20 inline-flex items-center gap-1.5 hover:bg-primary/20">
+                <Icon name="tag" size={11}/>
+                {filter.minPrice > 0 && filter.maxPrice > 0 ? `฿${filter.minPrice.toLocaleString()}–${filter.maxPrice.toLocaleString()}`
+                  : filter.minPrice > 0 ? `≥ ฿${filter.minPrice.toLocaleString()}`
+                  : `≤ ฿${filter.maxPrice.toLocaleString()}`}
+                <Icon name="x" size={11} className="opacity-70"/>
+              </button>
+            )
+          }
+          {filter.material && MATERIAL_MAP[filter.material] && (
+            <button type="button" onClick={()=>setFilter(f=>({...f, material: '', color: ''}))}
+              className="px-2.5 py-1 rounded-full text-xs bg-primary/10 text-primary border border-primary/20 inline-flex items-center gap-1.5 hover:bg-primary/20">
+              วัสดุ: {MATERIAL_MAP[filter.material].label}
+              <Icon name="x" size={11} className="opacity-70"/>
+            </button>
+          )}
+          {filter.color && COLOR_MAP[filter.color] && (
+            <button type="button" onClick={()=>setFilter(f=>({...f, color: ''}))}
+              className="px-2.5 py-1 rounded-full text-xs bg-primary/10 text-primary border border-primary/20 inline-flex items-center gap-1.5 hover:bg-primary/20">
+              <span className="inline-block w-3 h-3 rounded-full border border-white/40" style={{background: COLOR_MAP[filter.color].hex}}/>
+              สี: {COLOR_MAP[filter.color].label}
+              <Icon name="x" size={11} className="opacity-70"/>
+            </button>
+          )}
+          {filter.inStockOnly && (
+            <button type="button" onClick={()=>setFilter(f=>({...f, inStockOnly: false}))}
+              className="px-2.5 py-1 rounded-full text-xs bg-primary/10 text-primary border border-primary/20 inline-flex items-center gap-1.5 hover:bg-primary/20">
+              <Icon name="check" size={11}/> เฉพาะของพร้อมขาย
+              <Icon name="x" size={11} className="opacity-70"/>
+            </button>
+          )}
+          {hasAnyFilter && (
+            <button type="button" onClick={clearAll}
+              className="px-2.5 py-1 rounded-full text-xs text-muted hover:text-ink inline-flex items-center gap-1 underline underline-offset-2">
+              <Icon name="x" size={11}/> ล้างทั้งหมด
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Result count */}
+      <div className="text-xs text-muted mb-2 flex-shrink-0 flex items-center gap-2">
+        <span>พบ <span className="font-medium text-ink tabular-nums">{filtered.length.toLocaleString('th-TH')}</span> รายการ</span>
+        {filtered.length > visibleRows.length && <span className="text-muted-soft">· แสดง {visibleRows.length.toLocaleString('th-TH')}</span>}
+        {hasAnyFilter && filtered.length === 0 && (
+          <button type="button" onClick={clearAll} className="ml-auto text-primary hover:underline">ล้างตัวกรอง</button>
         )}
       </div>
 
@@ -3251,8 +3494,12 @@ function ProductsView() {
         </div>
         <div className="flex-1 overflow-y-auto min-h-0">
           {loading && <SkeletonRows n={8} label="กำลังโหลดสินค้า" />}
-          {!loading && rows.length===0 && <div className="p-6 text-muted text-sm">ไม่พบสินค้า</div>}
-          {rows.map(p => {
+          {!loading && filtered.length===0 && (
+            <div className="p-6 text-muted text-sm text-center">
+              {hasAnyFilter ? "ไม่พบสินค้าตรงกับตัวกรอง" : "ยังไม่มีสินค้าในระบบ"}
+            </div>
+          )}
+          {visibleRows.map(p => {
             const lc = latestCostMap[p.id];
             const drift = lc ? lc.unit_price - Number(p.cost_price||0) : 0;
             const driftPct = (lc && Number(p.cost_price||0) > 0) ? (drift / Number(p.cost_price) * 100) : 0;
@@ -3286,14 +3533,25 @@ function ProductsView() {
               </div>
             );
           })}
+          {filtered.length > visibleRows.length && (
+            <div className="p-3 border-t hairline flex justify-center">
+              <button type="button" className="btn-secondary !py-2 !text-sm" onClick={()=>setPageSize(n => n + 200)}>
+                ดูเพิ่ม ({(filtered.length - visibleRows.length).toLocaleString('th-TH')} รายการ)
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Mobile cards */}
       <div className="lg:hidden space-y-2">
         {loading && <div className="p-4 text-muted text-sm flex items-center gap-2"><span className="spinner"/>กำลังโหลด...</div>}
-        {!loading && rows.length===0 && <div className="p-4 text-muted text-sm">ไม่พบสินค้า</div>}
-        {rows.map(p => {
+        {!loading && filtered.length===0 && (
+          <div className="p-4 text-muted text-sm text-center">
+            {hasAnyFilter ? "ไม่พบสินค้าตรงกับตัวกรอง" : "ยังไม่มีสินค้าในระบบ"}
+          </div>
+        )}
+        {visibleRows.map(p => {
           const lc = latestCostMap[p.id];
           const drift = lc ? lc.unit_price - Number(p.cost_price||0) : 0;
           const driftPct = (lc && Number(p.cost_price||0) > 0) ? (drift / Number(p.cost_price) * 100) : 0;
@@ -3335,10 +3593,160 @@ function ProductsView() {
             </div>
           );
         })}
+        {filtered.length > visibleRows.length && (
+          <div className="pt-2 flex justify-center">
+            <button type="button" className="btn-secondary !py-2 !text-sm" onClick={()=>setPageSize(n => n + 200)}>
+              ดูเพิ่ม ({(filtered.length - visibleRows.length).toLocaleString('th-TH')} รายการ)
+            </button>
+          </div>
+        )}
       </div>
 
       <ProductEditor editing={editing} onClose={()=>setEditing(null)} onSave={save}
         brands={brands} categories={categories} addBrand={addBrand} addCategory={addCategory} />
+
+      <ProductFilterSheet
+        open={sheetOpen} onClose={()=>setSheetOpen(false)}
+        filter={filter} setFilter={setFilter}
+        materialCounts={materialCounts} colorCounts={colorCounts}
+        showCasioFacets={filter.brand === 'casio'}
+      />
+    </div>
+  );
+}
+
+/* ProductFilterSheet — bottom-sheet/modal for advanced filters
+   (price / material / color / stock-only). Reads + writes the parent's
+   `filter` object directly so changes apply live (no Apply button). The
+   trigger lives in ProductsView's top bar with a count badge.
+   Material + color show counts in the *current* filtered context so users
+   never see "0 results" facets unless they're already selected. */
+function ProductFilterSheet({ open, onClose, filter, setFilter, materialCounts, colorCounts, showCasioFacets }) {
+  if (!open) return null;
+  const setMaterial = (m) => setFilter(f => ({ ...f, material: m === f.material ? '' : m, color: '' }));
+  const setColor    = (c) => setFilter(f => ({ ...f, color: c === f.color ? '' : c }));
+  const setPricePreset = (preset) => setFilter(f => {
+    const same = f.minPrice === preset.min && f.maxPrice === preset.max;
+    return { ...f, minPrice: same ? 0 : preset.min, maxPrice: same ? 0 : preset.max };
+  });
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-end sm:items-center sm:justify-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-ink/40 fade-in"/>
+      <div className="relative w-full sm:max-w-lg bg-canvas rounded-t-2xl sm:rounded-2xl shadow-2xl border hairline max-h-[85vh] flex flex-col fade-in" onClick={e=>e.stopPropagation()}>
+        <div className="flex items-center justify-between px-4 py-3 border-b hairline">
+          <div className="font-display text-lg flex items-center gap-2"><Icon name="filter" size={18}/> ตัวกรอง</div>
+          <button type="button" className="btn-ghost !py-1.5 !px-2" onClick={onClose} aria-label="ปิด">
+            <Icon name="x" size={18}/>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-5">
+          {/* Stock-only */}
+          <label className="flex items-center justify-between gap-3 cursor-pointer">
+            <div>
+              <div className="text-sm font-medium">เฉพาะของพร้อมขาย</div>
+              <div className="text-xs text-muted-soft">ซ่อนสินค้าที่สต็อก ≤ 0</div>
+            </div>
+            <input type="checkbox" className="w-5 h-5 accent-primary" checked={filter.inStockOnly}
+              onChange={e=>setFilter(f=>({...f, inStockOnly: e.target.checked}))}/>
+          </label>
+
+          {/* Price preset */}
+          <div>
+            <div className="text-xs uppercase tracking-wider text-muted mb-2">ช่วงราคา</div>
+            <div className="grid grid-cols-2 gap-2">
+              {PRICE_PRESETS.map(p => {
+                const active = filter.minPrice === p.min && filter.maxPrice === p.max;
+                return (
+                  <button key={p.id} type="button" onClick={()=>setPricePreset(p)}
+                    className={"py-2 px-3 rounded-lg text-sm font-medium border transition-all " +
+                      (active
+                        ? "bg-ink text-on-dark border-ink shadow-sm"
+                        : "bg-white text-ink border-hairline hover:bg-white/80")}>
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-2 flex items-center gap-2">
+              <input type="number" inputMode="numeric" placeholder="ต่ำสุด" className="input !py-2 !text-sm flex-1 tabular-nums"
+                value={filter.minPrice || ''} onChange={e=>setFilter(f=>({...f, minPrice: Math.max(0, Number(e.target.value)||0)}))}/>
+              <span className="text-muted-soft">–</span>
+              <input type="number" inputMode="numeric" placeholder="สูงสุด" className="input !py-2 !text-sm flex-1 tabular-nums"
+                value={filter.maxPrice || ''} onChange={e=>setFilter(f=>({...f, maxPrice: Math.max(0, Number(e.target.value)||0)}))}/>
+            </div>
+          </div>
+
+          {/* CASIO-only facets — material + color */}
+          {showCasioFacets && (
+            <>
+              {Object.keys(materialCounts).length > 0 && (
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-muted mb-2">วัสดุสาย</div>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(materialCounts)
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([code, count]) => {
+                        const meta = MATERIAL_MAP[code];
+                        if (!meta) return null;
+                        const active = filter.material === code;
+                        return (
+                          <button key={code} type="button" onClick={()=>setMaterial(code)}
+                            className={"py-1.5 px-3 rounded-full text-xs font-medium border inline-flex items-center gap-1.5 transition-all " +
+                              (active
+                                ? "bg-ink text-on-dark border-ink shadow-sm"
+                                : "bg-white text-ink border-hairline hover:bg-white/80")}>
+                            <span className="inline-block w-3 h-3 rounded-full border border-white/40" style={{background: meta.swatch}}/>
+                            {meta.label}
+                            <span className="opacity-60 tabular-nums">{count}</span>
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+
+              {Object.keys(colorCounts).length > 0 && (
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-muted mb-2">โทนสี</div>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.keys(COLOR_MAP)
+                      .filter(c => (colorCounts[c] || 0) > 0)
+                      .map(code => {
+                        const meta = COLOR_MAP[code];
+                        const count = colorCounts[code] || 0;
+                        const active = filter.color === code;
+                        return (
+                          <button key={code} type="button" onClick={()=>setColor(code)}
+                            className={"py-1.5 px-3 rounded-full text-xs font-medium border inline-flex items-center gap-1.5 transition-all " +
+                              (active
+                                ? "bg-ink text-on-dark border-ink shadow-sm"
+                                : "bg-white text-ink border-hairline hover:bg-white/80")}>
+                            <span className="inline-block w-3 h-3 rounded-full border border-white/40" style={{background: meta.hex}}/>
+                            {meta.label}
+                            <span className="opacity-60 tabular-nums">{count}</span>
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="flex gap-2 px-4 py-3 border-t hairline bg-surface-soft">
+          <button type="button" className="btn-ghost flex-1" onClick={()=>setFilter(f => ({
+            ...f, material: '', color: '', minPrice: 0, maxPrice: 0, inStockOnly: false,
+          }))}>
+            ล้างตัวกรอง
+          </button>
+          <button type="button" className="btn-primary flex-1" onClick={onClose}>
+            เสร็จสิ้น
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -3429,10 +3837,14 @@ function ProductCostHistory({ productId }) {
     let cancel = false;
     (async () => {
       setRows(null);
-      const { data } = await sb.from('receive_order_items')
-        .select('quantity, unit_price, receive_orders!inner(id, receive_date, supplier_name, supplier_invoice_no, voided_at)')
-        .eq('product_id', productId)
-        .is('receive_orders.voided_at', null);
+      // Chunked: a hot SKU with years of receive history can exceed 1000 rows.
+      const { data } = await fetchAll((fromIdx, toIdx) =>
+        sb.from('receive_order_items')
+          .select('quantity, unit_price, receive_orders!inner(id, receive_date, supplier_name, supplier_invoice_no, voided_at)')
+          .eq('product_id', productId)
+          .is('receive_orders.voided_at', null)
+          .range(fromIdx, toIdx)
+      );
       if (cancel) return;
       const list = (data || [])
         .map(r => ({
@@ -3936,15 +4348,19 @@ function SalesView({ onGoPOS }) {
 
   const load = useCallback(async () => {
     setLoading(true);
-    // .limit(200) ทำให้บิลในช่วงเวลาที่กว้าง (เช่น 1-30 เม.ย. ที่มีบิลเกิน 200) โดน truncate
-    // เปลี่ยนเป็น 5000 ครอบคลุมเดือนยาวสุดของร้านนี้ (~500 บิล/เดือน × 10 เดือน)
-    let q = sb.from('sale_orders').select('*')
-      .gte('sale_date', startOfDayBangkok(from))
-      .lte('sale_date', endOfDayBangkok(to))
-      .order('sale_date', { ascending: false }).limit(5000);
-    if (channel) q = q.eq('channel', channel);
-    if (excludeVoided) q = q.eq('status', 'active');
-    const { data, error } = await q;
+    // Chunked pagination: PostgREST max-rows (1000 default) silently
+    // truncates .limit(5000) too. fetchAll() loops in 1000-row chunks so a
+    // wide date range (e.g. annual report) loads completely.
+    const { data, error } = await fetchAll((fromIdx, toIdx) => {
+      let q = sb.from('sale_orders').select('*')
+        .gte('sale_date', startOfDayBangkok(from))
+        .lte('sale_date', endOfDayBangkok(to))
+        .order('sale_date', { ascending: false })
+        .range(fromIdx, toIdx);
+      if (channel) q = q.eq('channel', channel);
+      if (excludeVoided) q = q.eq('status', 'active');
+      return q;
+    });
     if (error) toast.push("โหลดไม่ได้", "error");
     const ordersList = data || [];
     setOrders(ordersList);
@@ -3953,16 +4369,24 @@ function SalesView({ onGoPOS }) {
     if (ordersList.length) {
       try {
         const orderIds = ordersList.map(o => o.id);
-        const { data: itemsData } = await sb.from('sale_order_items')
-          .select('*').in('sale_order_id', orderIds);
+        // Chunked: a wide range can yield > 1000 line items; we'd silently
+        // under-count profit/qty without fetchAll().
+        const { data: itemsData } = await fetchAll((fromIdx, toIdx) =>
+          sb.from('sale_order_items').select('*')
+            .in('sale_order_id', orderIds).range(fromIdx, toIdx)
+        );
         const items = itemsData || [];
         const pids = [...new Set(items.map(i => i.product_id).filter(Boolean))];
 
         let recvRows = [];
         if (pids.length) {
-          const { data: rd } = await sb.from('receive_order_items')
-            .select('product_id, unit_price, receive_orders!inner(receive_date, voided_at)')
-            .in('product_id', pids).is('receive_orders.voided_at', null);
+          // Same pagination concern for receive history lookups.
+          const { data: rd } = await fetchAll((fromIdx, toIdx) =>
+            sb.from('receive_order_items')
+              .select('product_id, unit_price, receive_orders!inner(receive_date, voided_at)')
+              .in('product_id', pids).is('receive_orders.voided_at', null)
+              .range(fromIdx, toIdx)
+          );
           recvRows = rd || [];
         }
         const recvMap = {};
@@ -3975,7 +4399,11 @@ function SalesView({ onGoPOS }) {
 
         const prodMap = {};
         if (pids.length) {
-          const { data: prods } = await sb.from('products').select('id, cost_price').in('id', pids);
+          // Chunked: > 1000 distinct products in a wide period would
+          // truncate cost lookups, skewing displayed profit.
+          const { data: prods } = await fetchAll((fromIdx, toIdx) =>
+            sb.from('products').select('id, cost_price').in('id', pids).range(fromIdx, toIdx)
+          );
           (prods||[]).forEach(p => { prodMap[p.id] = Number(p.cost_price)||0; });
         }
 
@@ -4052,6 +4480,9 @@ function SalesView({ onGoPOS }) {
   }, [orders]);
 
   useEffect(()=>{ load(); }, [load]);
+  // Realtime: new sale on another device → refresh the list. sale_order_items
+  // is included so "รายการถูกแก้" (e.g. void line) also triggers a refresh.
+  useRealtimeInvalidate(sb, ['sale_orders', 'sale_order_items'], load);
 
   const openDetail = async (order) => {
     const { data } = await sb.from('sale_order_items').select('*').eq('sale_order_id', order.id);
@@ -5112,23 +5543,38 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind }, 
 /* =========================================================
    DASHBOARD VIEW
 ========================================================= */
-function DashboardView() {
+function DashboardView({ embedded = false, dateRange: dateRangeProp, onDateRangeChange } = {}) {
   const today = todayISO();
-  const [dateRange, setDateRange] = useState({ from: today, to: today });
+  // Controlled mode: when rendered inside <OverviewView/> the date picker
+  // lives in the shared header next to the segment tabs, so the parent
+  // owns this state. Standalone use keeps internal state.
+  const [internalRange, setInternalRange] = useState({ from: today, to: today });
+  const dateRange = dateRangeProp ?? internalRange;
+  const setDateRange = onDateRangeChange ?? setInternalRange;
   const [stats, setStats] = useState(null);
   const [topProducts, setTopProducts] = useState([]);
   const [lowStock, setLowStock] = useState([]);
   const [byChannel, setByChannel] = useState([]);
   const [loading, setLoading] = useState(false);
+  // Bumping this re-runs the loader — drives the realtime refresh below.
+  const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(()=>{ (async ()=>{
     setLoading(true);
     setStats(null);
     const { from, to } = dateRange;
 
+    // Dashboard sale_orders is paginated — without fetchAll() the dashboard
+    // silently under-reports any month with > 1000 active orders.
     const [rangeQ, lowQ] = await Promise.all([
-      sb.from('sale_orders').select('id, grand_total, channel, net_received').eq('status','active')
-        .gte('sale_date', startOfDayBangkok(from)).lte('sale_date', endOfDayBangkok(to)),
+      fetchAll((fromIdx, toIdx) =>
+        sb.from('sale_orders').select('id, grand_total, channel, net_received')
+          .eq('status','active')
+          .gte('sale_date', startOfDayBangkok(from))
+          .lte('sale_date', endOfDayBangkok(to))
+          .order('id', { ascending: false })
+          .range(fromIdx, toIdx)
+      ),
       sb.from('products').select('id,name,current_stock').lt('current_stock', 5).gt('current_stock', -1).order('current_stock', { ascending: true }).limit(8),
     ]);
 
@@ -5149,14 +5595,24 @@ function DashboardView() {
 
     const ids = rangeRows.map(x=>x.id);
     if (ids.length) {
-      const { data: items } = await sb.from('sale_order_items').select('product_name,quantity').in('sale_order_id', ids);
+      // Chunked: many orders × line items easily exceeds 1000 rows.
+      const { data: items } = await fetchAll((fromIdx, toIdx) =>
+        sb.from('sale_order_items').select('product_name,quantity')
+          .in('sale_order_id', ids).range(fromIdx, toIdx)
+      );
       const map = {};
       (items||[]).forEach(it => { map[it.product_name] = (map[it.product_name]||0) + (Number(it.quantity)||0); });
       const top = Object.entries(map).map(([name,q])=>({name,q})).sort((a,b)=>b.q-a.q).slice(0,8);
       setTopProducts(top);
     } else setTopProducts([]);
     setLoading(false);
-  })(); }, [dateRange.from, dateRange.to]);
+  })(); }, [dateRange.from, dateRange.to, reloadTick]);
+
+  // Realtime: when another device records a sale or changes stock, refresh
+  // the dashboard so the manager watching it from the back doesn't see
+  // stale numbers. Products listens for low-stock badge updates.
+  useRealtimeInvalidate(sb, ['sale_orders', 'sale_order_items', 'products'],
+    () => setReloadTick(t => t + 1));
 
   const StatCard = ({ tone, label, value, sub, icon }) => (
     <div className={
@@ -5196,24 +5652,31 @@ function DashboardView() {
   return (
     <div className="space-y-4 lg:space-y-8">
 
-      {/* Custom page header with date picker */}
-      <header className="hidden lg:flex px-10 pt-10 pb-6 items-end justify-between border-b hairline">
-        <div>
-          <div className="text-xs uppercase tracking-[1.5px] text-muted">Dashboard</div>
-          <h1 className="font-display text-5xl mt-2 leading-tight text-ink">แดชบอร์ด</h1>
-        </div>
-        <div className="flex items-center gap-3 pb-1">
-          <DatePicker mode="range" value={dateRange} onChange={setDateRange} placeholder="เลือกช่วงวันที่" className="w-64"/>
+      {/* Custom page header with date picker. Suppressed when this view
+          is rendered inside <OverviewView/> — the wrapper supplies a
+          shared header with the segment tabs. */}
+      {!embedded && (
+        <header className="hidden lg:flex px-10 pt-10 pb-6 items-end justify-between border-b hairline">
+          <div>
+            <div className="text-xs uppercase tracking-[1.5px] text-muted">Dashboard</div>
+            <h1 className="font-display text-5xl mt-2 leading-tight text-ink">แดชบอร์ด</h1>
+          </div>
+          <div className="flex items-center gap-3 pb-1">
+            <DatePicker mode="range" value={dateRange} onChange={setDateRange} placeholder="เลือกช่วงวันที่" className="w-64"/>
+            {loading && <span className="spinner text-muted"/>}
+          </div>
+        </header>
+      )}
+
+      {/* Standalone-only mobile date picker. When embedded, OverviewView's
+          mobile band already renders the picker next to the segment. */}
+      {!embedded && (
+        <div className="lg:hidden px-4 pt-4 flex items-center gap-3">
+          <Icon name="calendar" size={18} className="text-muted flex-shrink-0"/>
+          <DatePicker mode="range" value={dateRange} onChange={setDateRange} placeholder="เลือกช่วงวันที่" className="flex-1"/>
           {loading && <span className="spinner text-muted"/>}
         </div>
-      </header>
-
-      {/* Mobile date picker */}
-      <div className="lg:hidden px-4 pt-4 flex items-center gap-3">
-        <Icon name="calendar" size={18} className="text-muted flex-shrink-0"/>
-        <DatePicker mode="range" value={dateRange} onChange={setDateRange} placeholder="เลือกช่วงวันที่" className="flex-1"/>
-        {loading && <span className="spinner text-muted"/>}
-      </div>
+      )}
 
       <div className="px-4 lg:px-10 space-y-4 lg:space-y-8 pb-8 cascade">
 
@@ -5344,31 +5807,15 @@ function DashboardView() {
 /* =========================================================
    SHOP EXPENSES — store-level operating expenses (electricity,
    rent, staff salaries+commission, packaging, plus user-defined
-   "อื่นๆ"). Stored in `shop_expenses` table, separated from
-   product cost so the PnL view can split them clearly.
+   "อื่นๆ"). EXPENSE_CATEGORIES + staffComputed + realNetProfit
+   live in src/lib/expense-calc.js. Below are only the modal/UI
+   pieces.
 ========================================================= */
-const EXPENSE_CATEGORIES = [
-  { key: 'electricity',  label: 'ค่าไฟ',                  icon: 'zap'         },
-  { key: 'rent',         label: 'ค่าเช่าร้าน',             icon: 'store'       },
-  { key: 'staff_1',      label: 'ค่าพนักงาน คนที่ 1',     icon: 'user', staff: true },
-  { key: 'staff_2',      label: 'ค่าพนักงาน คนที่ 2',     icon: 'user', staff: true },
-  { key: 'shipping_box', label: 'ค่ากล่องพัสดุ',          icon: 'box'         },
-  { key: 'tape',         label: 'ค่าเทป',                 icon: 'tag'         },
-];
-const EXPENSE_CAT_MAP = Object.fromEntries(EXPENSE_CATEGORIES.map(c => [c.key, c]));
-
 const THAI_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 function fmtThaiYearMonth(yyyymm) {
   if (!yyyymm) return '';
   const [y, m] = yyyymm.split('-').map(Number);
   return `${THAI_MONTHS[m-1]} ${y + 543}`;
-}
-
-// Compute final amount for a staff category given its base+commission% and the month's sales total.
-function staffComputed(d, monthSales) {
-  const base = Number(d?.base_salary) || 0;
-  const pct  = Number(d?.commission_pct) || 0;
-  return base + (pct / 100) * (Number(monthSales) || 0);
 }
 
 function ShopExpensesModal({ open, onClose, initialMonth, onChanged }) {
@@ -5727,6 +6174,104 @@ function ExpenseRow({ category, value, onChange, monthSales, onApplyAll, disable
 }
 
 /* =========================================================
+   OVERVIEW WRAPPER — Dashboard + Insights tabs
+   ----------------------------------------------------------
+   Combined under one nav entry ("ภาพรวม") to keep the menu compact.
+   Insights mounts lazily on first click so its 365-day query payload
+   doesn't fire when the owner just wants today's numbers.
+========================================================= */
+function OverviewView() {
+  const today = todayISO();
+  const [dateRange, setDateRange] = useState({ from: today, to: today });
+  const [tab, setTab] = useState('dashboard'); // 'dashboard' | 'insights'
+  // Once Insights has been opened, keep it mounted so re-tabbing is
+  // instant (loader doesn't refire). Dashboard already self-refreshes
+  // via realtime, so leaving it mounted is cheap.
+  const [insightsLoaded, setInsightsLoaded] = useState(false);
+  useEffect(() => { if (tab === 'insights') setInsightsLoaded(true); }, [tab]);
+
+  const TABS = [
+    { k: 'dashboard', label: 'ยอดขาย',    icon: 'dashboard',
+      kicker: 'Dashboard',  title: 'แดชบอร์ด' },
+    { k: 'insights',  label: 'วิเคราะห์', icon: 'zap',
+      kicker: 'Insights',   title: 'Insights' },
+  ];
+  const activeTab = TABS.find((t) => t.k === tab) ?? TABS[0];
+
+  // Segment buttons styled to match `.btn-app-settings-sidebar` when
+  // active (coral gradient, white text, soft glow) and `.input`
+  // dimensions (h-10 + rounded-[10px]) so they sit on the same baseline
+  // as the DatePicker without any visual mismatch.
+  const Segment = ({ className = '' }) => (
+    <div className={'inline-flex gap-2 ' + className}>
+      {TABS.map((t) => {
+        const active = tab === t.k;
+        return (
+          <button key={t.k} type="button" onClick={() => setTab(t.k)}
+            className={
+              'h-10 px-4 rounded-[10px] text-sm font-medium flex items-center gap-1.5 ' +
+              'border transition-all duration-150 active:scale-[0.97] ' +
+              (active
+                ? 'btn-segment-active text-white border-white/20'
+                : 'bg-white/85 text-ink border-hairline hover:bg-white hover:border-muted')
+            }>
+            <Icon name={t.icon} size={15} />
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  return (
+    <div className="space-y-4 lg:space-y-6">
+      {/* Web header — title baseline-aligned with the tab segment.
+          Matches DashboardView's standalone style (kicker + h1 5xl) so
+          the page doesn't visually "shrink" when Insights merged in. */}
+      <header className="hidden lg:flex px-10 pt-10 pb-6 items-end justify-between border-b hairline gap-6">
+        <div>
+          <div className="text-xs uppercase tracking-[1.5px] text-muted">{activeTab.kicker}</div>
+          <h1 className="font-display text-5xl mt-2 leading-tight text-ink">{activeTab.title}</h1>
+        </div>
+        <div className="flex items-center gap-2 pb-1">
+          <Segment />
+          {/* DatePicker only relevant to the Dashboard pane — Insights
+              uses fixed 365 / 90 / 30-day windows. Hide on insights. */}
+          {tab === 'dashboard' && (
+            <DatePicker mode="range" value={dateRange} onChange={setDateRange}
+              placeholder="เลือกช่วงวันที่" className="w-56" />
+          )}
+        </div>
+      </header>
+
+      {/* Mobile header — MobileTopBar already shows the page title, so
+          here we surface segment + date picker (dashboard only). */}
+      <div className="lg:hidden px-4 pt-3 space-y-2">
+        <Segment className="w-full !flex" />
+        {tab === 'dashboard' && (
+          <div className="flex items-center gap-3">
+            <Icon name="calendar" size={18} className="text-muted flex-shrink-0"/>
+            <DatePicker mode="range" value={dateRange} onChange={setDateRange}
+              placeholder="เลือกช่วงวันที่" className="flex-1" />
+          </div>
+        )}
+      </div>
+
+      {/* Both panes are mounted (after first Insights visit) but only
+          one is visible — keeps scroll position + avoids re-querying. */}
+      <div className={tab === 'dashboard' ? 'block' : 'hidden'}>
+        <DashboardView embedded dateRange={dateRange} onDateRangeChange={setDateRange} />
+      </div>
+      {insightsLoaded && (
+        <div className={tab === 'insights' ? 'block' : 'hidden'}>
+          <InsightsView embedded />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* =========================================================
    PROFIT / LOSS VIEW
 ========================================================= */
 function ProfitLossView() {
@@ -5750,32 +6295,39 @@ function ProfitLossView() {
     setPage(1);
     const { from, to } = dateRange;
     try {
-      // 1) Sales in range (active only)
-      const { data: orders } = await sb.from('sale_orders')
-        .select('id, sale_date, channel, grand_total, subtotal, net_received')
-        .eq('status', 'active')
-        .gte('sale_date', startOfDayBangkok(from))
-        .lte('sale_date', endOfDayBangkok(to))
-        .order('sale_date', { ascending: false });
+      // 1) Sales in range (active only) — chunked to bypass 1000-row cap
+      const { data: orders } = await fetchAll((fromIdx, toIdx) =>
+        sb.from('sale_orders')
+          .select('id, sale_date, channel, grand_total, subtotal, net_received')
+          .eq('status', 'active')
+          .gte('sale_date', startOfDayBangkok(from))
+          .lte('sale_date', endOfDayBangkok(to))
+          .order('sale_date', { ascending: false })
+          .range(fromIdx, toIdx)
+      );
       const ordersList = orders || [];
       if (!ordersList.length) { setRows([]); setLoading(false); return; }
 
       const orderIds = ordersList.map(o=>o.id);
-      // 2) Items
-      const { data: itemsData } = await sb.from('sale_order_items')
-        .select('*')
-        .in('sale_order_id', orderIds);
+      // 2) Items — also chunked (orders × items easily > 1000 in a wide range)
+      const { data: itemsData } = await fetchAll((fromIdx, toIdx) =>
+        sb.from('sale_order_items').select('*')
+          .in('sale_order_id', orderIds).range(fromIdx, toIdx)
+      );
       const items = itemsData || [];
 
       const pids = [...new Set(items.map(i=>i.product_id).filter(Boolean))];
 
-      // 3) Receive history (only active i.e. voided_at IS NULL)
+      // 3) Receive history (only active i.e. voided_at IS NULL) — chunked
       let recvRows = [];
       if (pids.length) {
-        const { data } = await sb.from('receive_order_items')
-          .select('product_id, unit_price, receive_orders!inner(receive_date, voided_at)')
-          .in('product_id', pids)
-          .is('receive_orders.voided_at', null);
+        const { data } = await fetchAll((fromIdx, toIdx) =>
+          sb.from('receive_order_items')
+            .select('product_id, unit_price, receive_orders!inner(receive_date, voided_at)')
+            .in('product_id', pids)
+            .is('receive_orders.voided_at', null)
+            .range(fromIdx, toIdx)
+        );
         recvRows = data || [];
       }
       // Map: product_id -> sorted [{date, unit_price}] desc
@@ -5787,10 +6339,12 @@ function ProfitLossView() {
       });
       Object.values(recvMap).forEach(arr => arr.sort((a,b)=>b.date-a.date));
 
-      // 4) Products fallback
+      // 4) Products fallback — chunked
       let prodMap = {};
       if (pids.length) {
-        const { data: prods } = await sb.from('products').select('id, cost_price').in('id', pids);
+        const { data: prods } = await fetchAll((fromIdx, toIdx) =>
+          sb.from('products').select('id, cost_price').in('id', pids).range(fromIdx, toIdx)
+        );
         (prods||[]).forEach(p => { prodMap[p.id] = Number(p.cost_price)||0; });
       }
 
@@ -5875,11 +6429,14 @@ function ProfitLossView() {
         const monthEnd = `${yy}-${String(mm).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
         const startDay = pm > from ? pm : from;
         const endDay   = monthEnd < to ? monthEnd : to;
-        const { data: oList } = await sb.from('sale_orders')
-          .select('grand_total, net_received, channel')
-          .eq('status', 'active')
-          .gte('sale_date', startOfDayBangkok(startDay))
-          .lte('sale_date', endOfDayBangkok(endDay));
+        const { data: oList } = await fetchAll((fromIdx, toIdx) =>
+          sb.from('sale_orders')
+            .select('grand_total, net_received, channel')
+            .eq('status', 'active')
+            .gte('sale_date', startOfDayBangkok(startDay))
+            .lte('sale_date', endOfDayBangkok(endDay))
+            .range(fromIdx, toIdx)
+        );
         let s = 0;
         (oList || []).forEach(o => {
           const v = (ECOMMERCE_CHANNELS.has(o.channel) && o.net_received != null)
@@ -6390,7 +6947,7 @@ function App() {
               {view==='sales' && <SalesView onGoPOS={()=>setView('pos')} />}
               {view==='receive' && role==='admin' && <ReceiveView />}
               {view==='return' && <ReturnView />}
-              {view==='dashboard' && role==='admin' && <DashboardView />}
+              {view==='dashboard' && role==='admin' && <OverviewView />}
               {view==='pnl' && role==='admin' && <ProfitLossView />}
             </div>
           </main>

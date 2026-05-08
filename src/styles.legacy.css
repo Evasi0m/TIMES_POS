@@ -585,6 +585,20 @@
   }
   .btn-app-settings-sidebar:active { transform: scale(0.97); }
 
+  /* Used by the OverviewView segment tabs (ยอดขาย / วิเคราะห์).
+     Mirrors `.btn-app-settings-sidebar` so the brand identity feels
+     consistent — same coral gradient, same shadow recipe — but applies
+     to a smaller pill-shaped control sized to match `.input` (h-10). */
+  .btn-segment-active {
+    background: linear-gradient(180deg, rgba(204,120,92,0.85) 0%, rgba(184,100,72,0.92) 100%);
+    box-shadow: 0 2px 8px rgba(184,100,72,0.35), 0 1px 0 rgba(255,255,255,0.18) inset;
+  }
+  .btn-segment-active:hover {
+    background: linear-gradient(180deg, rgba(218,134,106,0.95) 0%, rgba(198,114,86,1) 100%);
+    box-shadow: 0 4px 12px rgba(184,100,72,0.50), 0 1px 0 rgba(255,255,255,0.2) inset;
+    transform: translateY(-1px);
+  }
+
   .sidebar .btn-settings-sidebar {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
     width: 100%;
@@ -767,6 +781,338 @@
   @keyframes fabPulse {
     0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.45), 0 10px 24px -4px rgba(184, 82, 40, 0.55), 0 4px 10px -2px rgba(184, 82, 40, 0.35), 0 1px 0 rgba(255, 255, 255, 0.32) inset; }
     50%      { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0), 0 12px 28px -4px rgba(184, 82, 40, 0.65), 0 4px 10px -2px rgba(184, 82, 40, 0.4), 0 1px 0 rgba(255, 255, 255, 0.32) inset; }
+  }
+
+  /* ==========  PER-ICON CLICK ANIMATIONS  ==========
+     Each nav icon gets a personality-matching tween that fires once whenever
+     the parent button transitions to `.active` (i.e., the user enters that
+     menu). The animations are scoped to nav contexts so the same icons used
+     elsewhere (page headers, badges) stay still.
+
+     IMPORTANT: SVG <path>/<rect>/<circle> children are positioned in the
+     viewBox's coordinate system, but `transform` on them inherits `%` units
+     against the parent's bbox. To rotate/scale around a known point we set
+     `transform-origin` in `px` (which equals viewBox units thanks to the
+     fixed 24x24 viewBox + matching width/height).                          */
+
+  /* --- cart: rolls forward, wheels spin --- */
+  @keyframes icon-cart-roll {
+    0%   { transform: translateX(0)   rotate(0); }
+    25%  { transform: translateX(-1.5px) rotate(-4deg); }
+    55%  { transform: translateX(2px)  rotate(3deg); }
+    80%  { transform: translateX(-0.5px) rotate(-1deg); }
+    100% { transform: translateX(0)   rotate(0); }
+  }
+  @keyframes icon-cart-wheel {
+    0%   { transform: rotate(0); }
+    100% { transform: rotate(360deg); }
+  }
+
+  /* --- box: jiggle + label dash widens like opening a flap --- */
+  @keyframes icon-box-jiggle {
+    0%, 100% { transform: rotate(0); }
+    25%      { transform: rotate(-6deg); }
+    60%      { transform: rotate(4deg); }
+    85%      { transform: rotate(-2deg); }
+  }
+  @keyframes icon-box-label {
+    0%   { stroke-dasharray: 0 8; }
+    100% { stroke-dasharray: 8 0; }
+  }
+
+  /* --- receipt (clock): hand sweeps then settles --- */
+  @keyframes icon-clock-tick {
+    0%   { transform: rotate(0); }
+    35%  { transform: rotate(35deg); }
+    65%  { transform: rotate(-15deg); }
+    100% { transform: rotate(0); }
+  }
+  @keyframes icon-clock-pulse {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.08); }
+  }
+
+  /* --- arrow-up (รับเข้า): hop upward like dropping a parcel in --- */
+  @keyframes icon-bounce-up {
+    0%   { transform: translateY(0); }
+    35%  { transform: translateY(-4px) scale(1.05); }
+    65%  { transform: translateY(1px)  scale(0.97); }
+    100% { transform: translateY(0)    scale(1); }
+  }
+
+  /* --- arrow-down (รับคืน): drop downward, soft squash --- */
+  @keyframes icon-bounce-down {
+    0%   { transform: translateY(0); }
+    35%  { transform: translateY(4px)  scale(1.05); }
+    65%  { transform: translateY(-1px) scale(0.97); }
+    100% { transform: translateY(0)    scale(1); }
+  }
+
+  /* --- dashboard: 4 tiles cascade-pop --- */
+  @keyframes icon-tile-pop {
+    0%   { transform: scale(1);    opacity: 1; }
+    35%  { transform: scale(0.7);  opacity: 0.6; }
+    70%  { transform: scale(1.15); opacity: 1; }
+    100% { transform: scale(1);    opacity: 1; }
+  }
+
+  /* --- trend-up: line draws on, then arrowhead pops --- */
+  @keyframes icon-line-draw {
+    0%   { stroke-dashoffset: 30; }
+    100% { stroke-dashoffset: 0; }
+  }
+  @keyframes icon-arrowhead-pop {
+    0%   { transform: scale(0.4); opacity: 0; }
+    60%  { transform: scale(1.2); opacity: 1; }
+    100% { transform: scale(1);   opacity: 1; }
+  }
+
+  /* Bind animations only inside nav contexts. Both the desktop sidebar
+     `.nav-item.active` and the mobile `.tab-btn.active` share these rules.
+
+     CART */
+  .nav-item.active svg[data-icon="cart"],
+  .tab-btn.active  svg[data-icon="cart"] {
+    animation: icon-cart-roll .55s cubic-bezier(.34,1.56,.64,1);
+  }
+  .nav-item.active svg[data-icon="cart"] circle,
+  .tab-btn.active  svg[data-icon="cart"] circle {
+    transform-origin: center;
+    animation: icon-cart-wheel .55s linear;
+  }
+  /* Each wheel rotates around its own center */
+  .nav-item.active svg[data-icon="cart"] circle:nth-of-type(1),
+  .tab-btn.active  svg[data-icon="cart"] circle:nth-of-type(1) { transform-origin: 10.5px 19.5px; }
+  .nav-item.active svg[data-icon="cart"] circle:nth-of-type(2),
+  .tab-btn.active  svg[data-icon="cart"] circle:nth-of-type(2) { transform-origin: 17.5px 19.5px; }
+
+  /* BOX */
+  .nav-item.active svg[data-icon="box"],
+  .tab-btn.active  svg[data-icon="box"] {
+    transform-origin: 12px 14px;
+    animation: icon-box-jiggle .5s cubic-bezier(.34,1.56,.64,1);
+  }
+  .nav-item.active svg[data-icon="box"] path:last-of-type,
+  .tab-btn.active  svg[data-icon="box"] path:last-of-type {
+    animation: icon-box-label .45s ease-out;
+  }
+
+  /* RECEIPT (clock) */
+  .nav-item.active svg[data-icon="receipt"] circle,
+  .tab-btn.active  svg[data-icon="receipt"] circle {
+    transform-origin: 12px 12px;
+    animation: icon-clock-pulse .55s ease-out;
+  }
+  .nav-item.active svg[data-icon="receipt"] path,
+  .tab-btn.active  svg[data-icon="receipt"] path {
+    transform-origin: 12px 12px;
+    animation: icon-clock-tick .65s cubic-bezier(.34,1.56,.64,1);
+  }
+
+  /* ARROW-UP (รับเข้า) */
+  .nav-item.active svg[data-icon="arrow-up"],
+  .tab-btn.active  svg[data-icon="arrow-up"] {
+    animation: icon-bounce-up .5s cubic-bezier(.34,1.56,.64,1);
+  }
+
+  /* ARROW-DOWN (รับคืน) */
+  .nav-item.active svg[data-icon="arrow-down"],
+  .tab-btn.active  svg[data-icon="arrow-down"] {
+    animation: icon-bounce-down .5s cubic-bezier(.34,1.56,.64,1);
+  }
+
+  /* DASHBOARD — 4 tiles pop in cascade. transform-origin centered to each rect. */
+  .nav-item.active svg[data-icon="dashboard"] rect:nth-of-type(1),
+  .tab-btn.active  svg[data-icon="dashboard"] rect:nth-of-type(1) {
+    transform-origin: 6.5px 7.5px;
+    animation: icon-tile-pop .45s cubic-bezier(.34,1.56,.64,1) 0ms;
+  }
+  .nav-item.active svg[data-icon="dashboard"] rect:nth-of-type(2),
+  .tab-btn.active  svg[data-icon="dashboard"] rect:nth-of-type(2) {
+    transform-origin: 17.5px 5.5px;
+    animation: icon-tile-pop .45s cubic-bezier(.34,1.56,.64,1) 60ms;
+  }
+  .nav-item.active svg[data-icon="dashboard"] rect:nth-of-type(3),
+  .tab-btn.active  svg[data-icon="dashboard"] rect:nth-of-type(3) {
+    transform-origin: 17.5px 16.5px;
+    animation: icon-tile-pop .45s cubic-bezier(.34,1.56,.64,1) 120ms;
+  }
+  .nav-item.active svg[data-icon="dashboard"] rect:nth-of-type(4),
+  .tab-btn.active  svg[data-icon="dashboard"] rect:nth-of-type(4) {
+    transform-origin: 6.5px 18.5px;
+    animation: icon-tile-pop .45s cubic-bezier(.34,1.56,.64,1) 180ms;
+  }
+
+  /* TREND-UP — line draws, then arrowhead pops in */
+  .nav-item.active svg[data-icon="trend-up"] polyline:nth-of-type(1),
+  .tab-btn.active  svg[data-icon="trend-up"] polyline:nth-of-type(1) {
+    stroke-dasharray: 30;
+    animation: icon-line-draw .55s ease-out;
+  }
+  .nav-item.active svg[data-icon="trend-up"] polyline:nth-of-type(2),
+  .tab-btn.active  svg[data-icon="trend-up"] polyline:nth-of-type(2) {
+    transform-origin: 18px 10px;
+    animation: icon-arrowhead-pop .45s cubic-bezier(.34,1.56,.64,1) .35s both;
+  }
+
+  /* ==========  GENERIC SVG HOVER ANIMATIONS  ==========
+     Every <svg> inside an interactive ancestor (button, link, .pressable)
+     gets a subtle scale on hover so the UI feels alive without being noisy.
+     Per-icon personalities below override the generic rule for icons whose
+     metaphor calls for something more specific (rotating gear, sliding
+     chevron, wobbling pencil, etc.).
+
+     We anchor the hover styles to interactive elements only — not on the
+     bare svg — so static decorative SVGs (logo, empty-state illustrations)
+     don't twitch when the cursor brushes past.                              */
+
+  /* Smooth transition baseline: any svg inside an interactive parent eases
+     transform/filter changes. Animations defined below replace this when
+     they're more expressive than a single tween.                            */
+  button svg, a svg, .pressable svg, label svg, [role="button"] svg {
+    transition: transform .22s var(--ease-out), filter .22s var(--ease-out);
+    transform-origin: center;
+  }
+
+  /* Generic hover lift — applies to anything that doesn't have a per-icon
+     rule overriding it. Uses scale(1.12) for subtle "wake up" feel. */
+  button:not(:disabled):hover  > svg,
+  a:hover                      > svg,
+  .pressable:hover             > svg,
+  label:hover                  > svg,
+  [role="button"]:hover        > svg {
+    transform: scale(1.12);
+  }
+
+  /* ----- per-icon hover personalities ----- */
+
+  /* SETTINGS — gear rotates while hovered (continuous, slow), settles back. */
+  button:hover  > svg[data-icon="settings"],
+  a:hover       > svg[data-icon="settings"],
+  .pressable:hover > svg[data-icon="settings"] {
+    animation: icon-gear-spin 2.4s linear infinite;
+    transform: none; /* defer to keyframes */
+  }
+  @keyframes icon-gear-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* PLUS (+) — quarter turn telegraphs "click to add" */
+  button:hover  > svg[data-icon="plus"],
+  a:hover       > svg[data-icon="plus"] {
+    transform: rotate(90deg) scale(1.05);
+  }
+
+  /* X (close/dismiss) — quick pop + slight twist */
+  button:hover  > svg[data-icon="x"] {
+    transform: rotate(90deg) scale(1.15);
+  }
+
+  /* TRASH — wiggle like shaking out crumbs */
+  button:hover  > svg[data-icon="trash"] {
+    animation: icon-wobble .42s ease-in-out;
+  }
+  @keyframes icon-wobble {
+    0%, 100% { transform: rotate(0); }
+    25%      { transform: rotate(-10deg); }
+    50%      { transform: rotate(8deg); }
+    75%      { transform: rotate(-4deg); }
+  }
+
+  /* EDIT (pencil) — tiny jitter like the tip is writing */
+  button:hover  > svg[data-icon="edit"],
+  .pressable:hover > svg[data-icon="edit"] {
+    animation: icon-pencil-jitter .4s ease-in-out;
+  }
+  @keyframes icon-pencil-jitter {
+    0%, 100% { transform: translate(0,0) rotate(0); }
+    25%      { transform: translate(0.5px,-0.5px) rotate(-3deg); }
+    50%      { transform: translate(-0.5px,0.5px) rotate(2deg); }
+    75%      { transform: translate(0.5px,0) rotate(-1deg); }
+  }
+
+  /* SEARCH — magnifier scoots & tilts as if scanning */
+  button:hover  > svg[data-icon="search"],
+  label:hover   > svg[data-icon="search"] {
+    transform: scale(1.12) rotate(-10deg) translateX(-1px);
+  }
+
+  /* CHEVRONS — slide in their pointing direction */
+  button:hover  > svg[data-icon="chevron-r"],
+  a:hover       > svg[data-icon="chevron-r"] { transform: translateX(2px) scale(1.05); }
+  button:hover  > svg[data-icon="chevron-l"],
+  a:hover       > svg[data-icon="chevron-l"] { transform: translateX(-2px) scale(1.05); }
+  button:hover  > svg[data-icon="chevron-u"] { transform: translateY(-2px) scale(1.05); }
+  button:hover  > svg[data-icon="chevron-d"] { transform: translateY(2px)  scale(1.05); }
+
+  /* MENU (hamburger) — bars compress into a stack */
+  button:hover  > svg[data-icon="menu"] {
+    transform: scaleX(0.85) scale(1.1);
+  }
+
+  /* CHECK — gentle scale + nudge, like a stamp */
+  button:hover  > svg[data-icon="check"] {
+    transform: scale(1.18) rotate(-4deg);
+  }
+
+  /* ARROW-UP / ARROW-DOWN — match nav click direction at smaller magnitude */
+  button:hover  > svg[data-icon="arrow-up"]   { transform: translateY(-2px) scale(1.08); }
+  button:hover  > svg[data-icon="arrow-down"] { transform: translateY(2px)  scale(1.08); }
+
+  /* CART (used outside FAB too — e.g., POS form) — small lurch */
+  button:hover  > svg[data-icon="cart"] {
+    transform: translateX(1.5px) scale(1.08);
+  }
+
+  /* DASHBOARD — tiles "breathe" via a slow pulse on hover */
+  button:hover  > svg[data-icon="dashboard"] rect {
+    animation: icon-tile-pop .42s cubic-bezier(.34,1.56,.64,1);
+    transform-origin: center;
+  }
+
+  /* TREND-UP — re-draw the line on hover so it feels live */
+  button:hover  > svg[data-icon="trend-up"] polyline {
+    stroke-dasharray: 30;
+    animation: icon-line-draw .5s ease-out;
+  }
+
+  /* CALENDAR — gentle tilt like flipping a page */
+  button:hover  > svg[data-icon="calendar"] {
+    transform: rotate(-4deg) scale(1.08);
+  }
+
+  /* BARCODE — bars shimmer (slight horizontal squash) */
+  button:hover  > svg[data-icon="barcode"] {
+    transform: scaleX(1.08) scaleY(1.05);
+  }
+
+  /* LOGOUT — door icon nudges right */
+  button:hover  > svg[data-icon="logout"] {
+    transform: translateX(2px) scale(1.06);
+  }
+
+  /* INFO / ALERT — subtle bounce to draw attention */
+  button:hover  > svg[data-icon="info"],
+  button:hover  > svg[data-icon="alert"] {
+    animation: icon-bounce-up .4s cubic-bezier(.34,1.56,.64,1);
+  }
+
+  /* Keep the nav-active click animations winning over hover lift. The click
+     animations are short (~0.5s) and finish on their own; afterwards hover
+     can take over normally. */
+  .nav-item.active:hover  > svg,
+  .tab-btn.active:hover   > svg {
+    transform: none;
+  }
+
+  /* Respect users who prefer reduced motion — disable click + hover anims. */
+  @media (prefers-reduced-motion: reduce) {
+    .nav-item.active svg, .nav-item.active svg *,
+    .tab-btn.active  svg, .tab-btn.active  svg *,
+    button:hover svg, a:hover svg, .pressable:hover svg, label:hover svg {
+      animation: none !important;
+      transform: none !important;
+    }
   }
 
   /* ==========  STEPPER (qty - / +)  ========== */

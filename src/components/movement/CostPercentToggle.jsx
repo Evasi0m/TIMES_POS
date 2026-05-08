@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React from 'react';
+import Popover from '../ui/Popover.jsx';
 
 const PRESETS = [30, 40, 50, 58];
 
@@ -28,23 +29,6 @@ export default function CostPercentToggle({
   onToggleOff, onOpenChooser, onChangeValue,
   sampleRetailPrice,
 }) {
-  const [helpOpen, setHelpOpen] = useState(false);
-  const popoverRef = useRef(null);
-
-  useEffect(() => {
-    if (!helpOpen) return;
-    const onDoc = (e) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target)) setHelpOpen(false);
-    };
-    const onKey = (e) => { if (e.key === 'Escape') setHelpOpen(false); };
-    document.addEventListener('pointerdown', onDoc);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('pointerdown', onDoc);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [helpOpen]);
-
   const sample = Number(sampleRetailPrice) > 0 ? Number(sampleRetailPrice) : 1000;
   const previewCost = Math.round((sample * (100 - (Number(value) || 0))) / 100);
   const isExample = !(Number(sampleRetailPrice) > 0);
@@ -69,27 +53,26 @@ export default function CostPercentToggle({
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/15 text-primary font-medium">เปิดตลอด</span>
             )}
           </button>
-          <div className="relative" ref={popoverRef}>
-            <button
-              type="button"
-              aria-label="ดูคำอธิบายสูตร"
-              onClick={() => setHelpOpen(o => !o)}
-              className={"flex items-center justify-center w-5 h-5 rounded-full border text-[11px] font-semibold transition-colors " +
-                (helpOpen ? "bg-primary text-on-primary border-primary" : "border-hairline text-muted hover:text-ink hover:border-muted")}
-            >
-              ?
-            </button>
-            {helpOpen && (
-              <div className="absolute left-0 top-full mt-2 z-30 w-[260px] glass-soft rounded-lg shadow-xl border hairline p-3 text-xs leading-relaxed text-ink fade-in">
-                <div className="font-medium mb-1">สูตรคำนวณทุน</div>
-                <div className="font-mono text-[11px] bg-white/60 rounded px-2 py-1 mb-1.5">ทุน = ราคาป้าย × (100 − %) ÷ 100</div>
-                <div className="text-muted">
-                  เช่น ราคาป้าย ฿1,000 ที่ 58% → ทุน ฿420
-                  <br />ใช้สำหรับเติมราคาทุนของรายการที่เพิ่มใหม่อัตโนมัติ — รายการที่แก้ราคาเองจะคงค่าเดิม
-                </div>
-              </div>
+          <Popover
+            trigger={({ ref, onClick, isOpen }) => (
+              <button
+                ref={ref}
+                type="button"
+                aria-label="ดูคำอธิบายสูตร"
+                aria-expanded={isOpen}
+                onClick={onClick}
+                className={"flex items-center justify-center w-5 h-5 rounded-full border text-[11px] font-semibold transition-colors " +
+                  (isOpen ? "bg-primary text-on-primary border-primary" : "border-hairline text-muted hover:text-ink hover:border-muted")}
+              >?</button>
             )}
-          </div>
+          >
+            <div className="font-medium mb-1">สูตรคำนวณทุน</div>
+            <div className="font-mono text-[11px] bg-white/60 rounded px-2 py-1 mb-1.5">ทุน = ราคาป้าย × (100 − %) ÷ 100</div>
+            <div className="text-muted">
+              เช่น ราคาป้าย ฿1,000 ที่ 58% → ทุน ฿420
+              <br />ใช้สำหรับเติมราคาทุนของรายการที่เพิ่มใหม่อัตโนมัติ — รายการที่แก้ราคาเองจะคงค่าเดิม
+            </div>
+          </Popover>
         </div>
         {enabled && (
           <span className="flex items-center gap-1.5">
