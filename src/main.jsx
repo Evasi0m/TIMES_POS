@@ -1288,11 +1288,13 @@ function AppSettingsModal({ open, onClose }) {
   const isAdmin = role === 'admin';
   const [draft, setDraft] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [shopOpen, setShopOpen] = useState(false);
-  const [telegramOpen, setTelegramOpen] = useState(false);
+  // Tab nav state — replaces the older accordion-of-collapsibles.
+  // Default to 'display' (the only tab visible to non-admin users); admin
+  // users see all four. Reset on every modal open so reopening always
+  // lands on the first tab.
+  const [activeTab, setActiveTab] = useState('display');
   // Paylater formula sub-state — kept separate from `draft` (the shop-info
   // draft) so its save flow + PIN gate don't entangle with the main "บันทึก".
-  const [paylaterOpen, setPaylaterOpen] = useState(false);
   const [paylaterDraft, setPaylaterDraft] = useState(null);
   const [paylaterBusy, setPaylaterBusy] = useState(false);
   const [pinOpen, setPinOpen] = useState(false);
@@ -1301,11 +1303,9 @@ function AppSettingsModal({ open, onClose }) {
     if (open && shop) {
       setDraft({ ...shop });
       setPaylaterDraft(mergePaylaterConfig(shop?.paylater_config));
+      setActiveTab('display');
     }
-    if (!open) {
-      setShopOpen(false); setTelegramOpen(false);
-      setPaylaterOpen(false); setPinOpen(false);
-    }
+    if (!open) { setPinOpen(false); }
   }, [open, shop]);
 
   // Persist the paylater draft to shop_settings.paylater_config. Called
@@ -1351,143 +1351,122 @@ function AppSettingsModal({ open, onClose }) {
     onClose();
   };
 
+  // Tab definitions. `adminOnly` filters them out for non-admin users so
+  // the nav doesn't show locked/unreachable items. Order here = display order.
+  const TABS = [
+    { id: 'display',  label: 'การแสดงผล',  icon: 'edit',       adminOnly: false },
+    { id: 'shop',     label: 'ข้อมูลร้าน',  icon: 'store',      adminOnly: true  },
+    { id: 'telegram', label: 'Telegram',     icon: 'zap',        adminOnly: true  },
+    { id: 'paylater', label: 'สูตรคำนวณ',    icon: 'calculator', adminOnly: true  },
+  ];
+  const visibleTabs = TABS.filter(t => isAdmin || !t.adminOnly);
+  // Footer "บันทึก" is only meaningful on the shop-info tab. Other tabs
+  // either save live (display) or own their own save UX (telegram has a
+  // built-in button, paylater goes through the PIN modal).
+  const showFooterSave = isAdmin && activeTab === 'shop';
+
   return (
     <Modal open={open} onClose={onClose} title="การตั้งค่า"
       footer={<>
         <button className="btn-secondary" onClick={onClose}>
-          {isAdmin ? 'ยกเลิก' : 'ปิด'}
+          {showFooterSave ? 'ยกเลิก' : 'ปิด'}
         </button>
-        {isAdmin && (
+        {showFooterSave && (
           <button className="btn-primary" onClick={save} disabled={busy}>
             {busy ? <span className="spinner"/> : <Icon name="check" size={16}/>}
             บันทึก
           </button>
         )}
       </>}>
-      <div className="space-y-6">
+      {/* ── Tab nav ──
+          Horizontal scroll on small screens (visibleTabs may be 4 wide).
+          Underline indicator + colour swap make the active tab obvious;
+          chosen over pills because it reads less "buttony" and matches
+          common settings patterns (iOS/Android system settings, etc.). */}
+      <div className="flex gap-1 -mt-1 mb-4 border-b hairline overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+        {visibleTabs.map(t => {
+          const active = activeTab === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setActiveTab(t.id)}
+              className={
+                "flex items-center gap-1.5 px-3 py-2.5 text-sm whitespace-nowrap transition border-b-2 -mb-px " +
+                (active
+                  ? "border-primary text-primary font-semibold"
+                  : "border-transparent text-muted hover:text-ink")
+              }
+            >
+              <Icon name={t.icon} size={14}/>
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
 
-        {/* ── Section 1: การแสดงผล — ขนาดตัวอักษร + ฟอนต์ (all users) ── */}
-        <div>
-          <div className="text-xs font-semibold uppercase tracking-wider text-muted mb-3 flex items-center gap-1.5">
-            <Icon name="edit" size={13}/>
-            การแสดงผล
-          </div>
-          <div className="rounded-xl bg-surface-soft border hairline p-3 space-y-4">
+      <div className="min-h-[280px]">
+
+        {/* ── Tab: การแสดงผล ── */}
+        {activeTab === 'display' && (
+          <div className="space-y-4 fade-in">
             <div>
-              <div className="text-sm text-ink mb-2">ขนาดตัวอักษร</div>
+              <div className="text-sm text-ink mb-2 font-medium">ขนาดตัวอักษร</div>
               <FontSizePickerInline />
             </div>
-            <div className="border-t hairline-soft pt-3">
-              <div className="text-sm text-ink mb-1">ฟอนต์</div>
+            <div className="border-t hairline-soft pt-4">
+              <div className="text-sm text-ink mb-1 font-medium">ฟอนต์</div>
               <div className="text-[11px] text-muted-soft mb-2">ใช้กับทุกหน้า — ยกเว้นใบเสร็จ</div>
               <FontPickerInline />
             </div>
           </div>
-        </div>
+        )}
 
-        {/* ── Section 2: ข้อมูลร้าน (admin only, collapsible) ── */}
-        {isAdmin && draft && (
-          <div className="border-t hairline pt-4">
-            <button
-              type="button"
-              onClick={() => setShopOpen(o => !o)}
-              className="w-full flex items-center justify-between gap-2 group"
-            >
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted flex items-center gap-1.5">
-                <Icon name="store" size={13}/>
-                ข้อมูลร้าน
-              </span>
-              <Icon
-                name={shopOpen ? 'chevron-u' : 'chevron-d'}
-                size={16}
-                className="text-muted-soft group-hover:text-muted transition"
-              />
-            </button>
-
-            {shopOpen && (
-              <div className="mt-3 space-y-4 fade-in">
-                <div className="text-xs text-muted">ข้อมูลส่วนนี้จะแสดงบนใบเสร็จและใบกำกับภาษี</div>
-                <div>
-                  <label className="text-xs uppercase tracking-wider text-muted">ชื่อร้าน *</label>
-                  <input className="input mt-1" value={draft.shop_name||""} onChange={e=>set('shop_name', e.target.value)} />
-                </div>
-                <div>
-                  <label className="text-xs uppercase tracking-wider text-muted">ที่อยู่</label>
-                  <textarea className="input mt-1" rows="2" value={draft.shop_address||""} onChange={e=>set('shop_address', e.target.value)} placeholder="เช่น 123 ห้างสรรพสินค้า ABC ชั้น 2" />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs uppercase tracking-wider text-muted">เบอร์โทร</label>
-                    <input className="input mt-1 font-mono" value={draft.shop_phone||""} onChange={e=>set('shop_phone', e.target.value)} placeholder="02-xxx-xxxx" />
-                  </div>
-                  <div>
-                    <label className="text-xs uppercase tracking-wider text-muted">เลขผู้เสียภาษี</label>
-                    <input className="input mt-1 font-mono" value={draft.shop_tax_id||""} onChange={e=>set('shop_tax_id', e.target.value)} placeholder="13 หลัก" />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs uppercase tracking-wider text-muted">ข้อความท้ายใบเสร็จ</label>
-                  <input className="input mt-1" value={draft.receipt_footer||""} onChange={e=>set('receipt_footer', e.target.value)} placeholder="เช่น ขอบคุณที่ใช้บริการ" />
-                </div>
+        {/* ── Tab: ข้อมูลร้าน ── */}
+        {activeTab === 'shop' && isAdmin && draft && (
+          <div className="space-y-4 fade-in">
+            <div className="text-xs text-muted">ข้อมูลส่วนนี้จะแสดงบนใบเสร็จและใบกำกับภาษี</div>
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted">ชื่อร้าน *</label>
+              <input className="input mt-1" value={draft.shop_name||""} onChange={e=>set('shop_name', e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted">ที่อยู่</label>
+              <textarea className="input mt-1" rows="2" value={draft.shop_address||""} onChange={e=>set('shop_address', e.target.value)} placeholder="เช่น 123 ห้างสรรพสินค้า ABC ชั้น 2" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs uppercase tracking-wider text-muted">เบอร์โทร</label>
+                <input className="input mt-1 font-mono" value={draft.shop_phone||""} onChange={e=>set('shop_phone', e.target.value)} placeholder="02-xxx-xxxx" />
               </div>
-            )}
+              <div>
+                <label className="text-xs uppercase tracking-wider text-muted">เลขผู้เสียภาษี</label>
+                <input className="input mt-1 font-mono" value={draft.shop_tax_id||""} onChange={e=>set('shop_tax_id', e.target.value)} placeholder="13 หลัก" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted">ข้อความท้ายใบเสร็จ</label>
+              <input className="input mt-1" value={draft.receipt_footer||""} onChange={e=>set('receipt_footer', e.target.value)} placeholder="เช่น ขอบคุณที่ใช้บริการ" />
+            </div>
           </div>
         )}
 
-        {/* ── Section 3: Telegram (admin only, collapsible) ── */}
-        {isAdmin && (
-          <div className="border-t hairline pt-4">
-            <button
-              type="button"
-              onClick={() => setTelegramOpen(o => !o)}
-              className="w-full flex items-center justify-between gap-2 group"
-            >
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted flex items-center gap-1.5">
-                <Icon name="zap" size={13}/>
-                Telegram — สรุปยอดอัตโนมัติ
-              </span>
-              <Icon
-                name={telegramOpen ? 'chevron-u' : 'chevron-d'}
-                size={16}
-                className="text-muted-soft group-hover:text-muted transition"
-              />
-            </button>
-            {telegramOpen && (
-              <div className="mt-3 fade-in">
-                <TelegramSettings toast={toast} />
-              </div>
-            )}
+        {/* ── Tab: Telegram ── */}
+        {activeTab === 'telegram' && isAdmin && (
+          <div className="fade-in">
+            <TelegramSettings toast={toast} />
           </div>
         )}
 
-        {/* ── Section 4: สูตรคำนวณ paylater/COD (admin only, PIN-gated save) ── */}
-        {isAdmin && paylaterDraft && (
-          <div className="border-t hairline pt-4">
-            <button
-              type="button"
-              onClick={() => setPaylaterOpen(o => !o)}
-              className="w-full flex items-center justify-between gap-2 group"
-            >
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted flex items-center gap-1.5">
-                <Icon name="calculator" size={13}/>
-                สูตรคำนวณ paylater/COD
-              </span>
-              <Icon
-                name={paylaterOpen ? 'chevron-u' : 'chevron-d'}
-                size={16}
-                className="text-muted-soft group-hover:text-muted transition"
-              />
-            </button>
-            {paylaterOpen && (
-              <PaylaterFormulaSection
-                draft={paylaterDraft}
-                onChange={setPaylaterDraft}
-                onSave={() => setPinOpen(true)}
-                onReset={resetPaylaterToDefaults}
-                busy={paylaterBusy}
-              />
-            )}
-          </div>
+        {/* ── Tab: สูตรคำนวณ paylater/COD ── */}
+        {activeTab === 'paylater' && isAdmin && paylaterDraft && (
+          <PaylaterFormulaSection
+            draft={paylaterDraft}
+            onChange={setPaylaterDraft}
+            onSave={() => setPinOpen(true)}
+            onReset={resetPaylaterToDefaults}
+            busy={paylaterBusy}
+          />
         )}
 
       </div>
