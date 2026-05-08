@@ -29,7 +29,10 @@ import {
   EXPENSE_CATEGORIES, EXPENSE_CAT_MAP, staffComputed, realNetProfit,
 } from './lib/expense-calc.js';
 import {
+  estimateNetReceivedPerUnit,
   estimateNetReceivedTotal,
+  mergePaylaterConfig,
+  DEFAULT_PAYLATER_CONFIG,
 } from './lib/money.js';
 import Icon from './components/ui/Icon.jsx';
 import { useRealtimeInvalidate } from './lib/use-realtime-invalidate.js';
@@ -996,9 +999,285 @@ function FontPickerInline() {
 }
 
 /* =========================================================
+   PAYLATER FORMULA SETTINGS — editable constants for the
+   "คำนวณอัตโนมัติ" estimator. Save is gated by PIN to keep
+   accidental edits away (the actual security boundary is the
+   admin role; this is a deliberate "speed bump").
+
+   Hint shown to the user: "รหัส iPhone เจได"
+========================================================= */
+const PAYLATER_CONFIG_PIN = '28933';
+const PAYLATER_PIN_COOLDOWN_MS = 30_000;
+
+// Renders a labelled numeric input bound to a path inside a nested
+// config object. Centralised here so all 12 inputs share the same
+// validation & styling without copy-paste.
+function PaylaterField({ label, value, onChange, suffix, min = 0, max, step = 'any' }) {
+  return (
+    <label className="block">
+      <div className="text-[11px] uppercase tracking-wider text-muted">{label}</div>
+      <div className="relative mt-1">
+        <input
+          type="number"
+          inputMode="decimal"
+          step={step}
+          min={min}
+          max={max}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="input !h-9 !rounded-lg !py-1.5 !pr-9 !text-sm tabular-nums"
+        />
+        {suffix && (
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-soft pointer-events-none">
+            {suffix}
+          </span>
+        )}
+      </div>
+    </label>
+  );
+}
+
+// The full formula editor. Controlled by `draft`; `onChange(draft)`
+// fires for every keystroke, parent decides when to persist (gated
+// behind PIN modal — see `AppSettingsModal`).
+function PaylaterFormulaSection({ draft, onChange, onSave, onReset, busy }) {
+  // Live preview: a tiny calculator using the *current* draft so
+  // the shopkeeper can sanity-check changes before committing.
+  const [previewPrice, setPreviewPrice] = useState('9700');
+  const previewE = useMemo(() => {
+    const p = Number(previewPrice);
+    if (!Number.isFinite(p) || p <= 0) return null;
+    return estimateNetReceivedPerUnit(p, draft);
+  }, [previewPrice, draft]);
+
+  // Setter helper: updates `draft.<group>.<key>` immutably.
+  const setField = (group, key) => (raw) => {
+    onChange({
+      ...draft,
+      [group]: { ...draft[group], [key]: raw === '' ? '' : Number(raw) },
+    });
+  };
+
+  return (
+    <div className="mt-3 space-y-4 fade-in">
+      <div className="text-xs text-muted leading-relaxed">
+        ตัวเลขเหล่านี้ใช้กับปุ่ม <span className="font-medium text-ink">"คำนวณอัตโนมัติ"</span> ในหน้าขาย
+        เมื่อช่องทางเป็น TikTok/Shopee/Lazada และชำระแบบ paylater หรือเก็บปลายทาง
+      </div>
+
+      {/* Tier 1 — bracket markdown by sticker price */}
+      <div className="rounded-xl bg-surface-soft border hairline p-3 space-y-3">
+        <div className="text-xs font-semibold text-ink">① ลด % ตามราคาป้าย (Tier 1)</div>
+        <div className="grid grid-cols-2 gap-2">
+          <PaylaterField label="ราคา > High" value={draft.tier1.high_threshold}
+            onChange={setField('tier1', 'high_threshold')} suffix="฿"/>
+          <PaylaterField label="ราคา > Mid" value={draft.tier1.mid_threshold}
+            onChange={setField('tier1', 'mid_threshold')} suffix="฿"/>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <PaylaterField label="High → ลด" value={draft.tier1.high_pct}
+            onChange={setField('tier1', 'high_pct')} suffix="%" max={100}/>
+          <PaylaterField label="Mid → ลด" value={draft.tier1.mid_pct}
+            onChange={setField('tier1', 'mid_pct')} suffix="%" max={100}/>
+          <PaylaterField label="Low → ลด" value={draft.tier1.low_pct}
+            onChange={setField('tier1', 'low_pct')} suffix="%" max={100}/>
+        </div>
+      </div>
+
+      {/* Markup */}
+      <div className="rounded-xl bg-surface-soft border hairline p-3 space-y-3">
+        <div className="text-xs font-semibold text-ink">② บวก % ต่อเนื่อง (Markup)</div>
+        <div className="grid grid-cols-2 gap-2">
+          <PaylaterField label="Markup 1" value={draft.markup.pct1}
+            onChange={setField('markup', 'pct1')} suffix="%"/>
+          <PaylaterField label="Markup 2" value={draft.markup.pct2}
+            onChange={setField('markup', 'pct2')} suffix="%"/>
+        </div>
+      </div>
+
+      {/* Tier 2 — bracket markdown by C */}
+      <div className="rounded-xl bg-surface-soft border hairline p-3 space-y-3">
+        <div className="text-xs font-semibold text-ink">③ ลด % ตามค่า C (Tier 2)</div>
+        <div className="grid grid-cols-2 gap-2">
+          <PaylaterField label="C > High" value={draft.tier2.high_threshold}
+            onChange={setField('tier2', 'high_threshold')}/>
+          <PaylaterField label="C > Mid" value={draft.tier2.mid_threshold}
+            onChange={setField('tier2', 'mid_threshold')}/>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <PaylaterField label="High → ลด" value={draft.tier2.high_pct}
+            onChange={setField('tier2', 'high_pct')} suffix="%" max={100}/>
+          <PaylaterField label="Mid → ลด" value={draft.tier2.mid_pct}
+            onChange={setField('tier2', 'mid_pct')} suffix="%" max={100}/>
+          <PaylaterField label="Low → ลด" value={draft.tier2.low_pct}
+            onChange={setField('tier2', 'low_pct')} suffix="%" max={100}/>
+        </div>
+      </div>
+
+      {/* Provider fee + flat */}
+      <div className="rounded-xl bg-surface-soft border hairline p-3 space-y-3">
+        <div className="text-xs font-semibold text-ink">④ ค่าธรรมเนียม Provider</div>
+        <div className="grid grid-cols-2 gap-2">
+          <PaylaterField label="หัก %" value={draft.fee.provider_pct}
+            onChange={setField('fee', 'provider_pct')} suffix="%" max={100}/>
+          <PaylaterField label="หักคงที่" value={draft.fee.flat_baht}
+            onChange={setField('fee', 'flat_baht')} suffix="฿"/>
+        </div>
+      </div>
+
+      {/* Live preview */}
+      <div className="rounded-xl bg-primary/5 border border-primary/15 p-3">
+        <div className="text-[11px] uppercase tracking-wider text-primary font-medium mb-1.5 inline-flex items-center gap-1.5">
+          <Icon name="zap" size={12}/> ตัวอย่างการคำนวณ
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="number" inputMode="decimal" min="0"
+            value={previewPrice}
+            onChange={(e) => setPreviewPrice(e.target.value)}
+            className="input !h-9 !rounded-lg !py-1.5 !text-sm flex-1 tabular-nums"
+            placeholder="ราคาป้ายทดลอง"
+          />
+          <Icon name="chevron-r" size={14} className="text-muted-soft flex-shrink-0"/>
+          <div className="text-base font-display tabular-nums text-primary flex-shrink-0 min-w-[90px] text-right">
+            {previewE != null ? fmtTHB(previewE) : '—'}
+          </div>
+        </div>
+        <div className="text-[11px] text-muted-soft mt-1.5">
+          ใส่ราคาป้ายเพื่อดูผลลัพธ์โดยประมาณตามสูตรปัจจุบัน
+        </div>
+      </div>
+
+      {/* Save / reset actions */}
+      <div className="flex items-center justify-between gap-2 pt-1">
+        <button
+          type="button"
+          onClick={onReset}
+          className="btn-ghost !text-xs"
+          disabled={busy}
+        >
+          <Icon name="refresh" size={13}/>
+          รีเซ็ตเป็นค่าเริ่มต้น
+        </button>
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={busy}
+          className="btn-primary !py-2 !px-3 !text-sm inline-flex items-center gap-1.5"
+        >
+          {busy ? <span className="spinner"/> : <Icon name="lock" size={14}/>}
+          บันทึกสูตร
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// 5-digit numeric PIN prompt with hint + cooldown after 3 wrong tries.
+// Uses the existing `Modal` so focus-trap / Escape / overlay all behave
+// the same as the rest of the app.
+function PinPromptModal({ open, onClose, onSuccess, hint }) {
+  const [pin, setPin] = useState('');
+  const [attempts, setAttempts] = useState(0);
+  const [lockUntil, setLockUntil] = useState(0);
+  const [shake, setShake] = useState(false);
+  const [now, setNow] = useState(Date.now());
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (open) { setPin(''); setShake(false); }
+  }, [open]);
+
+  // Tick once per second while a cooldown is active so the countdown
+  // text actually updates.
+  useEffect(() => {
+    if (!open || lockUntil <= Date.now()) return;
+    const id = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(id);
+  }, [open, lockUntil]);
+
+  const locked = lockUntil > now;
+  const remainingMs = Math.max(0, lockUntil - now);
+  const remainingSec = Math.ceil(remainingMs / 1000);
+
+  const submit = () => {
+    if (locked) return;
+    if (pin === PAYLATER_CONFIG_PIN) {
+      setAttempts(0);
+      setLockUntil(0);
+      setPin('');
+      onSuccess();
+    } else {
+      const next = attempts + 1;
+      setAttempts(next);
+      setShake(true);
+      setTimeout(() => setShake(false), 320);
+      setPin('');
+      inputRef.current?.focus();
+      if (next >= 3) {
+        setLockUntil(Date.now() + PAYLATER_PIN_COOLDOWN_MS);
+        setAttempts(0);
+      }
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title="ยืนยันรหัส"
+      footer={<>
+        <button className="btn-secondary" onClick={onClose}>ยกเลิก</button>
+        <button
+          className="btn-primary"
+          onClick={submit}
+          disabled={locked || pin.length !== 5}
+        >
+          <Icon name="check" size={16}/>
+          ยืนยัน
+        </button>
+      </>}>
+      <div className={"space-y-3 " + (shake ? "shake-error" : "")}>
+        <div className="text-sm text-muted">
+          ใส่รหัส 5 หลักเพื่อบันทึกสูตรการคำนวณ
+        </div>
+        <input
+          ref={inputRef}
+          type="password"
+          inputMode="numeric"
+          autoComplete="off"
+          maxLength={5}
+          autoFocus
+          value={pin}
+          onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 5))}
+          onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+          disabled={locked}
+          className="input !h-12 !text-center !text-2xl tabular-nums tracking-[0.6em] font-display"
+          placeholder="•••••"
+        />
+        {hint && (
+          <div className="text-xs text-muted-soft text-center">
+            คำใบ้: <span className="text-ink">{hint}</span>
+          </div>
+        )}
+        {attempts > 0 && !locked && (
+          <div className="text-xs text-error text-center">
+            รหัสไม่ถูกต้อง — เหลืออีก {3 - attempts} ครั้ง
+          </div>
+        )}
+        {locked && (
+          <div className="text-xs text-error text-center">
+            ใส่ผิดเกินกำหนด รออีก {remainingSec} วินาที
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+/* =========================================================
    UNIFIED APP SETTINGS MODAL
    - Section 1: การแสดงผล (FontSizePicker + FontPicker) — visible to ALL users
    - Section 2: ข้อมูลร้าน (shop fields for receipt/invoice) — admin only
+   - Section 3: Telegram (admin only)
+   - Section 4: สูตรคำนวณ paylater/COD (admin only, PIN-gated save)
    Replaces both the old SettingsModal and the inline FontSizePicker in
    the sidebar footer / mobile drawer.
 ========================================================= */
@@ -1011,11 +1290,46 @@ function AppSettingsModal({ open, onClose }) {
   const [busy, setBusy] = useState(false);
   const [shopOpen, setShopOpen] = useState(false);
   const [telegramOpen, setTelegramOpen] = useState(false);
+  // Paylater formula sub-state — kept separate from `draft` (the shop-info
+  // draft) so its save flow + PIN gate don't entangle with the main "บันทึก".
+  const [paylaterOpen, setPaylaterOpen] = useState(false);
+  const [paylaterDraft, setPaylaterDraft] = useState(null);
+  const [paylaterBusy, setPaylaterBusy] = useState(false);
+  const [pinOpen, setPinOpen] = useState(false);
 
   useEffect(() => {
-    if (open && shop) setDraft({ ...shop });
-    if (!open) { setShopOpen(false); setTelegramOpen(false); }
-  }, [open, shop]);  
+    if (open && shop) {
+      setDraft({ ...shop });
+      setPaylaterDraft(mergePaylaterConfig(shop?.paylater_config));
+    }
+    if (!open) {
+      setShopOpen(false); setTelegramOpen(false);
+      setPaylaterOpen(false); setPinOpen(false);
+    }
+  }, [open, shop]);
+
+  // Persist the paylater draft to shop_settings.paylater_config. Called
+  // *after* the PIN modal confirms — never bypassed.
+  const savePaylaterConfig = async () => {
+    if (!isAdmin || !paylaterDraft) return;
+    setPaylaterBusy(true);
+    const { error } = await sb.from('shop_settings').update({
+      paylater_config: paylaterDraft,
+      updated_at: new Date().toISOString(),
+    }).eq('id', 1);
+    setPaylaterBusy(false);
+    if (error) { toast.push("บันทึกสูตรไม่ได้: " + mapError(error), 'error'); return; }
+    toast.push("บันทึกสูตรการคำนวณแล้ว", 'success');
+    setPinOpen(false);
+    await refreshShop();
+  };
+
+  // Reset draft to the in-code defaults (does NOT persist until user
+  // also clicks "บันทึกสูตร" + enters the PIN).
+  const resetPaylaterToDefaults = () => {
+    setPaylaterDraft(mergePaylaterConfig(null));
+    toast.push("รีเซ็ตเป็นค่าเริ่มต้นแล้ว — กดบันทึกเพื่อยืนยัน", 'info');
+  };
 
   const set = (k, v) => setDraft(d => ({ ...d, [k]: v }));
 
@@ -1146,7 +1460,47 @@ function AppSettingsModal({ open, onClose }) {
           </div>
         )}
 
+        {/* ── Section 4: สูตรคำนวณ paylater/COD (admin only, PIN-gated save) ── */}
+        {isAdmin && paylaterDraft && (
+          <div className="border-t hairline pt-4">
+            <button
+              type="button"
+              onClick={() => setPaylaterOpen(o => !o)}
+              className="w-full flex items-center justify-between gap-2 group"
+            >
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted flex items-center gap-1.5">
+                <Icon name="calculator" size={13}/>
+                สูตรคำนวณ paylater/COD
+              </span>
+              <Icon
+                name={paylaterOpen ? 'chevron-u' : 'chevron-d'}
+                size={16}
+                className="text-muted-soft group-hover:text-muted transition"
+              />
+            </button>
+            {paylaterOpen && (
+              <PaylaterFormulaSection
+                draft={paylaterDraft}
+                onChange={setPaylaterDraft}
+                onSave={() => setPinOpen(true)}
+                onReset={resetPaylaterToDefaults}
+                busy={paylaterBusy}
+              />
+            )}
+          </div>
+        )}
+
       </div>
+
+      {/* Nested modal for the PIN gate. Mounted at the top of the
+          AppSettingsModal so it can stack above without unmounting
+          the parent's draft state. */}
+      <PinPromptModal
+        open={pinOpen}
+        onClose={() => setPinOpen(false)}
+        onSuccess={savePaylaterConfig}
+        hint="รหัส iPhone เจได"
+      />
     </Modal>
   );
 }
@@ -2126,14 +2480,14 @@ function DisplayPricePanel({ line, onApply, onClear }) {
 // known until 1–2 days later). Uses estimateNetReceivedTotal which
 // applies the per-line shop formula. Disabled when cart is empty so
 // the button shape stays stable but doesn't fire on no-op data.
-function NetReceivedAutoButton({ cart, onApply }) {
+function NetReceivedAutoButton({ cart, config, onApply }) {
   const disabled = !cart || cart.length === 0;
   return (
     <button
       type="button"
       disabled={disabled}
-      onClick={() => onApply(estimateNetReceivedTotal(cart))}
-      title="คำนวณยอดสุทธิหลังหัก fee โดยประมาณ จากราคาป้าย"
+      onClick={() => onApply(estimateNetReceivedTotal(cart, config))}
+      title="คำนวณยอดสุทธิหลังหัก fee โดยประมาณ จากราคาป้าย (สูตรแก้ได้ในการตั้งค่า)"
       className={"inline-flex items-center gap-1 h-10 px-3 rounded-xl text-xs font-semibold border whitespace-nowrap transition shadow-sm flex-shrink-0 " + (
         disabled
           ? "bg-white/40 text-muted-soft border-hairline cursor-not-allowed"
@@ -2149,6 +2503,15 @@ function NetReceivedAutoButton({ cart, onApply }) {
 function POSView() {
   const toast = useToast();
   const askConfirm = useConfirm();
+  const { shop } = useShop();
+  // Live formula config for the "คำนวณอัตโนมัติ" button. Falls back to
+  // DEFAULT_PAYLATER_CONFIG when the shop hasn't customised it (or is
+  // still loading). useMemo so the merged object is stable across
+  // renders and the button's onClick captures the same reference.
+  const paylaterConfig = useMemo(
+    () => mergePaylaterConfig(shop?.paylater_config),
+    [shop?.paylater_config]
+  );
   const [search, setSearch] = useState("");
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -2757,7 +3120,7 @@ function POSView() {
                 onChange={e=>setNetReceived(e.target.value)}
               />
               {(payment === 'paylater' || payment === 'cod') && (
-                <NetReceivedAutoButton cart={cart}
+                <NetReceivedAutoButton cart={cart} config={paylaterConfig}
                   onApply={(v)=>{ setNetReceived(String(v)); netReceivedRef.current?.focus(); }}/>
               )}
             </div>
@@ -3121,7 +3484,7 @@ function POSView() {
                           onChange={e=>setNetReceived(e.target.value)}
                         />
                         {(payment === 'paylater' || payment === 'cod') && (
-                          <NetReceivedAutoButton cart={cart}
+                          <NetReceivedAutoButton cart={cart} config={paylaterConfig}
                             onApply={(v)=>{ setNetReceived(String(v)); netReceivedRef.current?.focus(); }}/>
                         )}
                       </div>

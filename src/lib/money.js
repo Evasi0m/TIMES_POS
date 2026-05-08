@@ -56,44 +56,99 @@ export function applyDiscounts(unitPrice, qty, d1v, d1t, d2v, d2t) {
 }
 
 /**
+ * Default config for the paylater/COD net-received estimator. Mirrors
+ * the original hard-coded constants from the first iteration of the
+ * formula. Each shop can override any subset via `shop_settings.paylater_config`
+ * (see migration 011); missing fields fall back to these defaults.
+ *
+ * Schema (all numbers; thresholds in baht, rates in percent 0–100):
+ *   tier1.high_threshold > tier1.mid_threshold        (price-bracket cuts)
+ *   tier1.high_pct, tier1.mid_pct, tier1.low_pct      (markdown % per bracket)
+ *   markup.pct1, markup.pct2                          (cascading +%)
+ *   tier2.high_threshold > tier2.mid_threshold        (C-bracket cuts)
+ *   tier2.high_pct, tier2.mid_pct, tier2.low_pct      (markdown % per bracket)
+ *   fee.provider_pct, fee.flat_baht                   (final ×(1−p%) − f baht)
+ *
+ * Tier rules use STRICT > comparisons with the wider bracket first; see
+ * the original spec in plan auto-net-received-formula-a236c5 for the
+ * historical ">8000→55, >3500→58, else→55" pattern.
+ */
+export const DEFAULT_PAYLATER_CONFIG = Object.freeze({
+  tier1:  { high_threshold: 8000, mid_threshold: 3500, high_pct: 55, mid_pct: 58, low_pct: 55 },
+  markup: { pct1: 37, pct2: 11 },
+  tier2:  { high_threshold: 6000, mid_threshold: 2500, high_pct: 10, mid_pct: 8, low_pct: 5 },
+  fee:    { provider_pct: 23.08, flat_baht: 1.07 },
+});
+
+/**
+ * Deep-merge a partial config (e.g. from `shop_settings.paylater_config`,
+ * which may be NULL or have missing subtrees) with `DEFAULT_PAYLATER_CONFIG`.
+ * Returns a fully-populated config that's safe to feed into
+ * `estimateNetReceivedPerUnit`. Non-numeric overrides are silently
+ * ignored (fall back to default) so a corrupted DB row can't crash the
+ * POS.
+ */
+export function mergePaylaterConfig(partial) {
+  const result = {
+    tier1:  { ...DEFAULT_PAYLATER_CONFIG.tier1 },
+    markup: { ...DEFAULT_PAYLATER_CONFIG.markup },
+    tier2:  { ...DEFAULT_PAYLATER_CONFIG.tier2 },
+    fee:    { ...DEFAULT_PAYLATER_CONFIG.fee },
+  };
+  if (!partial || typeof partial !== 'object') return result;
+  for (const group of ['tier1', 'markup', 'tier2', 'fee']) {
+    const src = partial[group];
+    if (!src || typeof src !== 'object') continue;
+    for (const key of Object.keys(result[group])) {
+      // Skip null/undefined/empty-string explicitly — Number(null) === 0
+      // would otherwise silently zero out a percentage rate.
+      const raw = src[key];
+      if (raw === null || raw === undefined || raw === '') continue;
+      const v = Number(raw);
+      if (Number.isFinite(v)) result[group][key] = v;
+    }
+  }
+  return result;
+}
+
+/**
  * Estimate the net amount the shop receives per unit after platform +
  * paylater/COD provider fees, given the sticker price. Used to pre-fill
  * "เงินที่ร้านได้รับ" for paylater/cod e-commerce sales where the exact
  * deduction isn't known until 1–2 days after the sale.
  *
- * Formula (per shop spec — see plan auto-net-received-formula-a236c5):
+ * Formula (parameters editable per shop — see DEFAULT_PAYLATER_CONFIG):
  *
- *   tier1 (price-bracket markdown — counter-intuitive but correct):
- *     unit_price > 8000        → −55%
- *     8000 ≥ unit_price > 3500 → −58%
- *     unit_price ≤ 3500        → −55%
- *   then +37% then +11%  →  C
- *   tier2 (markdown by C):
- *     C > 6000 → −10%
- *     C > 2500 → −8%
- *     else     → −5%
- *   then ×(1 − 0.2308) − 1.07 baht (paylater fee + flat transaction fee)
+ *   tier1 (price-bracket markdown):
+ *     price > tier1.high_threshold        → −tier1.high_pct%
+ *     price > tier1.mid_threshold (≤high) → −tier1.mid_pct%
+ *     else                                → −tier1.low_pct%
+ *   then ×(1 + markup.pct1%) ×(1 + markup.pct2%)  →  C
+ *   tier2 (C-bracket markdown):
+ *     C > tier2.high_threshold        → −tier2.high_pct%
+ *     C > tier2.mid_threshold (≤high) → −tier2.mid_pct%
+ *     else                            → −tier2.low_pct%
+ *   then ×(1 − fee.provider_pct%) − fee.flat_baht
  *
- * Note the rule order: ">8000 → 55%" overrides ">3500 → 58%", and
- * ">6000 → 10%" overrides ">2500 → 8%". Implementation uses if/else if
- * with the wider bracket first to honour that.
+ * Note rule ordering uses STRICT > with the wider bracket first.
  */
-export function estimateNetReceivedPerUnit(unitPrice) {
+export function estimateNetReceivedPerUnit(unitPrice, config = DEFAULT_PAYLATER_CONFIG) {
   const p = Number(unitPrice) || 0;
   if (p <= 0) return 0;
+  const cfg = config === DEFAULT_PAYLATER_CONFIG ? config : mergePaylaterConfig(config);
   // tier1
-  let tier1 = 0.55;
-  if (p > 8000) tier1 = 0.55;
-  else if (p > 3500) tier1 = 0.58;
-  const A = roundMoney(p * (1 - tier1));
-  const B = roundMoney(A * 1.37);
-  const C = roundMoney(B * 1.11);
+  let tier1Pct = cfg.tier1.low_pct;
+  if (p > cfg.tier1.high_threshold) tier1Pct = cfg.tier1.high_pct;
+  else if (p > cfg.tier1.mid_threshold) tier1Pct = cfg.tier1.mid_pct;
+  const A = roundMoney(p * (1 - tier1Pct / 100));
+  const B = roundMoney(A * (1 + cfg.markup.pct1 / 100));
+  const C = roundMoney(B * (1 + cfg.markup.pct2 / 100));
   // tier2
-  let tier2 = 0.05;
-  if (C > 6000) tier2 = 0.10;
-  else if (C > 2500) tier2 = 0.08;
-  const D = roundMoney(C * (1 - tier2));
-  const E = roundMoney(D * (1 - 0.2308) - 1.07);
+  let tier2Pct = cfg.tier2.low_pct;
+  if (C > cfg.tier2.high_threshold) tier2Pct = cfg.tier2.high_pct;
+  else if (C > cfg.tier2.mid_threshold) tier2Pct = cfg.tier2.mid_pct;
+  const D = roundMoney(C * (1 - tier2Pct / 100));
+  const E = roundMoney(D * (1 - cfg.fee.provider_pct / 100) - cfg.fee.flat_baht);
   return E;
 }
 
@@ -102,10 +157,11 @@ export function estimateNetReceivedPerUnit(unitPrice) {
  * across the cart. Per-line so that the price-bracket tiers reflect the
  * sticker price of each individual product.
  */
-export function estimateNetReceivedTotal(cart) {
+export function estimateNetReceivedTotal(cart, config = DEFAULT_PAYLATER_CONFIG) {
   if (!Array.isArray(cart) || !cart.length) return 0;
+  const cfg = config === DEFAULT_PAYLATER_CONFIG ? config : mergePaylaterConfig(config);
   const sum = cart.reduce((acc, l) => {
-    const perUnit = estimateNetReceivedPerUnit(l?.unit_price);
+    const perUnit = estimateNetReceivedPerUnit(l?.unit_price, cfg);
     const q = Number(l?.quantity) || 0;
     return acc + perUnit * q;
   }, 0);

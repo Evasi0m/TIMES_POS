@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   estimateNetReceivedPerUnit,
   estimateNetReceivedTotal,
+  mergePaylaterConfig,
+  DEFAULT_PAYLATER_CONFIG,
 } from '../src/lib/money.js';
 
 // Reference example from the shop:
@@ -100,5 +102,76 @@ describe('estimateNetReceivedTotal — cart aggregation', () => {
     ];
     const expected = estimateNetReceivedPerUnit(9700);
     expect(Math.abs(estimateNetReceivedTotal(cart) - expected)).toBeLessThanOrEqual(0.02);
+  });
+});
+
+describe('mergePaylaterConfig — fallback behaviour', () => {
+  it('returns DEFAULT for null / undefined / non-object', () => {
+    expect(mergePaylaterConfig(null)).toEqual(DEFAULT_PAYLATER_CONFIG);
+    expect(mergePaylaterConfig(undefined)).toEqual(DEFAULT_PAYLATER_CONFIG);
+    expect(mergePaylaterConfig('whatever')).toEqual(DEFAULT_PAYLATER_CONFIG);
+    expect(mergePaylaterConfig(42)).toEqual(DEFAULT_PAYLATER_CONFIG);
+  });
+
+  it('returns DEFAULT for empty object', () => {
+    expect(mergePaylaterConfig({})).toEqual(DEFAULT_PAYLATER_CONFIG);
+  });
+
+  it('overrides only the specified leaves, keeps siblings at default', () => {
+    const merged = mergePaylaterConfig({ tier1: { high_pct: 50 } });
+    expect(merged.tier1.high_pct).toBe(50);
+    expect(merged.tier1.mid_pct).toBe(DEFAULT_PAYLATER_CONFIG.tier1.mid_pct);
+    expect(merged.tier1.high_threshold).toBe(DEFAULT_PAYLATER_CONFIG.tier1.high_threshold);
+    expect(merged.markup).toEqual(DEFAULT_PAYLATER_CONFIG.markup);
+    expect(merged.tier2).toEqual(DEFAULT_PAYLATER_CONFIG.tier2);
+    expect(merged.fee).toEqual(DEFAULT_PAYLATER_CONFIG.fee);
+  });
+
+  it('ignores non-numeric overrides (defensive against bad DB rows)', () => {
+    const merged = mergePaylaterConfig({
+      tier1: { high_pct: 'not a number', mid_pct: null },
+      fee:   { flat_baht: 'NaN' },
+    });
+    expect(merged.tier1.high_pct).toBe(DEFAULT_PAYLATER_CONFIG.tier1.high_pct);
+    expect(merged.tier1.mid_pct).toBe(DEFAULT_PAYLATER_CONFIG.tier1.mid_pct);
+    expect(merged.fee.flat_baht).toBe(DEFAULT_PAYLATER_CONFIG.fee.flat_baht);
+  });
+
+  it('does not mutate DEFAULT_PAYLATER_CONFIG', () => {
+    const merged = mergePaylaterConfig({ tier1: { high_pct: 99 } });
+    merged.tier1.high_pct = 1;
+    expect(DEFAULT_PAYLATER_CONFIG.tier1.high_pct).toBe(55);
+  });
+});
+
+describe('estimateNetReceivedPerUnit — custom config', () => {
+  it('honours custom tier1 percentages', () => {
+    // Set tier1.high_pct to 50 (instead of 55) — shop receives more.
+    const baseline = estimateNetReceivedPerUnit(9700);
+    const custom = estimateNetReceivedPerUnit(9700, { tier1: { high_pct: 50 } });
+    expect(custom).toBeGreaterThan(baseline);
+  });
+
+  it('honours custom markup', () => {
+    // Drop markup.pct1 from 37→0 — final estimate falls dramatically.
+    const baseline = estimateNetReceivedPerUnit(9700);
+    const custom = estimateNetReceivedPerUnit(9700, { markup: { pct1: 0 } });
+    expect(custom).toBeLessThan(baseline);
+  });
+
+  it('honours custom fee.flat_baht', () => {
+    // Increase flat fee by 10 baht → estimate drops by ~10.
+    const baseline = estimateNetReceivedPerUnit(9700);
+    const custom = estimateNetReceivedPerUnit(9700, { fee: { flat_baht: 11.07 } });
+    expect(Math.abs((baseline - custom) - 10)).toBeLessThanOrEqual(0.02);
+  });
+
+  it('partial config: omitted fields fall back to defaults', () => {
+    // Same as default → identical result.
+    const fromDefault = estimateNetReceivedPerUnit(9700);
+    const fromEmpty   = estimateNetReceivedPerUnit(9700, {});
+    const fromNull    = estimateNetReceivedPerUnit(9700, null);
+    expect(fromEmpty).toBe(fromDefault);
+    expect(fromNull).toBe(fromDefault);
   });
 });
