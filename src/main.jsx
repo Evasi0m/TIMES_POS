@@ -4267,6 +4267,7 @@ function ProductsView() {
           const lc = latestCostMap[p.id];
           return (
             <div key={p.id} className="card-canvas pressable p-3.5 flex items-center gap-3" onClick={()=>setEditing(p)}>
+              <span className={"stock-dot self-start mt-1.5 " + (p.current_stock<=0 ? 'is-empty' : 'is-ok')} aria-hidden="true" />
               <div className="flex-1 min-w-0">
                 <div className="font-semibold truncate text-[15px]">{p.name}</div>
                 <div className="flex items-baseline gap-2 mt-1.5 min-w-0 text-sm">
