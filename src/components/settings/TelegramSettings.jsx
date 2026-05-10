@@ -1,313 +1,515 @@
-// Telegram daily-summary settings panel (admin-only).
+// Telegram bot settings — tab body inside AppSettingsModal.
 //
-// Lives in the AppSettingsModal as a collapsible section. Reads/writes
-// `shop_secrets` (admin RLS — cashiers cannot even SELECT) and triggers
-// the deployed `daily-telegram-summary` edge function in test/preview
-// modes for a one-click verification flow.
+// Five sections, top-to-bottom:
+//   1. การเชื่อมต่อ        — bot token, chat picker, manual test send
+//   2. การแจ้งเตือนอัตโนมัติ — toggles + schedule for daily / monthly / brief
+//   3. ดูตัวอย่างข้อความ    — preview the rendered text for each kind
+//   4. Bot สั่งงาน          — webhook install/teardown for /commands
+//   5. ประวัติการส่ง        — last_*_sent_at + last_summary_error
 //
-// Setup flow for the owner:
-//   1. Open @BotFather on Telegram → /newbot → copy bot token
-//   2. Paste token here → กดปุ่ม "ดู Chat ID จาก bot"
-//      (BUT first message your bot once so it has a chat to fetch)
-//   3. Pick chat_id from list → กดปุ่ม "ทดสอบส่ง" → ดู Telegram
-//   4. เปิด switch ส่งอัตโนมัติ
-//
-// Security: bot token is stored in `shop_secrets` (admin-only RLS).
-// Token is masked in the UI by default; click "ดู" to reveal.
+// All interaction with Telegram (test, preview, webhook ops) goes through
+// the `telegram-send` edge function via supabase.functions.invoke(). The
+// browser never sees the bot token after the first save.
 
 import React, { useEffect, useState } from 'react';
 import { sb } from '../../lib/supabase-client.js';
 import Icon from '../ui/Icon.jsx';
 
-const HOUR_OPTIONS = [
-  { v: 9,  label: '09:00' }, { v: 12, label: '12:00' },
-  { v: 18, label: '18:00' }, { v: 19, label: '19:00' },
-  { v: 20, label: '20:00' }, { v: 21, label: '21:00' },
-  { v: 22, label: '22:00' }, { v: 23, label: '23:00' },
-];
+// ─────────────────────────────────────────────────────────────────────────
+//  Hours dropdown — 0..23
+// ─────────────────────────────────────────────────────────────────────────
+const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
-export default function TelegramSettings({ toast }) {
-  const [secret, setSecret] = useState(null);            // null = loading
-  const [draft, setDraft] = useState({
-    telegram_bot_token: '', telegram_chat_id: '',
-    daily_summary_enabled: false, daily_summary_hour: 21,
-  });
-  const [showToken, setShowToken] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [busy, setBusy] = useState({ test: false, chats: false, preview: false });
-  const [chatHits, setChatHits] = useState(null);        // null | [] | [{id,title}]
-  const [previewText, setPreviewText] = useState(null);  // last preview body
+// ─────────────────────────────────────────────────────────────────────────
+//  Pretty-format the relative time of last_*_sent_at.
+// ─────────────────────────────────────────────────────────────────────────
+function fmtRelative(iso) {
+  if (!iso) return '—';
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 0) return 'อนาคต';
+  const m = Math.floor(ms / 60_000);
+  if (m < 1) return 'เมื่อสักครู่';
+  if (m < 60) return `${m} นาทีที่แล้ว`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} ชม.ที่แล้ว`;
+  const d = Math.floor(h / 24);
+  return `${d} วันที่แล้ว`;
+}
 
+export function TelegramSettings({ toast }) {
+  const [row, setRow] = useState(null);            // raw shop_secrets row
+  const [busy, setBusy] = useState(false);
+  const [chats, setChats] = useState([]);          // [{id, title, type}]
+  const [chatsLoading, setChatsLoading] = useState(false);
+
+  // Preview state — `previewKind` is 'daily'|'monthly'|'brief' when open.
+  const [previewKind, setPreviewKind] = useState(null);
+  const [previewText, setPreviewText] = useState('');
+  const [previewBusy, setPreviewBusy] = useState(false);
+
+  // Webhook status — populated by `webhook_status` action.
+  const [hookStatus, setHookStatus] = useState(null);
+  const [hookBusy, setHookBusy] = useState(false);
+
+  // ── Initial load ───────────────────────────────────────────────────
   useEffect(() => {
-    let cancelled = false;
     (async () => {
       const { data, error } = await sb.from('shop_secrets').select('*').eq('id', 1).maybeSingle();
-      if (cancelled) return;
-      if (error) {
-        // RLS denial = cashier opened settings as admin somehow → just leave UI empty.
-        toast?.push?.('โหลด Telegram settings ไม่ได้ (อาจไม่ใช่ admin)', 'error');
-        setSecret({});
-        return;
-      }
-      setSecret(data || {});
-      setDraft({
-        telegram_bot_token: data?.telegram_bot_token || '',
-        telegram_chat_id:   data?.telegram_chat_id   || '',
-        daily_summary_enabled: !!data?.daily_summary_enabled,
-        daily_summary_hour: data?.daily_summary_hour ?? 21,
-      });
+      if (error) { toast.push('โหลดการตั้งค่า Telegram ไม่ได้: ' + error.message, 'error'); return; }
+      setRow(data);
     })();
-    return () => { cancelled = true; };
   }, [toast]);
 
-  const set = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
+  // ── Field setters — keep `row` immutable; UI binds to it directly. ─
+  const set = (k, v) => setRow(r => ({ ...r, [k]: v }));
 
-  const save = async () => {
-    setSaving(true);
-    const payload = {
-      telegram_bot_token:    draft.telegram_bot_token.trim() || null,
-      telegram_chat_id:      draft.telegram_chat_id.trim() || null,
-      daily_summary_enabled: !!draft.daily_summary_enabled,
-      daily_summary_hour:    Number(draft.daily_summary_hour) || 21,
-    };
-    const { error } = await sb.from('shop_secrets').update(payload).eq('id', 1);
-    setSaving(false);
-    if (error) { toast?.push?.('บันทึกไม่ได้: ' + error.message, 'error'); return; }
-    toast?.push?.('บันทึกการตั้งค่า Telegram แล้ว', 'success');
-    setSecret((s) => ({ ...(s || {}), ...payload }));
+  // ── Persist a single field (or several) to shop_secrets immediately.
+  // Auto-save flows let the user toggle a switch and forget — no extra
+  // "save" button to remember. Each save is fire-and-forget with toast.
+  const persist = async (patch, opts = {}) => {
+    setBusy(true);
+    const { error } = await sb.from('shop_secrets').update({
+      ...patch, updated_at: new Date().toISOString(),
+    }).eq('id', 1);
+    setBusy(false);
+    if (error) {
+      toast.push('บันทึกไม่ได้: ' + error.message, 'error');
+      return false;
+    }
+    if (opts.silent !== true) toast.push('บันทึกแล้ว', 'success');
+    setRow(r => ({ ...r, ...patch }));
+    return true;
   };
 
-  // Hit Telegram getUpdates directly from the browser. Token stays
-  // client-side; no need to round-trip through the edge function.
-  const fetchChatIds = async () => {
-    const token = draft.telegram_bot_token.trim();
-    if (!token) { toast?.push?.('กรอก Bot Token ก่อน', 'error'); return; }
-    setBusy((b) => ({ ...b, chats: true }));
-    setChatHits(null);
+  // ── Section 1: bot token save (commits the in-input value) ─────────
+  const saveToken = async () => {
+    const tok = (row?.telegram_bot_token || '').trim();
+    if (!tok) { toast.push('กรุณาวาง bot token', 'warn'); return; }
+    await persist({ telegram_bot_token: tok });
+  };
+
+  // ── Section 1: fetch chat IDs via Telegram getUpdates ──────────────
+  // Direct call from the browser — token must be present. Only used to
+  // help the user pick a chat at setup time. For sending we always go
+  // through the edge function.
+  const fetchChats = async () => {
+    const tok = (row?.telegram_bot_token || '').trim();
+    if (!tok) { toast.push('ใส่ bot token ก่อน', 'warn'); return; }
+    setChatsLoading(true); setChats([]);
     try {
-      const res = await fetch(`https://api.telegram.org/bot${token}/getUpdates`);
+      const res = await fetch(`https://api.telegram.org/bot${tok}/getUpdates`);
       const json = await res.json();
-      if (!json.ok) { toast?.push?.('Telegram: ' + (json.description || 'failed'), 'error'); return; }
-      // Dedupe by chat.id; latest wins for the title.
-      const map = new Map();
-      for (const upd of json.result || []) {
-        const chat = upd.message?.chat || upd.edited_message?.chat
-                  || upd.channel_post?.chat;
-        if (!chat) continue;
-        const title = chat.title || [chat.first_name, chat.last_name].filter(Boolean).join(' ') || chat.username || '(no name)';
-        map.set(chat.id, { id: chat.id, title, type: chat.type });
+      if (!json.ok) {
+        toast.push('Telegram: ' + (json.description || 'ไม่สำเร็จ'), 'error');
+        return;
       }
-      const hits = Array.from(map.values());
-      setChatHits(hits);
-      if (hits.length === 0) {
-        toast?.push?.('ยังไม่มี chat — ส่งข้อความใด ๆ ให้ bot ก่อน แล้วลองใหม่', 'info');
+      const seen = new Map();
+      for (const u of json.result || []) {
+        const c = u.message?.chat || u.edited_message?.chat || u.channel_post?.chat;
+        if (c) seen.set(c.id, c);
       }
-    } catch (e) {
-      toast?.push?.('Network error: ' + e.message, 'error');
+      const list = Array.from(seen.values());
+      if (!list.length) {
+        toast.push('ยังไม่พบข้อความ — ลอง /start ในแชทนั้นก่อน', 'info');
+      }
+      setChats(list);
+    } catch (err) {
+      toast.push('โหลด chat ไม่ได้: ' + String(err), 'error');
     } finally {
-      setBusy((b) => ({ ...b, chats: false }));
+      setChatsLoading(false);
     }
   };
 
-  const callEdge = async (body) => {
-    const { data: sess } = await sb.auth.getSession();
-    const token = sess?.session?.access_token;
-    if (!token) throw new Error('not signed in');
-    const res = await fetch(
-      'https://zrymhhkqdcttqsdczfcr.supabase.co/functions/v1/daily-telegram-summary',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify(body),
-      }
-    );
-    return res.json();
-  };
-
-  const sendTest = async () => {
-    if (!draft.telegram_bot_token || !draft.telegram_chat_id) {
-      toast?.push?.('กรอก Token + Chat ID ก่อน แล้วกด "บันทึก"', 'error');
+  // ── Test send (round-trips through edge function) ──────────────────
+  const testSend = async () => {
+    setBusy(true);
+    const { data, error } = await sb.functions.invoke('telegram-send', {
+      body: { action: 'test' },
+    });
+    setBusy(false);
+    if (error || !data?.ok) {
+      toast.push('ทดสอบส่งไม่ได้: ' + (data?.error || error?.message || 'unknown'), 'error');
       return;
     }
-    if ((secret?.telegram_bot_token || '') !== draft.telegram_bot_token.trim()
-        || (secret?.telegram_chat_id || '') !== draft.telegram_chat_id.trim()) {
-      toast?.push?.('กด "บันทึก" ก่อน แล้วทดสอบส่ง', 'info');
+    toast.push('ส่งข้อความทดสอบสำเร็จ — เช็ค Telegram', 'success');
+  };
+
+  // ── Section 3: preview a template ──────────────────────────────────
+  const openPreview = async (kind) => {
+    setPreviewKind(kind);
+    setPreviewText('');
+    setPreviewBusy(true);
+    const { data, error } = await sb.functions.invoke('telegram-send', {
+      body: { action: 'preview', kind },
+    });
+    setPreviewBusy(false);
+    if (error || !data?.ok) {
+      setPreviewText('— โหลดตัวอย่างไม่ได้ —\n' + (data?.error || error?.message || ''));
       return;
     }
-    setBusy((b) => ({ ...b, test: true }));
-    try {
-      // Call Telegram directly from the browser — Telegram's API supports CORS,
-      // and this avoids any edge-function deploy/CORS issues for a simple test send.
-      const tgToken = draft.telegram_bot_token.trim();
-      const tgChat  = draft.telegram_chat_id.trim();
-      const res = await fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: tgChat,
-          text: '✅ <b>เชื่อมต่อ Telegram สำเร็จ</b>\nร้าน TIMES POS · ทดสอบส่งข้อความ',
-          parse_mode: 'HTML',
-          disable_web_page_preview: true,
-        }),
-      });
-      const json = await res.json();
-      if (json.ok) toast?.push?.('ส่ง Telegram สำเร็จ ✅ ดูที่ chat ของคุณ', 'success');
-      else         toast?.push?.('ส่งไม่สำเร็จ: ' + (json.description || 'unknown'), 'error');
-    } catch (e) {
-      toast?.push?.('Network error: ' + e.message, 'error');
-    } finally {
-      setBusy((b) => ({ ...b, test: false }));
-    }
+    setPreviewText(data.text || '');
   };
 
-  const previewYesterday = async () => {
-    setBusy((b) => ({ ...b, preview: true }));
-    setPreviewText(null);
-    try {
-      const r = await callEdge({ preview: true });
-      if (r?.ok) setPreviewText(r.text);
-      else       toast?.push?.('Preview ล้มเหลว: ' + (r?.error || 'unknown'), 'error');
-    } catch (e) {
-      toast?.push?.('Network error: ' + e.message, 'error');
-    } finally {
-      setBusy((b) => ({ ...b, preview: false }));
+  // Manual one-off send (real Telegram message, not preview).
+  const sendNow = async (kind) => {
+    if (!confirm('ยืนยันส่งข้อความนี้ไปยัง Telegram จริงตอนนี้?')) return;
+    setPreviewBusy(true);
+    const { data, error } = await sb.functions.invoke('telegram-send', {
+      body: { action: 'send', kind },
+    });
+    setPreviewBusy(false);
+    if (error || !data?.ok) {
+      toast.push('ส่งไม่สำเร็จ: ' + (data?.error || error?.message || 'unknown'), 'error');
+      return;
     }
+    toast.push('ส่งสำเร็จ — เช็ค Telegram', 'success');
+    // Refresh row so the "ประวัติการส่ง" section shows the new timestamp
+    const { data: r } = await sb.from('shop_secrets').select('*').eq('id', 1).maybeSingle();
+    if (r) setRow(r);
   };
 
-  if (secret === null) return <div className="skeleton h-32 rounded" />;
+  // ── Section 4: webhook install / status / delete ───────────────────
+  const refreshHookStatus = async () => {
+    setHookBusy(true);
+    const { data, error } = await sb.functions.invoke('telegram-send', {
+      body: { action: 'webhook_status' },
+    });
+    setHookBusy(false);
+    if (error) { toast.push('ดู webhook ไม่ได้: ' + error.message, 'error'); return; }
+    setHookStatus(data);
+  };
+  const installHook = async () => {
+    setHookBusy(true);
+    const { data, error } = await sb.functions.invoke('telegram-send', {
+      body: { action: 'install_webhook' },
+    });
+    setHookBusy(false);
+    if (error || !data?.ok) {
+      toast.push('ติดตั้ง webhook ไม่สำเร็จ: ' + (data?.setWebhook?.description || error?.message || 'unknown'), 'error');
+      return;
+    }
+    toast.push('ติดตั้ง webhook สำเร็จ — ลองพิมพ์ /help ใน Telegram', 'success');
+    await refreshHookStatus();
+  };
+  const removeHook = async () => {
+    if (!confirm('ลบ webhook? Bot จะหยุดตอบคำสั่งจากคุณ')) return;
+    setHookBusy(true);
+    const { data, error } = await sb.functions.invoke('telegram-send', {
+      body: { action: 'delete_webhook' },
+    });
+    setHookBusy(false);
+    if (error) { toast.push('ลบ webhook ไม่ได้: ' + error.message, 'error'); return; }
+    toast.push('ลบ webhook แล้ว', 'success');
+    setHookStatus(data);
+  };
 
-  const tokenDirty = (draft.telegram_bot_token || '').trim() !== (secret.telegram_bot_token || '');
-  const chatDirty  = (draft.telegram_chat_id || '').trim()  !== (secret.telegram_chat_id || '');
-  const dirty = tokenDirty || chatDirty
-    || !!draft.daily_summary_enabled !== !!secret.daily_summary_enabled
-    || Number(draft.daily_summary_hour) !== Number(secret.daily_summary_hour ?? 21);
+  // ── Render ─────────────────────────────────────────────────────────
+  if (!row) return <div className="text-sm text-muted py-6">กำลังโหลด...</div>;
 
   return (
-    <div className="space-y-4">
-      <div className="text-xs text-muted leading-relaxed bg-white/40 rounded p-3">
-        ตั้งค่า Telegram Bot เพื่อให้ระบบส่งสรุปยอดของแต่ละวันเข้า chat ของคุณอัตโนมัติ
-        <br/>
-        1. เปิด <code className="font-mono text-[11px]">@BotFather</code> บน Telegram → <code>/newbot</code> → copy <b>Bot Token</b><br/>
-        2. ส่งข้อความใด ๆ ให้ bot ของคุณก่อน 1 ครั้ง<br/>
-        3. วาง token ด้านล่าง → กด <b>"ดู Chat ID"</b> → เลือก chat → กด <b>"ทดสอบส่ง"</b>
-      </div>
+    <div className="space-y-5">
 
-      {/* Bot token */}
-      <div>
-        <label className="text-xs uppercase tracking-wider text-muted">Bot Token</label>
-        <div className="mt-1 flex gap-2">
-          <input
-            type={showToken ? 'text' : 'password'}
-            className="input flex-1 font-mono text-xs"
-            placeholder="123456:ABC-DEF..."
-            value={draft.telegram_bot_token}
-            onChange={(e) => set('telegram_bot_token', e.target.value)}
-            autoComplete="off"
-            spellCheck={false}
-          />
-          <button type="button" className="btn-ghost !px-3"
-            onClick={() => setShowToken((s) => !s)}
-            title={showToken ? 'ซ่อน' : 'แสดง'}>
-            <Icon name={showToken ? 'x' : 'edit'} size={16} />
-          </button>
+      {/* ── Section 1: การเชื่อมต่อ ─────────────────────── */}
+      <Section title="1. การเชื่อมต่อ" icon="zap">
+        <div>
+          <label className="text-xs uppercase tracking-wider text-muted">Bot Token</label>
+          <div className="flex gap-2 mt-1">
+            <input
+              className="input flex-1 font-mono text-xs"
+              value={row.telegram_bot_token || ''}
+              onChange={e => set('telegram_bot_token', e.target.value)}
+              placeholder="123456:ABCdef..."
+              autoComplete="off" spellCheck="false"
+            />
+            <button className="btn-secondary" onClick={saveToken} disabled={busy}>
+              <Icon name="check" size={14}/> บันทึก
+            </button>
+          </div>
+          <div className="text-[11px] text-muted-soft mt-1">
+            ขอที่ <span className="font-mono">@BotFather</span> → /newbot — แล้ววาง token ที่นี่
+          </div>
         </div>
-      </div>
 
-      {/* Chat id + helper */}
-      <div>
-        <label className="text-xs uppercase tracking-wider text-muted">Chat ID</label>
-        <div className="mt-1 flex gap-2">
-          <input
-            className="input flex-1 font-mono text-xs"
-            placeholder="เช่น 123456789 หรือ -1001234567890"
-            value={draft.telegram_chat_id}
-            onChange={(e) => set('telegram_chat_id', e.target.value)}
-            spellCheck={false}
-          />
-          <button type="button" className="btn-secondary !text-xs whitespace-nowrap"
-            onClick={fetchChatIds} disabled={busy.chats}>
-            {busy.chats ? <span className="spinner mr-1"/> : <Icon name="search" size={14} className="mr-1"/>}
-            ดู Chat ID
-          </button>
+        <div>
+          <label className="text-xs uppercase tracking-wider text-muted">Chat ID</label>
+          <div className="flex gap-2 mt-1">
+            <input
+              className="input flex-1 font-mono text-sm"
+              value={row.telegram_chat_id || ''}
+              onChange={e => set('telegram_chat_id', e.target.value)}
+              placeholder="ส่งข้อความหา bot แล้วกดปุ่ม 'ค้นหา'"
+            />
+            <button className="btn-secondary" onClick={fetchChats} disabled={chatsLoading}>
+              {chatsLoading ? <span className="spinner"/> : <Icon name="search" size={14}/>} ค้นหา
+            </button>
+            <button className="btn-secondary" onClick={() => persist({ telegram_chat_id: (row.telegram_chat_id||'').trim() || null })}>
+              <Icon name="check" size={14}/>
+            </button>
+          </div>
+          {chats.length > 0 && (
+            <div className="mt-2 space-y-1">
+              {chats.map(c => (
+                <button
+                  key={c.id} type="button"
+                  onClick={() => persist({ telegram_chat_id: String(c.id) })}
+                  className={"w-full text-left text-sm px-3 py-2 rounded-md border transition " + (
+                    String(row.telegram_chat_id) === String(c.id)
+                      ? 'bg-primary/10 border-primary text-primary'
+                      : 'bg-white border-hairline hover:border-primary/30'
+                  )}
+                >
+                  <span className="font-mono mr-2">{c.id}</span>
+                  <span className="text-muted">{c.title || c.username || c.type}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-        {chatHits && chatHits.length > 0 && (
-          <div className="mt-2 rounded-md bg-white/60 border hairline divide-y divide-hairline-soft">
-            {chatHits.map((c) => (
-              <button key={c.id} type="button"
-                className="w-full text-left px-3 py-2 text-sm hover:bg-primary/5 flex items-center justify-between gap-2"
-                onClick={() => set('telegram_chat_id', String(c.id))}>
-                <span className="truncate">
-                  <span className="font-medium">{c.title}</span>
-                  <span className="text-muted-soft text-xs ml-2">({c.type})</span>
-                </span>
-                <span className="font-mono text-xs text-muted">{c.id}</span>
-              </button>
-            ))}
+
+        <button className="btn-primary w-full" onClick={testSend} disabled={busy || !row.telegram_bot_token || !row.telegram_chat_id}>
+          {busy ? <span className="spinner"/> : <Icon name="zap" size={14}/>}
+          ทดสอบส่งข้อความ
+        </button>
+      </Section>
+
+      {/* ── Section 2: การแจ้งเตือนอัตโนมัติ ─────────────── */}
+      <Section title="2. การแจ้งเตือนอัตโนมัติ" icon="calendar">
+        <div className="text-[11px] text-muted-soft -mt-1">
+          ทำงานทุกชั่วโมง — เช็คเวลา (เวลาไทย) แล้วส่งให้อัตโนมัติ
+        </div>
+
+        <ScheduleRow
+          label="สรุปประจำวัน"
+          desc="ส่งทุกวันเวลาที่ตั้ง — สรุปยอดของเมื่อวาน"
+          enabled={row.daily_enabled}
+          hour={row.daily_hour}
+          onToggle={(v) => persist({ daily_enabled: v }, { silent: true })}
+          onHour={(h) => persist({ daily_hour: h }, { silent: true })}
+        />
+
+        <ScheduleRow
+          label="สรุปสิ้นเดือน"
+          desc="ส่งวันที่ 1 ของเดือนใหม่ — สรุปยอดเดือนก่อน"
+          enabled={row.monthly_enabled}
+          hour={row.monthly_hour}
+          onToggle={(v) => persist({ monthly_enabled: v }, { silent: true })}
+          onHour={(h) => persist({ monthly_hour: h }, { silent: true })}
+        />
+
+        <ScheduleRow
+          label="Brief ตอนเช้า"
+          desc="ส่งทุกวัน — ยอดเดือนสะสม + สต็อกที่ต้องดู"
+          enabled={row.morning_enabled}
+          hour={row.morning_hour}
+          onToggle={(v) => persist({ morning_enabled: v }, { silent: true })}
+          onHour={(h) => persist({ morning_hour: h }, { silent: true })}
+        />
+
+        <div className="pt-2 border-t hairline-soft">
+          <label className="text-xs uppercase tracking-wider text-muted">เกณฑ์สต็อกใกล้หมด</label>
+          <div className="flex gap-2 items-center mt-1">
+            <input
+              type="number" min="0" max="999"
+              className="input w-24 text-center font-mono"
+              value={row.low_stock_threshold ?? 3}
+              onChange={e => set('low_stock_threshold', Math.max(0, Number(e.target.value)||0))}
+              onBlur={() => persist({ low_stock_threshold: row.low_stock_threshold ?? 3 }, { silent: true })}
+            />
+            <span className="text-sm text-muted">ชิ้น — เมื่อสต็อก ≤ ตัวเลขนี้ จะแสดงใน brief และคำสั่ง /lowstock</span>
+          </div>
+        </div>
+      </Section>
+
+      {/* ── Section 3: ดูตัวอย่างข้อความ ─────────────────── */}
+      <Section title="3. ดูตัวอย่าง / ส่งทันที" icon="edit">
+        <div className="text-[11px] text-muted-soft -mt-1">
+          ดูว่าข้อความจะหน้าตาเป็นยังไง หรือกด "ส่งทันที" เพื่อยิงไปจริง
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <PreviewButton kind="daily"   label="📊 Daily"    onClick={() => openPreview('daily')} />
+          <PreviewButton kind="monthly" label="🗓 Monthly"  onClick={() => openPreview('monthly')} />
+          <PreviewButton kind="brief"   label="☀️ Brief"    onClick={() => openPreview('brief')} />
+        </div>
+
+        {previewKind && (
+          <div className="rounded-lg border hairline bg-canvas/40 p-3 mt-2">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="text-xs text-muted uppercase tracking-wider">
+                ตัวอย่าง: {previewKind === 'daily' ? 'Daily' : previewKind === 'monthly' ? 'Monthly' : 'Brief'}
+              </div>
+              <div className="flex gap-1">
+                <button className="btn-ghost text-xs" onClick={() => openPreview(previewKind)} disabled={previewBusy}>
+                  <Icon name="refresh" size={12}/> รีโหลด
+                </button>
+                <button className="btn-primary text-xs" onClick={() => sendNow(previewKind)} disabled={previewBusy || !row.telegram_bot_token || !row.telegram_chat_id}>
+                  ส่งทันที
+                </button>
+                <button className="btn-ghost text-xs" onClick={() => setPreviewKind(null)}>
+                  <Icon name="x" size={12}/>
+                </button>
+              </div>
+            </div>
+            <pre className="text-xs whitespace-pre-wrap leading-relaxed font-mono text-ink overflow-x-auto max-h-72">
+              {previewBusy ? 'กำลังโหลด...' : stripHtmlTags(previewText)}
+            </pre>
           </div>
         )}
-      </div>
+      </Section>
 
-      {/* Schedule + enabled */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label className="text-xs uppercase tracking-wider text-muted">เวลาส่ง (เวลากรุงเทพ)</label>
-          <select className="input mt-1"
-            value={draft.daily_summary_hour}
-            onChange={(e) => set('daily_summary_hour', Number(e.target.value))}>
-            {HOUR_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
-          </select>
+      {/* ── Section 4: Two-way bot (webhook) ──────────────── */}
+      <Section title="4. Bot สั่งงาน (พิมพ์ /today, /month ฯลฯ)" icon="zap">
+        <div className="text-[11px] text-muted-soft -mt-1">
+          ติดตั้ง webhook แล้วพิมพ์คำสั่งใน Telegram เพื่อขอข้อมูลแบบ real-time
         </div>
-        <div>
-          <label className="text-xs uppercase tracking-wider text-muted">การส่งอัตโนมัติ</label>
-          <label className="mt-2 flex items-center gap-2 cursor-pointer">
-            <input type="checkbox"
-              checked={!!draft.daily_summary_enabled}
-              onChange={(e) => set('daily_summary_enabled', e.target.checked)}
-              className="w-4 h-4 accent-primary" />
-            <span className="text-sm">{draft.daily_summary_enabled ? 'เปิดอยู่' : 'ปิดอยู่'}</span>
-          </label>
+
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="rounded-md border hairline bg-canvas/40 p-2 font-mono">
+            /today, /yesterday<br/>/month, /lastmonth
+          </div>
+          <div className="rounded-md border hairline bg-canvas/40 p-2 font-mono">
+            /sales 7, /sales 30<br/>/lowstock, /whoami, /help
+          </div>
         </div>
-      </div>
 
-      {/* Save / test row */}
-      <div className="flex flex-wrap gap-2">
-        <button type="button" className="btn-primary !text-sm"
-          disabled={saving || !dirty} onClick={save}>
-          {saving ? <span className="spinner mr-1"/> : <Icon name="check" size={14} className="mr-1"/>}
-          บันทึก
-        </button>
-        <button type="button" className="btn-secondary !text-sm"
-          disabled={busy.test || dirty} onClick={sendTest}
-          title={dirty ? 'บันทึกก่อน' : ''}>
-          {busy.test ? <span className="spinner mr-1"/> : <Icon name="zap" size={14} className="mr-1"/>}
-          ทดสอบส่ง
-        </button>
-        <button type="button" className="btn-secondary !text-sm"
-          disabled={busy.preview} onClick={previewYesterday}>
-          {busy.preview ? <span className="spinner mr-1"/> : <Icon name="receipt" size={14} className="mr-1"/>}
-          ดูตัวอย่างยอดเมื่อวาน
-        </button>
-      </div>
+        <div className="flex gap-2">
+          <button className="btn-primary flex-1" onClick={installHook} disabled={hookBusy || !row.telegram_bot_token}>
+            {hookBusy ? <span className="spinner"/> : <Icon name="check" size={14}/>}
+            ติดตั้ง / อัปเดต Webhook
+          </button>
+          <button className="btn-secondary" onClick={refreshHookStatus} disabled={hookBusy || !row.telegram_bot_token}>
+            <Icon name="refresh" size={14}/> สถานะ
+          </button>
+          <button className="btn-secondary text-error" onClick={removeHook} disabled={hookBusy || !row.telegram_bot_token}>
+            <Icon name="x" size={14}/> ลบ
+          </button>
+        </div>
 
-      {previewText && (
-        <pre className="bg-white/60 border hairline rounded p-3 text-xs whitespace-pre-wrap font-mono leading-relaxed max-h-64 overflow-y-auto"
-          dangerouslySetInnerHTML={{ __html: previewText }} />
-      )}
-
-      {/* Last status */}
-      <div className="text-xs text-muted border-t hairline-soft pt-3 space-y-1">
-        {secret.last_summary_sent_at ? (
-          <div>ส่งล่าสุด: <span className="text-ink">{new Date(secret.last_summary_sent_at).toLocaleString('th-TH')}</span></div>
-        ) : (
-          <div className="text-muted-soft">ยังไม่มีประวัติการส่ง</div>
-        )}
-        {secret.last_summary_error && (
-          <div className="text-error">
-            <Icon name="alert" size={11} className="inline mr-1"/>
-            ครั้งล่าสุดผิดพลาด: <span className="font-mono">{secret.last_summary_error}</span>
+        {hookStatus && (
+          <div className="rounded-md border hairline bg-canvas/40 p-3 text-xs space-y-1">
+            <div>
+              <span className="text-muted">URL:</span>{' '}
+              <span className="font-mono break-all">{hookStatus?.result?.url || '(ไม่ได้ตั้ง)'}</span>
+            </div>
+            <div>
+              <span className="text-muted">Pending updates:</span>{' '}
+              <span className="font-mono">{hookStatus?.result?.pending_update_count ?? '—'}</span>
+            </div>
+            {hookStatus?.result?.last_error_message && (
+              <div className="text-error">
+                <span className="text-muted">Last error:</span>{' '}
+                {hookStatus.result.last_error_message}
+              </div>
+            )}
           </div>
         )}
-      </div>
+      </Section>
+
+      {/* ── Section 5: ประวัติการส่ง ───────────────────── */}
+      <Section title="5. ประวัติการส่ง" icon="calendar">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+          <HistoryCard label="Daily"   ts={row.last_summary_sent_at}/>
+          <HistoryCard label="Monthly" ts={row.last_monthly_sent_at}/>
+          <HistoryCard label="Brief"   ts={row.last_brief_sent_at}/>
+        </div>
+        {row.last_summary_error && (
+          <div className="rounded-md border border-error/30 bg-error/5 text-error text-xs p-3 mt-2">
+            <div className="font-medium mb-1">⚠️ Error ล่าสุด</div>
+            <div className="font-mono break-all">{row.last_summary_error}</div>
+          </div>
+        )}
+      </Section>
     </div>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+//  Subcomponents
+// ─────────────────────────────────────────────────────────────────────────
+
+function Section({ title, icon, children }) {
+  return (
+    <section className="space-y-3">
+      <h3 className="text-sm font-semibold text-ink flex items-center gap-2">
+        <Icon name={icon} size={14}/>
+        {title}
+      </h3>
+      <div className="space-y-3 pl-1">{children}</div>
+    </section>
+  );
+}
+
+// One row inside section 2 — toggle + hour dropdown.
+function ScheduleRow({ label, desc, enabled, hour, onToggle, onHour }) {
+  return (
+    <div className="flex items-center gap-3 py-2 border-t hairline-soft first:border-t-0 first:pt-0">
+      <button
+        type="button"
+        onClick={() => onToggle(!enabled)}
+        aria-pressed={enabled}
+        className={
+          "flex-shrink-0 w-11 h-6 rounded-full relative transition " +
+          (enabled ? 'bg-primary' : 'bg-hairline')
+        }
+      >
+        <span
+          className={
+            "absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition " +
+            (enabled ? 'left-[22px]' : 'left-0.5')
+          }
+        />
+      </button>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm text-ink font-medium">{label}</div>
+        <div className="text-[11px] text-muted-soft">{desc}</div>
+      </div>
+      <select
+        className="input !py-1 !px-2 text-sm font-mono w-24 text-center"
+        value={hour}
+        onChange={e => onHour(Number(e.target.value))}
+        disabled={!enabled}
+      >
+        {HOURS.map(h => (
+          <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function PreviewButton({ label, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-lg border hairline bg-white hover:border-primary/40 transition py-2 text-sm font-medium"
+    >
+      {label}
+    </button>
+  );
+}
+
+function HistoryCard({ label, ts }) {
+  return (
+    <div className="rounded-md border hairline bg-canvas/40 p-2.5">
+      <div className="text-[10px] uppercase tracking-wider text-muted">{label}</div>
+      <div className="text-sm text-ink font-medium">{ts ? fmtRelative(ts) : 'ยังไม่เคยส่ง'}</div>
+      {ts && <div className="text-[10px] text-muted-soft font-mono">{new Date(ts).toLocaleString('th-TH')}</div>}
+    </div>
+  );
+}
+
+// Strip the HTML tags we use in templates (<b>, <i>, <code>) for the preview
+// pane. Telegram renders them as bold/italic/mono, but we show plain text in
+// the UI so the user sees the structure without parsing the markup themselves.
+function stripHtmlTags(s) {
+  if (!s) return '';
+  return s
+    .replace(/<\/?b>/g, '')
+    .replace(/<\/?i>/g, '')
+    .replace(/<\/?code>/g, '')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+}
+
+export default TelegramSettings;
