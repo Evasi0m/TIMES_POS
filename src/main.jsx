@@ -4265,42 +4265,29 @@ function ProductsView() {
         )}
         {visibleRows.map(p => {
           const lc = latestCostMap[p.id];
-          const drift = lc ? lc.unit_price - Number(p.cost_price||0) : 0;
-          const driftPct = (lc && Number(p.cost_price||0) > 0) ? (drift / Number(p.cost_price) * 100) : 0;
-          const showDrift = lc && Math.abs(drift) >= 0.01;
           return (
             <div key={p.id} className="card-canvas pressable p-3.5 flex items-center gap-3" onClick={()=>setEditing(p)}>
               <div className="flex-1 min-w-0">
-                <div className="font-medium truncate">{p.name}</div>
-                <div className="font-mono text-xs text-muted truncate mt-0.5">{p.barcode||'—'}</div>
-                {(brandName(p.brand_id) || catName(p.category_id)) && (
-                  <div className="text-xs text-muted-soft mt-0.5 truncate">
-                    {[brandName(p.brand_id), catName(p.category_id)].filter(Boolean).join(' · ')}
-                  </div>
-                )}
-                <div className="flex items-center gap-2 mt-1.5">
-                  <span className="font-display text-lg leading-none tabular-nums">{fmtTHB(p.retail_price)}</span>
-                  <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':p.current_stock<5?'!bg-warning/15 !text-[#8a6500]':'')}>คงเหลือ {p.current_stock}</span>
-                </div>
-                <div className="flex items-center gap-2 mt-1 text-xs">
-                  <span className="text-muted-soft">ทุน:</span>
-                  <span className="text-muted-soft tabular-nums">ตั้งต้น {fmtTHB(p.cost_price)}</span>
-                  {lc && (
-                    <>
-                      <span className="text-muted-soft">·</span>
-                      <span className="font-medium tabular-nums">ล่าสุด {fmtTHB(lc.unit_price)}</span>
-                      {showDrift && (
-                        <span className={"px-1 rounded text-[10px] font-medium " + (drift > 0 ? 'bg-error/10 text-error' : 'bg-success/15 text-[#2c6b3a]')}>
-                          {drift > 0 ? '↑' : '↓'}{Math.abs(driftPct).toFixed(0)}%
-                        </span>
-                      )}
-                    </>
-                  )}
+                <div className="font-semibold truncate text-[15px]">{p.name}</div>
+                <div className="flex items-baseline gap-2 mt-1.5 min-w-0 text-sm">
+                  <span className="tabular-nums text-primary truncate">ป้าย {roundMoney(p.retail_price).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                  <span className="text-muted-soft leading-none">|</span>
+                  <span className="tabular-nums text-muted truncate">ต้นทุน {roundMoney(lc ? lc.unit_price : p.cost_price).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
                 </div>
               </div>
-              <div className="flex-shrink-0 inline-flex items-center gap-1 text-xs text-muted">
-                <Icon name="edit" size={14}/>
-                <span>แก้ไข</span>
+              <div
+                className="flex-shrink-0 flex items-center justify-center w-14 h-14 rounded-[10px] text-white font-display text-2xl leading-none tabular-nums font-semibold"
+                style={{
+                  background: p.current_stock<=0
+                    ? 'linear-gradient(180deg, #b91c1c 0%, #7f1d1d 100%)'
+                    : 'linear-gradient(180deg, #15803d 0%, #14532d 100%)',
+                  border: '1px solid rgba(255,255,255,0.18)',
+                  boxShadow: p.current_stock<=0
+                    ? '0 2px 8px rgba(127,29,29,0.45), 0 1px 0 rgba(255,255,255,0.18) inset'
+                    : '0 2px 8px rgba(20,83,45,0.45), 0 1px 0 rgba(255,255,255,0.18) inset',
+                }}
+              >
+                {p.current_stock}
               </div>
             </div>
           );
