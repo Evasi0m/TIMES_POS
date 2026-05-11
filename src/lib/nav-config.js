@@ -13,7 +13,9 @@ export const NAV = [
   { k: 'receive',   label: 'รับเข้า', labelLong: 'รับสินค้าจากบริษัท', icon: 'arrow-up',  adminOnly: true },
   { k: 'return',    label: 'รับคืน',  labelLong: 'รับคืนจากลูกค้า',   icon: 'arrow-down' },
   { k: 'dashboard', label: 'ภาพรวม',  labelLong: 'แดชบอร์ด',         icon: 'dashboard', adminOnly: true },
-  { k: 'pnl',       label: 'กำไร',    labelLong: 'กำไร / ขาดทุน',    icon: 'trend-up',  adminOnly: true },
+  // P&L was previously a top-level nav entry; it now lives as a tab
+  // inside OverviewView ("กำไรขาดทุน") so admins manage all reporting
+  // from a single page.
 ];
 
 export const navForRole = (role) =>

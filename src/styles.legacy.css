@@ -1238,6 +1238,44 @@
   @keyframes viewIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   .view-fade { animation: viewIn .3s var(--ease-out); }
 
+  /* POS cart-count glow badge. Continuous red halo pulse that lives next
+     to the "ขายสินค้า" page title so the cashier has an unmistakable
+     peripheral cue for how many items are in the cart. Visibility is
+     controlled by the React component (rendered = has items). The halo
+     expands+fades via box-shadow ring (0 → 10px) while the chip gently
+     scales 1 → 1.05 to give it life without being twitchy. */
+  @keyframes cartGlowPulse {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.55),
+                  0 2px 6px rgba(0, 0, 0, 0.18);
+      transform: scale(1);
+    }
+    50% {
+      box-shadow: 0 0 0 10px rgba(220, 38, 38, 0),
+                  0 2px 6px rgba(0, 0, 0, 0.18);
+      transform: scale(1.05);
+    }
+  }
+  .cart-glow-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    height: 36px;
+    padding: 0 8px;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, #ef4444 0%, #dc2626 55%, #b91c1c 100%);
+    color: #fff;
+    font-weight: 700;
+    font-size: 16px;
+    line-height: 1;
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.55),
+                0 2px 6px rgba(0, 0, 0, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    animation: cartGlowPulse 1.8s ease-in-out infinite;
+    user-select: none;
+  }
+
   /* Stock-status dot — small glowing pulse used in product list rows. */
   .stock-dot {
     display: inline-block;

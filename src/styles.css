@@ -7,7 +7,6 @@
  * NOTE: @import MUST come before @tailwind (CSS spec rule).
  */
 @import './styles.legacy.css';
-@import './themes.css';
 
 /* Tailwind layers — purges unused classes at build time (vs the JIT runtime
  * the legacy CDN setup loaded on every page view). */

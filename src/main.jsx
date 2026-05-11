@@ -112,6 +112,9 @@ const { useState, useEffect, useMemo, useCallback, useRef } = React;
 // Use everywhere prices are added/multiplied/discounted before storing or comparing.
 const roundMoney = (n) => Math.round(((Number(n) || 0) + Number.EPSILON) * 100) / 100;
 const fmtTHB = (n) => "฿" + roundMoney(n).toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+// Same as fmtTHB but without the ฿ prefix — used in tables where the column
+// header already implies currency and we want a denser tabular look.
+const fmtMoney = (n) => roundMoney(n).toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const fmtDate = (s) => s ? new Date(s).toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" }) : "-";
 const fmtDateTime = (s) => s ? new Date(s).toLocaleString("th-TH", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "-";
 // Bangkok-local YYYY-MM-DD — avoids the off-by-one bug when the server/client clock is in UTC
@@ -999,140 +1002,6 @@ function FontPickerInline() {
 }
 
 /* =========================================================
-   APP THEME SWITCHER
-
-   Persisted in localStorage; applied via the `[data-theme]`
-   attribute on <html>, which themes.css matches against.
-   Default = `claude` (no overrides; legacy aesthetic stays
-   pixel-perfect). Each non-default theme may also lazy-load
-   a Google Font when first activated.
-========================================================= */
-const APP_THEME_KEY = 'times_pos.app_theme';
-const APP_THEMES = [
-  {
-    id: 'claude',
-    label: 'Claude',
-    desc: 'Liquid glass · Coral · Taviraj serif (ค่าเริ่มต้น)',
-    accent: '#cc785c',
-    surface: 'linear-gradient(135deg, #faf9f5 0%, #efe9de 100%)',
-    ink: '#141413',
-    fontFamily: "'Taviraj', serif",
-    googleUrl: null,
-  },
-  {
-    id: 'apple',
-    label: 'Apple',
-    desc: 'Museum gallery · Action Blue · System sans',
-    accent: '#0066cc',
-    surface: '#f5f5f7',
-    ink: '#1d1d1f',
-    fontFamily: "'Inter', -apple-system, system-ui, sans-serif",
-    googleUrl: 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap',
-  },
-];
-
-function applyAppTheme(themeId) {
-  const theme = APP_THEMES.find(t => t.id === themeId) || APP_THEMES[0];
-  // ── Set the [data-theme] attribute that themes.css selectors match ──
-  // Default ("claude") gets no attribute so legacy CSS is untouched.
-  if (theme.id === 'claude') {
-    document.documentElement.removeAttribute('data-theme');
-  } else {
-    document.documentElement.setAttribute('data-theme', theme.id);
-  }
-  // ── Lazy-load the theme's Google Font (only on first activation) ──
-  const LINK_ID = 'times-app-theme-font';
-  let link = document.getElementById(LINK_ID);
-  if (theme.googleUrl) {
-    if (!link) {
-      link = document.createElement('link');
-      link.id = LINK_ID;
-      link.rel = 'stylesheet';
-      document.head.appendChild(link);
-    }
-    if (link.href !== theme.googleUrl) link.href = theme.googleUrl;
-  } else {
-    link?.remove();
-  }
-}
-
-// Apply saved theme immediately at module load — prevents FOUC where the
-// page would briefly render in the default theme before React hydrates.
-try { const _t = localStorage.getItem(APP_THEME_KEY); if (_t) applyAppTheme(_t); } catch {}
-
-function useAppTheme() {
-  const [themeId, _setThemeId] = useState(() => {
-    try { return localStorage.getItem(APP_THEME_KEY) || 'claude'; } catch { return 'claude'; }
-  });
-  const setThemeId = useCallback((id) => {
-    _setThemeId(id);
-    try { localStorage.setItem(APP_THEME_KEY, id); } catch {}
-    applyAppTheme(id);
-  }, []);
-  return [themeId, setThemeId];
-}
-
-// Inline preview card for each theme — mirrors FontPickerInline shape but
-// with a small mock UI (canvas + button + label) so the user can feel
-// the difference at a glance before committing.
-function ThemePickerInline() {
-  const [themeId, setThemeId] = useAppTheme();
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      {APP_THEMES.map(t => {
-        const active = themeId === t.id;
-        return (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setThemeId(t.id)}
-            className={"rounded-xl border p-3 text-left transition-colors " + (active
-              ? "bg-primary/10 border-primary"
-              : "bg-white border-hairline hover:border-primary/30")}
-          >
-            {/* Mini-preview — a tiny mock of canvas + button using the
-                theme's own colours so each card looks distinct. */}
-            <div
-              className="rounded-lg p-3 mb-2 flex items-center justify-between gap-2 overflow-hidden"
-              style={{
-                background: t.surface,
-                border: t.id === 'apple' ? '1px solid #e0e0e0' : '1px solid rgba(180, 168, 148, 0.35)',
-              }}
-            >
-              <div style={{ fontFamily: t.fontFamily, color: t.ink, fontWeight: 600, fontSize: 14, letterSpacing: t.id === 'apple' ? '-0.02em' : '-0.01em' }}>
-                Aa สวัสดี
-              </div>
-              <div
-                style={{
-                  background: t.accent,
-                  color: '#fff',
-                  fontFamily: t.fontFamily,
-                  fontSize: 11,
-                  fontWeight: t.id === 'apple' ? 400 : 500,
-                  padding: t.id === 'apple' ? '4px 12px' : '4px 10px',
-                  borderRadius: t.id === 'apple' ? 9999 : 7,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {t.id === 'apple' ? 'Buy' : 'ซื้อ'}
-              </div>
-            </div>
-            <div style={{ fontFamily: t.fontFamily, fontWeight: 600, color: active ? t.accent : '#141413' }}
-              className="text-sm leading-tight">
-              {t.label}
-              {active && <span className="ml-1 text-[10px] uppercase tracking-wider">· ใช้งานอยู่</span>}
-            </div>
-            <div className="text-[11px] text-muted mt-0.5 leading-snug">
-              {t.desc}
-            </div>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/* =========================================================
    PAYLATER FORMULA SETTINGS — editable constants for the
    "คำนวณอัตโนมัติ" estimator. Save is gated by PIN to keep
    accidental edits away (the actual security boundary is the
@@ -1489,7 +1358,6 @@ function AppSettingsModal({ open, onClose }) {
   // the nav doesn't show locked/unreachable items. Order here = display order.
   const TABS = [
     { id: 'display',  label: 'การแสดงผล',  icon: 'edit',       adminOnly: false },
-    { id: 'theme',    label: 'ธีม',         icon: 'palette',    adminOnly: false },
     { id: 'shop',     label: 'ข้อมูลร้าน',  icon: 'store',      adminOnly: true  },
     { id: 'telegram', label: 'Telegram',     icon: 'zap',        adminOnly: true  },
     { id: 'paylater', label: 'สูตรคำนวณ',    icon: 'calculator', adminOnly: true  },
@@ -1553,19 +1421,6 @@ function AppSettingsModal({ open, onClose }) {
               <div className="text-sm text-ink mb-1 font-medium">ฟอนต์</div>
               <div className="text-[11px] text-muted-soft mb-2">ใช้กับทุกหน้า — ยกเว้นใบเสร็จ</div>
               <FontPickerInline />
-            </div>
-          </div>
-        )}
-
-        {/* ── Tab: ธีม ── */}
-        {activeTab === 'theme' && (
-          <div className="space-y-4 fade-in">
-            <div>
-              <div className="text-sm text-ink mb-1 font-medium">ธีมของหน้าเว็บ</div>
-              <div className="text-[11px] text-muted-soft mb-3">
-                เปลี่ยนหน้าตา ปุ่ม การ์ด และตัวอักษรของแอปทั้งหมด — บันทึกไว้ที่เครื่องนี้เท่านั้น
-              </div>
-              <ThemePickerInline />
             </div>
           </div>
         )}
@@ -2416,20 +2271,12 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, view, setVie
             {role === 'admin' && (
               <div>
                 <div className="text-xs uppercase tracking-wider text-muted mb-2">รายงาน</div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    className={"btn-secondary !justify-start gap-2" + (view==='dashboard' ? " !border-primary !text-primary" : "")}
-                    onClick={()=>{ setView('dashboard'); setOpenMenu(false); }}
-                  >
-                    <Icon name="dashboard" size={16}/> ภาพรวม
-                  </button>
-                  <button
-                    className={"btn-secondary !justify-start gap-2" + (view==='pnl' ? " !border-primary !text-primary" : "")}
-                    onClick={()=>{ setView('pnl'); setOpenMenu(false); }}
-                  >
-                    <Icon name="trend-up" size={16}/> กำไร
-                  </button>
-                </div>
+                <button
+                  className={"btn-secondary !justify-start gap-2 w-full" + (view==='dashboard' ? " !border-primary !text-primary" : "")}
+                  onClick={()=>{ setView('dashboard'); setOpenMenu(false); }}
+                >
+                  <Icon name="dashboard" size={16}/> ภาพรวม (ยอดขาย · วิเคราะห์ · กำไรขาดทุน)
+                </button>
               </div>
             )}
             <button className="btn-app-settings-sidebar" onClick={()=>{ setOpenMenu(false); onOpenSettings?.(); }}>
@@ -2523,10 +2370,29 @@ function PageHeader({ title, subtitle, right }) {
     <header className="hidden lg:flex px-10 pt-10 pb-6 items-end justify-between border-b hairline">
       <div>
         <div className="text-xs uppercase tracking-[1.5px] text-muted">{subtitle}</div>
-        <h1 className="font-display text-5xl mt-2 leading-tight text-ink">{title}</h1>
+        {/* Right slot sits beside the h1 specifically (not the subtitle+h1
+            block) and is vertically centred against the title text so a
+            count badge feels visually anchored to the heading. */}
+        <div className="flex items-center gap-4 mt-2">
+          <h1 className="font-display text-5xl leading-tight text-ink">{title}</h1>
+          {right}
+        </div>
       </div>
-      <div>{right}</div>
     </header>
+  );
+}
+
+// Glowing red cart-count badge shown next to the POS page title. Pulses
+// continuously while visible so the cashier always has a peripheral cue
+// for how many units are pending checkout. Hidden entirely when empty;
+// caps at "99+" to keep the layout tight.
+function CartGlowBadge({ count }) {
+  if (!count) return null;
+  const display = count >= 100 ? '99+' : count;
+  return (
+    <div className="cart-glow-badge" aria-label={`ในตะกร้า ${count} ชิ้น`}>
+      <span className="tabular-nums">{display}</span>
+    </div>
   );
 }
 
@@ -3326,6 +3192,11 @@ function POSView() {
 
   return (
     <>
+      {/* Desktop page header — owned by POSView (not App) so we can drop
+          the live cart-count glow badge into the header's `right` slot
+          without lifting cart state up. App skips the global header for
+          'pos' view; mobile uses MobileTopBar instead. */}
+      <PageHeader title="ขายสินค้า" subtitle="POS" right={<CartGlowBadge count={totalQty}/>}/>
       {/* DESKTOP LAYOUT */}
       <div className="hidden lg:grid grid-cols-12 gap-6 px-10 py-8 h-[calc(100vh-180px)]">
         <div className="col-span-7 flex flex-col overflow-hidden">
@@ -4201,8 +4072,8 @@ function ProductsView() {
           <div className="col-span-2">บาร์โค้ด</div>
           <div className="col-span-2 text-right" title="ทุนตั้งต้น (catalog)">ทุนตั้งต้น</div>
           <div className="col-span-2 text-right" title="ทุนจากบิลรับเข้าล่าสุด">ทุนล่าสุด</div>
-          <div className="col-span-2 text-right">ราคาป้าย</div>
-          <div className="col-span-1 text-right">คงเหลือ</div>
+          <div className="col-span-2 text-center">ราคาป้าย</div>
+          <div className="col-span-1 text-center">คงเหลือ</div>
         </div>
         <div className="flex-1 overflow-y-auto min-h-0">
           {loading && <SkeletonRows n={8} label="กำลังโหลดสินค้า" />}
@@ -4213,34 +4084,47 @@ function ProductsView() {
           )}
           {visibleRows.map(p => {
             const lc = latestCostMap[p.id];
-            const drift = lc ? lc.unit_price - Number(p.cost_price||0) : 0;
-            const driftPct = (lc && Number(p.cost_price||0) > 0) ? (drift / Number(p.cost_price) * 100) : 0;
-            const showDrift = lc && Math.abs(drift) >= 0.01;
+            const fmtPlain = (n) => roundMoney(n).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
             return (
               <div key={p.id} className="grid grid-cols-12 px-4 py-3.5 items-center border-b hairline last:border-0 hover:bg-white/40 cursor-pointer transition-colors" onClick={()=>setEditing(p)}>
                 <div className="col-span-3 font-medium truncate">{p.name}</div>
                 <div className="col-span-2 font-mono text-sm text-muted truncate">{p.barcode||'—'}</div>
-                <div className="col-span-2 text-right text-muted-soft tabular-nums">{fmtTHB(p.cost_price)}</div>
+                <div className={"col-span-2 text-right tabular-nums " + (lc ? 'text-muted-soft' : 'font-medium text-ink')}>{fmtPlain(p.cost_price)}</div>
                 <div className="col-span-2 text-right tabular-nums">
                   {lc ? (
-                    <div>
-                      <div className="font-medium text-ink">{fmtTHB(lc.unit_price)}</div>
-                      <div className="text-[10px] text-muted-soft mt-0.5 flex items-center justify-end gap-1">
-                        <span>{fmtThaiDateShort(lc.receive_date)}</span>
-                        {showDrift && (
-                          <span className={"px-1 rounded font-medium " + (drift > 0 ? 'bg-error/10 text-error' : 'bg-success/15 text-[#2c6b3a]')}>
-                            {drift > 0 ? '↑' : '↓'} {Math.abs(driftPct).toFixed(0)}%
-                          </span>
-                        )}
-                      </div>
-                    </div>
+                    <span className="font-medium text-ink">{fmtPlain(lc.unit_price)}</span>
                   ) : (
                     <span className="text-muted-soft text-xs" title="ยังไม่เคยรับเข้า">—</span>
                   )}
                 </div>
-                <div className="col-span-2 text-right font-medium tabular-nums">{fmtTHB(p.retail_price)}</div>
-                <div className="col-span-1 text-right">
-                  <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':p.current_stock<5?'!bg-warning/15 !text-[#8a6500]':'')}>{p.current_stock}</span>
+                <div className="col-span-2 flex justify-center">
+                  <div
+                    className="inline-flex items-center justify-center min-w-[88px] h-9 px-3 rounded-[10px] font-display text-sm leading-none tabular-nums font-semibold"
+                    style={{
+                      background: 'linear-gradient(180deg, #1f2937 0%, #0f172a 100%)',
+                      color: '#ffffff',
+                      border: '1px solid rgba(255,255,255,0.10)',
+                      boxShadow: '0 2px 8px rgba(15,23,42,0.45), 0 1px 0 rgba(255,255,255,0.08) inset',
+                    }}
+                  >
+                    {fmtPlain(p.retail_price)}
+                  </div>
+                </div>
+                <div className="col-span-1 flex justify-center">
+                  <div
+                    className="flex items-center justify-center w-10 h-10 rounded-[10px] text-white font-display text-base leading-none tabular-nums font-semibold"
+                    style={{
+                      background: p.current_stock<=0
+                        ? 'linear-gradient(180deg, #b91c1c 0%, #7f1d1d 100%)'
+                        : 'linear-gradient(180deg, #15803d 0%, #14532d 100%)',
+                      border: '1px solid rgba(255,255,255,0.18)',
+                      boxShadow: p.current_stock<=0
+                        ? '0 2px 8px rgba(127,29,29,0.45), 0 1px 0 rgba(255,255,255,0.18) inset'
+                        : '0 2px 8px rgba(20,83,45,0.45), 0 1px 0 rgba(255,255,255,0.18) inset',
+                    }}
+                  >
+                    {p.current_stock}
+                  </div>
                 </div>
               </div>
             );
@@ -4273,7 +4157,7 @@ function ProductsView() {
                 <div className="flex items-baseline gap-2 mt-1.5 min-w-0 text-sm">
                   <span className="tabular-nums text-primary truncate">ป้าย {roundMoney(p.retail_price).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
                   <span className="text-muted-soft leading-none">|</span>
-                  <span className="tabular-nums text-muted truncate">ต้นทุน {roundMoney(lc ? lc.unit_price : p.cost_price).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                  <span className={"tabular-nums truncate " + (lc ? 'text-muted' : 'text-ink font-medium')}>ต้นทุน {roundMoney(lc ? lc.unit_price : p.cost_price).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
                 </div>
               </div>
               <div
@@ -5306,7 +5190,7 @@ function SalesView({ onGoPOS }) {
               </div>
               <div className="text-right">
                 <div className="text-xs uppercase tracking-wider text-muted">รวมวันนี้</div>
-                <div className="font-display text-xl tabular-nums">{fmtTHB(g.total)}</div>
+                <div className="font-display text-xl tabular-nums">{fmtMoney(g.total)}</div>
               </div>
             </div>
             {/* Column header */}
@@ -5336,13 +5220,13 @@ function SalesView({ onGoPOS }) {
                 <div className="col-span-2"><span className="badge-pill !text-xs">{CHANNEL_LABELS[o.channel] || o.channel || '—'}</span></div>
                 <div className="col-span-1 text-xs text-muted truncate">{PAYMENTS.find(p=>p.v===o.payment_method)?.label || '—'}</div>
                 <div className={"col-span-2 text-right tabular-nums " + (o.status==='voided'?'line-through':'')}>
-                  <div className="font-medium">{fmtTHB(o.grand_total)}</div>
+                  <div className="font-medium">{fmtMoney(o.grand_total)}</div>
                   {ECOMMERCE_CHANNELS.has(o.channel) && o.net_received != null && (
-                    <div className="text-xs text-muted-soft">ได้รับ {fmtTHB(o.net_received)}</div>
+                    <div className="text-xs text-muted-soft">ได้รับ {fmtMoney(o.net_received)}</div>
                   )}
                 </div>
                 <div className={"col-span-2 text-right tabular-nums font-medium " + (o.status==='voided' ? 'text-muted-soft line-through' : sm && sm.profit >= 0 ? 'text-ink' : 'text-error')}>
-                  {sm == null ? <span className="text-muted-soft">—</span> : (sm.profit >= 0 ? '+' : '') + fmtTHB(sm.profit)}
+                  {sm == null ? <span className="text-muted-soft">—</span> : (sm.profit >= 0 ? '+' : '') + fmtMoney(sm.profit)}
                 </div>
               </div>
               );
@@ -5373,7 +5257,7 @@ function SalesView({ onGoPOS }) {
                 <span className="font-display text-base">{fmtThaiDateShort(g.day)}</span>
                 <span className="text-xs text-muted">· {g.count} บิล</span>
               </div>
-              <span className="font-display text-base tabular-nums">{fmtTHB(g.total)}</span>
+              <span className="font-display text-base tabular-nums">{fmtMoney(g.total)}</span>
             </div>
             <div className="space-y-2">
               {g.list.map(o => {
@@ -5392,13 +5276,13 @@ function SalesView({ onGoPOS }) {
                     <div className="text-xs text-muted mt-1 tabular-nums">{new Date(o.sale_date).toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"})} น. · {PAYMENTS.find(p=>p.v===o.payment_method)?.label || '—'}</div>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <div className={"font-display text-lg leading-none tabular-nums " + (o.status==='voided'?'line-through':'')}>{fmtTHB(o.grand_total)}</div>
+                    <div className={"font-display text-lg leading-none tabular-nums " + (o.status==='voided'?'line-through':'')}>{fmtMoney(o.grand_total)}</div>
                     {ECOMMERCE_CHANNELS.has(o.channel) && o.net_received != null && (
-                      <div className="text-xs text-muted-soft mt-0.5 tabular-nums">ได้รับ {fmtTHB(o.net_received)}</div>
+                      <div className="text-xs text-muted-soft mt-0.5 tabular-nums">ได้รับ {fmtMoney(o.net_received)}</div>
                     )}
                     {sm && o.status !== 'voided' && (
                       <div className={"text-xs tabular-nums mt-0.5 " + (sm.profit >= 0 ? 'text-success' : 'text-error')}>
-                        {sm.profit >= 0 ? '+' : ''}{fmtTHB(sm.profit)}
+                        {sm.profit >= 0 ? '+' : ''}{fmtMoney(sm.profit)}
                       </div>
                     )}
                   </div>
@@ -6883,39 +6767,41 @@ function ExpenseRow({ category, value, onChange, monthSales, onApplyAll, disable
 function OverviewView() {
   const today = todayISO();
   const [dateRange, setDateRange] = useState({ from: today, to: today });
-  const [tab, setTab] = useState('dashboard'); // 'dashboard' | 'insights'
-  // Once Insights has been opened, keep it mounted so re-tabbing is
-  // instant (loader doesn't refire). Dashboard already self-refreshes
-  // via realtime, so leaving it mounted is cheap.
+  const [tab, setTab] = useState('dashboard'); // 'dashboard' | 'insights' | 'pnl'
+  // Lazy-mount Insights + P&L on first click and then keep them mounted
+  // so re-tabbing is instant (loaders don't refire). Dashboard already
+  // self-refreshes via realtime so it's always mounted from the start.
   const [insightsLoaded, setInsightsLoaded] = useState(false);
+  const [pnlLoaded, setPnlLoaded] = useState(false);
   useEffect(() => { if (tab === 'insights') setInsightsLoaded(true); }, [tab]);
+  useEffect(() => { if (tab === 'pnl') setPnlLoaded(true); }, [tab]);
 
   const TABS = [
-    { k: 'dashboard', label: 'ยอดขาย',    icon: 'dashboard',
-      kicker: 'Dashboard',  title: 'แดชบอร์ด' },
-    { k: 'insights',  label: 'วิเคราะห์', icon: 'zap',
-      kicker: 'Insights',   title: 'Insights' },
+    { k: 'dashboard', label: 'ยอดขาย',     icon: 'dashboard',
+      kicker: 'Dashboard',     title: 'แดชบอร์ด' },
+    { k: 'insights',  label: 'วิเคราะห์',  icon: 'zap',
+      kicker: 'Insights',      title: 'Insights' },
+    { k: 'pnl',       label: 'กำไรขาดทุน', icon: 'trend-up',
+      kicker: 'Profit & Loss', title: 'กำไร / ขาดทุน' },
   ];
   const activeTab = TABS.find((t) => t.k === tab) ?? TABS[0];
 
-  // Segment buttons styled to match `.btn-app-settings-sidebar` when
-  // active (coral gradient, white text, soft glow) and `.input`
-  // dimensions (h-10 + rounded-[10px]) so they sit on the same baseline
-  // as the DatePicker without any visual mismatch.
+  // Tab pill bar styled after `KindTabs` (stock-in page): glass-soft
+  // rounded chip with the active button getting a solid white pill +
+  // shadow + hairline ring so it pops above the bar.
   const Segment = ({ className = '' }) => (
-    <div className={'inline-flex gap-2 ' + className}>
+    <div className={'inline-flex glass-soft rounded-xl p-1 shadow-sm ' + className}>
       {TABS.map((t) => {
         const active = tab === t.k;
         return (
           <button key={t.k} type="button" onClick={() => setTab(t.k)}
             className={
-              'h-10 px-4 rounded-[10px] text-sm font-medium flex items-center gap-1.5 ' +
-              'border transition-all duration-150 active:scale-[0.97] ' +
+              'px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-all ' +
               (active
-                ? 'btn-segment-active text-white border-white/20'
-                : 'bg-white/85 text-ink border-hairline hover:bg-white hover:border-muted')
+                ? 'bg-white text-ink shadow-md ring-1 ring-hairline'
+                : 'text-muted hover:text-ink hover:bg-white/40')
             }>
-            <Icon name={t.icon} size={15} />
+            <Icon name={t.icon} size={16} />
             {t.label}
           </button>
         );
@@ -6927,20 +6813,23 @@ function OverviewView() {
     <div className="space-y-4 lg:space-y-6">
       {/* Web header — title baseline-aligned with the tab segment.
           Matches DashboardView's standalone style (kicker + h1 5xl) so
-          the page doesn't visually "shrink" when Insights merged in. */}
+          the page doesn't visually "shrink" when sub-views merged in. */}
       <header className="hidden lg:flex px-10 pt-10 pb-6 items-end justify-between border-b hairline gap-6">
         <div>
           <div className="text-xs uppercase tracking-[1.5px] text-muted">{activeTab.kicker}</div>
           <h1 className="font-display text-5xl mt-2 leading-tight text-ink">{activeTab.title}</h1>
         </div>
         <div className="flex items-center gap-2 pb-1">
-          <Segment />
           {/* DatePicker only relevant to the Dashboard pane — Insights
-              uses fixed 365 / 90 / 30-day windows. Hide on insights. */}
+              uses fixed 365 / 90 / 30-day windows; P&L renders its own
+              date controls + expense button inside the pane. Positioned
+              to the LEFT of the tab Segment so the date filter feels
+              like a pre-condition for the data shown, not an afterthought. */}
           {tab === 'dashboard' && (
             <DatePicker mode="range" value={dateRange} onChange={setDateRange}
               placeholder="เลือกช่วงวันที่" className="w-56" />
           )}
+          <Segment />
         </div>
       </header>
 
@@ -6957,8 +6846,8 @@ function OverviewView() {
         )}
       </div>
 
-      {/* Both panes are mounted (after first Insights visit) but only
-          one is visible — keeps scroll position + avoids re-querying. */}
+      {/* Panes are mounted once visited and then kept mounted — keeps
+          scroll position + avoids re-querying when tabbing back. */}
       <div className={tab === 'dashboard' ? 'block' : 'hidden'}>
         <DashboardView embedded dateRange={dateRange} onDateRangeChange={setDateRange} />
       </div>
@@ -6967,14 +6856,23 @@ function OverviewView() {
           <InsightsView embedded />
         </div>
       )}
+      {pnlLoaded && (
+        <div className={tab === 'pnl' ? 'block' : 'hidden'}>
+          <ProfitLossView embedded />
+        </div>
+      )}
     </div>
   );
 }
 
 /* =========================================================
    PROFIT / LOSS VIEW
+   ---------------------------------------------------------
+   `embedded=true` mounts inside OverviewView's tab pane:
+   skips own page header + outer padding wrapper so the
+   parent's spacing + title bar stay in control.
 ========================================================= */
-function ProfitLossView() {
+function ProfitLossView({ embedded = false }) {
   const today = todayISO();
   const [dateRange, setDateRange] = useState({ from: today, to: today });
   const [loading, setLoading] = useState(false);
@@ -7258,16 +7156,29 @@ function ProfitLossView() {
   return (
     <>
     <div>
-      {/* Desktop header */}
-      <header className="hidden lg:flex px-10 pt-10 pb-6 items-end justify-between border-b hairline gap-4">
-        <div>
-          <div className="text-xs uppercase tracking-[1.5px] text-muted">Profit & Loss</div>
-          <h1 className="font-display text-5xl mt-2 leading-tight text-ink">กำไร / ขาดทุน</h1>
-        </div>
-        <div className="flex items-center gap-3 pb-1">{DateControls}</div>
-      </header>
+      {/* Standalone-only header. When embedded inside OverviewView the
+          parent owns the title bar; we just surface DateControls inline
+          above the content so the cashier can still pick a date / open
+          the shop-expense modal. */}
+      {!embedded && (
+        <header className="hidden lg:flex px-10 pt-10 pb-6 items-end justify-between border-b hairline gap-4">
+          <div>
+            <div className="text-xs uppercase tracking-[1.5px] text-muted">Profit & Loss</div>
+            <h1 className="font-display text-5xl mt-2 leading-tight text-ink">กำไร / ขาดทุน</h1>
+          </div>
+          <div className="flex items-center gap-3 pb-1">{DateControls}</div>
+        </header>
+      )}
 
-      <div className="px-4 py-4 lg:px-10 lg:py-8 space-y-4 lg:space-y-6">
+      <div className={embedded
+        ? "px-4 lg:px-10 space-y-4 lg:space-y-6"
+        : "px-4 py-4 lg:px-10 lg:py-8 space-y-4 lg:space-y-6"}>
+
+      {/* When embedded, surface the desktop date controls inline (since
+          we suppressed the standalone header that normally hosts them). */}
+      {embedded && (
+        <div className="hidden lg:flex items-center justify-end gap-3 flex-wrap">{DateControls}</div>
+      )}
 
       {/* Disclaimer (Phase 3.3): only show when range includes pre-June-2026 dates,
           since cost data was incomplete then and the calc may be approximate. */}
@@ -7627,7 +7538,6 @@ function App() {
     receive:   { t: "รับสินค้าจากบริษัท",    s: "Stock In · From Supplier" },
     return:    { t: "รับคืนจากลูกค้า",       s: "Customer Return" },
     dashboard: { t: "แดชบอร์ด",              s: "Dashboard" },
-    pnl:       { t: "กำไร / ขาดทุน",         s: "Profit & Loss" },
   };
 
   return (
@@ -7640,7 +7550,7 @@ function App() {
           <Sidebar view={view} setView={setView} userEmail={session.user?.email} onOpenSettings={()=>setSettingsOpen(true)}/>
           <main className="flex-1 min-h-screen pb-24 lg:pb-0 lg:pl-64">
             <MobileTopBar title={titles[view].t} userEmail={session.user?.email} onLogout={()=>sb.auth.signOut()} onOpenSettings={()=>setSettingsOpen(true)} view={view} setView={setView}/>
-            {!['dashboard','receive','return','pnl'].includes(view) && <PageHeader title={titles[view].t} subtitle={titles[view].s} />}
+            {!['dashboard','receive','return','pos'].includes(view) && <PageHeader title={titles[view].t} subtitle={titles[view].s} />}
             <div key={view} className="view-fade">
               {view==='pos' && <POSView />}
               {view==='products' && <ProductsView />}
@@ -7648,7 +7558,6 @@ function App() {
               {view==='receive' && role==='admin' && <ReceiveView />}
               {view==='return' && <ReturnView />}
               {view==='dashboard' && role==='admin' && <OverviewView />}
-              {view==='pnl' && role==='admin' && <ProfitLossView />}
             </div>
           </main>
         </div>
