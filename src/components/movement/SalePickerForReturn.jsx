@@ -2,75 +2,46 @@ import React from 'react';
 
 /**
  * Original-sale picker shown only on the customer-Return form.
- * Caller drives data fetching and selection state — this component is
- * purely presentational.
+ *
+ * Bill is always required for a return — there is no "manual entry / unknown
+ * bill" escape hatch anymore. There are two ways to land on a selected sale:
+ *   1) Search by bill ID directly (this component's search box).
+ *   2) Add a product to the cart first → caller opens BillPickerPopup which
+ *      shows bills containing that product. That flow is owned by the caller;
+ *      this component only displays the resulting `selectedSale` (if any).
  *
  * Props:
  *   Icon, fmtTHB, fmtThaiDateShort
  *   CHANNEL_LABELS
- *   items                          — current cart items (used to gate manual mode)
- *   origSaleMode, setOrigSaleMode  — 'search' | 'manual'
- *   selectedSale,
+ *   selectedSale                   — non-null once a bill is locked
  *   saleSearch, setSaleSearch
- *   saleResults, saleSearching
- *   origSaleId, setOrigSaleId
+ *   saleResults, saleSearching     — caller-fetched recent-sale list
  *   onSelectSale(sale)
  *   onClearSale()
- *   onWantManualButNoItems()       — fired when user taps "manual" but cart empty
+ *   showError                      — turn input ring red on submit attempt
  */
 export default function SalePickerForReturn({
   Icon, fmtTHB, fmtThaiDateShort,
   CHANNEL_LABELS,
-  items,
-  origSaleMode, setOrigSaleMode,
   selectedSale,
   saleSearch, setSaleSearch,
   saleResults, saleSearching,
-  origSaleId, setOrigSaleId,
   onSelectSale, onClearSale,
-  onWantManualButNoItems,
+  showError,
 }) {
-  const goManual = () => {
-    if (items.length === 0) {
-      onWantManualButNoItems?.();
-      return;
-    }
-    setOrigSaleMode('manual');
-    onClearSale();
-  };
-
   return (
     <div>
-      <label className="text-xs uppercase tracking-wider text-muted mb-1.5 block">บิลขายต้นฉบับ</label>
-      <div className="flex gap-1 mb-2">
-        <button
-          type="button"
-          onClick={() => { setOrigSaleMode('search'); onClearSale(); }}
-          className={"flex-1 py-2 px-3 rounded-lg text-xs font-medium border transition-all inline-flex items-center justify-center gap-1 " +
-            (origSaleMode === 'search' ? "text-white" : "glass-soft text-muted hover:text-ink")}
-          style={origSaleMode === 'search' ? { background: 'linear-gradient(180deg, rgba(204,120,92,0.85) 0%, rgba(184,100,72,0.92) 100%)', borderColor: 'rgba(255,255,255,0.18)', boxShadow: '0 2px 8px rgba(184,100,72,0.35), 0 1px 0 rgba(255,255,255,0.18) inset' } : {}}
-        >
-          <Icon name="search" size={13} />ค้นหาบิล
-        </button>
-        <button
-          type="button"
-          onClick={goManual}
-          className={"flex-1 py-2 px-3 rounded-lg text-xs font-medium border transition-all inline-flex items-center justify-center gap-1 " +
-            (origSaleMode === 'manual' ? "text-white" : "glass-soft text-muted hover:text-ink")}
-          style={origSaleMode === 'manual' ? { background: 'linear-gradient(180deg, rgba(204,120,92,0.85) 0%, rgba(184,100,72,0.92) 100%)', borderColor: 'rgba(255,255,255,0.18)', boxShadow: '0 2px 8px rgba(184,100,72,0.35), 0 1px 0 rgba(255,255,255,0.18) inset' } : {}}
-        >
-          <Icon name="edit" size={13} />กรอกเองหรือไม่ทราบเลขบิล
-        </button>
-      </div>
+      <label className="text-xs uppercase tracking-wider text-muted mb-1.5 block">
+        บิลขายต้นฉบับ <span className="text-error">*</span>
+      </label>
 
-      {origSaleMode === 'search' && !selectedSale && (
-        <div>
+      {!selectedSale && (
+        <div className={showError ? 'field-error-glow rounded-xl' : ''}>
           <input
-            className="input !h-10 font-mono"
+            className="input font-mono"
             placeholder="พิมพ์เลขบิล เช่น 60590"
             value={saleSearch}
             onChange={e => setSaleSearch(e.target.value)}
-            autoFocus
           />
           {saleSearching && (
             <div className="p-3 text-sm text-muted flex gap-2"><span className="spinner" />กำลังโหลด...</div>
@@ -99,10 +70,13 @@ export default function SalePickerForReturn({
               ))}
             </div>
           )}
+          <div className="text-[11px] text-muted-soft mt-1.5">
+            หรือเลือกสินค้าด้านบน — ระบบจะแสดงบิลที่มีสินค้านั้นให้เลือกอัตโนมัติ
+          </div>
         </div>
       )}
 
-      {origSaleMode === 'search' && selectedSale && (
+      {selectedSale && (
         <div className="flex items-start gap-2">
           <div className="flex-1 card-canvas p-3 rounded-xl">
             <div className="flex justify-between items-center">
@@ -113,39 +87,17 @@ export default function SalePickerForReturn({
               {CHANNEL_LABELS[selectedSale.channel] || selectedSale.channel} · {fmtTHB(selectedSale.grand_total)}
             </div>
             <div className="text-[10px] text-primary mt-1 flex items-center gap-1">
-              <Icon name="check" size={11} />วันที่และช่องทางถูกกรอกอัตโนมัติแล้ว
+              <Icon name="check" size={11} />วันที่และช่องทางถูกกรอกอัตโนมัติแล้ว · สินค้าที่เพิ่มต้องอยู่ในบิลนี้
             </div>
           </div>
           <button
             type="button"
             onClick={onClearSale}
             className="btn-ghost !p-2.5 !min-h-0 text-muted hover:text-error mt-0.5"
-            title="ล้างบิลที่เลือก"
+            title="ล้างบิลที่เลือก (จะลบสินค้าทั้งหมดออกจากรายการ)"
           >
             <Icon name="x" size={16} />
           </button>
-        </div>
-      )}
-
-      {origSaleMode === 'manual' && (
-        <div className="flex items-center gap-2">
-          <input
-            className="input !h-10 font-mono flex-1"
-            placeholder="เลขบิล (ไม่บังคับ)"
-            inputMode="numeric"
-            value={origSaleId}
-            onChange={e => setOrigSaleId(e.target.value.replace(/\D/g, ''))}
-          />
-          {origSaleId && (
-            <button
-              type="button"
-              onClick={() => setOrigSaleId("")}
-              className="btn-ghost !p-2.5 !min-h-0 text-muted"
-              aria-label="ล้างเลขบิล"
-            >
-              <Icon name="x" size={16} />
-            </button>
-          )}
         </div>
       )}
     </div>

@@ -621,7 +621,7 @@ export default function InsightsView({ embedded = false } = {}) {
   const peak = useMemo(() => heatmap ? peakCell(heatmap) : null, [heatmap]);
 
   return (
-    <div className={(embedded ? 'pt-2 ' : 'py-4 lg:py-6 ') + 'px-4 lg:px-10 space-y-4 lg:space-y-5'}>
+    <div className={(embedded ? 'pt-2 pb-8 lg:pb-12 ' : 'py-4 pb-8 lg:py-6 lg:pb-12 ') + 'px-4 lg:px-10 space-y-4 lg:space-y-5'}>
       {!embedded && (
         <header className="flex items-center justify-between gap-3 flex-wrap">
           <div>

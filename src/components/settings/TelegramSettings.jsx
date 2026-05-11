@@ -2,7 +2,7 @@
 //
 // Five sections, top-to-bottom:
 //   1. การเชื่อมต่อ        — bot token, chat picker, manual test send
-//   2. การแจ้งเตือนอัตโนมัติ — toggles + schedule for daily / monthly / brief
+//   2. การแจ้งเตือนอัตโนมัติ — toggles + schedule for daily / monthly
 //   3. ดูตัวอย่างข้อความ    — preview the rendered text for each kind
 //   4. Bot สั่งงาน          — webhook install/teardown for /commands
 //   5. ประวัติการส่ง        — last_*_sent_at + last_summary_error
@@ -42,7 +42,7 @@ export function TelegramSettings({ toast }) {
   const [chats, setChats] = useState([]);          // [{id, title, type}]
   const [chatsLoading, setChatsLoading] = useState(false);
 
-  // Preview state — `previewKind` is 'daily'|'monthly'|'brief' when open.
+  // Preview state — `previewKind` is 'daily'|'monthly' when open.
   const [previewKind, setPreviewKind] = useState(null);
   const [previewText, setPreviewText] = useState('');
   const [previewBusy, setPreviewBusy] = useState(false);
@@ -296,15 +296,6 @@ export function TelegramSettings({ toast }) {
           onHour={(h) => persist({ monthly_hour: h }, { silent: true })}
         />
 
-        <ScheduleRow
-          label="Brief ตอนเช้า"
-          desc="ส่งทุกวัน — ยอดเดือนสะสม + สต็อกที่ต้องดู"
-          enabled={row.morning_enabled}
-          hour={row.morning_hour}
-          onToggle={(v) => persist({ morning_enabled: v }, { silent: true })}
-          onHour={(h) => persist({ morning_hour: h }, { silent: true })}
-        />
-
         <div className="pt-2 border-t hairline-soft">
           <label className="text-xs uppercase tracking-wider text-muted">เกณฑ์สต็อกใกล้หมด</label>
           <div className="flex gap-2 items-center mt-1">
@@ -315,7 +306,7 @@ export function TelegramSettings({ toast }) {
               onChange={e => set('low_stock_threshold', Math.max(0, Number(e.target.value)||0))}
               onBlur={() => persist({ low_stock_threshold: row.low_stock_threshold ?? 3 }, { silent: true })}
             />
-            <span className="text-sm text-muted">ชิ้น — เมื่อสต็อก ≤ ตัวเลขนี้ จะแสดงใน brief และคำสั่ง /lowstock</span>
+            <span className="text-sm text-muted">ชิ้น — เมื่อสต็อก ≤ ตัวเลขนี้ จะแสดงในคำสั่ง /lowstock</span>
           </div>
         </div>
       </Section>
@@ -325,17 +316,16 @@ export function TelegramSettings({ toast }) {
         <div className="text-[11px] text-muted-soft -mt-1">
           ดูว่าข้อความจะหน้าตาเป็นยังไง หรือกด "ส่งทันที" เพื่อยิงไปจริง
         </div>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <PreviewButton kind="daily"   label="📊 Daily"    onClick={() => openPreview('daily')} />
           <PreviewButton kind="monthly" label="🗓 Monthly"  onClick={() => openPreview('monthly')} />
-          <PreviewButton kind="brief"   label="☀️ Brief"    onClick={() => openPreview('brief')} />
         </div>
 
         {previewKind && (
           <div className="rounded-lg border hairline bg-canvas/40 p-3 mt-2">
             <div className="flex items-center justify-between gap-2 mb-2">
               <div className="text-xs text-muted uppercase tracking-wider">
-                ตัวอย่าง: {previewKind === 'daily' ? 'Daily' : previewKind === 'monthly' ? 'Monthly' : 'Brief'}
+                ตัวอย่าง: {previewKind === 'daily' ? 'Daily' : 'Monthly'}
               </div>
               <div className="flex gap-1">
                 <button className="btn-ghost text-xs" onClick={() => openPreview(previewKind)} disabled={previewBusy}>
@@ -406,10 +396,9 @@ export function TelegramSettings({ toast }) {
 
       {/* ── Section 5: ประวัติการส่ง ───────────────────── */}
       <Section title="5. ประวัติการส่ง" icon="calendar">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
           <HistoryCard label="Daily"   ts={row.last_summary_sent_at}/>
           <HistoryCard label="Monthly" ts={row.last_monthly_sent_at}/>
-          <HistoryCard label="Brief"   ts={row.last_brief_sent_at}/>
         </div>
         {row.last_summary_error && (
           <div className="rounded-md border border-error/30 bg-error/5 text-error text-xs p-3 mt-2">

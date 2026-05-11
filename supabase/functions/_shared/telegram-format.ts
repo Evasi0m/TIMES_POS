@@ -86,13 +86,6 @@ export function bangkokDayOfMonth(): number {
 export const startOfDayBkk = (yyyymmdd: string) => `${yyyymmdd}T00:00:00+07:00`;
 export const endOfDayBkk   = (yyyymmdd: string) => `${yyyymmdd}T23:59:59.999+07:00`;
 
-/** Build a small ASCII bar for embedding in messages. */
-export function asciiBar(ratio: number, width = 8): string {
-  const r = Math.max(0, Math.min(1, ratio));
-  const filled = Math.round(r * width);
-  return '█'.repeat(filled) + '░'.repeat(width - filled);
-}
-
 /** Walk past PostgREST 1000-row cap. */
 export async function fetchAll<T>(
   build: (from: number, to: number) => Promise<{ data: T[] | null; error: any }>,
@@ -123,6 +116,99 @@ const revenueOf = (r: OrderLike) =>
     : Number(r.grand_total) || 0;
 
 // ─────────────────────────────────────────────────────────────────────────
+//  COST HELPER — mirrors the frontend ProfitLossView logic so Telegram and
+//  the in-app P&L view always agree on the cost of goods sold.
+//
+//  Why this exists: `sale_order_items` does NOT carry a per-line cost
+//  (the schema deliberately keeps inventory cost in receive history). To
+//  cost a sale we look up the most-recent `receive_order_items.unit_price`
+//  for the product whose `receive_orders.receive_date` is on/before the
+//  sale, falling back to `products.cost_price` if no receive history
+//  exists. Without this the daily/monthly summary would be 100% revenue
+//  and the message preview would crash on a Postgres "column does not
+//  exist" because the legacy code referenced `cost_price` directly on
+//  sale_order_items.
+// ─────────────────────────────────────────────────────────────────────────
+
+interface OrderForCost { id: number | string; sale_date: string }
+interface ItemRow { sale_order_id: number; product_id: number | null; product_name: string | null; quantity: number }
+
+export interface OrderItemsCost {
+  totalCost: number;
+  /** qty aggregated by product_name — used by daily/monthly top-products list. */
+  qtyByName: Map<string, number>;
+}
+
+export async function computeOrderItemsCost(
+  supa: any,
+  orders: OrderForCost[],
+): Promise<OrderItemsCost> {
+  const qtyByName = new Map<string, number>();
+  if (!orders.length) return { totalCost: 0, qtyByName };
+
+  const ids = orders.map(o => o.id);
+  const orderTsById = new Map<number | string, number>();
+  for (const o of orders) orderTsById.set(o.id, new Date(o.sale_date).getTime());
+
+  // 1) sale items in scope — chunked for big months
+  const items = await fetchAll<ItemRow>(
+    (from, to) => supa.from('sale_order_items')
+      .select('sale_order_id, product_id, product_name, quantity')
+      .in('sale_order_id', ids).range(from, to),
+  );
+
+  // 2) receive history for those products — sorted DESC so we can take the
+  //    first row whose receive_date <= saleTs as the cost
+  const productIds = Array.from(new Set(
+    items.map(it => it.product_id).filter((x): x is number => typeof x === 'number' && x > 0),
+  ));
+  const recvByProduct = new Map<number, Array<{ ts: number; price: number }>>();
+  if (productIds.length) {
+    const recvs = await fetchAll<any>(
+      (from, to) => supa.from('receive_order_items')
+        .select('product_id, unit_price, receive_orders!inner(receive_date)')
+        .in('product_id', productIds).range(from, to),
+    );
+    for (const r of recvs) {
+      const date = r.receive_orders?.receive_date;
+      if (!date || !r.product_id) continue;
+      const arr = recvByProduct.get(r.product_id) || [];
+      arr.push({ ts: new Date(date).getTime(), price: Number(r.unit_price) || 0 });
+      recvByProduct.set(r.product_id, arr);
+    }
+    for (const arr of recvByProduct.values()) arr.sort((a, b) => b.ts - a.ts);
+  }
+
+  // 3) products.cost_price fallback — used when the product never had a
+  //    matching receive (legacy / manually-created products)
+  const productCostFallback = new Map<number, number>();
+  if (productIds.length) {
+    const prods = await fetchAll<{ id: number; cost_price: number | null }>(
+      (from, to) => supa.from('products').select('id, cost_price').in('id', productIds).range(from, to),
+    );
+    for (const p of prods) productCostFallback.set(p.id, Number(p.cost_price) || 0);
+  }
+
+  // 4) sum
+  let totalCost = 0;
+  for (const it of items) {
+    const qty = Number(it.quantity) || 0;
+    const name = it.product_name || '?';
+    qtyByName.set(name, (qtyByName.get(name) || 0) + qty);
+    if (!it.product_id) continue;
+    const saleTs = orderTsById.get(it.sale_order_id) ?? 0;
+    let unitCost = productCostFallback.get(it.product_id) ?? 0;
+    const list = recvByProduct.get(it.product_id);
+    if (list && list.length) {
+      const found = list.find(r => r.ts <= saleTs);
+      if (found) unitCost = found.price;
+    }
+    totalCost += unitCost * qty;
+  }
+  return { totalCost, qtyByName };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 //  DAILY SUMMARY — yesterday's totals (default), or any explicit date.
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -137,20 +223,21 @@ export interface DailySummary {
   aov: number;
   margin: number;
   prevRevenue: number;        // revenue of (date - 1) — for compare arrow
-  topProducts: Array<{ name: string; qty: number; max: number }>;
-  byChannel: Array<{ channel: string; total: number; pct: number }>;
+  byChannel: Array<{ channel: string; total: number; count: number; pct: number }>;
 }
 
 export async function computeDailySummary(supa: any, dateBkk: string): Promise<DailySummary> {
-  // Today's orders
+  // Today's orders — `sale_date` included so the cost helper can resolve
+  // historical receive prices accurately when a product was received
+  // multiple times across price changes.
   const { data: orders, error: ordErr } = await supa
     .from('sale_orders')
-    .select('id, channel, grand_total, net_received')
+    .select('id, channel, grand_total, net_received, sale_date')
     .eq('status', 'active')
     .gte('sale_date', startOfDayBkk(dateBkk))
     .lte('sale_date', endOfDayBkk(dateBkk));
   if (ordErr) throw ordErr;
-  const ords = (orders || []) as Array<OrderLike & { id: number }>;
+  const ords = (orders || []) as Array<OrderLike & { id: number; sale_date: string }>;
   const revenue = ords.reduce((s, r) => s + revenueOf(r), 0);
 
   // Previous-day revenue for the compare arrow
@@ -168,36 +255,18 @@ export async function computeDailySummary(supa: any, dateBkk: string): Promise<D
     .lte('sale_date', endOfDayBkk(prevDate));
   const prevRevenue = (prevOrders || []).reduce((s: number, r: any) => s + revenueOf(r), 0);
 
-  // By-channel breakdown
-  const channelMap: Record<string, number> = {};
+  // By-channel breakdown — amount + bill count (user-facing report shows both)
+  const channelMap = new Map<string, { total: number; count: number }>();
   for (const r of ords) {
     const k = r.channel || 'store';
-    channelMap[k] = (channelMap[k] || 0) + revenueOf(r);
+    const cur = channelMap.get(k) || { total: 0, count: 0 };
+    cur.total += revenueOf(r);
+    cur.count += 1;
+    channelMap.set(k, cur);
   }
 
-  // Items → cost + top products
-  let cost = 0;
-  const productMap = new Map<string, number>();
-  if (ords.length) {
-    const ids = ords.map((o) => o.id);
-    const items = await fetchAll<{ product_name: string; quantity: number; cost_price: number | null }>(
-      (from, to) => supa.from('sale_order_items')
-        .select('product_name, quantity, cost_price')
-        .in('sale_order_id', ids).range(from, to),
-    );
-    for (const it of items) {
-      const q = Number(it.quantity) || 0;
-      cost += (Number(it.cost_price) || 0) * q;
-      const name = it.product_name || '?';
-      productMap.set(name, (productMap.get(name) || 0) + q);
-    }
-  }
-  const topRaw = Array.from(productMap.entries())
-    .map(([name, qty]) => ({ name, qty }))
-    .sort((a, b) => b.qty - a.qty)
-    .slice(0, 3);
-  const topMax = topRaw[0]?.qty || 1;
-  const topProducts = topRaw.map(p => ({ ...p, max: topMax }));
+  // Items → cost only (top products dropped from the minimal daily template).
+  const { totalCost: cost } = await computeOrderItemsCost(supa, ords);
 
   // Shop expense — month total ÷ days-in-month gives "per day"
   const shopExpense = await computeAvgShopExpensePerDay(supa, dateBkk);
@@ -207,17 +276,17 @@ export async function computeDailySummary(supa: any, dateBkk: string): Promise<D
   const margin = revenue > 0 ? grossProfit / revenue : 0;
   const aov = ords.length ? revenue / ords.length : 0;
 
-  const totalChannelRevenue = Object.values(channelMap).reduce((s, v) => s + v, 0);
-  const byChannel = Object.entries(channelMap)
-    .map(([channel, total]) => ({
-      channel, total,
-      pct: totalChannelRevenue > 0 ? total / totalChannelRevenue : 0,
+  const totalChannelRevenue = Array.from(channelMap.values()).reduce((s, v) => s + v.total, 0);
+  const byChannel = Array.from(channelMap.entries())
+    .map(([channel, v]) => ({
+      channel, total: v.total, count: v.count,
+      pct: totalChannelRevenue > 0 ? v.total / totalChannelRevenue : 0,
     }))
     .sort((a, b) => b.total - a.total);
 
   return {
     date: dateBkk, revenue, cost, grossProfit, shopExpense, netProfit,
-    orderCount: ords.length, aov, margin, prevRevenue, topProducts, byChannel,
+    orderCount: ords.length, aov, margin, prevRevenue, byChannel,
   };
 }
 
@@ -260,37 +329,26 @@ async function computeAvgShopExpensePerDay(supa: any, dateBkk: string): Promise<
 
 export function formatDaily(s: DailySummary): string {
   const lines: string[] = [];
-  lines.push(`📊 <b>สรุปยอด${fmtThaiDate(s.date)}</b>`);
+  lines.push(`📊 <b>${fmtThaiDate(s.date)}</b>`);
   lines.push('');
   if (s.orderCount === 0) {
     lines.push('🌙 วันนี้ไม่มีบิลขาย');
     return lines.join('\n');
   }
-  // Revenue + compare arrow
   const change = s.prevRevenue > 0 ? (s.revenue - s.prevRevenue) / s.prevRevenue : 0;
-  const compare = s.prevRevenue > 0 ? `   <i>${fmtPct(change)} vs เมื่อวาน</i>` : '';
-  lines.push(`💰 ยอดขาย      <b>${fmtTHB(s.revenue)}</b>${compare}`);
-  lines.push(`🧾 จำนวนบิล    ${s.orderCount} บิล   <i>AOV ${fmtTHB(s.aov)}</i>`);
-  lines.push(`💵 กำไรเบื้องต้น ${fmtTHB(s.grossProfit)}   <i>(${(s.margin * 100).toFixed(1)}%)</i>`);
-  lines.push(`💸 ค่าใช้จ่าย    -${fmtTHB(s.shopExpense)}`);
-  lines.push('━━━━━━━━━━━━━━━━━━━━');
-  lines.push(`✨ <b>กำไรสุทธิ    ${fmtTHB(s.netProfit)}</b>`);
-
-  if (s.topProducts.length) {
-    lines.push('');
-    lines.push('📦 <b>ขายดี</b>');
-    s.topProducts.forEach((p, i) => {
-      const bar = asciiBar(p.qty / p.max, 5);
-      lines.push(`  ${i + 1}. ${truncate(p.name, 24)} ${bar} ×${p.qty}`);
-    });
-  }
+  const compare = s.prevRevenue > 0 ? ` <i>${fmtPct(change)}</i>` : '';
+  lines.push(`ยอดขาย <b>${fmtTHB(s.revenue)}</b>${compare}`);
+  lines.push(`บิล ${s.orderCount} · AOV ${fmtTHB(s.aov)}`);
+  lines.push(`กำไรขั้นต้น ${fmtTHB(s.grossProfit)} <i>(${(s.margin * 100).toFixed(1)}%)</i>`);
+  if (s.shopExpense > 0) lines.push(`ค่าใช้จ่าย -${fmtTHB(s.shopExpense)}`);
+  lines.push(`✨ <b>กำไรสุทธิ ${fmtTHB(s.netProfit)}</b>`);
 
   if (s.byChannel.length) {
     lines.push('');
     lines.push('🛒 <b>ช่องทาง</b>');
     s.byChannel.forEach(c => {
-      const label = (CHANNEL_LABEL[c.channel] || c.channel).padEnd(8, ' ');
-      lines.push(`  ${label} ${fmtTHB(c.total).padStart(10, ' ')}  (${(c.pct * 100).toFixed(0)}%)`);
+      const label = CHANNEL_LABEL[c.channel] || c.channel;
+      lines.push(`  ${label} — ${fmtTHB(c.total)} · ${c.count} บิล`);
     });
   }
 
@@ -313,7 +371,7 @@ export interface MonthlySummary {
   prevRevenue: number;        // previous month
   prevGross: number;
   topProducts: Array<{ name: string; qty: number; max: number }>;
-  byChannel: Array<{ channel: string; total: number; pct: number }>;
+  byChannel: Array<{ channel: string; total: number; count: number; pct: number }>;
   bestDay: { date: string; revenue: number } | null;
 }
 
@@ -341,17 +399,21 @@ export async function computeMonthlySummary(supa: any, yyyymm: string): Promise<
   const prevMonthStart = `${prevYyyymm}-01T00:00:00+07:00`;
   const { data: prevOrders } = await supa
     .from('sale_orders')
-    .select('channel, grand_total, net_received')
+    .select('id, channel, grand_total, net_received, sale_date')
     .eq('status', 'active')
     .gte('sale_date', prevMonthStart)
     .lt('sale_date', monthStart);
-  const prevRevenue = (prevOrders || []).reduce((s: number, r: any) => s + revenueOf(r), 0);
+  const prevOrds = (prevOrders || []) as Array<OrderLike & { id: number; sale_date: string }>;
+  const prevRevenue = prevOrds.reduce((s, r) => s + revenueOf(r), 0);
 
   // By channel
-  const channelMap: Record<string, number> = {};
+  const channelMap = new Map<string, { total: number; count: number }>();
   for (const r of ords) {
     const k = r.channel || 'store';
-    channelMap[k] = (channelMap[k] || 0) + revenueOf(r);
+    const cur = channelMap.get(k) || { total: 0, count: 0 };
+    cur.total += revenueOf(r);
+    cur.count += 1;
+    channelMap.set(k, cur);
   }
 
   // Best day
@@ -364,23 +426,10 @@ export async function computeMonthlySummary(supa: any, yyyymm: string): Promise<
     .map(([date, revenue]) => ({ date, revenue }))
     .sort((a, b) => b.revenue - a.revenue)[0] || null;
 
-  // Items → cost + top products
-  let cost = 0;
-  const productMap = new Map<string, number>();
-  if (ords.length) {
-    const ids = ords.map((o) => o.id);
-    const items = await fetchAll<{ product_name: string; quantity: number; cost_price: number | null }>(
-      (from, to) => supa.from('sale_order_items')
-        .select('product_name, quantity, cost_price')
-        .in('sale_order_id', ids).range(from, to),
-    );
-    for (const it of items) {
-      const q = Number(it.quantity) || 0;
-      cost += (Number(it.cost_price) || 0) * q;
-      const name = it.product_name || '?';
-      productMap.set(name, (productMap.get(name) || 0) + q);
-    }
-  }
+  // Items → cost + top products. Cost is resolved against historical
+  // receive prices via the shared helper so the monthly card matches the
+  // in-app P&L view.
+  const { totalCost: cost, qtyByName: productMap } = await computeOrderItemsCost(supa, ords);
   const topRaw = Array.from(productMap.entries())
     .map(([name, qty]) => ({ name, qty }))
     .sort((a, b) => b.qty - a.qty)
@@ -409,25 +458,18 @@ export async function computeMonthlySummary(supa: any, yyyymm: string): Promise<
   const netProfit = grossProfit - shopExpense;
   const margin = revenue > 0 ? grossProfit / revenue : 0;
 
-  // Prev gross — rough; we only have prev revenue + need its cost, fetch items
+  // Prev gross — same cost helper so the MoM compare arrow is honest.
   let prevGross = 0;
-  if (prevOrders && prevOrders.length) {
-    const { data: prevItems } = await supa
-      .from('sale_order_items')
-      .select('quantity, cost_price, sale_order_id')
-      .in('sale_order_id', (prevOrders as any).map((o: any) => o.id ?? -1).filter((x: number) => x >= 0));
-    let prevCost = 0;
-    for (const it of (prevItems || []) as any[]) {
-      prevCost += (Number(it.cost_price) || 0) * (Number(it.quantity) || 0);
-    }
+  if (prevOrds.length) {
+    const { totalCost: prevCost } = await computeOrderItemsCost(supa, prevOrds);
     prevGross = prevRevenue - prevCost;
   }
 
-  const totalChannelRevenue = Object.values(channelMap).reduce((s, v) => s + v, 0);
-  const byChannel = Object.entries(channelMap)
-    .map(([channel, total]) => ({
-      channel, total,
-      pct: totalChannelRevenue > 0 ? total / totalChannelRevenue : 0,
+  const totalChannelRevenue = Array.from(channelMap.values()).reduce((s, v) => s + v.total, 0);
+  const byChannel = Array.from(channelMap.entries())
+    .map(([channel, v]) => ({
+      channel, total: v.total, count: v.count,
+      pct: totalChannelRevenue > 0 ? v.total / totalChannelRevenue : 0,
     }))
     .sort((a, b) => b.total - a.total);
 
@@ -439,33 +481,30 @@ export async function computeMonthlySummary(supa: any, yyyymm: string): Promise<
 
 export function formatMonthly(m: MonthlySummary): string {
   const lines: string[] = [];
-  lines.push(`🗓 <b>สรุปเดือน${fmtThaiMonth(m.yyyymm)}</b>`);
+  lines.push(`🗓 <b>${fmtThaiMonth(m.yyyymm)}</b>`);
   lines.push('');
   if (m.orderCount === 0) {
     lines.push('🌙 ไม่มีบิลขายในเดือนนี้');
     return lines.join('\n');
   }
-  lines.push(`💰 ยอดขายเดือน    <b>${fmtTHB(m.revenue)}</b>`);
-  lines.push(`🧾 จำนวนบิล       ${m.orderCount.toLocaleString('th-TH')} บิล`);
-  lines.push(`💵 กำไรเบื้องต้น   ${fmtTHB(m.grossProfit)}  <i>(${(m.margin * 100).toFixed(1)}%)</i>`);
-  lines.push(`💸 ค่าใช้จ่ายร้าน  -${fmtTHB(m.shopExpense)}`);
-  lines.push('━━━━━━━━━━━━━━━━━━━━');
-  lines.push(`✨ <b>กำไรสุทธิ      ${fmtTHB(m.netProfit)}</b>`);
+  lines.push(`ยอดขาย <b>${fmtTHB(m.revenue)}</b>`);
+  lines.push(`บิล ${m.orderCount.toLocaleString('th-TH')}`);
+  lines.push(`กำไรขั้นต้น ${fmtTHB(m.grossProfit)} <i>(${(m.margin * 100).toFixed(1)}%)</i>`);
+  if (m.shopExpense > 0) lines.push(`ค่าใช้จ่ายร้าน -${fmtTHB(m.shopExpense)}`);
+  lines.push(`✨ <b>กำไรสุทธิ ${fmtTHB(m.netProfit)}</b>`);
 
   if (m.prevRevenue > 0) {
     const revChange = (m.revenue - m.prevRevenue) / m.prevRevenue;
     const grossChange = m.prevGross > 0 ? (m.grossProfit - m.prevGross) / m.prevGross : 0;
     lines.push('');
-    lines.push('📈 <b>เทียบเดือนก่อน</b>');
-    lines.push(`   ยอดขาย ${fmtPct(revChange)}  ·  กำไร ${fmtPct(grossChange)}`);
+    lines.push(`📈 เทียบเดือนก่อน · ยอด ${fmtPct(revChange)} · กำไร ${fmtPct(grossChange)}`);
   }
 
   if (m.topProducts.length) {
     lines.push('');
-    lines.push('📦 <b>Top 5 ขายดี</b>');
+    lines.push('📦 <b>ขายดี</b>');
     m.topProducts.forEach((p, i) => {
-      const bar = asciiBar(p.qty / p.max, 6);
-      lines.push(`  ${i + 1}. ${truncate(p.name, 22)} ${bar} ×${p.qty}`);
+      lines.push(`  ${i + 1}. ${truncate(p.name, 26)} ×${p.qty}`);
     });
   }
 
@@ -473,114 +512,24 @@ export function formatMonthly(m: MonthlySummary): string {
     lines.push('');
     lines.push('🛒 <b>ช่องทาง</b>');
     m.byChannel.forEach(c => {
-      const label = (CHANNEL_LABEL[c.channel] || c.channel).padEnd(8, ' ');
-      const pct = (c.pct * 100).toFixed(0).padStart(3, ' ');
-      lines.push(`  ${label} ${pct}%  ${asciiBar(c.pct, 8)}`);
+      const label = CHANNEL_LABEL[c.channel] || c.channel;
+      lines.push(`  ${label} — ${fmtTHB(c.total)} · ${c.count} บิล`);
     });
   }
 
   if (m.bestDay) {
-    const [, , dd] = m.bestDay.date.split('-');
+    const [, mm, dd] = m.bestDay.date.split('-');
     lines.push('');
-    lines.push(`📅 ขายดีที่สุดวันที่ ${Number(dd)} (${fmtTHB(m.bestDay.revenue)})`);
+    lines.push(`📅 ขายดีสุด ${Number(dd)}/${Number(mm)} (${fmtTHB(m.bestDay.revenue)})`);
   }
 
   return lines.join('\n');
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-//  MORNING BRIEF — month-to-date + low-stock list.
-// ─────────────────────────────────────────────────────────────────────────
-
-export interface MorningBrief {
-  date: string;
-  mtdRevenue: number;
-  mtdDays: number;
-  mtdAvg: number;
-  lowStock: Array<{ name: string; stock: number }>;
-  totalLowStock: number;
-}
-
-export async function computeMorningBrief(
-  supa: any,
-  dateBkk: string,
-  threshold: number,
-): Promise<MorningBrief> {
-  const yyyymm = dateBkk.slice(0, 7);
-  const monthStart = `${yyyymm}-01T00:00:00+07:00`;
-  const dayBkkEnd = endOfDayBkk(dateBkk);
-
-  // MTD revenue (this month, up to and including yesterday for clean numbers
-  // since brief sends in the morning before the day's first sale).
-  const yest = (() => {
-    const [y, m, d] = dateBkk.split('-').map(Number);
-    const dt = new Date(Date.UTC(y, m - 1, d));
-    dt.setUTCDate(dt.getUTCDate() - 1);
-    return dt.toISOString().slice(0, 10);
-  })();
-  const mtdEnd = endOfDayBkk(yest);
-
-  const { data: orders } = await supa
-    .from('sale_orders')
-    .select('channel, grand_total, net_received, sale_date')
-    .eq('status', 'active')
-    .gte('sale_date', monthStart)
-    .lte('sale_date', mtdEnd);
-  const ords = (orders || []) as Array<OrderLike & { sale_date: string }>;
-  const mtdRevenue = ords.reduce((s, r) => s + revenueOf(r), 0);
-  // Distinct days that had at least one order — gives a meaningful "avg/day"
-  // even when the shop was closed on some weekdays.
-  const days = new Set(ords.map(o => o.sale_date.slice(0, 10)));
-  const mtdDays = days.size || 1;
-  const mtdAvg = mtdRevenue / mtdDays;
-
-  // Low stock — show top 10 lowest, plus a total-count line.
-  const { data: lowAll } = await supa
-    .from('products')
-    .select('name, current_stock')
-    .lte('current_stock', threshold)
-    .gt('current_stock', -9999)
-    .order('current_stock', { ascending: true })
-    .limit(50);
-  const lowStock = (lowAll || []).slice(0, 10).map((r: any) => ({
-    name: r.name, stock: Number(r.current_stock) || 0,
-  }));
-  const totalLowStock = (lowAll || []).length;
-
-  return { date: dateBkk, mtdRevenue, mtdDays, mtdAvg, lowStock, totalLowStock };
-}
-
-export function formatBrief(b: MorningBrief): string {
-  const lines: string[] = [];
-  lines.push(`☀️ <b>อรุณสวัสดิ์ · ${fmtThaiDate(b.date)}</b>`);
-  lines.push('');
-  lines.push('📅 <b>เดือนนี้ถึงเมื่อวาน</b>');
-  if (b.mtdRevenue > 0) {
-    lines.push(`   ยอดขาย    ${fmtTHB(b.mtdRevenue)}  <i>(${b.mtdDays} วัน)</i>`);
-    lines.push(`   เฉลี่ย/วัน  ${fmtTHB(b.mtdAvg)}`);
-  } else {
-    lines.push('   ยังไม่มีบิลในเดือนนี้');
-  }
-
-  if (b.totalLowStock > 0) {
-    lines.push('');
-    lines.push(`⚠️ <b>สต็อกใกล้หมด</b>  <i>(${b.totalLowStock} รายการ)</i>`);
-    b.lowStock.forEach(p => {
-      const icon = p.stock <= 0 ? '🔴' : p.stock <= 1 ? '🟠' : '🟡';
-      lines.push(`  ${icon} ${truncate(p.name, 28)} — เหลือ ${p.stock}`);
-    });
-    if (b.totalLowStock > b.lowStock.length) {
-      lines.push(`  <i>… และอีก ${b.totalLowStock - b.lowStock.length} รายการ</i>`);
-    }
-  } else {
-    lines.push('');
-    lines.push('✅ <b>สต็อก OK</b> — ไม่มีรายการใกล้หมด');
-  }
-
-  lines.push('');
-  lines.push('💼 ขอให้ขายดีวันนี้ครับ');
-  return lines.join('\n');
-}
+// Morning brief was intentionally removed — only Daily and Monthly summaries
+// (plus on-demand /sales and /lowstock) remain. The `last_brief_sent_at` and
+// `morning_*` columns are still in `shop_secrets` to keep the migration
+// history clean, but they are no longer written or read by any code path.
 
 // ─────────────────────────────────────────────────────────────────────────
 //  RANGE SUMMARY — used by `/sales 7d`, `/sales 30d`.
@@ -593,7 +542,7 @@ export interface RangeSummary {
   revenue: number;
   orderCount: number;
   avgPerDay: number;
-  byChannel: Array<{ channel: string; total: number; pct: number }>;
+  byChannel: Array<{ channel: string; total: number; count: number; pct: number }>;
 }
 
 export async function computeRangeSummary(supa: any, days: number): Promise<RangeSummary> {
@@ -608,16 +557,19 @@ export async function computeRangeSummary(supa: any, days: number): Promise<Rang
   const ords = (orders || []) as OrderLike[];
   const revenue = ords.reduce((s, r) => s + revenueOf(r), 0);
 
-  const channelMap: Record<string, number> = {};
+  const channelMap = new Map<string, { total: number; count: number }>();
   for (const r of ords) {
     const k = r.channel || 'store';
-    channelMap[k] = (channelMap[k] || 0) + revenueOf(r);
+    const cur = channelMap.get(k) || { total: 0, count: 0 };
+    cur.total += revenueOf(r);
+    cur.count += 1;
+    channelMap.set(k, cur);
   }
-  const total = Object.values(channelMap).reduce((s, v) => s + v, 0);
-  const byChannel = Object.entries(channelMap)
-    .map(([channel, sum]) => ({
-      channel, total: sum,
-      pct: total > 0 ? sum / total : 0,
+  const total = Array.from(channelMap.values()).reduce((s, v) => s + v.total, 0);
+  const byChannel = Array.from(channelMap.entries())
+    .map(([channel, v]) => ({
+      channel, total: v.total, count: v.count,
+      pct: total > 0 ? v.total / total : 0,
     }))
     .sort((a, b) => b.total - a.total);
 
@@ -632,23 +584,21 @@ export async function computeRangeSummary(supa: any, days: number): Promise<Rang
 
 export function formatRange(r: RangeSummary): string {
   const lines: string[] = [];
-  lines.push(`📈 <b>สรุปยอด ${r.days} วันล่าสุด</b>`);
-  lines.push(`   <i>${fmtThaiDate(r.fromDate, false)} – ${fmtThaiDate(r.toDate, false)}</i>`);
+  lines.push(`📈 <b>${r.days} วันล่าสุด</b>`);
+  lines.push(`<i>${fmtThaiDate(r.fromDate, false)} – ${fmtThaiDate(r.toDate, false)}</i>`);
   lines.push('');
   if (r.orderCount === 0) {
     lines.push('🌙 ไม่มีบิลในช่วงนี้');
     return lines.join('\n');
   }
-  lines.push(`💰 ยอดขายรวม   <b>${fmtTHB(r.revenue)}</b>`);
-  lines.push(`🧾 จำนวนบิล    ${r.orderCount.toLocaleString('th-TH')} บิล`);
-  lines.push(`📅 เฉลี่ย/วัน   ${fmtTHB(r.avgPerDay)}`);
+  lines.push(`ยอดขายรวม <b>${fmtTHB(r.revenue)}</b>`);
+  lines.push(`บิล ${r.orderCount.toLocaleString('th-TH')} · เฉลี่ย/วัน ${fmtTHB(r.avgPerDay)}`);
   if (r.byChannel.length) {
     lines.push('');
     lines.push('🛒 <b>ช่องทาง</b>');
     r.byChannel.forEach(c => {
-      const label = (CHANNEL_LABEL[c.channel] || c.channel).padEnd(8, ' ');
-      const pct = (c.pct * 100).toFixed(0).padStart(3, ' ');
-      lines.push(`  ${label} ${pct}%  ${asciiBar(c.pct, 8)}`);
+      const label = CHANNEL_LABEL[c.channel] || c.channel;
+      lines.push(`  ${label} — ${fmtTHB(c.total)} · ${c.count} บิล`);
     });
   }
   return lines.join('\n');

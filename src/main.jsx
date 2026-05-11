@@ -111,7 +111,10 @@ const { useState, useEffect, useMemo, useCallback, useRef } = React;
 // Round to satang precision (2 decimals) to avoid JS float drift on currency math.
 // Use everywhere prices are added/multiplied/discounted before storing or comparing.
 const roundMoney = (n) => Math.round(((Number(n) || 0) + Number.EPSILON) * 100) / 100;
-const fmtTHB = (n) => "฿" + roundMoney(n).toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+// Currency formatter — historically prefixed with "฿" but the user
+// requested a clean numeric display, so we render just the number
+// (still with Thai locale grouping + 2-decimal cap).
+const fmtTHB = (n) => roundMoney(n).toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 // Same as fmtTHB but without the ฿ prefix — used in tables where the column
 // header already implies currency and we want a denser tabular look.
 const fmtMoney = (n) => roundMoney(n).toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -147,9 +150,13 @@ const PAYLATER_BLOCKED_CHANNELS = new Set(["store", "facebook"]);
 // Channels whose platform fees make grand_total ≠ shop revenue.
 // For these, the cashier records net_received separately for the P&L.
 const ECOMMERCE_CHANNELS = new Set(['tiktok', 'shopee', 'lazada']);
-// Payments where the platform-deducted total is known immediately at sale
-// time. Pay-later (delay 1–2d) and COD (delay until courier remits) aren't.
-const NET_RECEIVED_REQUIRED_PAYMENTS = new Set(['transfer', 'card']);
+// Payments on e-commerce channels where the cashier is required to enter
+// the platform-deducted "net received" total before checkout. Pay-later
+// is included because the cashier can estimate it via the auto-fill
+// button (paylater fee config) — making it required ensures P&L stays
+// accurate instead of falling back to grand_total. COD remains optional
+// since the actual remit happens only after the courier delivers.
+const NET_RECEIVED_REQUIRED_PAYMENTS = new Set(['transfer', 'card', 'paylater']);
 const requiresNetReceived = (channel, payment) =>
   ECOMMERCE_CHANNELS.has(channel) && NET_RECEIVED_REQUIRED_PAYMENTS.has(payment);
 const UNITS = ["เรือน", "เส้น", "ก้อน", "ใบ"];
@@ -780,7 +787,7 @@ function DatePicker({ value, onChange, mode = 'single', placeholder = 'เลื
 
   return (
     <div className={"relative " + className} ref={ref}>
-      <button type="button" onClick={()=>setOpen(o=>!o)} className="input flex items-center gap-2.5 text-left hover:bg-white/95 transition-colors !h-10">
+      <button type="button" onClick={()=>setOpen(o=>!o)} className="input flex items-center gap-2.5 text-left hover:bg-white/95 transition-colors">
         <Icon name="calendar" size={18} className="text-body flex-shrink-0" strokeWidth={2}/>
         <span className={(mode==='single'?value:value?.from) ? "text-ink truncate" : "text-muted-soft truncate"}>{display}</span>
         <Icon name="chevron-d" size={16} className={"ml-auto text-muted flex-shrink-0 transition-transform " + (open?"rotate-180":"")}/>
@@ -1497,10 +1504,10 @@ function FontSizePickerInline() {
           type="button"
           onClick={() => setSize(s.id)}
           aria-pressed={size === s.id}
-          className={"flex-1 py-2.5 rounded-lg font-medium transition border text-sm " + (
+          className={"flex-1 py-2.5 rounded-lg font-medium transition text-sm " + (
             size === s.id
-              ? "bg-primary text-on-primary border-primary shadow-sm"
-              : "bg-white text-muted border-hairline hover:text-ink hover:bg-white/80"
+              ? "bg-primary text-on-primary border border-primary shadow-sm"
+              : "lg-tile text-muted hover:text-ink"
           )}
           style={{ fontSize: s.px === 16 ? '13px' : s.px === 18 ? '15px' : '17px' }}
         >
@@ -1768,6 +1775,11 @@ function MovementHistoryModal({ open, onClose, kind }) {
   });
   const [excludeVoided, setExcludeVoided] = useState(true);
   const [rows, setRows] = useState([]);
+  // Quantity (pieces) per order, fetched separately from the items table —
+  // the order header only carries `total_value`, not `total_qty`, so we
+  // aggregate line-item quantities here. Drives both the per-row "X ชิ้น"
+  // chip and the per-day subtotal in the day-grouped header.
+  const [qtyByOrder, setQtyByOrder] = useState({});
   const [loading, setLoading] = useState(false);
   const [detailId, setDetailId] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -1788,13 +1800,54 @@ function MovementHistoryModal({ open, onClose, kind }) {
         if (excludeVoided) q = q.is('voided_at', null);
         return q;
       });
-      if (!cancel) {
-        if (error) toast.push("โหลดไม่ได้: " + mapError(error), 'error');
-        setRows(data || []); setLoading(false);
+      if (cancel) return;
+      if (error) toast.push("โหลดไม่ได้: " + mapError(error), 'error');
+      const orderRows = data || [];
+      setRows(orderRows);
+
+      // Second hop: sum up `quantity` per order so we can show
+      // "X ชิ้น" inline + a daily piece total in the day header.
+      const ids = orderRows.map(r => r.id);
+      let qtyMap = {};
+      if (ids.length) {
+        const { data: itemsData } = await fetchAll((fromIdx, toIdx) =>
+          sb.from(meta.itemTable)
+            .select(`${meta.itemFk}, quantity`)
+            .in(meta.itemFk, ids)
+            .range(fromIdx, toIdx)
+        );
+        for (const it of itemsData || []) {
+          const oid = it[meta.itemFk];
+          qtyMap[oid] = (qtyMap[oid] || 0) + (Number(it.quantity) || 0);
+        }
       }
+      if (!cancel) { setQtyByOrder(qtyMap); setLoading(false); }
     })();
     return () => { cancel = true; };
   }, [open, range.from, range.to, excludeVoided, kind, reloadKey]);
+
+  // Group orders by their Bangkok-local calendar date so the user gets a
+  // running "วันที่ X · N บิล · M ชิ้น · ฿Y" header above each day's bills.
+  // Voided rows are still rendered (when `excludeVoided` is off) but their
+  // values are excluded from the day subtotal — matching how the cashier
+  // expects to read the report.
+  const grouped = useMemo(() => {
+    const map = new Map();
+    for (const r of rows) {
+      const raw = r[meta.dateField];
+      const dKey = raw ? dateISOBangkok(new Date(raw)) : '';
+      const bucket = map.get(dKey) || { date: dKey, orders: [], totalValue: 0, totalQty: 0, activeCount: 0 };
+      const qty = qtyByOrder[r.id] || 0;
+      bucket.orders.push({ ...r, _qty: qty });
+      if (!r.voided_at) {
+        bucket.totalValue += Number(r.total_value) || 0;
+        bucket.totalQty   += qty;
+        bucket.activeCount += 1;
+      }
+      map.set(dKey, bucket);
+    }
+    return Array.from(map.values()).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  }, [rows, qtyByOrder, meta.dateField]);
 
   const refresh = useCallback(() => setReloadKey(k => k+1), []);
 
@@ -1825,29 +1878,53 @@ function MovementHistoryModal({ open, onClose, kind }) {
         )}
         {!loading && rows.length > 0 && (
           <div className="card-canvas overflow-hidden">
-            {rows.map(r => {
-              const voided = !!r.voided_at;
-              const date = r[meta.dateField];
-              const refLabel = meta.showSupplier ? (r.supplier_name || '—')
-                             : meta.showChannel  ? (CHANNEL_LABELS[r.channel] || r.channel || '—')
-                             : '—';
-              return (
-                <div key={r.id}
-                  className={"px-4 py-3 border-b hairline last:border-0 hover:bg-white/40 cursor-pointer flex items-center gap-3 transition-colors " + (voided ? "opacity-60" : "")}
-                  onClick={()=>setDetailId(r.id)}>
-                  <div className="flex-shrink-0 font-mono text-xs text-muted-soft w-16">#{r.id}</div>
-                  <div className="min-w-0 flex-1">
-                    <div className={"font-medium text-sm truncate " + (voided?"line-through":"")}>{refLabel}</div>
-                    <div className="text-xs text-muted">{fmtThaiDateShort(date)}{r.supplier_invoice_no ? ` · ${r.supplier_invoice_no}` : ''}</div>
+            {grouped.map(g => (
+              <div key={g.date}>
+                {/* Day header — sticky so the date label stays visible while
+                    scrolling through a long day's worth of bills. Shows the
+                    aggregate the cashier asked for: bill count, piece count,
+                    and ฿ total (voided bills excluded from the totals). */}
+                <div className="px-4 py-2.5 bg-surface-cream-strong/85 backdrop-blur border-b hairline flex items-center justify-between gap-3 sticky top-0 z-10">
+                  <div className="text-sm font-medium text-ink">{fmtThaiDateShort(g.date)}</div>
+                  <div className="flex items-center gap-3 text-xs">
+                    <span className="text-muted-soft tabular-nums">
+                      {g.activeCount} บิล · <span className="font-medium text-ink">{g.totalQty.toLocaleString('th-TH')}</span> ชิ้น
+                    </span>
+                    <span className="font-display text-sm tabular-nums text-ink">{fmtTHB(g.totalValue)}</span>
                   </div>
-                  <div className="text-right flex-shrink-0">
-                    <div className={"font-medium tabular-nums text-sm " + (voided?"line-through text-muted":"")}>{fmtTHB(r.total_value)}</div>
-                    {voided && <span className="badge-pill !bg-error/10 !text-error mt-0.5">ยกเลิก</span>}
-                  </div>
-                  <Icon name="chevron-r" size={16} className="text-muted-soft flex-shrink-0"/>
                 </div>
-              );
-            })}
+                {g.orders.map(r => {
+                  const voided = !!r.voided_at;
+                  const refLabel = meta.showSupplier ? (r.supplier_name || '—')
+                                 : meta.showChannel  ? (CHANNEL_LABELS[r.channel] || r.channel || '—')
+                                 : '—';
+                  return (
+                    <div key={r.id}
+                      className={"px-4 py-3 border-b hairline last:border-0 hover:bg-white/40 cursor-pointer flex items-center gap-3 transition-colors " + (voided ? "opacity-60" : "")}
+                      onClick={()=>setDetailId(r.id)}>
+                      <div className="flex-shrink-0 font-mono text-xs text-muted-soft w-16">#{r.id}</div>
+                      <div className="min-w-0 flex-1">
+                        <div className={"font-medium text-sm truncate " + (voided?"line-through":"")}>{refLabel}</div>
+                        <div className="text-xs text-muted">{fmtThaiDateShort(r[meta.dateField])}{r.supplier_invoice_no ? ` · ${r.supplier_invoice_no}` : ''}</div>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <div className={"font-medium tabular-nums text-sm " + (voided?"line-through text-muted":"")}>{fmtTHB(r.total_value)}</div>
+                        <div className="text-[11px] text-muted-soft tabular-nums mt-0.5">
+                          {(r._qty || 0).toLocaleString('th-TH')} ชิ้น
+                        </div>
+                        {/* Refund-only return — surfaces the "lost goods" state
+                            in the history list at a glance, distinct from voids. */}
+                        {kind==='return' && r.goods_returned === false && (
+                          <span className="badge-pill !bg-warning/15 !text-[#8a6500] mt-0.5">ของหาย</span>
+                        )}
+                        {voided && <span className="badge-pill !bg-error/10 !text-error mt-0.5">ยกเลิก</span>}
+                      </div>
+                      <Icon name="chevron-r" size={16} className="text-muted-soft flex-shrink-0"/>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -1980,6 +2057,22 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
               <div>
                 <div className="font-medium">บิลนี้ถูกยกเลิกแล้ว</div>
                 <div className="text-xs mt-1">{fmtDateTime(order.voided_at)}{order.void_reason? ` · ${order.void_reason}`:''}</div>
+              </div>
+            </div>
+          )}
+          {/* Lost-goods (refund-only) banner. Read-only: changing this flag
+              after save would create stock mismatch (no audit reversal path),
+              so the banner clearly tells the user they must void+recreate
+              if the original entry was wrong. */}
+          {kind==='return' && order.goods_returned === false && (
+            <div className="p-3 rounded-md bg-warning/15 text-[#8a6500] text-sm flex items-start gap-2">
+              <Icon name="alert" size={16} className="mt-0.5 flex-shrink-0"/>
+              <div>
+                <div className="font-medium">เงินคืนอย่างเดียว — ของหาย/ไม่ได้รับสินค้าคืน</div>
+                <div className="text-xs mt-1 leading-relaxed">
+                  ใบนี้ไม่ได้บวก stock กลับ เพราะเป็นเคส platform คืนเงินแต่สินค้าหาย
+                  · หากบันทึกผิดประเภท ต้อง<strong>ยกเลิกบิลแล้วทำใหม่</strong> (แก้ flag นี้ตรงๆ ไม่ได้เพราะจะทำให้ stock ไม่ตรง)
+                </div>
               </div>
             </div>
           )}
@@ -2439,7 +2532,7 @@ function DisplayPricePanel({ line, onApply, onClear }) {
   return (
     <div className="mt-2 p-2.5 rounded-lg bg-primary/5 border border-primary/15 fade-in">
       <div className="text-[11px] text-muted-soft mb-1.5">
-        ราคานี้จะแสดงในใบเสร็จลูกค้าแทน <span className="tabular-nums">฿{fmtTHB(line.unit_price).replace(/^฿/,'')}</span> · ราคาจริงไม่เปลี่ยน · ไม่กระทบกำไร / สต็อก
+        ราคานี้จะแสดงในใบเสร็จลูกค้าแทน <span className="tabular-nums">{fmtTHB(line.unit_price)}</span> · ราคาจริงไม่เปลี่ยน · ไม่กระทบกำไร / สต็อก
       </div>
       <div className="flex items-center gap-1.5">
         <input
@@ -2468,11 +2561,13 @@ function DisplayPricePanel({ line, onApply, onClear }) {
   );
 }
 
-// "คำนวณอัตโนมัติ" — pre-fills "เงินที่ร้านได้รับ" with an estimate
-// for paylater/COD sales (where the platform's actual deduction isn't
-// known until 1–2 days later). Uses estimateNetReceivedTotal which
-// applies the per-line shop formula. Disabled when cart is empty so
-// the button shape stays stable but doesn't fire on no-op data.
+// "คำนวณอัตโนมัติ" — pre-fills "เงินที่ร้านได้รับ" with an estimate.
+// Shown ONLY for COD on e-commerce channels: the platform's actual
+// remit is unknown until the courier delivers, so an estimate via the
+// per-line shop formula (paylater_config) is a sensible default the
+// cashier can tweak later when the real number lands. Other payment
+// methods (transfer/card/paylater) get the exact number from the
+// platform dashboard immediately — no estimate needed.
 function NetReceivedAutoButton({ cart, config, onApply }) {
   const disabled = !cart || cart.length === 0;
   return (
@@ -2497,10 +2592,10 @@ function POSView() {
   const toast = useToast();
   const askConfirm = useConfirm();
   const { shop } = useShop();
-  // Live formula config for the "คำนวณอัตโนมัติ" button. Falls back to
-  // DEFAULT_PAYLATER_CONFIG when the shop hasn't customised it (or is
-  // still loading). useMemo so the merged object is stable across
-  // renders and the button's onClick captures the same reference.
+  // Live formula config for the "คำนวณอัตโนมัติ" button (COD only).
+  // Falls back to DEFAULT_PAYLATER_CONFIG when the shop hasn't customised
+  // it. useMemo so the merged object is stable across renders and the
+  // button's onClick captures the same reference.
   const paylaterConfig = useMemo(
     () => mergePaylaterConfig(shop?.paylater_config),
     [shop?.paylater_config]
@@ -2690,6 +2785,30 @@ function POSView() {
   const discountAmount = Math.max(0, subtotal - grand);
   const totalQty = useMemo(()=> cart.reduce((s,l)=> s+l.quantity, 0), [cart]);
 
+  // Sanity guard for "เงินที่ร้านได้รับ" (net_received) on e-commerce sales.
+  // The platform never pays the shop MORE than the customer paid (grand_total),
+  // so a value above `grand` is almost certainly a typo (e.g. 70000 vs 7000).
+  // On blur we surface a popup, clear the field, and refocus so the cashier
+  // re-enters the correct amount rather than silently locking in a bad number
+  // that would skew P&L. Tiny float epsilon allows for rounding wobble.
+  const handleNetReceivedBlur = useCallback(async () => {
+    const val = Number(netReceived);
+    if (!Number.isFinite(val) || val <= 0) return;
+    if (grand <= 0) return;
+    if (val <= grand + 0.01) return;
+    await askConfirm({
+      title: 'ใส่ตัวเลขเกินราคาป้าย',
+      message:
+        `ยอดที่ร้านได้รับ ${fmtTHB(val)} สูงกว่าราคาที่ลูกค้าจ่าย ${fmtTHB(grand)}\n` +
+        `ระบบจะล้างช่องนี้ — กรุณากรอกใหม่ให้ไม่เกินยอดที่ลูกค้าจ่าย`,
+      okLabel: 'ตกลง',
+      cancelLabel: 'ปิด',
+    });
+    setNetReceived('');
+    // Defer focus so the dialog's close animation doesn't steal it back.
+    setTimeout(() => { try { netReceivedRef.current?.focus(); } catch {} }, 60);
+  }, [netReceived, grand, askConfirm]);
+
   // Form validity — drives the submit button disabled state and the
   // submit() guard. Centralised so both stay in sync.
   const netPriceFilled = netPrice !== "" && Number(netPrice) > 0;
@@ -2850,7 +2969,22 @@ function POSView() {
           }}
           autoFocus
         />
-        {search && <button className="absolute right-3 top-1/2 -translate-y-1/2 btn-ghost !p-2 !min-h-0" onClick={()=>{setSearch("");setResults([]);searchRef.current?.focus();}} aria-label="ล้างคำค้น"><Icon name="x" size={18}/></button>}
+        {/* Always rendered so opacity transition can play on both
+            directions. NOTE: we deliberately avoid `btn-ghost` here —
+            its scale-on-active + bg-on-hover transitions race with our
+            opacity fade and produce a jittery "shrink-while-disappear"
+            effect. A bare button with only an opacity transition keeps
+            the fade pristine. `pointer-events-none` while empty also
+            kills hover state during fade-out. */}
+        <button
+          className={"absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-md text-muted hover:text-ink transition-opacity duration-200 ease-out " + (search ? "opacity-100" : "opacity-0 pointer-events-none")}
+          onClick={()=>{setSearch("");setResults([]);searchRef.current?.focus();}}
+          aria-label="ล้างคำค้น"
+          aria-hidden={!search}
+          tabIndex={search ? 0 : -1}
+        >
+          <Icon name="x" size={18}/>
+        </button>
       </div>
       <button type="button" className="scan-inline-btn" onClick={()=>setScannerOpen(true)} aria-label="สแกนด้วยกล้อง">
         <Icon name="camera" size={20}/>
@@ -2909,12 +3043,16 @@ function POSView() {
 
   const CartContent = (close) => (
     <>
-      <div className="flex-1 overflow-y-auto p-3">
+      <div className={"overflow-y-auto " + (cart.length ? "flex-1 p-3" : "flex-1 flex flex-col items-center justify-center px-5 py-3")}>
         {!cart.length && (
-          <div className="p-8 text-center">
-            <div className="inline-flex w-14 h-14 items-center justify-center rounded-full bg-surface-card text-muted mb-3"><Icon name="cart" size={28}/></div>
-            <div className="text-ink font-medium">ยังไม่มีสินค้า</div>
-            <div className="text-muted text-sm mt-1">พิมพ์หรือยิงบาร์โค้ดที่ช่องค้นหาด้านซ้าย แล้วแตะสินค้าเพื่อลงตะกร้า</div>
+          <div className="text-center">
+            <div className="inline-flex w-12 h-12 items-center justify-center rounded-full bg-white/55 ring-1 ring-hairline text-muted-soft mb-2.5 shadow-sm">
+              <Icon name="cart" size={22}/>
+            </div>
+            <div className="text-ink font-medium text-[15px] leading-tight">ยังไม่มีสินค้า</div>
+            <div className="text-muted-soft text-xs mt-1 leading-relaxed">
+              พิมพ์หรือสแกนบาร์โค้ดที่ช่องด้านซ้ายเพื่อเริ่ม
+            </div>
           </div>
         )}
         {cart.map((l, idx) => {
@@ -3017,6 +3155,17 @@ function POSView() {
       </div>
 
       <div className={"p-4 lg:p-5 border-t hairline bg-surface-cream-strong flex-shrink-0 " + (shaking ? "shake-error" : "")}>
+      {/* Empty-cart footer: just a disabled "ชำระเงิน" button so the
+          collapsed card still has a clear next-step affordance without
+          the noise of the full bill form. Skip the entire bill content
+          below to avoid rendering ~150 lines of inputs the cashier can't
+          interact with yet. */}
+      {!cart.length ? (
+        <button type="button" disabled className="btn-primary w-full !py-3 !text-base opacity-60 cursor-not-allowed">
+          เพิ่มสินค้าก่อนชำระเงิน
+        </button>
+      ) : (
+      <>
         {/* Section: ข้อมูลบิล */}
         <div className="text-[11px] uppercase tracking-[0.12em] text-muted-soft font-medium mb-1.5">ข้อมูลบิล</div>
         <div className="grid grid-cols-2 gap-2 mb-4">
@@ -3100,23 +3249,33 @@ function POSView() {
                 </span>
               )}
             </div>
-            <div className="flex items-stretch gap-2 mt-1">
+            {payment === 'cod' ? (
+              <div className="flex items-stretch gap-2 mt-1">
+                <input
+                  ref={netReceivedRef}
+                  type="number"
+                  inputMode="decimal"
+                  className="input !h-10 !rounded-xl !py-2 !text-sm flex-1 min-w-0"
+                  placeholder="รู้ทีหลังก็มาแก้ในหน้าขายได้"
+                  value={netReceived}
+                  onChange={e=>setNetReceived(e.target.value)}
+                  onBlur={handleNetReceivedBlur}
+                />
+                <NetReceivedAutoButton cart={cart} config={paylaterConfig}
+                  onApply={(v)=>{ setNetReceived(String(v)); netReceivedRef.current?.focus(); }}/>
+              </div>
+            ) : (
               <input
                 ref={netReceivedRef}
                 type="number"
                 inputMode="decimal"
-                className="input !h-10 !rounded-xl !py-2 !text-sm flex-1 min-w-0"
-                placeholder={requiresNetReceived(channel, payment)
-                  ? `ยอดที่ ${CHANNEL_LABELS[channel]||channel} โอนเข้าร้าน (บาท)`
-                  : 'รู้ทีหลังก็มาแก้ในหน้าขายได้'}
+                className="input !h-10 !rounded-xl !py-2 !text-sm mt-1 w-full"
+                placeholder={`ยอดที่ ${CHANNEL_LABELS[channel]||channel} โอนเข้าร้าน (บาท)`}
                 value={netReceived}
                 onChange={e=>setNetReceived(e.target.value)}
+                onBlur={handleNetReceivedBlur}
               />
-              {(payment === 'paylater' || payment === 'cod') && (
-                <NetReceivedAutoButton cart={cart} config={paylaterConfig}
-                  onApply={(v)=>{ setNetReceived(String(v)); netReceivedRef.current?.focus(); }}/>
-              )}
-            </div>
+            )}
             <div className="text-xs text-muted-soft mt-1">
               ใช้คำนวณกำไร · ไม่แสดงในใบเสร็จลูกค้า
             </div>
@@ -3186,6 +3345,8 @@ function POSView() {
             </div>
           )}
         </div>
+      </>
+      )}
       </div>
     </>
   );
@@ -3204,7 +3365,15 @@ function POSView() {
           <div className="flex-1 flex flex-col min-h-0">{ResultsList}</div>
         </div>
         <div className="col-span-5 flex flex-col">
-          <div className="card-cream flex flex-col flex-1 overflow-hidden">
+          {/* Cart card collapses to a compact header+placeholder card when
+              empty so the right column doesn't feel like a vast empty
+              canvas; expands to full column height the moment the first
+              item lands so the cashier sees items + the full bill form.
+              Animation is a height transition (% → rem, both compute to
+              px under the fixed-height grid row, so it interpolates).
+              `overflow-hidden` is essential — without it the bill panel
+              would spill out during the collapse keyframes. */}
+          <div className={"card-cream flex flex-col overflow-hidden transition-[height] duration-[450ms] ease-[cubic-bezier(0.4,0,0.2,1)] " + (cart.length ? "h-full" : "h-[19rem]")}>
             <div className="p-5 border-b hairline flex items-center justify-between flex-shrink-0">
               <div>
                 <div className="font-display text-2xl">ตะกร้า</div>
@@ -3469,23 +3638,33 @@ function POSView() {
                           </span>
                         )}
                       </div>
-                      <div className="flex items-stretch gap-2 mt-1">
+                      {payment === 'cod' ? (
+                        <div className="flex items-stretch gap-2 mt-1">
+                          <input
+                            ref={netReceivedRef}
+                            type="number"
+                            inputMode="decimal"
+                            className="input !h-10 !rounded-xl !py-2 !text-sm flex-1 min-w-0"
+                            placeholder="รู้ทีหลังก็มาแก้ในหน้าขายได้"
+                            value={netReceived}
+                            onChange={e=>setNetReceived(e.target.value)}
+                            onBlur={handleNetReceivedBlur}
+                          />
+                          <NetReceivedAutoButton cart={cart} config={paylaterConfig}
+                            onApply={(v)=>{ setNetReceived(String(v)); netReceivedRef.current?.focus(); }}/>
+                        </div>
+                      ) : (
                         <input
                           ref={netReceivedRef}
                           type="number"
                           inputMode="decimal"
-                          className="input !h-10 !rounded-xl !py-2 !text-sm flex-1 min-w-0"
-                          placeholder={requiresNetReceived(channel, payment)
-                            ? `ยอดที่ ${CHANNEL_LABELS[channel]||channel} โอนเข้าร้าน (บาท)`
-                            : 'รู้ทีหลังก็มาแก้ในหน้าขายได้'}
+                          className="input !h-10 !rounded-xl !py-2 !text-sm mt-1 w-full"
+                          placeholder={`ยอดที่ ${CHANNEL_LABELS[channel]||channel} โอนเข้าร้าน (บาท)`}
                           value={netReceived}
                           onChange={e=>setNetReceived(e.target.value)}
+                          onBlur={handleNetReceivedBlur}
                         />
-                        {(payment === 'paylater' || payment === 'cod') && (
-                          <NetReceivedAutoButton cart={cart} config={paylaterConfig}
-                            onApply={(v)=>{ setNetReceived(String(v)); netReceivedRef.current?.focus(); }}/>
-                        )}
-                      </div>
+                      )}
                       <div className="text-xs text-muted-soft mt-1">
                         ใช้คำนวณกำไร · ไม่แสดงในใบเสร็จลูกค้า
                       </div>
@@ -3617,17 +3796,24 @@ function POSView() {
       </Modal>
 
       {/* Receipt modal — opens after successful sale. On close we
-          re-focus the product search input so the cashier can scan the
-          next barcode immediately without hunting for the field. */}
+          clear any leftover search text from the previous bill (cashier
+          may have a half-typed query lingering) and re-focus the product
+          search input so the next barcode scan lands directly without
+          the cashier hunting for the field. */}
       <ReceiptModal
         open={!!receiptOrderId}
         onClose={()=>{
           setReceiptOrderId(null);
-          // Defer one frame so the modal's unmount doesn't yank focus away
-          // after we set it (React portals + animated close transition).
-          requestAnimationFrame(() => {
+          setSearch("");
+          setResults([]);
+          // Wait until after Modal's 220ms exit animation completes.
+          // Modal's own cleanup (focus-trap) restores focus to whatever
+          // had it when the modal opened (the pay button) — that fires
+          // synchronously on the close commit, BEFORE rAF, so a one-frame
+          // defer loses the race. 260ms is safely past the exit timer.
+          setTimeout(() => {
             searchRef.current?.focus();
-          });
+          }, 260);
         }}
         orderId={receiptOrderId}
       />
@@ -3914,10 +4100,10 @@ function ProductsView() {
   };
 
   const chipCls = (active) =>
-    "px-3 py-1.5 rounded-full text-xs font-medium border transition-all whitespace-nowrap inline-flex items-center gap-1 " +
+    "px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap inline-flex items-center gap-1 " +
     (active
-      ? "bg-ink text-on-dark border-ink shadow-sm"
-      : "bg-white/70 text-muted border-hairline hover:text-ink hover:bg-white");
+      ? "lg-tile-dark"
+      : "lg-tile text-muted hover:text-ink");
 
   return (
     <div className="px-4 py-4 lg:px-10 lg:py-6 lg:h-[calc(100vh-180px)] lg:flex lg:flex-col">
@@ -4098,15 +4284,7 @@ function ProductsView() {
                   )}
                 </div>
                 <div className="col-span-2 flex justify-center">
-                  <div
-                    className="inline-flex items-center justify-center min-w-[88px] h-9 px-3 rounded-[10px] font-display text-sm leading-none tabular-nums font-semibold"
-                    style={{
-                      background: 'linear-gradient(180deg, #1f2937 0%, #0f172a 100%)',
-                      color: '#ffffff',
-                      border: '1px solid rgba(255,255,255,0.10)',
-                      boxShadow: '0 2px 8px rgba(15,23,42,0.45), 0 1px 0 rgba(255,255,255,0.08) inset',
-                    }}
-                  >
+                  <div className="lg-tile-dark inline-flex items-center justify-center min-w-[88px] h-9 px-3 rounded-[10px] font-display text-sm leading-none tabular-nums font-semibold">
                     {fmtPlain(p.retail_price)}
                   </div>
                 </div>
@@ -5126,14 +5304,19 @@ function SalesView({ onGoPOS }) {
 
   const FilterControls = (
     <div className="space-y-3">
+      {/* Two filter controls side-by-side at sm+ — explicit w-full on
+          the DatePicker wrapper and matching min-height on both so the
+          range button and the channel select read as a single, balanced
+          pair (same width AND same visual height).                     */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
+        <div className="min-w-0">
           <label className="text-xs uppercase tracking-wider text-muted">ช่วงวันที่</label>
-          <DatePicker mode="range" value={range} onChange={handleRangeChange} placeholder="เลือกช่วงวันที่" className="mt-1"/>
+          <DatePicker mode="range" value={range} onChange={handleRangeChange}
+            placeholder="เลือกช่วงวันที่" className="mt-1 w-full"/>
         </div>
-        <div>
+        <div className="min-w-0">
           <label className="text-xs uppercase tracking-wider text-muted">ช่องทาง</label>
-          <select className="input mt-1" value={channel} onChange={e=>setChannel(e.target.value)}>
+          <select className="input mt-1 w-full" value={channel} onChange={e=>setChannel(e.target.value)}>
             <option value="">ทุกช่องทาง</option>
             {CHANNELS.map(c=> <option key={c.v} value={c.v}>{c.label}</option>)}
           </select>
@@ -5617,6 +5800,146 @@ function ReturnView()  {
   );
 }
 
+/**
+ * BillPickerPopup — when the user adds a product on the customer-Return form
+ * without first picking a bill, this modal lists every active sale order
+ * that contains that product, newest first. Bills that already have a
+ * non-voided return order are shown disabled (`มีรายการคืนแล้ว`) so the
+ * user cannot double-return; voiding the existing return re-enables the
+ * bill (since the blocked set is computed at open time).
+ *
+ * Returns the picked sale + its full sale_order_items array so the caller
+ * can both lock the bill AND auto-fill price/qty caps for the requested
+ * product without a second round-trip.
+ */
+function BillPickerPopup({ open, product, onPick, onClose }) {
+  const [rows, setRows] = useState(null);     // null = loading, [] = empty
+  const [blocked, setBlocked] = useState(() => new Set());
+  const [picking, setPicking] = useState(false);
+
+  useEffect(() => {
+    if (!open || !product?.id) return;
+    let cancel = false;
+    setRows(null);
+    (async () => {
+      // 1) Bills that sold this product (active only).
+      //    PostgREST !inner join lets us filter on the parent's status field.
+      const { data: hits } = await sb.from('sale_order_items')
+        .select('quantity, unit_price, sale_orders!inner(id, sale_date, channel, grand_total, status)')
+        .eq('product_id', product.id)
+        .eq('sale_orders.status', 'active')
+        .order('sale_date', { foreignTable: 'sale_orders', ascending: false })
+        .limit(200);
+
+      // Group by sale_order_id — one row per bill even if it sold the same
+      // product on multiple lines (rare, but happens with split discounts).
+      const map = new Map();
+      for (const r of hits || []) {
+        const so = r.sale_orders;
+        if (!so) continue;
+        const key = so.id;
+        const cur = map.get(key) || {
+          id: so.id, sale_date: so.sale_date, channel: so.channel,
+          grand_total: so.grand_total, status: so.status,
+          totalQty: 0, lastUnitPrice: r.unit_price,
+        };
+        cur.totalQty += Number(r.quantity) || 0;
+        // First row wins for unit_price display since hits are date-desc;
+        // good enough for the picker preview.
+        map.set(key, cur);
+      }
+      // Always sort newest-first in JS — relying on PostgREST's
+      // foreignTable order is fragile (it sorts the joined rows but the
+      // outer iteration order isn't guaranteed across drivers/versions).
+      const grouped = Array.from(map.values()).sort((a, b) => {
+        const ad = a.sale_date || '';
+        const bd = b.sale_date || '';
+        if (ad !== bd) return bd.localeCompare(ad);
+        return b.id - a.id; // tie-break by id desc
+      });
+
+      // 2) Bills already returned (active returns only).
+      const { data: returned } = await sb.from('return_orders')
+        .select('original_sale_order_id')
+        .is('voided_at', null)
+        .not('original_sale_order_id', 'is', null);
+      const blockedSet = new Set((returned || []).map(r => r.original_sale_order_id));
+
+      if (!cancel) {
+        setRows(grouped);
+        setBlocked(blockedSet);
+      }
+    })();
+    return () => { cancel = true; };
+  }, [open, product?.id]);
+
+  const handlePick = async (row) => {
+    if (blocked.has(row.id) || picking) return;
+    setPicking(true);
+    try {
+      // Fetch the bill's full line items so the caller can validate
+      // membership of future cart additions AND snap prices/qty caps.
+      const { data: items } = await sb.from('sale_order_items')
+        .select('*').eq('sale_order_id', row.id);
+      onPick({ ...row, items: items || [] });
+    } finally {
+      setPicking(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose}
+      title={product ? `เลือกบิลที่ขาย "${product.name}"` : 'เลือกบิล'}
+      footer={<button className="btn-secondary" onClick={onClose}>ยกเลิก</button>}>
+      {rows === null && (
+        <div className="p-6 text-sm text-muted flex items-center gap-2">
+          <span className="spinner"/>กำลังโหลดรายการบิล...
+        </div>
+      )}
+      {rows && rows.length === 0 && (
+        <div className="p-8 text-center text-muted text-sm card-canvas">
+          <Icon name="receipt" size={28} className="mx-auto mb-2 text-muted-soft"/>
+          ยังไม่เคยขายสินค้านี้ในบิลใดเลย
+          <div className="text-xs text-muted-soft mt-2">
+            หากบิลเก่าไม่ปรากฏ อาจเป็นเพราะบิลถูกยกเลิก
+          </div>
+        </div>
+      )}
+      {rows && rows.length > 0 && (
+        <div className="card-canvas overflow-hidden max-h-[60vh] overflow-y-auto">
+          {rows.map(r => {
+            const isBlocked = blocked.has(r.id);
+            return (
+              <button
+                key={r.id} type="button"
+                disabled={isBlocked || picking}
+                onClick={() => handlePick(r)}
+                className={"w-full text-left px-4 py-3 border-b hairline last:border-0 flex items-center gap-3 transition-colors " +
+                  (isBlocked ? "opacity-50 cursor-not-allowed bg-error/5" : "hover:bg-white/50 cursor-pointer")}
+              >
+                <div className="flex-shrink-0 font-mono text-sm font-semibold text-ink w-20">#{r.id}</div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm">{fmtThaiDateShort(r.sale_date?.slice(0, 10))}</div>
+                  <div className="text-xs text-muted mt-0.5">
+                    {CHANNEL_LABELS[r.channel] || r.channel} · {r.totalQty.toLocaleString('th-TH')} ชิ้น · {fmtTHB(r.lastUnitPrice)}/ชิ้น
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <div className="text-sm font-medium tabular-nums">{fmtTHB(r.grand_total)}</div>
+                  {isBlocked && (
+                    <span className="badge-pill !bg-error/10 !text-error mt-0.5 text-[10px]">มีรายการคืนแล้ว</span>
+                  )}
+                </div>
+                {!isBlocked && <Icon name="chevron-r" size={16} className="text-muted-soft flex-shrink-0"/>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 const StockMovementForm = React.forwardRef(function StockMovementForm({ kind }, ref) {
   const toast = useToast();
   const productSearchRef = useRef(null);
@@ -5636,14 +5959,28 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind }, 
   const [costPct, setCostPct] = useState(58);
   const [costPctMode, setCostPctMode] = useState('once'); // 'once' | 'persist'
   const [costPctChooserOpen, setCostPctChooserOpen] = useState(false);
-  // Return-specific
+  // Return-specific. `selectedSale` carries `.items` (sale_order_items) once
+  // a bill is locked — used to validate that any further cart additions
+  // actually belong to that bill (1 ใบรับคืน = 1 บิลขาย).
   const [origSaleId, setOrigSaleId] = useState("");
   const [returnReason, setReturnReason] = useState("");
-  const [origSaleMode, setOrigSaleMode] = useState('search'); // 'search' | 'manual'
+  // Refund-only flag — tri-state on purpose:
+  //   null  = user hasn't picked yet (blocks submit, prevents "forgot to tick")
+  //   true  = customer physically returned the product → stock is replenished
+  //   false = platform refunded but the physical product never came back
+  //           (lost in transit / customer kept it) → RPC skips stock adjust
+  // Forcing an explicit choice is safer than defaulting either way: a wrong
+  // default silently corrupts inventory in one direction.
+  const [goodsReturned, setGoodsReturned] = useState(null);
   const [saleSearch, setSaleSearch] = useState("");
   const [recentSales, setRecentSales] = useState([]);
   const [saleSearching, setSaleSearching] = useState(false);
   const [selectedSale, setSelectedSale] = useState(null);
+  // Bill-picker popup state — opened when user adds a product on the return
+  // form without having a bill locked yet. `pendingProduct` is the product
+  // the user just tapped; on bill-pick we both lock the bill and add it.
+  const [billPickerOpen, setBillPickerOpen] = useState(false);
+  const [pendingProduct, setPendingProduct] = useState(null);
   // Shared
   const [notes, setNotes] = useState("");
   // Validation + confirm
@@ -5651,9 +5988,11 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind }, 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const submitLockRef = useRef(false); // hard guard against double-submit
 
-  // Load recent sales when return + search mode is active
+  // Recent sales for the search-by-bill-id list shown when no bill is locked.
+  // Only relevant on the return form. Pulled once per mount per kind change —
+  // the list is short (50) and we filter client-side as the user types.
   useEffect(()=>{
-    if (kind !== 'return' || origSaleMode !== 'search') return;
+    if (kind !== 'return') return;
     let cancel = false;
     setSaleSearching(true);
     (async()=>{
@@ -5661,7 +6000,7 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind }, 
       if (!cancel) { setRecentSales(data||[]); setSaleSearching(false); }
     })();
     return ()=>{ cancel=true; };
-  }, [kind, origSaleMode]);
+  }, [kind]);
 
   const saleResults = React.useMemo(()=>{
     const q = saleSearch.trim();
@@ -5669,28 +6008,80 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind }, 
     return recentSales.filter(s => String(s.id).includes(q)).slice(0,15);
   }, [recentSales, saleSearch]);
 
-  const selectSale = async (sale) => {
+  // Convert a sale_order_items row to a return cart line. Used both when
+  // pre-filling from a search-bill pick and when adding a single product
+  // after bill-picker pop-up confirmation. The unit_price comes from what
+  // was actually charged on the original bill (NOT the catalog's current
+  // retail_price) so the return value lines up with the original sale —
+  // critical for P&L math.
+  const lineFromSaleItem = (l, overrideQty) => ({
+    _uid: (crypto.randomUUID?.() || `r${Math.random().toString(36).slice(2)}${Date.now()}`),
+    product_id: l.product_id,
+    product_name: l.product_name,
+    retail_price: l.unit_price,
+    cost_price: 0,
+    quantity: overrideQty != null ? overrideQty : l.quantity,
+    unit: 'เรือน',
+    unit_price: l.unit_price,
+    manualPrice: true,
+    discount1_value: 0, discount1_type: null,
+    discount2_value: 0, discount2_type: null,
+  });
+
+  // Path A — user searched the bill by ID and picked it. Auto-fill the cart
+  // with ALL items from that bill (the old behavior), since they explicitly
+  // chose the bill first.
+  const selectSaleFromSearch = async (sale) => {
+    const { data } = await sb.from('sale_order_items').select('*').eq('sale_order_id', sale.id);
+    const fullSale = { ...sale, items: data || [] };
+    setSelectedSale(fullSale);
+    setOrigSaleId(String(sale.id));
+    if (sale.sale_date) setDate(sale.sale_date.slice(0,10));
+    if (sale.channel) setChannel(sale.channel);
+    if (data && data.length) {
+      setItems(data.map(l => lineFromSaleItem(l)));
+    }
+  };
+
+  // Path B — user added a product first; BillPickerPopup returned the picked
+  // bill (with `.items` already fetched). Lock the bill and add ONLY the
+  // requested product, with price/qty snapped from the bill (qty=1 by
+  // default; user can adjust up to the original sold quantity).
+  const selectSaleFromPopup = (sale) => {
     setSelectedSale(sale);
     setOrigSaleId(String(sale.id));
     if (sale.sale_date) setDate(sale.sale_date.slice(0,10));
     if (sale.channel) setChannel(sale.channel);
-    const { data } = await sb.from('sale_order_items').select('*').eq('sale_order_id', sale.id);
-    if (data && data.length) {
-      setItems(data.map(l => ({
-        _uid: (crypto.randomUUID?.() || `r${Math.random().toString(36).slice(2)}${Date.now()}`),
-        product_id: l.product_id,
-        product_name: l.product_name,
-        retail_price: l.unit_price,
-        cost_price: 0,
-        quantity: l.quantity,
-        unit: 'เรือน',
-        unit_price: l.unit_price,
-        manualPrice: true,
-        discount1_value: 0, discount1_type: null,
-        discount2_value: 0, discount2_type: null,
-      })));
+    if (pendingProduct) {
+      const saleLine = (sale.items || []).find(l => l.product_id === pendingProduct.id);
+      if (saleLine) {
+        setItems(it => [...it, lineFromSaleItem(saleLine, 1)]);
+      }
     }
+    setBillPickerOpen(false);
+    setPendingProduct(null);
   };
+
+  // Clearing the locked bill drops every cart line — the cart only makes
+  // sense in the context of one bill. Confirmation lives in the trash icon's
+  // title attribute; we keep the action itself snappy.
+  const clearSelectedSale = () => {
+    setSelectedSale(null);
+    setOrigSaleId("");
+    setSaleSearch("");
+    setItems([]);
+  };
+
+  // Auto-release the bill lock once the cart is emptied (e.g. user removed
+  // items one-by-one). Without this the form would stay "locked" to a bill
+  // with no items, which is a confusing dead-end.
+  useEffect(() => {
+    if (kind !== 'return') return;
+    if (items.length === 0 && selectedSale) {
+      setSelectedSale(null);
+      setOrigSaleId("");
+    }
+  }, [items.length, selectedSale, kind]);
 
   useEffect(()=>{
     if (!search.trim()) { setResults([]); return; }
@@ -5717,7 +6108,36 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind }, 
     // Default for receive/claim: show retail price (ราคาป้าย) as starting point
     return Number(p.retail_price) || 0;
   };
+  // addItem — entry point for every "add this product to the cart" action
+  // (search-result tap, barcode hit, camera scan). The return form layers
+  // on bill-gating logic; receive/claim just push the line straight in.
   const addItem = (p) => {
+    if (kind === 'return') {
+      // No bill locked yet → open the picker for THIS product. The item
+      // gets added only after the user confirms a bill (selectSaleFromPopup).
+      // If the picker is already open (e.g. user mashes a barcode scanner),
+      // we silently ignore the new add to avoid clobbering pendingProduct.
+      if (!selectedSale) {
+        if (billPickerOpen) return;
+        setPendingProduct(p);
+        setBillPickerOpen(true);
+        return;
+      }
+      // Bill locked → product must exist in that bill, otherwise reject.
+      // Dedupe too: if it's already in the cart, treat as a no-op so the
+      // user doesn't accidentally double-up by tapping a search result twice.
+      const saleLine = (selectedSale.items || []).find(l => l.product_id === p.id);
+      if (!saleLine) {
+        toast.push(`สินค้านี้ไม่อยู่ในบิล #${selectedSale.id}`, 'error');
+        return;
+      }
+      if (items.some(it => it.product_id === p.id)) {
+        toast.push("สินค้านี้อยู่ในรายการคืนอยู่แล้ว", 'error');
+        return;
+      }
+      setItems(it => [...it, lineFromSaleItem(saleLine, 1)]);
+      return;
+    }
     setItems(it => [...it, {
       _uid: (crypto.randomUUID?.() || `r${Math.random().toString(36).slice(2)}${Date.now()}`),
       product_id: p.id, product_name: p.name,
@@ -5796,7 +6216,8 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind }, 
 
   const total = useMemo(()=> items.reduce((s,l)=> s + applyDiscounts(l.unit_price, l.quantity, l.discount1_value, l.discount1_type, l.discount2_value, l.discount2_type), 0), [items]);
 
-  // Required-field validation per kind (เลขบิล optional — auto-generate if empty)
+  // Required-field validation per kind (เลขบิล optional — auto-generate if empty,
+  // EXCEPT for returns where a linked original sale is mandatory — see plan).
   const missing = useMemo(()=>{
     const m = { date: !date };
     if (kind === 'receive' || kind === 'claim') {
@@ -5805,8 +6226,17 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind }, 
     if (kind === 'claim') {
       m.claimReason = !returnReason; // reuse returnReason state for claim_reason
     }
+    if (kind === 'return') {
+      // Bill is now required. The picker enforces selection in the UI, but
+      // belt-and-braces: also reject at submit time so accidental keyboard
+      // submits can't bypass it.
+      m.origSale = !selectedSale || !origSaleId;
+      // Tri-state goods_returned: must be an explicit true/false. `null`
+      // means the user never ticked either box → block submit.
+      m.goodsReturned = goodsReturned === null;
+    }
     return m;
-  }, [kind, date, supplierName, returnReason]);
+  }, [kind, date, supplierName, returnReason, selectedSale, origSaleId, goodsReturned]);
 
   const autoInvoiceNo = () => {
     const d = new Date();
@@ -5822,6 +6252,18 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind }, 
       setAttemptedSubmit(true);
       toast.push("กรุณากรอกข้อมูลให้ครบ", 'error');
       return;
+    }
+    // Returns can't exceed what was originally sold on the locked bill —
+    // a 5-piece sale can only generate up to a 5-piece return. We check
+    // here (not in `missing`) so the error message can name the offender.
+    if (kind === 'return' && selectedSale) {
+      const saleQty = new Map((selectedSale.items || []).map(l => [l.product_id, Number(l.quantity) || 0]));
+      const offender = items.find(l => (Number(l.quantity) || 0) > (saleQty.get(l.product_id) || 0));
+      if (offender) {
+        const max = saleQty.get(offender.product_id) || 0;
+        toast.push(`"${offender.product_name}" คืนได้ไม่เกิน ${max} ชิ้น (ตามบิล #${selectedSale.id})`, 'error');
+        return;
+      }
     }
     setConfirmOpen(true);
   };
@@ -5851,6 +6293,9 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind }, 
         headerPayload.return_reason = returnReason||null;
         const sid = parseInt(origSaleId,10);
         headerPayload.original_sale_order_id = Number.isFinite(sid) && sid>0 ? sid : null;
+        // Refund-only flag — RPC defaults to true if absent, but we always
+        // send it explicitly to keep the audit trail unambiguous.
+        headerPayload.goods_returned = goodsReturned;
       }
 
       const itemsPayload = items.map(l => ({
@@ -5872,7 +6317,7 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind }, 
       const verb = kind==='receive' ? 'การรับ' : kind==='claim' ? 'ส่งเคลม' : 'การคืน';
       toast.push(`บันทึก${verb} #${head.id} สำเร็จ`, 'success');
       setItems([]); setNotes(""); setSupplierName(""); setSupplierInvoiceNo(""); setOrigSaleId(""); setReturnReason("");
-      setSelectedSale(null); setSaleSearch(""); setOrigSaleMode('search');
+      setSelectedSale(null); setSaleSearch(""); setGoodsReturned(null);
       // Cost % toggle: 'once' resets after save, 'persist' stays on until leaving page
       if (costPctMode !== 'persist') { setCostPctEnabled(false); setCostPct(58); setCostPctMode('once'); }
       setAttemptedSubmit(false); setConfirmOpen(false);
@@ -6013,19 +6458,85 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind }, 
               <SalePickerForReturn
                 Icon={Icon} fmtTHB={fmtTHB} fmtThaiDateShort={fmtThaiDateShort}
                 CHANNEL_LABELS={CHANNEL_LABELS}
-                items={items}
-                origSaleMode={origSaleMode} setOrigSaleMode={setOrigSaleMode}
                 selectedSale={selectedSale}
                 saleSearch={saleSearch} setSaleSearch={setSaleSearch}
                 saleResults={saleResults} saleSearching={saleSearching}
-                origSaleId={origSaleId} setOrigSaleId={setOrigSaleId}
-                onSelectSale={selectSale}
-                onClearSale={()=>{ setSelectedSale(null); setSaleSearch(""); setOrigSaleId(""); }}
-                onWantManualButNoItems={()=>{
-                  toast.push("กรุณาเลือกสินค้าก่อน", 'error');
-                  productSearchRef.current?.focus();
-                }}
+                onSelectSale={selectSaleFromSearch}
+                onClearSale={clearSelectedSale}
+                showError={attemptedSubmit && !selectedSale}
               />
+            )}
+
+            {/* Refund flow choice (return form only) — two mutually-exclusive
+                checkboxes acting as a required radio group:
+                  ✓ ได้รับสินค้าคืน  → RPC adds stock back (normal return)
+                  ✓ ไม่ได้รับสินค้าคืน → RPC skips stock adjust (lost goods)
+                Neither defaults: user MUST tick one before save, otherwise
+                the form blocks submit. We use checkboxes (not <input radio>)
+                to keep the visual language identical to the rest of this
+                form — and because radios can't be unchecked, which would
+                hide the "you forgot to choose" failure mode from the user. */}
+            {kind==='return' && (
+              <div className={
+                "rounded-xl p-3 transition-colors " +
+                (attemptedSubmit && missing.goodsReturned
+                  ? "ring-1 ring-error/40 bg-error/5 field-error-glow"
+                  : "")
+              }>
+                <div className="text-xs uppercase tracking-wider text-muted mb-2 flex items-center gap-1.5">
+                  <span>สถานะสินค้า <span className="text-error">*</span></span>
+                  {attemptedSubmit && missing.goodsReturned && (
+                    <span className="text-error normal-case tracking-normal">— กรุณาเลือก</span>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {/* Option A — physically returned (stock adds back) */}
+                  <label className={"flex items-start gap-3 cursor-pointer select-none p-3 rounded-xl border transition-colors " +
+                    (goodsReturned === true
+                      ? "border-primary bg-primary/5"
+                      : "border-hairline hover:border-primary/30")}>
+                    <span className={"relative flex items-center justify-center w-5 h-5 rounded border flex-shrink-0 mt-0.5 transition-colors " +
+                      (goodsReturned === true ? "bg-primary border-primary" : "bg-white border-hairline")}>
+                      <input type="checkbox" className="sr-only"
+                        checked={goodsReturned === true}
+                        onChange={() => setGoodsReturned(true)} />
+                      {goodsReturned === true && <Icon name="check" size={13} className="text-white"/>}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className={"text-sm font-medium " + (goodsReturned === true ? "text-primary" : "")}>
+                        ได้รับสินค้าคืน
+                      </div>
+                      <div className="text-xs text-muted mt-0.5 leading-relaxed">
+                        ลูกค้าส่งของกลับมาตามปกติ — ระบบจะ<strong>บวก stock กลับ</strong>เข้าคลัง
+                      </div>
+                    </div>
+                  </label>
+
+                  {/* Option B — refund-only (no stock change, lost goods) */}
+                  <label className={"flex items-start gap-3 cursor-pointer select-none p-3 rounded-xl border transition-colors " +
+                    (goodsReturned === false
+                      ? "border-[#8a6500]/50 bg-warning/15"
+                      : "border-hairline hover:border-primary/30")}>
+                    <span className={"relative flex items-center justify-center w-5 h-5 rounded border flex-shrink-0 mt-0.5 transition-colors " +
+                      (goodsReturned === false ? "border-[#8a6500]" : "bg-white border-hairline")}
+                      style={goodsReturned === false ? { background: '#8a6500' } : undefined}>
+                      <input type="checkbox" className="sr-only"
+                        checked={goodsReturned === false}
+                        onChange={() => setGoodsReturned(false)} />
+                      {goodsReturned === false && <Icon name="check" size={13} className="text-white"/>}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className={"text-sm font-medium " + (goodsReturned === false ? "text-[#8a6500]" : "")}>
+                        ไม่ได้รับสินค้าคืน (เงินคืนอย่างเดียว)
+                      </div>
+                      <div className="text-xs text-muted mt-0.5 leading-relaxed">
+                        เคสสินค้าหาย / ลูกค้าไม่ส่งกลับ แต่ platform คืนเงินแล้ว —
+                        <strong>ไม่บวก stock กลับ</strong> และแยกเป็น "ของหาย" ใน P&L
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              </div>
             )}
 
             <div>
@@ -6077,6 +6588,24 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind }, 
           {kind==='return' && (
             <div className="flex justify-between"><span className="text-muted">ช่องทาง</span><span className="font-medium">{CHANNELS.find(c=>c.v===channel)?.label||'—'}</span></div>
           )}
+          {kind==='return' && selectedSale && (
+            <div className="flex justify-between"><span className="text-muted">บิลขายต้นฉบับ</span><span className="font-medium font-mono">#{selectedSale.id}</span></div>
+          )}
+          {kind==='return' && !goodsReturned && (
+            // Loud warning for the refund-only case — single-glance confirmation
+            // that no stock will be added back. Yellow tone matches the form
+            // toggle so user maps "I checked the box → I see this banner".
+            <div className="rounded-xl border-2 border-[#8a6500]/40 p-3" style={{ background: 'rgba(255,233,170,0.4)' }}>
+              <div className="text-sm font-semibold text-[#8a6500] flex items-center gap-1.5">
+                <Icon name="alert" size={14}/> เงินคืนอย่างเดียว — ไม่บวก stock กลับ
+              </div>
+              <div className="text-xs text-[#8a6500]/85 mt-1 leading-relaxed">
+                ใบนี้จะบันทึกการคืนเงินโดย<strong>ไม่นำสินค้ากลับเข้า inventory</strong>
+                สำหรับเคส platform คืนเงินแต่สินค้าหาย/ไม่ได้รับคืน
+                — ตรวจสอบให้แน่ใจก่อนยืนยัน
+              </div>
+            </div>
+          )}
           <div className="border-t hairline pt-3 flex justify-between font-display text-2xl"><span>รวม</span><span className="tabular-nums">{fmtTHB(total)}</span></div>
         </div>
       </Modal>
@@ -6120,9 +6649,423 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind }, 
         mode="continuous"
         title={kind==='receive' ? 'สแกนสินค้าที่รับเข้า' : kind==='claim' ? 'สแกนสินค้าที่ส่งคืน' : 'สแกนสินค้าที่ลูกค้าคืน'}
       />
+
+      {/* Bill picker — return form only. Opens automatically when the user
+          adds a product without a locked bill, lists every active sale that
+          contained that product, and (on confirm) locks the bill + adds the
+          product as a return line with the bill's actual sold price. */}
+      {kind === 'return' && (
+        <BillPickerPopup
+          open={billPickerOpen}
+          product={pendingProduct}
+          onPick={selectSaleFromPopup}
+          onClose={() => { setBillPickerOpen(false); setPendingProduct(null); }}
+        />
+      )}
     </div>
   );
 });
+
+/* =========================================================
+   ANALYTICS PRIMITIVES — shared by Dashboard + P&L
+   ----------------------------------------------------------
+   Pure-presentational, no data fetching of their own. Each is
+   built on inline SVG + CSS keyframes (see styles.legacy.css)
+   so we add zero npm deps and render is cheap.
+========================================================= */
+
+/**
+ * AnimatedNumber — tweens from previous value to next via rAF.
+ * Respects `prefers-reduced-motion`: snaps instantly when set.
+ *
+ * `format` receives the live tween value and returns a string. Defaults
+ * to identity. Common usage: `format={fmtTHB}` for money values.
+ *
+ * Skips the tween on first mount (renders the final value immediately)
+ * so a freshly-loaded dashboard doesn't visibly count up from zero —
+ * counter animation only fires on subsequent updates (range changes,
+ * realtime invalidates), where the "delta" feels meaningful.
+ */
+function AnimatedNumber({ value, format = (n)=>String(n), duration = 700, className = '' }) {
+  const [display, setDisplay] = useState(Number.isFinite(value) ? value : 0);
+  const fromRef = useRef(Number.isFinite(value) ? value : 0);
+  const rafRef = useRef(null);
+  const mountedRef = useRef(false);
+
+  useEffect(() => {
+    const target = Number.isFinite(value) ? value : 0;
+    // First render: skip tween, snap to value.
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      fromRef.current = target;
+      setDisplay(target);
+      return;
+    }
+    const reduce = typeof window !== 'undefined' && window.matchMedia
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce || duration <= 0) {
+      fromRef.current = target;
+      setDisplay(target);
+      return;
+    }
+    const start = performance.now();
+    const from = fromRef.current;
+    const delta = target - from;
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    const tick = (now) => {
+      const t = Math.min(1, (now - start) / duration);
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - t, 3);
+      const v = from + delta * eased;
+      setDisplay(v);
+      if (t < 1) rafRef.current = requestAnimationFrame(tick);
+      else { fromRef.current = target; rafRef.current = null; }
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [value, duration]);
+
+  return <span className={"tabular-nums " + className}>{format(display)}</span>;
+}
+
+/**
+ * DeltaBadge — "+12.3% ▲ vs ช่วงก่อน" pill. Color follows sign:
+ *   positive → success-tinted, negative → error-tinted, zero → muted.
+ *   `prev === 0` → render "ใหม่" (no division by zero).
+ */
+function DeltaBadge({ current, prev, label = 'vs ช่วงก่อน' }) {
+  if (prev == null || !Number.isFinite(prev)) return null;
+  if (prev === 0 && current === 0) return null;
+  const isFirst = prev === 0 && current !== 0;
+  const pct = isFirst ? null : ((current - prev) / Math.abs(prev)) * 100;
+  const sign = current > prev ? 1 : current < prev ? -1 : 0;
+  const cls = sign > 0
+    ? 'bg-[#1f3d27]/12 text-[#1f3d27] border-[#1f3d27]/15'
+    : sign < 0
+      ? 'bg-error/12 text-error border-error/20'
+      : 'bg-muted/10 text-muted border-hairline';
+  const arrow = sign > 0 ? '▲' : sign < 0 ? '▼' : '·';
+  return (
+    <span className={"inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium border tabular-nums " + cls}>
+      <span>{arrow}</span>
+      <span>{isFirst ? 'ใหม่' : `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`}</span>
+      <span className="opacity-60 hidden sm:inline">· {label}</span>
+    </span>
+  );
+}
+
+/**
+ * Sparkline — mini line chart, animated draw-in via stroke-dashoffset.
+ * Accepts an array of `{ label, value }` (label is optional, used in
+ * tooltip title). Renders a smooth line + area fill underneath.
+ *
+ * Width/height are intrinsic; parent should size it via CSS. We animate
+ * by setting `--len` to the path length so `.draw-line` knows how far
+ * to offset the dasharray.
+ */
+function Sparkline({ data = [], width = 480, height = 110, stroke = 'var(--primary, #cc785c)', fill = 'rgba(204, 120, 92, 0.18)' }) {
+  const pathRef = useRef(null);
+  const [pathLen, setPathLen] = useState(600);
+  // Stable key from data identity so the path animation re-runs on data
+  // change. We bump a remount-key when the data signature changes.
+  const dataKey = data.map(d => d.value).join('|');
+  useEffect(() => {
+    if (pathRef.current) {
+      try { setPathLen(Math.ceil(pathRef.current.getTotalLength())); } catch {}
+    }
+  }, [dataKey]);
+  if (!data.length) {
+    return (
+      <div className="w-full h-full flex items-center justify-center text-xs text-muted-soft">
+        ไม่มีข้อมูลกราฟ
+      </div>
+    );
+  }
+  const max = Math.max(...data.map(d => d.value), 1);
+  const min = Math.min(...data.map(d => d.value), 0);
+  const range = Math.max(1, max - min);
+  const padX = 4, padY = 8;
+  const innerW = width - padX * 2;
+  const innerH = height - padY * 2;
+  const pts = data.map((d, i) => {
+    const x = padX + (data.length === 1 ? innerW / 2 : (i / (data.length - 1)) * innerW);
+    const y = padY + innerH - ((d.value - min) / range) * innerH;
+    return [x, y];
+  });
+  // Smooth via cardinal-ish quadratic between midpoints.
+  const linePath = pts.reduce((acc, [x, y], i) => {
+    if (i === 0) return `M ${x},${y}`;
+    const [px, py] = pts[i - 1];
+    const cx = (px + x) / 2;
+    return acc + ` Q ${px},${py} ${cx},${(py + y) / 2} T ${x},${y}`;
+  }, '');
+  const areaPath = `${linePath} L ${pts[pts.length-1][0]},${height - padY} L ${pts[0][0]},${height - padY} Z`;
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="w-full h-full" key={dataKey}>
+      <defs>
+        <linearGradient id="spark-area" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"  stopColor={fill} stopOpacity="0.55"/>
+          <stop offset="100%" stopColor={fill} stopOpacity="0"/>
+        </linearGradient>
+      </defs>
+      <path d={areaPath} fill="url(#spark-area)" opacity="0.9"/>
+      <path
+        ref={pathRef}
+        d={linePath}
+        fill="none"
+        stroke={stroke}
+        strokeWidth="2.25"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="draw-line"
+        style={{ '--len': pathLen }}
+      />
+      {pts.map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r={i === pts.length - 1 ? 3.5 : 0} fill={stroke}>
+          <title>{data[i].label || ''}: {data[i].value}</title>
+        </circle>
+      ))}
+    </svg>
+  );
+}
+
+/**
+ * DonutChart — channel breakdown. Renders an SVG donut with one arc
+ * per `slice` (`{ key, value, color, label }`), animates draw-in.
+ * Hovering a segment dims the rest (CSS-only).
+ *
+ * `centerLabel` / `centerValue` are rendered in the donut hole.
+ * `onSliceClick(key)` fires when user taps a segment — used to filter.
+ */
+function DonutChart({ slices = [], size = 200, thickness = 26, centerLabel, centerValue, onSliceClick }) {
+  const total = slices.reduce((s, sl) => s + Math.max(0, sl.value), 0);
+  const r = (size - thickness) / 2;
+  const cx = size / 2, cy = size / 2;
+  const circumference = 2 * Math.PI * r;
+  if (total <= 0 || !slices.length) {
+    return (
+      <div className="flex items-center justify-center" style={{ width: size, height: size }}>
+        <div className="text-center">
+          <div className="text-xs text-muted-soft">ยังไม่มีข้อมูล</div>
+        </div>
+      </div>
+    );
+  }
+  let offset = 0;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="donut-chart" style={{ transform: 'rotate(-90deg)' }}>
+      {/* track */}
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(180,168,148,0.15)" strokeWidth={thickness}/>
+      {slices.map((sl) => {
+        const frac = Math.max(0, sl.value) / total;
+        const len = frac * circumference;
+        const dash = `${len} ${circumference - len}`;
+        const dashOffset = -offset;
+        offset += len;
+        return (
+          <circle key={sl.key}
+            cx={cx} cy={cy} r={r} fill="none"
+            stroke={sl.color}
+            strokeWidth={thickness}
+            strokeDasharray={dash}
+            strokeDashoffset={dashOffset}
+            className={"donut-segment " + (onSliceClick ? "cursor-pointer" : "")}
+            onClick={onSliceClick ? () => onSliceClick(sl.key) : undefined}
+            style={{
+              animation: `draw-line 0.9s cubic-bezier(.2,.7,.2,1) forwards`,
+              strokeDashoffset: dashOffset,
+            }}
+          >
+            <title>{sl.label}: {((frac)*100).toFixed(1)}%</title>
+          </circle>
+        );
+      })}
+      {/* Counter-rotate the inner labels so they're upright */}
+      {(centerLabel || centerValue != null) && (
+        <g transform={`rotate(90 ${cx} ${cy})`}>
+          {centerLabel && (
+            <text x={cx} y={cy - 8} textAnchor="middle" className="text-xs fill-current text-muted" style={{ fontSize: 10 }}>
+              {centerLabel}
+            </text>
+          )}
+          {centerValue != null && (
+            <text x={cx} y={cy + 12} textAnchor="middle" className="font-display fill-current" style={{ fontSize: 22, letterSpacing: '-0.02em' }}>
+              {centerValue}
+            </text>
+          )}
+        </g>
+      )}
+    </svg>
+  );
+}
+
+/**
+ * RadialGauge — margin %, 0-100. Sweeps an arc through 270° (3/4 circle)
+ * with the value's fill color depending on threshold:
+ *   > 30%  → success green     |  10–30%  → amber     |  < 10%  → coral
+ * Negative values clamp to 0 visually but show the real numeric label.
+ */
+function RadialGauge({ percent = 0, size = 180, thickness = 14, label = 'Margin' }) {
+  const safe = Math.max(0, Math.min(100, Number.isFinite(percent) ? percent : 0));
+  const sweep = 270; // degrees
+  const r = (size - thickness) / 2;
+  const cx = size / 2, cy = size / 2;
+  const arcLen = (sweep / 360) * 2 * Math.PI * r;
+  const fillLen = (safe / 100) * arcLen;
+  const color = percent < 10 ? '#dc2626'
+              : percent < 30 ? '#b45309'
+              : '#1f3d27';
+  // Start at 135deg (bottom-left), sweep clockwise to 405° (bottom-right).
+  // Since SVG circle starts at 3 o'clock by default and we rotate -90 at root,
+  // we orient the SVG so the gauge's gap is at bottom.
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(135deg)' }}>
+      {/* Track */}
+      <circle cx={cx} cy={cy} r={r} fill="none"
+        stroke="rgba(180,168,148,0.20)" strokeWidth={thickness}
+        strokeDasharray={`${arcLen} ${2 * Math.PI * r}`}
+        strokeLinecap="round"/>
+      {/* Fill */}
+      <circle cx={cx} cy={cy} r={r} fill="none"
+        stroke={color} strokeWidth={thickness}
+        strokeDasharray={`${fillLen} ${2 * Math.PI * r}`}
+        strokeLinecap="round"
+        style={{ transition: 'stroke-dasharray 0.9s cubic-bezier(.2,.7,.2,1), stroke 0.4s' }}/>
+      {/* Center label — counter-rotate */}
+      <g transform={`rotate(-135 ${cx} ${cy})`}>
+        <text x={cx} y={cy - 4} textAnchor="middle" style={{ fontSize: 11, fill: 'currentColor', opacity: 0.6 }}>
+          {label}
+        </text>
+        <text x={cx} y={cy + 22} textAnchor="middle" className="font-display tabular-nums"
+          style={{ fontSize: 30, fill: color, fontWeight: 600, letterSpacing: '-0.02em' }}>
+          {percent.toFixed(1)}%
+        </text>
+      </g>
+    </svg>
+  );
+}
+
+/**
+ * WaterfallChart — P&L breakdown shown as a waterfall:
+ *   Revenue (full-height bar) → -Cost (descend) → -Expenses (descend)
+ *   → Net Profit (final bar, sign-tinted).
+ *
+ * `bars` shape: [{ key, label, value, type: 'positive'|'negative'|'total' }]
+ * — `total` bars start from 0; `positive`/`negative` chain from previous total.
+ *
+ * Bars animate via `.bar-grow` with staggered delay.
+ */
+function WaterfallChart({ bars = [], height = 240 }) {
+  if (!bars.length) return null;
+  // Compute running totals to derive bar positions
+  let running = 0;
+  const segs = bars.map((b) => {
+    if (b.type === 'total') {
+      const seg = { ...b, top: 0, val: b.value, running: b.value };
+      running = b.value;
+      return seg;
+    }
+    const next = running + b.value; // value already signed (negative for cost/exp)
+    const top = b.value < 0 ? running : next; // for negative, bar sits between next..running
+    const val = Math.abs(b.value);
+    const seg = { ...b, top, val, running: next };
+    running = next;
+    return seg;
+  });
+  const maxAbs = Math.max(...segs.map(s => Math.max(Math.abs(s.running), s.val + s.top)), 1);
+  // Map a y-value (in money units) to SVG coordinate (top-down).
+  const padTop = 18, padBottom = 22;
+  const innerH = height - padTop - padBottom;
+  const yOf = (v) => padTop + innerH - (v / maxAbs) * innerH;
+  const yZero = padTop + innerH;
+  const barWidth = 56;
+  const gap = 24;
+  const totalWidth = segs.length * barWidth + (segs.length - 1) * gap;
+  return (
+    <svg viewBox={`0 0 ${totalWidth} ${height}`} preserveAspectRatio="xMidYMid meet" className="w-full h-full">
+      {/* baseline */}
+      <line x1="0" x2={totalWidth} y1={yZero} y2={yZero} stroke="rgba(180,168,148,0.45)" strokeDasharray="3 4"/>
+      {segs.map((s, i) => {
+        const x = i * (barWidth + gap);
+        const yTop = yOf(s.top + s.val);
+        const yBot = yOf(s.top);
+        const barH = Math.max(2, yBot - yTop);
+        const fill = s.type === 'total'
+          ? (s.value >= 0 ? '#1f3d27' : '#dc2626')
+          : s.type === 'negative' ? '#cc785c'
+          : '#3a6a52';
+        const labelY = yTop - 6;
+        return (
+          <g key={s.key} style={{ '--grow-delay': `${i * 120}ms` }}>
+            <rect x={x} y={yTop} width={barWidth} height={barH} rx="4"
+              fill={fill}
+              className="bar-grow"
+              opacity={s.type === 'total' ? 0.95 : 0.85}/>
+            {/* connector line to next bar */}
+            {i < segs.length - 1 && (
+              <line
+                x1={x + barWidth} x2={x + barWidth + gap}
+                y1={yOf(s.running)} y2={yOf(s.running)}
+                stroke="rgba(180,168,148,0.55)" strokeDasharray="3 3"/>
+            )}
+            {/* value label above */}
+            <text x={x + barWidth / 2} y={labelY} textAnchor="middle"
+              style={{ fontSize: 11, fill: 'currentColor', fontWeight: 600 }}
+              className="tabular-nums">
+              {s.value >= 0 ? '' : '−'}{Math.abs(s.value).toLocaleString('th-TH', { maximumFractionDigits: 0 })}
+            </text>
+            {/* category label below */}
+            <text x={x + barWidth / 2} y={height - 6} textAnchor="middle"
+              style={{ fontSize: 10, fill: 'currentColor', opacity: 0.6 }}>
+              {s.label}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+/**
+ * RangePresets — chips bar that sets `dateRange` to common windows.
+ * Highlights the active preset by comparing computed from/to to current.
+ */
+function RangePresets({ dateRange, setDateRange, className = '' }) {
+  const today = todayISO();
+  const presets = useMemo(() => {
+    const t = new Date();
+    const iso = dateISOBangkok;
+    const d7 = new Date(t); d7.setDate(d7.getDate() - 6);
+    const monStart = iso(t).slice(0, 7) + '-01';
+    const yrStart = iso(t).slice(0, 4) + '-01-01';
+    return [
+      { k: 'today', label: 'วันนี้', from: today, to: today },
+      { k: '7d',    label: '7 วัน',  from: iso(d7), to: today },
+      { k: 'month', label: 'เดือนนี้', from: monStart, to: today },
+      { k: 'year',  label: 'ปีนี้',  from: yrStart, to: today },
+    ];
+  }, [today]);
+  const active = presets.find(p => p.from === dateRange.from && p.to === dateRange.to);
+  return (
+    <div className={"inline-flex glass-soft rounded-xl p-1 shadow-sm " + className}>
+      {presets.map(p => {
+        const isActive = active?.k === p.k;
+        return (
+          <button key={p.k} type="button"
+            onClick={() => setDateRange({ from: p.from, to: p.to })}
+            className={
+              "preset-chip px-3 py-1.5 rounded-lg text-xs font-medium transition-all " +
+              (isActive
+                ? "bg-white text-ink shadow-sm ring-1 ring-hairline"
+                : "text-muted hover:text-ink hover:bg-white/40")
+            }>
+            {p.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 /* =========================================================
    DASHBOARD VIEW
@@ -6139,6 +7082,13 @@ function DashboardView({ embedded = false, dateRange: dateRangeProp, onDateRange
   const [topProducts, setTopProducts] = useState([]);
   const [lowStock, setLowStock] = useState([]);
   const [byChannel, setByChannel] = useState([]);
+  // Daily revenue points used by the hero Sparkline. One point per day in
+  // the selected range; days with zero revenue still rendered so the line
+  // shape reflects calendar pacing, not just non-zero days.
+  const [dailySeries, setDailySeries] = useState([]);
+  // Revenue total for the equivalent-length window immediately before the
+  // current range. Drives the <DeltaBadge/> in the hero card.
+  const [prevTotal, setPrevTotal] = useState(null);
   const [loading, setLoading] = useState(false);
   // Bumping this re-runs the loader — drives the realtime refresh below.
   const [reloadTick, setReloadTick] = useState(0);
@@ -6148,27 +7098,62 @@ function DashboardView({ embedded = false, dateRange: dateRangeProp, onDateRange
     setStats(null);
     const { from, to } = dateRange;
 
+    // Previous window of identical length — for delta comparison. e.g.
+    // today vs yesterday; this week vs last week; this month vs prior 30d.
+    const fromD = new Date(from + 'T00:00:00');
+    const toD   = new Date(to   + 'T00:00:00');
+    const dayMs = 86400000;
+    const lengthDays = Math.max(1, Math.round((toD - fromD) / dayMs) + 1);
+    const prevTo   = new Date(fromD.getTime() - dayMs);
+    const prevFrom = new Date(prevTo.getTime() - (lengthDays - 1) * dayMs);
+    const prevFromIso = dateISOBangkok(prevFrom);
+    const prevToIso   = dateISOBangkok(prevTo);
+
     // Dashboard sale_orders is paginated — without fetchAll() the dashboard
     // silently under-reports any month with > 1000 active orders.
-    const [rangeQ, lowQ] = await Promise.all([
+    const [rangeQ, prevQ, lowQ] = await Promise.all([
       fetchAll((fromIdx, toIdx) =>
-        sb.from('sale_orders').select('id, grand_total, channel, net_received')
+        sb.from('sale_orders').select('id, grand_total, channel, net_received, sale_date')
           .eq('status','active')
           .gte('sale_date', startOfDayBangkok(from))
           .lte('sale_date', endOfDayBangkok(to))
           .order('id', { ascending: false })
           .range(fromIdx, toIdx)
       ),
+      fetchAll((fromIdx, toIdx) =>
+        sb.from('sale_orders').select('grand_total, channel, net_received')
+          .eq('status','active')
+          .gte('sale_date', startOfDayBangkok(prevFromIso))
+          .lte('sale_date', endOfDayBangkok(prevToIso))
+          .range(fromIdx, toIdx)
+      ),
       sb.from('products').select('id,name,current_stock').lt('current_stock', 5).gt('current_stock', -1).order('current_stock', { ascending: true }).limit(8),
     ]);
 
-    const rangeRows = rangeQ.data || [];
     // For e-commerce sales the actual shop revenue is net_received (after platform fee).
     // Fallback to grand_total when net_received hasn't been entered yet.
     const revenueOf = (r) => (ECOMMERCE_CHANNELS.has(r.channel) && r.net_received != null)
       ? Number(r.net_received)
       : Number(r.grand_total) || 0;
+
+    const rangeRows = rangeQ.data || [];
     const rangeTotal = rangeRows.reduce((s,r)=>s+revenueOf(r),0);
+    const prevRows = prevQ.data || [];
+    setPrevTotal(prevRows.reduce((s,r)=>s+revenueOf(r),0));
+
+    // Daily series — group by Bangkok date. Seed every day in the range
+    // with 0 first so days with no sales still render as data points (gives
+    // the sparkline a calendar-accurate shape).
+    const dayMap = new Map();
+    for (let i = 0; i < lengthDays; i++) {
+      const d = new Date(fromD.getTime() + i * dayMs);
+      dayMap.set(dateISOBangkok(d), 0);
+    }
+    rangeRows.forEach(r => {
+      const key = (r.sale_date || '').slice(0, 10);
+      if (dayMap.has(key)) dayMap.set(key, dayMap.get(key) + revenueOf(r));
+    });
+    setDailySeries(Array.from(dayMap.entries()).map(([day, value]) => ({ label: day, value })));
 
     const chMap = {};
     rangeRows.forEach(r=>{ const k = r.channel||'store'; chMap[k]=(chMap[k]||0)+revenueOf(r); });
@@ -6198,43 +7183,39 @@ function DashboardView({ embedded = false, dateRange: dateRangeProp, onDateRange
   useRealtimeInvalidate(sb, ['sale_orders', 'sale_order_items', 'products'],
     () => setReloadTick(t => t + 1));
 
-  const StatCard = ({ tone, label, value, sub, icon }) => (
-    <div className={
-      "rounded-lg p-4 lg:p-6 " +
-      (tone==='canvas' ? "card-canvas" :
-       tone==='cream'  ? "card-cream"  :
-       tone==='dark'   ? "card-dark"   :
-       "card-primary-mesh text-on-primary")
-    }>
-      <div className="flex items-center justify-between">
-        <div className={"text-xs lg:text-xs uppercase tracking-[1.5px] " + (tone==='dark'?'text-on-dark-soft':tone==='coral'?'opacity-90':'text-muted')}>{label}</div>
-        <span className={tone==='dark'?'text-on-dark-soft':tone==='coral'?'opacity-80':'text-muted-soft'}><Icon name={icon} size={18}/></span>
-      </div>
-      <div className="font-display stat-value tabular-nums mt-2" title={String(value)}>{value}</div>
-      {sub && <div className={"text-xs mt-1 " + (tone==='dark'?'text-on-dark-soft':tone==='coral'?'opacity-90':'text-muted')}>{sub}</div>}
-    </div>
-  );
-
   const rangeLabel = dateRange.from === dateRange.to
     ? fmtThaiDateShort(dateRange.from)
     : fmtThaiRange(dateRange.from, dateRange.to);
+
   const channelRows = CHANNELS.map(c => {
     const total = byChannel.find(x=>x.channel===c.v)?.total || 0;
     const share = stats?.rangeTotal ? (total / stats.rangeTotal) * 100 : 0;
     return { ...c, total, share };
   });
-  const channelMax = Math.max(...channelRows.map(c=>c.total), 1);
   const channelSorted = channelRows.filter(c=>c.total>0).sort((a,b)=>b.total-a.total);
-  const CH_META = {
-    store:    { bg:'#fef3c7', fg:'#78350f', border:'rgba(217,119,6,0.18)' },
-    tiktok:   { bg:'#09090b', fg:'#f4f4f5', border:'rgba(255,45,85,0.35)' },
-    shopee:   { bg:'#ea580c', fg:'#ffffff', border:'rgba(255,200,100,0.22)' },
-    lazada:   { bg:'#6d28d9', fg:'#ffffff', border:'rgba(196,181,253,0.28)' },
-    facebook: { bg:'#1d4ed8', fg:'#ffffff', border:'rgba(147,197,253,0.28)' },
+
+  // Donut palette — punchy enough to read on the dark hero card. Aligns
+  // with the platform brand colors where possible (TikTok ink, Shopee
+  // orange, Lazada purple, Facebook blue) so legend recognition is fast.
+  const CH_COLORS = {
+    store:    '#d97706',
+    tiktok:   '#f0f0f2',
+    shopee:   '#ea580c',
+    lazada:   '#a78bfa',
+    facebook: '#60a5fa',
   };
+  const donutSlices = channelSorted.map(c => ({
+    key: c.v,
+    value: c.total,
+    color: CH_COLORS[c.v] || '#94a3b8',
+    label: c.label,
+  }));
+
+  const topMax = Math.max(...topProducts.map(p=>p.q), 1);
+  const avgPerBill = stats?.rangeCount ? stats.rangeTotal / stats.rangeCount : 0;
 
   return (
-    <div className="space-y-4 lg:space-y-8">
+    <div className="space-y-4 lg:space-y-6">
 
       {/* Custom page header with date picker. Suppressed when this view
           is rendered inside <OverviewView/> — the wrapper supplies a
@@ -6262,127 +7243,172 @@ function DashboardView({ embedded = false, dateRange: dateRangeProp, onDateRange
         </div>
       )}
 
-      <div className="px-4 lg:px-10 space-y-4 lg:space-y-8 pb-8 cascade">
+      {/* Re-key the panel on range change so every card replays its
+          cascade entrance — feels responsive after every preset tap. */}
+      <div key={`${dateRange.from}_${dateRange.to}`}
+           className="px-4 lg:px-10 pb-8 cascade space-y-4 lg:space-y-6">
 
-      {!stats ? (
-        <div className="text-muted text-sm flex items-center gap-3"><span className="spinner"/>กำลังโหลดข้อมูล...</div>
-      ) : (<>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4" style={{ '--i': 0 }}>
-          <StatCard tone="canvas" label="ยอดขายรวม" value={fmtTHB(stats.rangeTotal)} sub={`${stats.rangeCount} บิล`} icon="trend-up"/>
-          <StatCard tone="cream"  label="จำนวนบิล" value={stats.rangeCount} sub={rangeLabel} icon="receipt"/>
-          <StatCard tone="dark"   label="เฉลี่ยต่อบิล" value={stats.rangeCount? fmtTHB(stats.rangeTotal/stats.rangeCount):'—'} sub={rangeLabel} icon="credit-card"/>
-          <StatCard tone="coral"  label="สต็อกใกล้หมด" value={lowStock.length} sub="รายการ (น้อยกว่า 5)" icon="alert"/>
+        {/* Quick range presets */}
+        <div style={{ '--i': 0 }} className="flex items-center justify-between gap-3 flex-wrap fade-in stagger">
+          <RangePresets dateRange={dateRange} setDateRange={setDateRange}/>
+          <div className="text-xs text-muted-soft tabular-nums">{rangeLabel}</div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6" style={{ '--i': 1 }}>
-          <div className="lg:col-span-7 card-canvas p-4 lg:p-6">
-            <div className="font-display text-xl lg:text-2xl mb-3 lg:mb-4 flex items-center gap-2"><Icon name="trend-up" size={20}/> สินค้าขายดีในช่วงนี้</div>
-            {!topProducts.length && <div className="text-muted text-sm">ยังไม่มียอดขายในช่วงที่เลือก</div>}
-            {topProducts.map((p,i)=>(
-              <div key={p.name} className="flex items-center gap-3 py-2 border-b hairline-soft last:border-0">
-                <div className="font-display text-xl lg:text-2xl w-7 text-muted-soft">{i+1}</div>
-                <div className="flex-1 truncate text-sm">{p.name}</div>
-                <div className="badge-pill">{p.q} ชิ้น</div>
+        {/* ━━━━━━━━━━ HERO — total + 14-day sparkline ━━━━━━━━━━ */}
+        {loading && !stats ? (
+          <div style={{ '--i': 1 }} className="card-hero-mesh p-6 h-[180px] fade-in stagger relative overflow-hidden">
+            <div className="shimmer absolute inset-4 rounded-xl"/>
+          </div>
+        ) : stats && (
+          <div style={{ '--i': 1 }} className="card-hero-mesh p-5 lg:p-7 fade-in stagger hover-lift relative">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-center relative z-10">
+              <div className="lg:col-span-5">
+                <div className="text-xs uppercase tracking-[1.5px] text-muted mb-1.5">ยอดขายรวม</div>
+                <div className="font-display text-5xl lg:text-6xl tabular-nums leading-none text-ink">
+                  <AnimatedNumber value={stats.rangeTotal} format={fmtTHB}/>
+                </div>
+                <div className="mt-3 flex items-center gap-2 flex-wrap">
+                  <DeltaBadge current={stats.rangeTotal} prev={prevTotal}/>
+                  <span className="text-xs text-muted">· {stats.rangeCount} บิล</span>
+                </div>
               </div>
-            ))}
-          </div>
-          <div className="lg:col-span-5 card-canvas p-4 lg:p-6">
-            <div className="font-display text-xl lg:text-2xl mb-3 lg:mb-4 flex items-center gap-2"><Icon name="alert" size={20}/> สต็อกใกล้หมด</div>
-            {!lowStock.length && <div className="text-muted text-sm">สต็อกปลอดภัย</div>}
-            {lowStock.map(p => (
-              <div key={p.id} className="flex items-center gap-3 py-2 border-b hairline-soft last:border-0">
-                <div className="flex-1 truncate text-sm">{p.name}</div>
-                <span className={"badge-pill " + (p.current_stock<=0?'!bg-error/10 !text-error':'!bg-warning/15 !text-[#8a6500]')}>{p.current_stock}</span>
+              <div className="lg:col-span-7 h-[100px] lg:h-[140px]">
+                <Sparkline data={dailySeries}/>
               </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="card-dark p-4 lg:p-6" style={{ '--i': 2 }}>
-          <div className="flex items-start justify-between gap-3 mb-3 lg:mb-4">
-            <div className="font-display text-xl lg:text-2xl flex items-center gap-2"><Icon name="store" size={20}/> ยอดขายแยกช่องทาง</div>
-            <div className="text-right">
-              <div className="text-xs uppercase tracking-wider text-on-dark-soft">รวม</div>
-              <div className="font-display text-lg tabular-nums">{fmtTHB(stats.rangeTotal)}</div>
             </div>
           </div>
-          {!channelSorted.length && <div className="text-on-dark-soft text-sm">ยังไม่มียอดขายในช่วงที่เลือก</div>}
+        )}
 
-          {/* Mobile — horizontal bar list (Phase 3.1): readable labels + amounts on small screens */}
-          {channelSorted.length>0 && (
-            <div className="lg:hidden space-y-2.5">
-              {channelSorted.map(ch => {
-                const m = CH_META[ch.v] || { bg:'#f3f4f6', fg:'#111827', border:'rgba(0,0,0,0.1)' };
-                return (
-                  <div key={ch.v} className="flex items-center gap-3">
-                    <div
-                      className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center"
-                      style={{ background: m.bg, border: `1px solid ${m.border}` }}
-                    >
-                      {ch.v==='store'    && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={m.fg} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7h18v13a1 1 0 01-1 1H4a1 1 0 01-1-1V7z"/><path d="M3 7 5.5 3h13L21 7"/><path d="M9 21V13h6v8"/></svg>}
-                      {ch.v==='tiktok'   && <svg width="18" height="18" viewBox="0 0 24 24" fill={m.fg}><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 00-.79-.05 6.34 6.34 0 000 12.68 6.34 6.34 0 006.33-6.34V7.83a8.16 8.16 0 004.77 1.52V5.9a4.85 4.85 0 01-1-.21z"/></svg>}
-                      {ch.v==='shopee'   && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={m.fg} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 01-8 0"/></svg>}
-                      {ch.v==='lazada'   && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={m.fg} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 8v7h7"/></svg>}
-                      {ch.v==='facebook' && <svg width="18" height="18" viewBox="0 0 24 24" fill={m.fg}><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg>}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-baseline justify-between gap-2 mb-1">
-                        <span className="text-sm font-medium text-on-dark truncate">{ch.label}</span>
-                        <span className="text-xs text-on-dark-soft tabular-nums flex-shrink-0">
-                          <span className="font-medium text-on-dark">{ch.share.toFixed(0)}%</span>
-                          <span className="mx-1.5 opacity-40">·</span>
-                          {fmtTHB(ch.total)}
-                        </span>
-                      </div>
-                      <div className="h-2 rounded-full bg-white/10 overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all"
-                          style={{ width: `${Math.max(2, ch.share)}%`, background: m.bg, boxShadow: `0 0 0 1px ${m.border} inset` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+        {/* ━━━━━━━━━━ KPI ROW — 3 cards ━━━━━━━━━━ */}
+        {stats && (
+          <div style={{ '--i': 2 }} className="grid grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-4 fade-in stagger">
+            <div className="card-canvas p-4 lg:p-5 hover-lift">
+              <div className="flex items-center justify-between mb-1">
+                <div className="text-xs uppercase tracking-[1.5px] text-muted">จำนวนบิล</div>
+                <Icon name="receipt" size={16} className="text-muted-soft"/>
+              </div>
+              <div className="font-display text-3xl lg:text-4xl tabular-nums leading-none mt-1">
+                <AnimatedNumber value={stats.rangeCount} format={(n)=>Math.round(n).toLocaleString('th-TH')}/>
+              </div>
+              <div className="text-xs text-muted-soft mt-1.5">บิลที่ active</div>
             </div>
-          )}
+            <div className="card-cream p-4 lg:p-5 hover-lift">
+              <div className="flex items-center justify-between mb-1">
+                <div className="text-xs uppercase tracking-[1.5px] text-muted">เฉลี่ย/บิล</div>
+                <Icon name="credit-card" size={16} className="text-muted-soft"/>
+              </div>
+              <div className="font-display text-3xl lg:text-4xl tabular-nums leading-none mt-1">
+                <AnimatedNumber value={avgPerBill} format={fmtTHB}/>
+              </div>
+              <div className="text-xs text-muted-soft mt-1.5">{rangeLabel}</div>
+            </div>
+            <div className="glass-soft rounded-lg p-4 lg:p-5 hover-lift col-span-2 lg:col-span-1 ring-1 ring-hairline">
+              <div className="flex items-center justify-between mb-1">
+                <div className="text-xs uppercase tracking-[1.5px] text-muted">สต็อกใกล้หมด</div>
+                <Icon name="alert" size={16} className={lowStock.length ? "text-error" : "text-muted-soft"}/>
+              </div>
+              <div className={"font-display text-3xl lg:text-4xl tabular-nums leading-none mt-1 " + (lowStock.length ? "text-error" : "text-ink")}>
+                <AnimatedNumber value={lowStock.length} format={(n)=>Math.round(n).toLocaleString('th-TH')}/>
+              </div>
+              <div className="text-xs text-muted-soft mt-1.5">เหลือน้อยกว่า 5 ชิ้น</div>
+            </div>
+          </div>
+        )}
 
-          {/* Desktop — masonry tiles */}
-          {channelSorted.length>0 && (
-            <div className="hidden lg:grid grid-cols-4 gap-2 lg:gap-3" style={{gridAutoRows:'110px'}}>
-              {channelSorted.map((ch, idx) => {
-                const big = idx === 0;
-                const m = CH_META[ch.v] || { bg:'#f3f4f6', fg:'#111827', border:'rgba(0,0,0,0.1)' };
-                const iconSize = big ? 34 : 20;
-                const sw = 1.5;
-                return (
-                  <div key={ch.v}
-                    className={"rounded-2xl p-3 lg:p-4 flex flex-col justify-between transition-all duration-200 hover:scale-[1.02] hover:shadow-xl " + (big ? "col-span-2 row-span-2" : "col-span-1 row-span-1")}
-                    style={{ background: m.bg, border: `1px solid ${m.border}`, gridRow: big ? 'span 2' : undefined }}
-                  >
-                    <div className="flex items-start justify-between gap-1">
-                      {ch.v==='store'    && <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke={m.fg} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d="M3 7h18v13a1 1 0 01-1 1H4a1 1 0 01-1-1V7z"/><path d="M3 7 5.5 3h13L21 7"/><path d="M9 21V13h6v8"/></svg>}
-                      {ch.v==='tiktok'   && <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill={m.fg}><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 00-.79-.05 6.34 6.34 0 000 12.68 6.34 6.34 0 006.33-6.34V7.83a8.16 8.16 0 004.77 1.52V5.9a4.85 4.85 0 01-1-.21z"/></svg>}
-                      {ch.v==='shopee'   && <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke={m.fg} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 01-8 0"/></svg>}
-                      {ch.v==='lazada'   && <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke={m.fg} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 8v7h7"/></svg>}
-                      {ch.v==='facebook' && <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill={m.fg}><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg>}
-                      <span className="text-[11px] lg:text-xs font-semibold uppercase tracking-wider leading-tight text-right" style={{color:m.fg, opacity:0.5}}>{ch.label}</span>
+        {/* ━━━━━━━━━━ CHANNELS DONUT + TOP PRODUCTS ━━━━━━━━━━ */}
+        {stats && (
+          <div style={{ '--i': 3 }} className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 fade-in stagger">
+            {/* Donut */}
+            <div className="card-dark p-5 lg:p-6 lg:col-span-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="font-display text-lg lg:text-xl flex items-center gap-2">
+                  <Icon name="store" size={18}/> ช่องทางขาย
+                </div>
+                <span className="text-xs text-on-dark-soft">{channelSorted.length} ช่อง</span>
+              </div>
+              <div className="flex flex-col items-center gap-4 text-on-dark">
+                <DonutChart slices={donutSlices} size={200} thickness={28}
+                  centerLabel="รวม"
+                  centerValue={fmtMoney(stats.rangeTotal)}/>
+                <div className="w-full grid grid-cols-1 gap-1.5">
+                  {channelSorted.map(c => (
+                    <div key={c.v} className="flex items-center gap-2.5 text-xs">
+                      <span className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
+                            style={{background: CH_COLORS[c.v] || '#94a3b8'}}/>
+                      <span className="flex-1 truncate text-on-dark">{c.label}</span>
+                      <span className="tabular-nums text-on-dark-soft">{c.share.toFixed(1)}%</span>
+                      <span className="tabular-nums text-on-dark font-medium w-24 text-right">{fmtMoney(c.total)}</span>
                     </div>
-                    <div>
-                      <div className={"font-display leading-none tabular-nums " + (big ? "text-5xl lg:text-7xl" : "text-2xl lg:text-3xl")} style={{color:m.fg}}>
-                        {ch.share.toFixed(0)}<span className={"font-sans font-normal " + (big ? "text-xl lg:text-2xl" : "text-sm")} style={{opacity:0.45}}>%</span>
-                      </div>
-                      <div className={"mt-1 tabular-nums font-medium " + (big ? "text-xs lg:text-sm" : "text-xs")} style={{color:m.fg, opacity:0.6}}>
-                        {fmtTHB(ch.total)}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+                  ))}
+                  {!channelSorted.length && (
+                    <div className="text-on-dark-soft text-sm py-4 text-center">ยังไม่มียอดขาย</div>
+                  )}
+                </div>
+              </div>
             </div>
-          )}
-        </div>
-      </>)}
+
+            {/* Top products — animated bars */}
+            <div className="card-canvas p-5 lg:p-6 lg:col-span-7">
+              <div className="flex items-center justify-between mb-3">
+                <div className="font-display text-lg lg:text-xl flex items-center gap-2">
+                  <Icon name="trend-up" size={18}/> สินค้าขายดี
+                </div>
+                {topProducts.length > 0 && <span className="text-xs text-muted-soft">top {topProducts.length}</span>}
+              </div>
+              {!topProducts.length ? (
+                <div className="text-muted-soft text-sm py-6 text-center">ยังไม่มียอดขายในช่วงที่เลือก</div>
+              ) : (
+                <div className="space-y-2.5">
+                  {topProducts.map((p, i) => {
+                    const pct = (p.q / topMax) * 100;
+                    return (
+                      <div key={p.name}>
+                        <div className="flex items-baseline justify-between gap-2 mb-1">
+                          <div className="flex items-baseline gap-2 min-w-0">
+                            <span className="font-display text-sm text-muted-soft tabular-nums w-5">{i+1}</span>
+                            <span className="text-sm truncate">{p.name}</span>
+                          </div>
+                          <span className="text-xs text-muted tabular-nums flex-shrink-0">{p.q} ชิ้น</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-hairline/40 overflow-hidden">
+                          <div className="h-full rounded-full bar-grow-x"
+                               style={{
+                                 width: `${Math.max(2, pct)}%`,
+                                 background: 'linear-gradient(90deg, rgba(204,120,92,0.85), rgba(232,165,90,0.85))',
+                                 '--grow-delay': `${i*60}ms`,
+                               }}/>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ━━━━━━━━━━ LOW STOCK STRIP — only when non-empty ━━━━━━━━━━ */}
+        {stats && lowStock.length > 0 && (
+          <div style={{ '--i': 4 }} className="card-cream p-5 lg:p-6 fade-in stagger">
+            <div className="flex items-center justify-between mb-3">
+              <div className="font-display text-lg lg:text-xl flex items-center gap-2">
+                <Icon name="alert" size={18} className="text-error"/> สต็อกใกล้หมด
+              </div>
+              <span className="text-xs text-muted-soft">{lowStock.length} รายการ</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {lowStock.map(p => (
+                <div key={p.id} className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs bg-white/70 border border-hairline hover-lift">
+                  <span className="truncate max-w-[12rem]">{p.name}</span>
+                  <span className={"font-medium tabular-nums px-1.5 rounded " +
+                    (p.current_stock<=0 ? 'bg-error/15 text-error' : 'bg-warning/20 text-[#8a6500]')}>
+                    {p.current_stock}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -6773,8 +7799,10 @@ function OverviewView() {
   // self-refreshes via realtime so it's always mounted from the start.
   const [insightsLoaded, setInsightsLoaded] = useState(false);
   const [pnlLoaded, setPnlLoaded] = useState(false);
+  const [anomaliesLoaded, setAnomaliesLoaded] = useState(false);
   useEffect(() => { if (tab === 'insights') setInsightsLoaded(true); }, [tab]);
   useEffect(() => { if (tab === 'pnl') setPnlLoaded(true); }, [tab]);
+  useEffect(() => { if (tab === 'anomalies') setAnomaliesLoaded(true); }, [tab]);
 
   const TABS = [
     { k: 'dashboard', label: 'ยอดขาย',     icon: 'dashboard',
@@ -6783,6 +7811,8 @@ function OverviewView() {
       kicker: 'Insights',      title: 'Insights' },
     { k: 'pnl',       label: 'กำไรขาดทุน', icon: 'trend-up',
       kicker: 'Profit & Loss', title: 'กำไร / ขาดทุน' },
+    { k: 'anomalies', label: 'รายการผิดพลาด', icon: 'alert',
+      kicker: 'Anomalies',     title: 'รายการผิดพลาด' },
   ];
   const activeTab = TABS.find((t) => t.k === tab) ?? TABS[0];
 
@@ -6819,15 +7849,17 @@ function OverviewView() {
           <div className="text-xs uppercase tracking-[1.5px] text-muted">{activeTab.kicker}</div>
           <h1 className="font-display text-5xl mt-2 leading-tight text-ink">{activeTab.title}</h1>
         </div>
-        <div className="flex items-center gap-2 pb-1">
+        {/* Stack DatePicker above the Segment with items-stretch so the
+            DatePicker (w-full) inherits the column's width — which is
+            in turn driven by the Segment's natural intrinsic width.
+            Net effect: DatePicker width === Segment width, no JS / refs. */}
+        <div className="flex flex-col items-stretch gap-2 pb-1">
           {/* DatePicker only relevant to the Dashboard pane — Insights
               uses fixed 365 / 90 / 30-day windows; P&L renders its own
-              date controls + expense button inside the pane. Positioned
-              to the LEFT of the tab Segment so the date filter feels
-              like a pre-condition for the data shown, not an afterthought. */}
+              date controls + expense button inside the pane.            */}
           {tab === 'dashboard' && (
             <DatePicker mode="range" value={dateRange} onChange={setDateRange}
-              placeholder="เลือกช่วงวันที่" className="w-56" />
+              placeholder="เลือกช่วงวันที่" className="w-full" />
           )}
           <Segment />
         </div>
@@ -6861,6 +7893,11 @@ function OverviewView() {
           <ProfitLossView embedded />
         </div>
       )}
+      {anomaliesLoaded && (
+        <div className={tab === 'anomalies' ? 'block' : 'hidden'}>
+          <AnomaliesView embedded />
+        </div>
+      )}
     </div>
   );
 }
@@ -6886,6 +7923,14 @@ function ProfitLossView({ embedded = false }) {
   const [shopExpModalOpen, setShopExpModalOpen] = useState(false);
   const [shopExpReload, setShopExpReload] = useState(0);
   const [shopExp, setShopExp] = useState({ total: 0, breakdown: [], hasData: false });
+
+  // Refund-only returns (goods_returned=false) in range — surfaced as a
+  // separate "Loss" line because the cash went out but no inventory came
+  // back, so it can't be netted against gross profit the way a normal
+  // return is (a normal return reverses both revenue + restocks the unit
+  // and is therefore invisible at the line level once the original sale
+  // is voided/excluded — out of scope for this view).
+  const [lostGoods, setLostGoods] = useState({ total: 0, count: 0, byChannel: [], rows: [] });
 
   useEffect(()=>{ (async ()=>{
     setLoading(true);
@@ -7072,6 +8117,38 @@ function ProfitLossView({ embedded = false }) {
     }
   })(); }, [dateRange.from, dateRange.to, shopExpReload]);
 
+  // Lost-goods (refund-only) returns in range. Active only — voided
+  // refund-only returns shouldn't count as a loss because they were
+  // unwound. Channel breakdown answers "where do we lose the most?"
+  // (Shopee in transit vs. Lazada returns vs. TikTok scams etc.)
+  useEffect(() => { (async () => {
+    const { from, to } = dateRange;
+    try {
+      const { data, error } = await sb.from('return_orders')
+        .select('id, return_date, channel, total_value, original_sale_order_id')
+        .eq('goods_returned', false)
+        .is('voided_at', null)
+        .gte('return_date', startOfDayBangkok(from))
+        .lte('return_date', endOfDayBangkok(to))
+        .order('return_date', { ascending: false });
+      if (error) throw error;
+      const list = data || [];
+      const total = list.reduce((s, r) => s + (Number(r.total_value) || 0), 0);
+      const byChMap = {};
+      list.forEach(r => {
+        const k = r.channel || 'store';
+        if (!byChMap[k]) byChMap[k] = { channel: k, total: 0, count: 0 };
+        byChMap[k].total += Number(r.total_value) || 0;
+        byChMap[k].count += 1;
+      });
+      const byChannel = Object.values(byChMap).sort((a, b) => b.total - a.total);
+      setLostGoods({ total, count: list.length, byChannel, rows: list });
+    } catch (e) {
+      console.error('lost-goods fetch failed', e);
+      setLostGoods({ total: 0, count: 0, byChannel: [], rows: [] });
+    }
+  })(); }, [dateRange.from, dateRange.to]);
+
   // Filtered rows (channel + search)
   const filtered = useMemo(()=>{
     return rows.filter(r => {
@@ -7111,33 +8188,6 @@ function ProfitLossView({ embedded = false }) {
     ? fmtThaiDateShort(dateRange.from)
     : fmtThaiRange(dateRange.from, dateRange.to);
 
-  const StatCard = ({ tone, label, value, sub, icon }) => (
-    <div className={
-      "rounded-lg p-4 lg:p-6 " +
-      (tone==='canvas' ? "card-canvas" :
-       tone==='cream'  ? "card-cream"  :
-       tone==='dark'   ? "card-dark"   :
-       "card-primary-mesh text-on-primary")
-    }>
-      <div className="flex items-center justify-between">
-        <div className={"text-xs lg:text-xs uppercase tracking-[1.5px] " + (tone==='dark'?'text-on-dark-soft':tone==='coral'?'opacity-90':'text-muted')}>{label}</div>
-        <span className={tone==='dark'?'text-on-dark-soft':tone==='coral'?'opacity-80':'text-muted-soft'}><Icon name={icon} size={18}/></span>
-      </div>
-      <div className="font-display stat-value tabular-nums mt-2" title={String(value)}>{value}</div>
-      {sub && <div className={"text-xs mt-1 " + (tone==='dark'?'text-on-dark-soft':tone==='coral'?'opacity-90':'text-muted')}>{sub}</div>}
-    </div>
-  );
-
-  // Quick presets — all dates Bangkok-local
-  const setPreset = (preset) => {
-    const t = new Date();
-    const iso = dateISOBangkok;
-    if (preset === 'today') setDateRange({ from: iso(t), to: iso(t) });
-    else if (preset === '7d') { const d = new Date(t); d.setDate(d.getDate()-6); setDateRange({ from: iso(d), to: iso(t) }); }
-    else if (preset === 'month') { setDateRange({ from: iso(t).slice(0,7)+'-01', to: iso(t) }); }
-    else if (preset === 'year')  { setDateRange({ from: iso(t).slice(0,4)+'-01-01', to: iso(t) }); }
-  };
-
   const DateControls = (
     <>
       <button type="button" className="btn-secondary !py-2.5" onClick={()=>setShopExpModalOpen(true)}
@@ -7151,8 +8201,13 @@ function ProfitLossView({ embedded = false }) {
     </>
   );
 
-  // Real net profit = product gross profit − shop operating expenses (only when expenses exist)
-  const netRealProfit = agg.profit - shopExp.total;
+  // Real net profit = product gross profit − shop operating expenses − lost
+  // goods (refund-only returns). Lost goods are netted here because they
+  // represent cash that left the till without offsetting inventory recovery.
+  const netRealProfit = agg.profit - shopExp.total - lostGoods.total;
+  // Max abs profit across top-10 — used to scale the horizontal bars so
+  // each row's width is proportional to its share of the biggest mover.
+  const topProfitMax = Math.max(...topProfit.map(p => Math.abs(p.profit)), 1);
   return (
     <>
     <div>
@@ -7171,127 +8226,185 @@ function ProfitLossView({ embedded = false }) {
       )}
 
       <div className={embedded
-        ? "px-4 lg:px-10 space-y-4 lg:space-y-6"
-        : "px-4 py-4 lg:px-10 lg:py-8 space-y-4 lg:space-y-6"}>
+        ? "px-4 pb-8 lg:px-10 lg:pb-12 space-y-4 lg:space-y-6"
+        : "px-4 py-4 pb-8 lg:px-10 lg:py-8 lg:pb-12 space-y-4 lg:space-y-6"}>
 
-      {/* When embedded, surface the desktop date controls inline (since
-          we suppressed the standalone header that normally hosts them). */}
-      {embedded && (
-        <div className="hidden lg:flex items-center justify-end gap-3 flex-wrap">{DateControls}</div>
-      )}
-
-      {/* Disclaimer (Phase 3.3): only show when range includes pre-June-2026 dates,
-          since cost data was incomplete then and the calc may be approximate. */}
-      {dateRange.from < '2026-06-01' && (
-        <div className="rounded-xl border-2 border-dashed border-red-300/70 bg-red-50/40 px-4 py-2.5 text-xs lg:text-sm text-red-700/80">
-          ข้อมูลก่อน <span className="font-medium">มิถุนายน 2026</span> อาจคำนวณกำไรไม่แม่นยำ — ทุนของบางรายการเป็นค่าประมาณ
-        </div>
-      )}
-
-      {/* Mobile date controls */}
-      <div className="flex flex-wrap items-center gap-2 lg:hidden">
-        <Icon name="calendar" size={18} className="text-muted flex-shrink-0"/>
-        {DateControls}
-      </div>
-
-      {/* Stat cards — when shop expenses exist, "กำไรสุทธิ" becomes "กำไรขั้นต้น"
-          and a separate breakdown section below shows real net profit after operating costs. */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-        <StatCard tone="canvas" label="ยอดขายสุทธิ" value={fmtTHB(agg.revenue)} sub={rangeLabel} icon="trend-up"/>
-        <StatCard tone="cream"  label="ต้นทุนสินค้า" value={fmtTHB(agg.cost)} sub={`${filtered.length} รายการ`} icon="package-in"/>
-        <StatCard tone={agg.profit>=0?"dark":"coral"}
-          label={shopExp.hasData ? "กำไรขั้นต้น" : "กำไรสุทธิ"}
-          value={fmtTHB(agg.profit)}
-          sub={shopExp.hasData ? "ก่อนหักค่าใช้จ่ายร้าน" : (agg.profit>=0?"กำไร":"ขาดทุน")} icon="trend-up"/>
-        <StatCard tone="coral"  label="Margin" value={`${agg.margin.toFixed(1)}%`} sub="กำไร / ยอดขาย" icon="tag"/>
-      </div>
-
-      {/* Shop expenses breakdown — only when at least one month in range has data */}
-      {shopExp.hasData && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:gap-4">
-          {/* Breakdown card (spans 2 cols on desktop) */}
-          <div className="lg:col-span-2 card-canvas p-4 lg:p-6">
-            <div className="flex items-center justify-between mb-3 lg:mb-4 gap-2 flex-wrap">
-              <div className="font-display text-xl lg:text-2xl flex items-center gap-2">
-                <Icon name="wallet" size={20}/> ค่าใช้จ่ายร้านค้า
+      {/* Disclaimer (Phase 3.3): pre-launch (before 2026-05-08) cost data is
+          patchy, so any P&L touching that window can be approximate. Shown
+          as an always-on compact pill while historic data is being cleaned —
+          tighten the predicate later (e.g. `dateRange.from < '2026-05-08'`)
+          once enough post-launch days have accumulated. */}
+      {(() => {
+        const showWarn = true;
+        const Warn = (
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-amber-50 text-amber-800 ring-1 ring-amber-200/80 text-[11px] lg:text-xs">
+            <Icon name="alert" size={13} className="text-amber-600 flex-shrink-0"/>
+            <span>ข้อมูลก่อน <span className="font-medium">8 พฤษภาคม 2026</span> คำนวณกำไรไม่แม่นยำ</span>
+          </div>
+        );
+        return (
+          <>
+            {/* When embedded, surface the desktop date controls inline (since
+                we suppressed the standalone header that normally hosts them).
+                Disclaimer pill sits on the left of the same row. */}
+            {embedded && (
+              <div className="hidden lg:flex items-center justify-between gap-3 flex-wrap">
+                <div>{showWarn && Warn}</div>
+                <div className="flex items-center gap-3 flex-wrap">{DateControls}</div>
               </div>
-              <button type="button" className="btn-ghost !py-1.5 !px-3 !text-xs" onClick={()=>setShopExpModalOpen(true)}>
-                <Icon name="edit" size={13}/> แก้ไข
-              </button>
+            )}
+
+            {/* Mobile date controls — disclaimer stacks above on small screens. */}
+            <div className="flex flex-wrap items-center gap-2 lg:hidden">
+              {showWarn && <div className="w-full">{Warn}</div>}
+              <Icon name="calendar" size={18} className="text-muted flex-shrink-0"/>
+              {DateControls}
             </div>
-            <div className="space-y-2">
-              {shopExp.breakdown.map(b => (
-                <div key={b.key} className="flex items-center gap-3 py-1.5 border-b hairline-soft last:border-0">
-                  <Icon name={b.icon} size={14} className="text-muted flex-shrink-0"/>
-                  <div className="flex-1 min-w-0 text-sm truncate">
-                    {b.label}
-                    {b.isOther && <span className="ml-1.5 text-[10px] uppercase tracking-wider text-muted-soft">อื่นๆ</span>}
-                  </div>
-                  <div className="font-display text-base tabular-nums">{fmtTHB(b.amount)}</div>
-                </div>
-              ))}
-              <div className="flex items-center gap-3 pt-2 mt-1 border-t hairline">
-                <div className="flex-1 text-sm font-medium">รวมค่าใช้จ่ายร้านค้า</div>
-                <div className="font-display text-xl tabular-nums">{fmtTHB(shopExp.total)}</div>
+          </>
+        );
+      })()}
+
+      {/* Quick range presets — same component used by Dashboard, lives
+          inside the pane so it can re-key the cascade on tap. */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <RangePresets dateRange={dateRange} setDateRange={setDateRange}/>
+        <div className="text-xs text-muted-soft tabular-nums">{rangeLabel}</div>
+      </div>
+
+      {/* Re-key on range change so cards replay their entrance. */}
+      <div key={`${dateRange.from}_${dateRange.to}`} className="cascade space-y-4 lg:space-y-6">
+
+        {/* ━━━━━━━━━━ HERO — net profit + margin gauge ━━━━━━━━━━ */}
+        <div style={{ '--i': 0 }}
+             className={"fade-in stagger relative " +
+               (netRealProfit >= 0 ? "card-hero-teal" : "card-hero-coral")}>
+          {/* Top glass rim — thin highlight across the top edge so the
+              card reads as a slab of liquid glass with a refractive edge.
+              Sits absolute above the bg gradient + drift overlay.        */}
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/45 to-transparent z-10"/>
+          {/* Soft top-left specular highlight — adds the "wet" liquid feel. */}
+          <div className="pointer-events-none absolute -top-10 -left-10 w-48 h-48 rounded-full opacity-50 z-10"
+            style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.18), transparent 60%)' }}/>
+
+          <div className="relative z-20 p-5 lg:p-7">
+            {/* Header row: label on the left, margin chip on the right */}
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="text-[11px] lg:text-xs uppercase tracking-[1.5px] opacity-80">
+                {shopExp.hasData ? 'กำไรสุทธิจริง · หลังหักค่าใช้จ่ายร้าน' : 'กำไรสุทธิ'}
+              </div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] lg:text-xs tabular-nums font-medium ring-1 ring-white/25 backdrop-blur"
+                   style={{ background: 'rgba(255,255,255,0.10)' }}>
+                <span className="w-1.5 h-1.5 rounded-full"
+                  style={{ background: netRealProfit >= 0 ? '#86efac' : '#fecaca' }}/>
+                Margin {agg.margin.toFixed(1)}%
+              </div>
+            </div>
+
+            {/* Big net profit number — gets full width now that the gauge is gone */}
+            <div className="font-display text-5xl lg:text-7xl tabular-nums leading-none">
+              <AnimatedNumber value={netRealProfit} format={fmtTHB}/>
+            </div>
+
+            {/* Sub-info row */}
+            <div className="mt-3 text-xs lg:text-sm opacity-80 flex items-center gap-2 flex-wrap">
+              <span>{rangeLabel}</span>
+              <span className="opacity-50">·</span>
+              <span>{netRealProfit >= 0 ? 'กำไร' : 'ขาดทุน'}</span>
+            </div>
+
+            {/* Slim horizontal margin meter — replaces the circular gauge.
+                Reads left-to-right (0% → 30%+) so it scans naturally with
+                the rest of the page. 30% is the "great margin" anchor. */}
+            <div className="mt-5 lg:mt-6">
+              <div className="flex items-center justify-between text-[10px] uppercase tracking-[1.5px] opacity-65 mb-1.5">
+                <span>Margin</span>
+                <span className="tabular-nums">0% · 15% · 30%+</span>
+              </div>
+              <div className="relative h-2 rounded-full overflow-hidden ring-1 ring-white/15"
+                   style={{ background: 'rgba(255,255,255,0.10)' }}>
+                {/* tick markers at 15% (mid) and 30% (cap) of the bar */}
+                <span className="absolute top-0 bottom-0 w-px bg-white/15" style={{ left: '50%' }}/>
+                <div className="h-full bar-grow-x rounded-full"
+                  style={{
+                    width: Math.min(100, Math.max(2, (agg.margin / 30) * 100)) + '%',
+                    background: netRealProfit >= 0
+                      ? 'linear-gradient(90deg, rgba(134,239,172,0.95), rgba(187,247,208,1))'
+                      : 'linear-gradient(90deg, rgba(252,165,165,0.95), rgba(254,202,202,1))',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4)',
+                  }}/>
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Real net profit — unique teal liquid-glass card (positive) /
-              coral mesh (loss). All text centered. */}
-          <div className={"rounded-lg p-4 lg:p-6 flex flex-col items-center justify-center text-center " +
-              (netRealProfit>=0 ? "card-teal" : "card-primary-mesh text-on-primary")}>
-            <span className={"inline-flex items-center justify-center w-9 h-9 rounded-full " +
-                (netRealProfit>=0
-                  ? "bg-white/15 ring-1 ring-white/25"
-                  : "bg-white/20 ring-1 ring-white/30")}>
-              <Icon name="trend-up" size={18}/>
-            </span>
-            <div className={"text-xs uppercase tracking-[1.5px] mt-3 " +
-                (netRealProfit>=0 ? "opacity-85" : "opacity-90")}>กำไรสุทธิจริง</div>
-            <div className="font-display stat-value tabular-nums mt-1" title={String(netRealProfit)}>{fmtTHB(netRealProfit)}</div>
-            <div className={"text-xs mt-1 " + (netRealProfit>=0 ? "opacity-80" : "opacity-90")}>
-              กำไรขั้นต้น − ค่าใช้จ่ายร้าน
+        {/* ━━━━━━━━━━ 3-CARD ROW — revenue / cost / shop expenses ━━━━━━━━━━ */}
+        <div style={{ '--i': 1 }} className="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:gap-4 fade-in stagger">
+          <div className="card-canvas p-4 lg:p-5 hover-lift">
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs uppercase tracking-[1.5px] text-muted">ยอดขายสุทธิ</div>
+              <Icon name="trend-up" size={16} className="text-muted-soft"/>
+            </div>
+            <div className="font-display text-3xl lg:text-4xl tabular-nums leading-none mt-1">
+              <AnimatedNumber value={agg.revenue} format={fmtTHB}/>
+            </div>
+            <div className="text-xs text-muted-soft mt-1.5">{filtered.length} รายการ</div>
+          </div>
+          <div className="card-cream p-4 lg:p-5 hover-lift">
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs uppercase tracking-[1.5px] text-muted">ต้นทุนสินค้า</div>
+              <Icon name="package-in" size={16} className="text-muted-soft"/>
+            </div>
+            <div className="font-display text-3xl lg:text-4xl tabular-nums leading-none mt-1">
+              <AnimatedNumber value={agg.cost} format={fmtTHB}/>
+            </div>
+            <div className="text-xs text-muted-soft mt-1.5">
+              {agg.revenue > 0 ? `${(agg.cost / agg.revenue * 100).toFixed(1)}% ของยอดขาย` : 'ยังไม่มียอดขาย'}
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Top 10 */}
-      <div className="card-canvas p-4 lg:p-6">
-        <div className="font-display text-xl lg:text-2xl mb-3 lg:mb-4 flex items-center gap-2">
-          <Icon name="trend-up" size={20}/> Top 10 สินค้าทำกำไรสูงสุด
-        </div>
-        {!topProfit.length && <div className="text-muted text-sm">ยังไม่มีข้อมูลในช่วงที่เลือก</div>}
-        {topProfit.map((p,i)=>(
-          <div key={p.product_id || p.name || i} className="flex items-center gap-3 py-2 border-b hairline-soft last:border-0">
-            <div className="font-display text-xl lg:text-2xl w-7 text-muted-soft">{i+1}</div>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm truncate font-medium">{p.name}</div>
-              <div className="text-xs text-muted">ขาย {p.qty} ชิ้น · ยอด {fmtTHB(p.revenue)}</div>
+          <button type="button" onClick={()=>setShopExpModalOpen(true)}
+            className="text-left glass-soft rounded-lg p-4 lg:p-5 hover-lift ring-1 ring-hairline transition-all hover:ring-primary/30">
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs uppercase tracking-[1.5px] text-muted">ค่าใช้จ่ายร้านค้า</div>
+              <Icon name="wallet" size={16} className="text-muted-soft"/>
             </div>
-            <div className={"font-display text-base lg:text-lg tabular-nums " + (p.profit>=0?"text-ink":"text-error")}>
-              {p.profit>=0?'+':''}{fmtTHB(p.profit)}
+            <div className="font-display text-3xl lg:text-4xl tabular-nums leading-none mt-1">
+              {shopExp.hasData
+                ? <AnimatedNumber value={shopExp.total} format={fmtTHB}/>
+                : <span className="text-muted-soft font-sans text-lg">— ยังไม่บันทึก —</span>}
+            </div>
+            <div className="text-xs text-muted-soft mt-1.5">
+              {shopExp.hasData ? 'แตะเพื่อแก้ไข' : 'แตะเพื่อบันทึก'}
+            </div>
+          </button>
+        </div>
+
+        {/* ━━━━━━━━━━ DETAIL TABLE — collapsed by default ━━━━━━━━━━
+            Power-user view of every line; default-closed keeps the
+            overview-first feel. Moved above the revenue-flow card so
+            cashiers chasing a specific bill see it first.            */}
+        <details style={{ '--i': 2 }} className="card-cream overflow-hidden fade-in stagger group">
+          <summary className="cursor-pointer list-none p-4 lg:p-5 border-b hairline flex items-center justify-between">
+            <div className="font-display text-lg lg:text-xl flex items-center gap-2">
+              <Icon name="receipt" size={18}/> รายละเอียดทุกรายการ
+              <span className="text-xs text-muted-soft font-normal">· {filtered.length} แถว</span>
+            </div>
+            <Icon name="chevron-d" size={16} className="text-muted-soft transition-transform group-open:rotate-180"/>
+          </summary>
+
+          {/* Filters live inside the collapsible so they don't take vertical
+              space until the user opens the table. */}
+          <div className="p-4 lg:p-5 border-b hairline">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 lg:gap-3">
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted z-10"><Icon name="search" size={16} strokeWidth={2.25}/></span>
+                <input className="input !pl-9 !py-2 !text-sm" placeholder="ค้นหาชื่อสินค้า" value={search} onChange={e=>setSearch(e.target.value)}/>
+              </div>
+              <select className="input !py-2 !text-sm" value={filterChannel} onChange={e=>setFilterChannel(e.target.value)}>
+                <option value="">ทุกช่องทาง</option>
+                {CHANNELS.map(c => <option key={c.v} value={c.v}>{c.label}</option>)}
+              </select>
             </div>
           </div>
-        ))}
-      </div>
-
-      {/* Detail table */}
-      <div className="card-cream overflow-hidden">
-        <div className="p-4 lg:p-5 border-b hairline space-y-3">
-          <div className="font-display text-xl lg:text-2xl flex items-center gap-2"><Icon name="receipt" size={20}/> รายละเอียดทุกรายการ</div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 lg:gap-3">
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted z-10"><Icon name="search" size={16} strokeWidth={2.25}/></span>
-              <input className="input !pl-9 !py-2 !text-sm" placeholder="ค้นหาชื่อสินค้า" value={search} onChange={e=>setSearch(e.target.value)}/>
-            </div>
-            <select className="input !py-2 !text-sm" value={filterChannel} onChange={e=>setFilterChannel(e.target.value)}>
-              <option value="">ทุกช่องทาง</option>
-              {CHANNELS.map(c => <option key={c.v} value={c.v}>{c.label}</option>)}
-            </select>
-          </div>
-        </div>
 
         {/* Desktop table */}
         <div className="hidden lg:block overflow-x-auto">
@@ -7398,6 +8511,235 @@ function ProfitLossView({ embedded = false }) {
             </div>
           </div>
         )}
+        </details>
+
+        {/* ━━━━━━━━━━ REVENUE FLOW — where the revenue went ━━━━━━━━━━
+            Replaces the older waterfall SVG with a compact "allocation"
+            view: one stacked bar (Revenue = 100%) split into cost +
+            expenses + profit, then a tidy detail list underneath. Much
+            denser + reads top-to-bottom like a P&L statement. */}
+        <div style={{ '--i': 3 }} className="card-canvas p-5 lg:p-6 fade-in stagger">
+          <div className="flex items-center justify-between mb-4">
+            <div className="font-display text-lg lg:text-xl flex items-center gap-2">
+              <Icon name="trend-up" size={18}/> ที่มาของกำไรสุทธิ
+            </div>
+            <span className="text-xs text-muted-soft">รายได้ถูกใช้ไปอย่างไร</span>
+          </div>
+
+          {agg.revenue > 0 ? (() => {
+            const rev = agg.revenue;
+            const costPct = Math.max(0, Math.min(100, (agg.cost / rev) * 100));
+            const expPct  = shopExp.hasData
+              ? Math.max(0, Math.min(100 - costPct, (shopExp.total / rev) * 100))
+              : 0;
+            // Lost goods slot — clamped against whatever the cost+exp segments
+            // already consumed so the bar can never overflow 100%.
+            const lostPct = lostGoods.total > 0
+              ? Math.max(0, Math.min(100 - costPct - expPct, (lostGoods.total / rev) * 100))
+              : 0;
+            const isLoss = netRealProfit < 0;
+            const profitPct = Math.max(0, 100 - costPct - expPct - lostPct);
+            const margin = (netRealProfit / rev) * 100;
+            // Inline row helper — keeps markup uniform across the 4 lines
+            // (revenue / cost / expense / net) without pulling in a new component.
+            const Row = ({ swatch, label, value, share, negative, accent, divider }) => (
+              <div className={"flex items-center gap-3 " + (divider ? 'pt-3 mt-1 border-t hairline' : '')}>
+                <span className="inline-block w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: swatch }}/>
+                <div className="flex-1 min-w-0">
+                  <div className={"text-sm " + (accent ? 'font-medium text-ink' : 'text-body')}>{label}</div>
+                  <div className="mt-1 h-1.5 rounded-full bg-[#f1ebe2] overflow-hidden">
+                    <div className="h-full bar-grow-x rounded-full"
+                      style={{ width: Math.min(100, Math.max(0, share)) + '%', background: swatch }}/>
+                  </div>
+                </div>
+                <div className="text-right tabular-nums flex-shrink-0">
+                  <div className={"text-sm " + (accent ? 'font-display text-lg leading-none' : '') + (accent && isLoss && negative === false ? ' text-error' : '')}>
+                    {negative ? '−' : ''}{fmtTHB(Math.abs(value))}
+                  </div>
+                  <div className="text-[10px] text-muted-soft mt-0.5">
+                    {share >= 0.05 ? share.toFixed(1) + '%' : '<0.1%'}
+                  </div>
+                </div>
+              </div>
+            );
+            return (
+              <>
+                {/* Stacked allocation bar — Revenue (100%) split into cost / exp / profit */}
+                <div className="mb-1.5 flex items-baseline justify-between text-xs text-muted-soft">
+                  <span>ยอดขาย <span className="text-ink font-medium tabular-nums">{fmtTHB(rev)}</span></span>
+                  <span className="tabular-nums">100%</span>
+                </div>
+                <div className="h-3 rounded-full bg-[#f1ebe2] overflow-hidden flex shadow-inner">
+                  <div className="h-full bar-grow-x" title={`ทุนขาย ${fmtTHB(agg.cost)}`}
+                    style={{ width: costPct + '%', background: '#cc785c', '--grow-delay': '0ms' }}/>
+                  {shopExp.hasData && (
+                    <div className="h-full bar-grow-x" title={`ค่าใช้จ่ายร้านค้า ${fmtTHB(shopExp.total)}`}
+                      style={{ width: expPct + '%', background: '#b45309', '--grow-delay': '90ms' }}/>
+                  )}
+                  {lostGoods.total > 0 && (
+                    <div className="h-full bar-grow-x" title={`ของหาย ${fmtTHB(lostGoods.total)}`}
+                      style={{ width: lostPct + '%', background: '#a16207', '--grow-delay': '135ms' }}/>
+                  )}
+                  {!isLoss && (
+                    <div className="h-full bar-grow-x" title={`กำไรสุทธิ ${fmtTHB(netRealProfit)}`}
+                      style={{ width: profitPct + '%', background: '#1f3d27', '--grow-delay': '180ms' }}/>
+                  )}
+                </div>
+                <div className="mt-1.5 flex items-center justify-between text-[11px]">
+                  <div className="text-muted-soft inline-flex items-center gap-1">
+                    อัตรากำไรสุทธิ{' '}
+                    <span className={"font-medium tabular-nums " + (isLoss ? 'text-error' : 'text-[#1f3d27]')}>
+                      {margin.toFixed(1)}%
+                    </span>
+                  </div>
+                  {isLoss && (
+                    <span className="text-error inline-flex items-center gap-1">
+                      <Icon name="arrow-down" size={11}/> ขาดทุน {fmtTHB(Math.abs(netRealProfit))}
+                    </span>
+                  )}
+                </div>
+
+                {/* Detail list — same colours as the stacked bar so the eye
+                    maps each segment to its number without a legend. */}
+                <div className="mt-5 space-y-2.5">
+                  <Row swatch="#7a8a82" label="ยอดขายรวม" value={rev} share={100}/>
+                  <Row swatch="#cc785c" label="ทุนขาย" value={agg.cost}
+                    share={costPct} negative/>
+                  {shopExp.hasData && (
+                    <Row swatch="#b45309" label="ค่าใช้จ่ายร้านค้า" value={shopExp.total}
+                      share={expPct} negative/>
+                  )}
+                  {lostGoods.total > 0 && (
+                    <Row swatch="#a16207"
+                      label={`ของหาย / Loss · ${lostGoods.count} ใบ`}
+                      value={lostGoods.total} share={lostPct} negative/>
+                  )}
+                  <Row
+                    swatch={isLoss ? '#c2410c' : '#1f3d27'}
+                    label={(shopExp.hasData || lostGoods.total > 0) ? 'กำไรสุทธิจริง' : 'กำไรขั้นต้น'}
+                    value={netRealProfit}
+                    share={Math.abs(margin)}
+                    negative={false}
+                    accent
+                    divider/>
+                </div>
+              </>
+            );
+          })() : (
+            <div className="text-muted-soft text-sm py-6 text-center">ยังไม่มียอดขายในช่วงที่เลือก</div>
+          )}
+        </div>
+
+        {/* ━━━━━━━━━━ SHOP EXPENSE BREAKDOWN — collapsible ━━━━━━━━━━ */}
+        {shopExp.hasData && (
+          <details style={{ '--i': 4 }} className="card-cream p-5 lg:p-6 fade-in stagger group">
+            <summary className="cursor-pointer list-none flex items-center justify-between">
+              <div className="font-display text-lg lg:text-xl flex items-center gap-2">
+                <Icon name="wallet" size={18}/> ค่าใช้จ่ายร้านค้า · รายการ
+                <span className="text-xs text-muted-soft font-normal">· {shopExp.breakdown.length} หมวด</span>
+              </div>
+              <Icon name="chevron-d" size={16} className="text-muted-soft transition-transform group-open:rotate-180"/>
+            </summary>
+            <div className="mt-3 space-y-2">
+              {shopExp.breakdown.map(b => (
+                <div key={b.key} className="flex items-center gap-3 py-1.5 border-b hairline-soft last:border-0">
+                  <Icon name={b.icon} size={14} className="text-muted flex-shrink-0"/>
+                  <div className="flex-1 min-w-0 text-sm truncate">
+                    {b.label}
+                    {b.isOther && <span className="ml-1.5 text-[10px] uppercase tracking-wider text-muted-soft">อื่นๆ</span>}
+                  </div>
+                  <div className="font-display text-base tabular-nums">{fmtTHB(b.amount)}</div>
+                </div>
+              ))}
+              <div className="flex items-center gap-3 pt-2 mt-1 border-t hairline">
+                <div className="flex-1 text-sm font-medium">รวมค่าใช้จ่ายร้านค้า</div>
+                <div className="font-display text-xl tabular-nums">{fmtTHB(shopExp.total)}</div>
+              </div>
+              <button type="button" className="btn-secondary w-full !py-2 mt-2 !text-sm" onClick={()=>setShopExpModalOpen(true)}>
+                <Icon name="edit" size={14}/> แก้ไขค่าใช้จ่าย
+              </button>
+            </div>
+          </details>
+        )}
+
+        {/* ━━━━━━━━━━ LOST GOODS BREAKDOWN — collapsible ━━━━━━━━━━
+            Surfaces refund-only returns (goods_returned=false) so the owner
+            can see *where* inventory leakage is happening — typically a
+            specific platform's logistics. Mirrors the shop-expense card so
+            the visual rhythm of the page stays consistent. */}
+        {lostGoods.total > 0 && (
+          <details style={{ '--i': 4 }} className="card-cream p-5 lg:p-6 fade-in stagger group" open>
+            <summary className="cursor-pointer list-none flex items-center justify-between">
+              <div className="font-display text-lg lg:text-xl flex items-center gap-2 text-[#8a6500]">
+                <Icon name="alert" size={18}/> ของหาย / Loss · เงินคืนอย่างเดียว
+                <span className="text-xs text-muted-soft font-normal">· {lostGoods.count} ใบ</span>
+              </div>
+              <Icon name="chevron-d" size={16} className="text-muted-soft transition-transform group-open:rotate-180"/>
+            </summary>
+            <div className="mt-3 space-y-2">
+              <div className="text-xs text-muted leading-relaxed pb-2">
+                บิลที่ platform คืนเงินแต่สินค้าไม่ได้กลับมา (สินค้าหาย/ลูกค้าไม่ส่งคืน) —
+                เงินออกจริงแต่ไม่มีของกลับเข้า inventory จึงคิดเป็น "ขาดทุน" แยกต่างหาก
+              </div>
+              {lostGoods.byChannel.map(b => (
+                <div key={b.channel} className="flex items-center gap-3 py-1.5 border-b hairline-soft last:border-0">
+                  <span className="badge-pill !text-xs flex-shrink-0">{CHANNEL_LABELS[b.channel] || b.channel}</span>
+                  <div className="flex-1 min-w-0 text-xs text-muted-soft tabular-nums">{b.count} ใบ</div>
+                  <div className="font-display text-base tabular-nums text-[#8a6500]">{fmtTHB(b.total)}</div>
+                </div>
+              ))}
+              <div className="flex items-center gap-3 pt-2 mt-1 border-t hairline">
+                <div className="flex-1 text-sm font-medium">รวมของหาย</div>
+                <div className="font-display text-xl tabular-nums text-[#8a6500]">{fmtTHB(lostGoods.total)}</div>
+              </div>
+            </div>
+          </details>
+        )}
+
+        {/* ━━━━━━━━━━ TOP 10 PROFIT — animated bars ━━━━━━━━━━ */}
+        <div style={{ '--i': 5 }} className="card-canvas p-5 lg:p-6 fade-in stagger">
+          <div className="flex items-center justify-between mb-3">
+            <div className="font-display text-lg lg:text-xl flex items-center gap-2">
+              <Icon name="trend-up" size={18}/> สินค้าทำกำไรสูงสุด
+            </div>
+            <span className="text-xs text-muted-soft">top {topProfit.length}</span>
+          </div>
+          {!topProfit.length ? (
+            <div className="text-muted-soft text-sm py-6 text-center">ยังไม่มีข้อมูลในช่วงที่เลือก</div>
+          ) : (
+            <div className="space-y-2.5">
+              {topProfit.map((p, i) => {
+                const pct = (Math.abs(p.profit) / topProfitMax) * 100;
+                const pos = p.profit >= 0;
+                return (
+                  <div key={(p.name||'') + i}>
+                    <div className="flex items-baseline justify-between gap-2 mb-1">
+                      <div className="flex items-baseline gap-2 min-w-0">
+                        <span className="font-display text-sm text-muted-soft tabular-nums w-5">{i+1}</span>
+                        <span className="text-sm truncate">{p.name}</span>
+                        <span className="text-xs text-muted-soft whitespace-nowrap">· {p.qty} ชิ้น</span>
+                      </div>
+                      <span className={"text-sm font-medium tabular-nums flex-shrink-0 " + (pos ? "text-ink" : "text-error")}>
+                        {pos?'+':''}{fmtTHB(p.profit)}
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-hairline/40 overflow-hidden">
+                      <div className="h-full rounded-full bar-grow-x"
+                        style={{
+                          width: `${Math.max(2, pct)}%`,
+                          background: pos
+                            ? 'linear-gradient(90deg, rgba(60,132,122,0.85), rgba(110,180,160,0.85))'
+                            : 'linear-gradient(90deg, rgba(220,38,38,0.85), rgba(245,82,82,0.85))',
+                          '--grow-delay': `${i*60}ms`,
+                        }}/>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
       </div>
       </div>
     </div>
@@ -7408,6 +8750,437 @@ function ProfitLossView({ embedded = false }) {
       initialMonth={(dateRange.from || todayISO()).slice(0,7)}
       onChanged={()=>setShopExpReload(k=>k+1)}
     />
+    </>
+  );
+}
+
+/* =========================================================
+   ANOMALIES VIEW — "รายการผิดพลาด"
+   ---------------------------------------------------------
+   Scans active sales in the chosen range and surfaces lines /
+   bills that look like data-entry mistakes:
+     • price ≥ 2× variance within the same product / model
+     • qty outliers (≥ 5× median per product)
+     • duplicate bills (same total + channel within 5 min)
+     • discount-too-deep bills (≤ 0 or < 10% of subtotal)
+   Read-only summary with click-to-open ReceiptModal for triage.
+========================================================= */
+function AnomaliesView({ embedded = false }) {
+  const today = todayISO();
+  // Default to "this month so far" — matches the user's example use case
+  // ("วันที่ 8 vs วันที่ 20" within the same month).
+  const monStart = today.slice(0, 7) + '-01';
+  const [dateRange, setDateRange] = useState({ from: monStart, to: today });
+  const [loading, setLoading] = useState(false);
+  const [orders, setOrders] = useState([]);
+  const [items, setItems] = useState([]);
+  const [reloadTick, setReloadTick] = useState(0);
+  const [receiptId, setReceiptId] = useState(null);
+  // Map of section-key → bool; true = collapsed, missing/false = open.
+  const [collapsed, setCollapsed] = useState({});
+
+  useEffect(() => { (async () => {
+    setLoading(true);
+    const { from, to } = dateRange;
+    try {
+      // Chunked: a wide range can blow past the 1000-row default cap.
+      const { data: ords } = await fetchAll((fromIdx, toIdx) =>
+        sb.from('sale_orders')
+          .select('id, sale_date, channel, subtotal, grand_total, net_received')
+          .eq('status', 'active')
+          .gte('sale_date', startOfDayBangkok(from))
+          .lte('sale_date', endOfDayBangkok(to))
+          .order('sale_date', { ascending: true })
+          .range(fromIdx, toIdx)
+      );
+      const ordersList = ords || [];
+      if (!ordersList.length) {
+        setOrders([]); setItems([]); setLoading(false); return;
+      }
+      const orderIds = ordersList.map(o => o.id);
+      const { data: itemsData } = await fetchAll((fromIdx, toIdx) =>
+        sb.from('sale_order_items').select('*')
+          .in('sale_order_id', orderIds).range(fromIdx, toIdx)
+      );
+      setOrders(ordersList);
+      setItems(itemsData || []);
+    } catch (e) {
+      console.error('anomalies load failed', e);
+      setOrders([]); setItems([]);
+    } finally { setLoading(false); }
+  })(); }, [dateRange.from, dateRange.to, reloadTick]);
+
+  useRealtimeInvalidate(sb, ['sale_orders', 'sale_order_items'],
+    () => setReloadTick(t => t + 1));
+
+  // --- detection (memoised; cheap math, but inputs can be wide) ---
+  const result = useMemo(() => {
+    if (!orders.length) {
+      return { groups: { price: [], qty: [], dup: [], disc: [] }, totalCount: 0, totalImpact: 0 };
+    }
+    const itemsByOrder = {};
+    items.forEach(it => { (itemsByOrder[it.sale_order_id] ||= []).push(it); });
+
+    // Build flat per-line records using the SAME discount + e-commerce
+    // revenue-distribution logic as ProfitLossView, so "net unit price"
+    // here matches what the cashier ultimately received per item.
+    const lines = [];
+    for (const o of orders) {
+      const orderLines = itemsByOrder[o.id] || [];
+      const lineRevenues = orderLines.map(it => applyDiscounts(
+        it.unit_price, it.quantity,
+        it.discount1_value, it.discount1_type,
+        it.discount2_value, it.discount2_type,
+      ));
+      const subtotalCalc = lineRevenues.reduce((s, x) => s + x, 0);
+      const revenueBase = (ECOMMERCE_CHANNELS.has(o.channel) && o.net_received != null)
+        ? Number(o.net_received) : Number(o.grand_total) || 0;
+      const ratio = subtotalCalc > 0 ? revenueBase / subtotalCalc : 1;
+      orderLines.forEach((it, idx) => {
+        const qty = Number(it.quantity) || 0;
+        if (qty <= 0) return;
+        const lineRev = lineRevenues[idx] * ratio;
+        const netUnitPrice = lineRev / qty;
+        const name = (it.product_name || '').trim();
+        // Hybrid key: product_id wins (master-linked items), fall back to
+        // normalised name for hand-typed items so the same model still
+        // groups together across bills.
+        const key = it.product_id
+          ? `id:${it.product_id}`
+          : (name ? `name:${name.toLowerCase()}` : null);
+        lines.push({
+          sale_id: o.id,
+          sale_date: o.sale_date,
+          channel: o.channel || '',
+          product_id: it.product_id,
+          product_name: name || '(ไม่ระบุชื่อ)',
+          qty,
+          unitPrice: Number(it.unit_price) || 0,
+          netUnitPrice,
+          lineRev,
+          key,
+        });
+      });
+    }
+
+    // Group lines by hybrid key for price / qty checks.
+    const groupsByKey = {};
+    lines.forEach(l => { if (l.key) (groupsByKey[l.key] ||= []).push(l); });
+
+    // ---- 1. Price variance ≥ 2× ----
+    const priceFindings = [];
+    Object.values(groupsByKey).forEach(arr => {
+      if (arr.length < 2) return;
+      const prices = arr.map(l => l.netUnitPrice).filter(p => p > 0);
+      if (prices.length < 2) return;
+      const min = Math.min(...prices);
+      const max = Math.max(...prices);
+      if (min <= 0 || max < 2 * min) return;
+      const sorted = [...prices].sort((a, b) => a - b);
+      const median = sorted[Math.floor(sorted.length / 2)] || min;
+      arr.forEach(l => {
+        if (l.netUnitPrice <= 0) return;
+        const high = l.netUnitPrice >= 2 * min;
+        const low  = l.netUnitPrice <= max / 2;
+        if (!high && !low) return;
+        const ratioVsMedian = l.netUnitPrice / median;
+        const impact = Math.abs(l.netUnitPrice - median) * l.qty;
+        priceFindings.push({
+          ...l,
+          findingType: 'price',
+          severity: (ratioVsMedian >= 3 || ratioVsMedian <= 1 / 3) ? 'danger' : 'warning',
+          headline: high
+            ? `ราคาสูงผิดปกติ ${fmtTHB(l.netUnitPrice)} (× ${ratioVsMedian.toFixed(2)} median)`
+            : `ราคาต่ำผิดปกติ ${fmtTHB(l.netUnitPrice)} (× ${ratioVsMedian.toFixed(2)} median)`,
+          detail: `median ของรุ่นนี้ ≈ ${fmtTHB(median)} · เทียบ ${arr.length} รายการในช่วง`,
+          impact,
+        });
+      });
+    });
+    // Sort newest-first so the most recent suspect surfaces on top.
+    priceFindings.sort((a, b) => new Date(b.sale_date) - new Date(a.sale_date));
+
+    // ---- 2. Qty outlier (≥ 5× median, abs floor 5) ----
+    const qtyFindings = [];
+    Object.values(groupsByKey).forEach(arr => {
+      if (arr.length < 3) return;
+      const qtys = arr.map(l => l.qty).filter(q => q > 0).sort((a, b) => a - b);
+      const median = qtys[Math.floor(qtys.length / 2)];
+      if (!median || median <= 0) return;
+      arr.forEach(l => {
+        if (l.qty >= 5 && l.qty >= 5 * median) {
+          qtyFindings.push({
+            ...l,
+            findingType: 'qty',
+            severity: l.qty >= 10 * median ? 'danger' : 'warning',
+            headline: `จำนวน ${l.qty} ชิ้น (× ${(l.qty / median).toFixed(1)} median)`,
+            detail: `median ของรุ่นนี้ = ${median} ชิ้น · จาก ${arr.length} ครั้ง`,
+            impact: (l.qty - median) * l.netUnitPrice,
+          });
+        }
+      });
+    });
+    qtyFindings.sort((a, b) => new Date(b.sale_date) - new Date(a.sale_date));
+
+    // ---- 3. Duplicate bills (same channel + total within 5 min) ----
+    const dupFindings = [];
+    const sortedOrders = [...orders].sort((a, b) =>
+      new Date(a.sale_date).getTime() - new Date(b.sale_date).getTime()
+    );
+    for (let i = 1; i < sortedOrders.length; i++) {
+      const a = sortedOrders[i - 1];
+      const b = sortedOrders[i];
+      if ((a.channel || '') !== (b.channel || '')) continue;
+      const ta = Math.round((Number(a.grand_total) || 0) * 100);
+      const tb = Math.round((Number(b.grand_total) || 0) * 100);
+      if (ta !== tb || ta <= 0) continue;
+      const dt = new Date(b.sale_date).getTime() - new Date(a.sale_date).getTime();
+      if (dt < 0 || dt > 5 * 60 * 1000) continue;
+      const secs = Math.max(1, Math.round(dt / 1000));
+      dupFindings.push({
+        sale_id: b.id,
+        peer_sale_id: a.id,
+        sale_date: b.sale_date,
+        channel: b.channel || '',
+        product_name: 'บิลซ้ำ',
+        findingType: 'dup',
+        severity: secs <= 60 ? 'danger' : 'warning',
+        headline: `บิลยอด ${fmtTHB(b.grand_total)} ตรงกัน`,
+        detail: `บิล #${b.id} ห่างจาก #${a.id} เพียง ${secs} วินาที`,
+        impact: Number(b.grand_total) || 0,
+      });
+    }
+    dupFindings.sort((a, b) => new Date(b.sale_date) - new Date(a.sale_date));
+
+    // ---- 4. Discount too deep ----
+    const discFindings = [];
+    orders.forEach(o => {
+      const sub = Number(o.subtotal) || 0;
+      const gt = Number(o.grand_total) || 0;
+      if (sub < 100) return; // skip genuinely tiny bills
+      const ratio = sub > 0 ? gt / sub : 1;
+      const tooDeep = gt <= 0 || ratio < 0.1;
+      if (!tooDeep) return;
+      discFindings.push({
+        sale_id: o.id,
+        sale_date: o.sale_date,
+        channel: o.channel || '',
+        product_name: 'ส่วนลดผิดปกติ',
+        findingType: 'disc',
+        severity: gt <= 0 ? 'danger' : 'warning',
+        headline: gt <= 0
+          ? `บิลยอด ${fmtTHB(gt)} (ติดลบ / ศูนย์)`
+          : `เหลือเพียง ${(ratio * 100).toFixed(1)}% ของ subtotal`,
+        detail: `subtotal ${fmtTHB(sub)} → grand_total ${fmtTHB(gt)}`,
+        impact: Math.max(0, sub - gt),
+      });
+    });
+    discFindings.sort((a, b) => new Date(b.sale_date) - new Date(a.sale_date));
+
+    const groups = {
+      price: priceFindings,
+      qty:   qtyFindings,
+      dup:   dupFindings,
+      disc:  discFindings,
+    };
+    const all = [...priceFindings, ...qtyFindings, ...dupFindings, ...discFindings];
+    const totalCount = all.length;
+    const totalImpact = all.reduce((s, f) => s + (Number(f.impact) || 0), 0);
+    return { groups, totalCount, totalImpact };
+  }, [orders, items]);
+
+  const channelLabel = (c) => CHANNELS.find(x => x.v === c)?.label || c || 'หน้าร้าน';
+
+  const SECTIONS = [
+    { k: 'price', label: 'ราคาเพี้ยน ≥ 2 เท่า', icon: 'tag',
+      desc: 'รุ่นเดียวกันแต่ราคาต่อชิ้นต่างกัน 2 เท่าขึ้นไป' },
+    { k: 'qty',   label: 'จำนวนผิดปกติ',        icon: 'package',
+      desc: 'จำนวนต่อบรรทัดเกิน 5 เท่าของมัธยฐาน — อาจพิมพ์ qty เกิน' },
+    { k: 'dup',   label: 'บิลซ้ำใกล้กัน',       icon: 'receipt',
+      desc: 'ยอดตรงกัน + ช่องทางเดียวกัน ภายใน 5 นาที' },
+    { k: 'disc',  label: 'ส่วนลด/ยอดผิดปกติ',   icon: 'alert',
+      desc: 'บิลที่ติดลบ/เป็นศูนย์ หรือเหลือ < 10% ของ subtotal' },
+  ];
+
+  const rangeLabel = dateRange.from === dateRange.to
+    ? fmtThaiDateShort(dateRange.from)
+    : fmtThaiRange(dateRange.from, dateRange.to);
+
+  return (
+    <>
+      <div className={embedded
+        ? "px-4 pb-8 lg:px-10 lg:pb-12 space-y-4 lg:space-y-6"
+        : "px-4 py-4 pb-8 lg:px-10 lg:py-8 lg:pb-12 space-y-4 lg:space-y-6"}>
+        {/* Range controls — preset chips + free DatePicker, same pattern as P&L */}
+        <div style={{ '--i': 0 }} className="fade-in stagger flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <RangePresets dateRange={dateRange} setDateRange={setDateRange}/>
+            <DatePicker mode="range" value={dateRange} onChange={setDateRange}
+              placeholder="เลือกช่วงวันที่" className="w-56"/>
+          </div>
+          <div className="text-xs text-muted-soft tabular-nums">{rangeLabel}</div>
+        </div>
+
+        {/* Hero summary — animated headline count + 4 quick-jump chips */}
+        <div style={{ '--i': 1 }} className="card-hero-mesh p-5 lg:p-7 fade-in stagger hover-lift relative">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-center relative z-10">
+            <div className="lg:col-span-5">
+              <div className="text-xs uppercase tracking-[1.5px] text-muted mb-1.5">รายการที่อาจบันทึกผิด</div>
+              <div className="flex items-baseline gap-3 flex-wrap">
+                <AnimatedNumber
+                  value={result.totalCount}
+                  format={(n) => Math.round(n).toLocaleString('th-TH')}
+                  className={
+                    "font-display text-5xl lg:text-6xl tabular-nums leading-none number-pop " +
+                    (result.totalCount > 0 ? "text-error" : "text-ink")
+                  }/>
+                <div className="text-sm text-muted">รายการ</div>
+              </div>
+              <div className="mt-3 text-sm text-muted-soft">
+                มูลค่าที่อาจกระทบ ≈{' '}
+                <span className="text-ink font-medium tabular-nums">{fmtTHB(result.totalImpact)}</span>
+                <span className="mx-2">·</span>
+                ตรวจจาก {orders.length.toLocaleString('th-TH')} บิล
+              </div>
+            </div>
+            <div className="lg:col-span-7 grid grid-cols-2 sm:grid-cols-4 gap-2 lg:gap-3">
+              {SECTIONS.map(s => {
+                const n = result.groups[s.k]?.length || 0;
+                return (
+                  <button key={s.k} type="button"
+                    onClick={() => {
+                      // Make sure the section is open before scrolling to it.
+                      setCollapsed(c => ({ ...c, [s.k]: false }));
+                      requestAnimationFrame(() => {
+                        document.getElementById('anom-' + s.k)
+                          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      });
+                    }}
+                    className={
+                      "text-left p-3 rounded-xl glass-soft shadow-sm hover-lift transition-all " +
+                      (n > 0 ? 'ring-1 ring-error/30' : 'opacity-70')
+                    }>
+                    <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted">
+                      <Icon name={s.icon} size={12}/> {s.label}
+                    </div>
+                    <div className={
+                      "font-display text-2xl tabular-nums leading-none mt-1 " +
+                      (n > 0 ? 'text-error' : 'text-ink')
+                    }>{n}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Sections — each collapsible. Detector lists are independent so we
+            render them all even when empty to make the negative result legible. */}
+        {SECTIONS.map((s, idx) => {
+          const list = result.groups[s.k] || [];
+          const impact = list.reduce((sum, f) => sum + (Number(f.impact) || 0), 0);
+          const isOpen = collapsed[s.k] !== true;
+          return (
+            <div key={s.k} id={'anom-' + s.k} style={{ '--i': idx + 2 }}
+              className="fade-in stagger glass-soft rounded-2xl overflow-hidden ring-1 ring-hairline">
+              <button type="button"
+                onClick={() => setCollapsed(c => ({ ...c, [s.k]: isOpen }))}
+                className="w-full flex items-center justify-between gap-3 p-4 lg:p-5 hover:bg-white/40 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className={
+                    "lg-tile-tint w-10 h-10 rounded-xl flex items-center justify-center " +
+                    (list.length > 0 ? 'bg-error/20 text-error' : 'bg-emerald-100/70 text-emerald-700')
+                  }>
+                    <Icon name={list.length > 0 ? s.icon : 'check'} size={18}/>
+                  </div>
+                  <div className="text-left">
+                    <div className="font-medium text-ink">{s.label}</div>
+                    <div className="text-xs text-muted">{s.desc}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <div className="font-display text-2xl text-ink tabular-nums leading-none">{list.length}</div>
+                    <div className="text-[11px] text-muted-soft mt-0.5">≈ {fmtTHB(impact)}</div>
+                  </div>
+                  <Icon name={isOpen ? 'chevron-u' : 'chevron-d'} size={18} className="text-muted"/>
+                </div>
+              </button>
+              {isOpen && (
+                <div className="border-t hairline">
+                  {list.length === 0 ? (
+                    <div className="p-6 text-center text-sm text-muted-soft">
+                      <Icon name="check" size={28} className="mx-auto mb-2 text-emerald-500"/>
+                      ไม่พบรายการที่เข้าข่ายในช่วงนี้
+                    </div>
+                  ) : (
+                    <div className="divide-y hairline">
+                      {list.slice(0, 100).map((f, i) => {
+                        const sevCls = f.severity === 'danger'
+                          ? 'bg-error/15 text-error'
+                          : 'bg-amber-100 text-amber-800';
+                        return (
+                          <button key={`${f.sale_id}-${i}`} type="button"
+                            onClick={() => setReceiptId(f.sale_id)}
+                            className="w-full text-left grid grid-cols-12 gap-2 px-4 py-3 hover:bg-white/50 transition-colors items-center">
+                            <div className="col-span-3 lg:col-span-2 text-xs text-muted tabular-nums">
+                              {fmtDateTime(f.sale_date)}
+                            </div>
+                            <div className="col-span-9 lg:col-span-3 min-w-0">
+                              <div className="text-sm text-ink truncate">{f.product_name}</div>
+                              <div className="text-[11px] text-muted-soft truncate">
+                                บิล #{f.sale_id} · {channelLabel(f.channel)}
+                              </div>
+                            </div>
+                            <div className="col-span-8 lg:col-span-5 min-w-0">
+                              <div className={"inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium " + sevCls}>
+                                {f.headline}
+                              </div>
+                              <div className="text-[11px] text-muted-soft mt-1 truncate">{f.detail}</div>
+                            </div>
+                            <div className="col-span-4 lg:col-span-2 text-right">
+                              <div className="text-sm font-medium text-ink tabular-nums">{fmtTHB(f.impact)}</div>
+                              <div className="text-[10px] text-muted-soft inline-flex items-center gap-0.5">
+                                เปิดใบเสร็จ <Icon name="chevron-r" size={11}/>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                      {list.length > 100 && (
+                        <div className="p-3 text-center text-xs text-muted-soft">
+                          แสดง 100 จาก {list.length.toLocaleString('th-TH')} รายการ — กรองช่วงเวลาให้แคบลงเพื่อดูทั้งหมด
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Future checks — surfaces other automated lints we plan to add so
+            the manager knows what's coming. Read-only (not implemented yet). */}
+        <div style={{ '--i': SECTIONS.length + 2 }}
+          className="fade-in stagger glass-soft rounded-2xl p-4 lg:p-5 ring-1 ring-hairline">
+          <div className="text-xs uppercase tracking-wider text-muted mb-2">การตรวจสอบเพิ่มเติม (เร็ว ๆ นี้)</div>
+          <ul className="grid sm:grid-cols-2 gap-2 text-sm text-muted">
+            <li className="flex items-center gap-2"><Icon name="trend-up" size={14}/> ขายต่ำกว่าทุน (ต่อบรรทัด)</li>
+            <li className="flex items-center gap-2"><Icon name="package" size={14}/> สต็อกติดลบ (ขายโดยไม่ได้รับเข้า)</li>
+            <li className="flex items-center gap-2"><Icon name="calendar" size={14}/> ขายก่อนวันที่บันทึกรับเข้า</li>
+            <li className="flex items-center gap-2"><Icon name="edit" size={14}/> ชื่อพิมพ์มือคล้ายสินค้าใน master (ลืม link)</li>
+          </ul>
+        </div>
+
+        {loading && (
+          <div className="flex items-center gap-2 text-sm text-muted px-1">
+            <span className="spinner"/> กำลังตรวจสอบรายการ…
+          </div>
+        )}
+      </div>
+
+      <ReceiptModal open={!!receiptId} onClose={() => setReceiptId(null)} orderId={receiptId}/>
     </>
   );
 }

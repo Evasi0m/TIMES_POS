@@ -22,9 +22,7 @@ import {
   bangkokHour,
   computeDailySummary,
   computeMonthlySummary,
-  computeMorningBrief,
   computeRangeSummary,
-  formatBrief,
   formatDaily,
   formatMonthly,
   formatRange,
@@ -42,8 +40,8 @@ const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 interface ReqBody {
   action?: 'send' | 'preview' | 'test' | 'install_webhook' | 'delete_webhook' | 'webhook_status';
-  kind?: 'daily' | 'monthly' | 'brief' | 'range' | 'cron';
-  date?: string;          // YYYY-MM-DD, target day for daily/brief
+  kind?: 'daily' | 'monthly' | 'range' | 'cron';
+  date?: string;          // YYYY-MM-DD, target day for daily
   yyyymm?: string;        // YYYY-MM,    target month for monthly
   days?: number;          // for kind=range
   // Backward compat with the legacy function:
@@ -133,8 +131,7 @@ async function getWebhookInfo(token: string): Promise<any> {
 
 async function buildMessage(
   supa: any,
-  kind: 'daily' | 'monthly' | 'brief' | 'range',
-  threshold: number,
+  kind: 'daily' | 'monthly' | 'range',
   opts: { date?: string; yyyymm?: string; days?: number },
 ): Promise<string> {
   switch (kind) {
@@ -154,10 +151,6 @@ async function buildMessage(
         yyyymm = `${py}-${String(pm).padStart(2, '0')}`;
       }
       return formatMonthly(await computeMonthlySummary(supa, yyyymm));
-    }
-    case 'brief': {
-      const date = opts.date || bangkokDate(0);
-      return formatBrief(await computeMorningBrief(supa, date, threshold));
     }
     case 'range': {
       const days = Math.max(1, Math.min(365, Number(opts.days) || 7));
@@ -185,7 +178,7 @@ async function dispatchCron(supa: any, secret: any) {
     const lastSent = secret.last_summary_sent_at?.slice(0, 10);
     if (lastSent !== today) {
       try {
-        const text = await buildMessage(supa, 'daily', secret.low_stock_threshold || 3, {});
+        const text = await buildMessage(supa, 'daily', {});
         await sendTelegram(token, chatId, text);
         await supa.from('shop_secrets').update({
           last_summary_sent_at: new Date().toISOString(),
@@ -205,7 +198,7 @@ async function dispatchCron(supa: any, secret: any) {
     const lastSent = secret.last_monthly_sent_at?.slice(0, 10);
     if (lastSent !== today) {
       try {
-        const text = await buildMessage(supa, 'monthly', 0, {});
+        const text = await buildMessage(supa, 'monthly', {});
         await sendTelegram(token, chatId, text);
         await supa.from('shop_secrets').update({
           last_monthly_sent_at: new Date().toISOString(),
@@ -220,25 +213,7 @@ async function dispatchCron(supa: any, secret: any) {
     }
   }
 
-  // Morning brief — every day at morning_hour.
-  if (secret.morning_enabled && hour === secret.morning_hour) {
-    const lastSent = secret.last_brief_sent_at?.slice(0, 10);
-    if (lastSent !== today) {
-      try {
-        const text = await buildMessage(supa, 'brief', secret.low_stock_threshold || 3, {});
-        await sendTelegram(token, chatId, text);
-        await supa.from('shop_secrets').update({
-          last_brief_sent_at: new Date().toISOString(),
-          last_summary_error: null,
-        }).eq('id', 1);
-        sent.push('brief');
-      } catch (err) {
-        await supa.from('shop_secrets').update({
-          last_summary_error: String(err).slice(0, 500),
-        }).eq('id', 1);
-      }
-    }
-  }
+  // Morning brief was removed in May 2026 — only daily & monthly remain.
 
   return { sent, hour, dom };
 }
@@ -305,14 +280,14 @@ Deno.serve(async (req: Request) => {
   }
 
   // ── Build a message for preview / manual send ───────────────────────
-  const kind = (body.kind || 'daily') as 'daily' | 'monthly' | 'brief' | 'range';
-  if (!['daily', 'monthly', 'brief', 'range'].includes(kind)) {
+  const kind = (body.kind || 'daily') as 'daily' | 'monthly' | 'range';
+  if (!['daily', 'monthly', 'range'].includes(kind)) {
     return json({ ok: false, error: 'bad kind: ' + kind }, 400);
   }
 
   let text: string;
   try {
-    text = await buildMessage(supa, kind, secret?.low_stock_threshold || 3, {
+    text = await buildMessage(supa, kind, {
       date: body.date, yyyymm: body.yyyymm, days: body.days,
     });
   } catch (err) {
@@ -331,8 +306,7 @@ Deno.serve(async (req: Request) => {
     const now = new Date().toISOString();
     const stampField =
       kind === 'daily' ? 'last_summary_sent_at' :
-      kind === 'monthly' ? 'last_monthly_sent_at' :
-      kind === 'brief' ? 'last_brief_sent_at' : null;
+      kind === 'monthly' ? 'last_monthly_sent_at' : null;
     if (stampField) {
       await supa.from('shop_secrets').update({
         [stampField]: now, last_summary_error: null,
