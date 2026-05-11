@@ -1363,11 +1363,19 @@ function AppSettingsModal({ open, onClose }) {
 
   // Tab definitions. `adminOnly` filters them out for non-admin users so
   // the nav doesn't show locked/unreachable items. Order here = display order.
+  // `activeClass` is applied when the tab is selected — each topic gets its
+  // own tinted pill colour (display=blue, shop=amber, telegram=sky,
+  // paylater=emerald) so the user can visually associate the tab with the
+  // content category at a glance.
   const TABS = [
-    { id: 'display',  label: 'การแสดงผล',  icon: 'edit',       adminOnly: false },
-    { id: 'shop',     label: 'ข้อมูลร้าน',  icon: 'store',      adminOnly: true  },
-    { id: 'telegram', label: 'Telegram',     icon: 'zap',        adminOnly: true  },
-    { id: 'paylater', label: 'สูตรคำนวณ',    icon: 'calculator', adminOnly: true  },
+    { id: 'display',  label: 'การแสดงผล',  icon: 'edit',       adminOnly: false,
+      activeClass: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200 shadow-sm' },
+    { id: 'shop',     label: 'ข้อมูลร้าน',  icon: 'store',      adminOnly: true,
+      activeClass: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200 shadow-sm' },
+    { id: 'telegram', label: 'Telegram',     icon: 'zap',        adminOnly: true,
+      activeClass: 'bg-sky-50 text-sky-700 ring-1 ring-sky-200 shadow-sm' },
+    { id: 'paylater', label: 'สูตรคำนวณ',    icon: 'calculator', adminOnly: true,
+      activeClass: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 shadow-sm' },
   ];
   const visibleTabs = TABS.filter(t => isAdmin || !t.adminOnly);
   // Footer "บันทึก" is only meaningful on the shop-info tab. Other tabs
@@ -1389,30 +1397,33 @@ function AppSettingsModal({ open, onClose }) {
         )}
       </>}>
       {/* ── Tab nav ──
-          Horizontal scroll on small screens (visibleTabs may be 4 wide).
-          Underline indicator + colour swap make the active tab obvious;
-          chosen over pills because it reads less "buttony" and matches
-          common settings patterns (iOS/Android system settings, etc.). */}
-      <div className="flex gap-1 -mt-1 mb-4 border-b hairline overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-        {visibleTabs.map(t => {
-          const active = activeTab === t.id;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setActiveTab(t.id)}
-              className={
-                "flex items-center gap-1.5 px-3 py-2.5 text-sm whitespace-nowrap transition border-b-2 -mb-px " +
-                (active
-                  ? "border-primary text-primary font-semibold"
-                  : "border-transparent text-muted hover:text-ink")
-              }
-            >
-              <Icon name={t.icon} size={14}/>
-              {t.label}
-            </button>
-          );
-        })}
+          Glass-soft pill bar (same shape as the Insights/Dashboard `Segment`
+          on the analytics page). Each tab carries its own topic colour via
+          `activeClass` — display=blue, shop=amber, telegram=sky,
+          paylater=emerald — so the active section is both highlighted
+          and visually coded. Horizontal scroll keeps the row tidy on phones. */}
+      <div className="-mt-1 mb-4 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+        <div className="inline-flex glass-soft rounded-xl p-1 shadow-sm">
+          {visibleTabs.map(t => {
+            const active = activeTab === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setActiveTab(t.id)}
+                className={
+                  'px-3.5 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 whitespace-nowrap transition-all ' +
+                  (active
+                    ? t.activeClass
+                    : 'text-muted hover:text-ink hover:bg-white/40')
+                }
+              >
+                <Icon name={t.icon} size={14}/>
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="min-h-[280px]">
@@ -1504,10 +1515,13 @@ function FontSizePickerInline() {
           type="button"
           onClick={() => setSize(s.id)}
           aria-pressed={size === s.id}
-          className={"flex-1 py-2.5 rounded-lg font-medium transition text-sm " + (
+          className={"flex-1 rounded-lg font-medium transition text-sm " + (
             size === s.id
-              ? "bg-primary text-on-primary border border-primary shadow-sm"
-              : "lg-tile text-muted hover:text-ink"
+              // Coral gradient pill — reuses the sidebar "การตั้งค่า"
+              // button style so the active-selection language stays
+              // consistent across the app.
+              ? "btn-app-settings-sidebar"
+              : "py-2.5 lg-tile text-muted hover:text-ink"
           )}
           style={{ fontSize: s.px === 16 ? '13px' : s.px === 18 ? '15px' : '17px' }}
         >
@@ -3855,6 +3869,11 @@ function ProductsView() {
   // recent active receive batch — surfaces "current cost" alongside the catalog
   // cost_price so the user can spot drift without opening each product.
   const [latestCostMap, setLatestCostMap] = useState({});
+  // Cost map is fetched *after* products land (separate, paginated query that
+  // can take a few seconds on first load). Track it independently so the
+  // "ทุนล่าสุด" column shows a spinner instead of an em-dash while we wait —
+  // an em-dash means "never received" which is misleading mid-fetch.
+  const [costLoading, setCostLoading] = useState(true);
   const [sheetOpen, setSheetOpen] = useState(false);
   // Render only the first N filtered rows; "ดูเพิ่ม" button bumps this. Keeps
   // initial paint fast even when the brand chip is "ทั้งหมด" (6k items).
@@ -3929,6 +3948,7 @@ function ProductsView() {
     // Latest receive cost per product (chunked because IN() can hold ~1000 ids)
     const ids = enriched.map(p => p.id).filter(Boolean);
     if (ids.length) {
+      setCostLoading(true);
       try {
         const map = {};
         for (let i = 0; i < ids.length; i += 500) {
@@ -3955,8 +3975,10 @@ function ProductsView() {
         }
         setLatestCostMap(map);
       } catch { /* non-fatal — table still renders without "ทุนล่าสุด" */ }
+      finally { setCostLoading(false); }
     } else {
       setLatestCostMap({});
+      setCostLoading(false);
     }
   }, [toast]);
 
@@ -4279,6 +4301,10 @@ function ProductsView() {
                 <div className="col-span-2 text-right tabular-nums">
                   {lc ? (
                     <span className="font-medium text-ink">{fmtPlain(lc.unit_price)}</span>
+                  ) : costLoading ? (
+                    <span className="inline-flex justify-end" title="กำลังโหลดทุนล่าสุด">
+                      <span className="spinner" aria-label="กำลังโหลด" />
+                    </span>
                   ) : (
                     <span className="text-muted-soft text-xs" title="ยังไม่เคยรับเข้า">—</span>
                   )}
