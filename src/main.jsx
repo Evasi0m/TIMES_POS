@@ -24,7 +24,7 @@ import {
   classifyBrand, classifySeries, parseCasioModel, enrichProduct,
   matchSubType, getEffectivePrice, filterProducts, sortProducts,
 } from './lib/product-classify.js';
-import { NAV, navForRole } from './lib/nav-config.js';
+import { NAV, navForRole, canNavigate, VISITOR_VIEW } from './lib/nav-config.js';
 import {
   EXPENSE_CATEGORIES, EXPENSE_CAT_MAP, staffComputed, realNetProfit,
 } from './lib/expense-calc.js';
@@ -1295,7 +1295,10 @@ function AppSettingsModal({ open, onClose }) {
   const toast = useToast();
   const { shop, refreshShop } = useShop();
   const role = useRole();
-  const isAdmin = role === 'admin';
+  // admin-or-above can edit shop info; only super_admin can edit
+  // Telegram + paylater. Cheaper than two more useRole() calls below.
+  const isAdmin = role === 'admin' || role === 'super_admin';
+  const isSuperAdmin = role === 'super_admin';
   const [draft, setDraft] = useState(null);
   const [busy, setBusy] = useState(false);
   // Tab nav state — replaces the older accordion-of-collapsibles.
@@ -1361,15 +1364,22 @@ function AppSettingsModal({ open, onClose }) {
     onClose();
   };
 
-  // Tab definitions. `adminOnly` filters them out for non-admin users so
-  // the nav doesn't show locked/unreachable items. Order here = display order.
+  // Tab definitions. Visibility rules:
+  //   adminOnly      → hidden for visitor (they can't edit anything anyway)
+  //   superAdminOnly → visible for admin BUT disabled (greyed, click no-op),
+  //                    fully interactive for super_admin only
+  // Order here = display order.
   const TABS = [
     { id: 'display',  label: 'การแสดงผล',  icon: 'edit',       adminOnly: false },
     { id: 'shop',     label: 'ข้อมูลร้าน',  icon: 'store',      adminOnly: true  },
-    { id: 'telegram', label: 'Telegram',     icon: 'zap',        adminOnly: true  },
-    { id: 'paylater', label: 'สูตรคำนวณ',    icon: 'calculator', adminOnly: true  },
+    { id: 'telegram', label: 'Telegram',     icon: 'zap',        adminOnly: true, superAdminOnly: true },
+    { id: 'paylater', label: 'สูตรคำนวณ',    icon: 'calculator', adminOnly: true, superAdminOnly: true },
   ];
+  // Visitor: only `display`. admin+: every tab (but superAdminOnly ones are
+  // disabled at click time for admin — see below).
   const visibleTabs = TABS.filter(t => isAdmin || !t.adminOnly);
+  // True when the given tab is shown but the current user can't enter it.
+  const isTabDisabled = (t) => t.superAdminOnly && !isSuperAdmin;
   // Footer "บันทึก" is only meaningful on the shop-info tab. Other tabs
   // either save live (display) or own their own save UX (telegram has a
   // built-in button, paylater goes through the PIN modal).
@@ -1396,20 +1406,26 @@ function AppSettingsModal({ open, onClose }) {
       <div className="flex gap-1 -mt-1 mb-4 border-b hairline overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
         {visibleTabs.map(t => {
           const active = activeTab === t.id;
+          const disabled = isTabDisabled(t);
           return (
             <button
               key={t.id}
               type="button"
-              onClick={() => setActiveTab(t.id)}
+              disabled={disabled}
+              onClick={disabled ? undefined : () => setActiveTab(t.id)}
+              title={disabled ? 'เฉพาะ super admin เท่านั้น' : undefined}
               className={
                 "flex items-center gap-1.5 px-3 py-2.5 text-sm whitespace-nowrap transition border-b-2 -mb-px " +
-                (active
-                  ? "border-primary text-primary font-semibold"
-                  : "border-transparent text-muted hover:text-ink")
+                (disabled
+                  ? "border-transparent text-muted-soft opacity-40 cursor-not-allowed "
+                  : active
+                    ? "border-primary text-primary font-semibold"
+                    : "border-transparent text-muted hover:text-ink")
               }
             >
               <Icon name={t.icon} size={14}/>
               {t.label}
+              {disabled && <Icon name="lock" size={11} className="opacity-70 ml-0.5"/>}
             </button>
           );
         })}
@@ -1515,6 +1531,584 @@ function FontSizePickerInline() {
         </button>
       ))}
     </div>
+  );
+}
+
+/* =========================================================
+   USER MANAGEMENT MODAL (super_admin only)
+   ----------------------------------------------------------
+   List / create / change-role / delete app users. Talks to the
+   `admin-users` edge function which enforces super_admin via the
+   caller's JWT + service_role internally; the modal itself is
+   only mounted from the App shell when role === 'super_admin',
+   but every action still goes through that server-side gate.
+========================================================= */
+const ROLE_OPTIONS = [
+  { id: 'super_admin', label: 'Super Admin', tone: 'text-warning',
+    hint: 'เข้าถึงทุกอย่าง + จัดการผู้ใช้' },
+  { id: 'admin',       label: 'Admin',       tone: 'text-primary',
+    hint: 'เข้าถึงทุกอย่าง ยกเว้นการตั้งค่าผู้ใช้/Telegram/สูตรคำนวณ + รายการผิดพลาด' },
+  { id: 'visitor',     label: 'Visitor',     tone: 'text-muted-soft',
+    hint: 'ดูสินค้าได้อย่างเดียว — แก้ไขอะไรไม่ได้' },
+];
+const ROLE_LABEL = Object.fromEntries(ROLE_OPTIONS.map(r => [r.id, r.label]));
+
+// Thin wrapper around the `admin-users` edge function. Returns the
+// parsed JSON body on success; throws on any non-2xx with a helpful
+// message that the modal surfaces via toast.
+async function callAdminUsers(action, payload = {}) {
+  const { data: { session } } = await sb.auth.getSession();
+  const token = session?.access_token;
+  if (!token) throw new Error('ยังไม่ได้เข้าสู่ระบบ');
+  const { data, error } = await sb.functions.invoke('admin-users', {
+    body: { action, ...payload },
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (error) {
+    // Functions invoke surfaces the raw body inside `error.context` on
+    // recent supabase-js; fall back to the generic message otherwise.
+    let msg = error.message || 'เรียก admin-users ไม่สำเร็จ';
+    try {
+      const ctx = await error.context?.json?.();
+      if (ctx?.error) msg = ctx.error;
+    } catch { /* swallow */ }
+    throw new Error(msg);
+  }
+  return data;
+}
+
+function UserManagementModal({ open, onClose }) {
+  const toast = useToast();
+  const askConfirm = useConfirm();
+  // The currently signed-in user — used to prevent the super_admin
+  // from accidentally deleting themself or demoting their own account
+  // and getting locked out. The edge function ALSO enforces this, but
+  // disabling the UI removes the foot-gun entirely.
+  const [meId, setMeId] = useState(null);
+  useEffect(() => {
+    if (!open) return;
+    sb.auth.getUser().then(({ data }) => setMeId(data?.user?.id ?? null));
+  }, [open]);
+
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [busyId, setBusyId] = useState(null); // user id currently saving
+  const [creating, setCreating] = useState(false);
+  // Create-user form draft — kept controlled so we can reset it after
+  // a successful create without remounting the inputs.
+  const [draft, setDraft] = useState({ email: '', password: '', role: 'visitor', mfa_required: true });
+  const [showCreate, setShowCreate] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await callAdminUsers('list');
+      setUsers(Array.isArray(res?.users) ? res.users : []);
+    } catch (e) {
+      toast.push('โหลดรายชื่อผู้ใช้ไม่สำเร็จ: ' + e.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  // Auto-load on open; clear when closed so reopening reflects any
+  // out-of-band changes (e.g. another super_admin tweaking roles).
+  useEffect(() => {
+    if (open) load();
+    else {
+      setUsers([]);
+      setShowCreate(false);
+      setDraft({ email: '', password: '', role: 'visitor', mfa_required: true });
+    }
+  }, [open, load]);
+
+  const handleToggleMfaRequired = async (u) => {
+    setBusyId(u.id);
+    try {
+      await callAdminUsers('set_mfa_required', { user_id: u.id, required: !u.mfa_required });
+      toast.push(u.mfa_required ? 'ปิดการบังคับ MFA แล้ว' : 'บังคับ MFA แล้ว', 'success');
+      await load();
+    } catch (e) {
+      toast.push('เปลี่ยนค่าไม่สำเร็จ: ' + e.message, 'error');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleResetMfa = async (u) => {
+    if (!u.has_totp) {
+      toast.push('ผู้ใช้นี้ยังไม่ได้ตั้ง MFA', 'info');
+      return;
+    }
+    const ok = await askConfirm({
+      title: 'รีเซ็ต MFA?',
+      message: `อีเมล ${u.email}\nระบบจะลบ MFA ที่ผู้ใช้ตั้งไว้ — ครั้งถัดไปที่ login จะต้องสแกน QR ใหม่`,
+      okLabel: 'รีเซ็ต', cancelLabel: 'ยกเลิก', danger: true,
+    });
+    if (!ok) return;
+    setBusyId(u.id);
+    try {
+      await callAdminUsers('reset_mfa', { user_id: u.id });
+      toast.push('รีเซ็ต MFA แล้ว', 'success');
+      await load();
+    } catch (e) {
+      toast.push('รีเซ็ตไม่สำเร็จ: ' + e.message, 'error');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleChangeRole = async (u, newRole) => {
+    if (u.role === newRole) return;
+    if (u.id === meId && newRole !== 'super_admin') {
+      const ok = await askConfirm({
+        title: 'ลดสิทธิ์ตัวเอง?',
+        message: 'คุณกำลังลดสิทธิ์บัญชีของตัวเอง — หลังบันทึกอาจเข้าหน้านี้ไม่ได้อีก ต้องการดำเนินการต่อหรือไม่?',
+        okLabel: 'ยืนยัน', cancelLabel: 'ยกเลิก', danger: true,
+      });
+      if (!ok) return;
+    }
+    setBusyId(u.id);
+    try {
+      await callAdminUsers('update_role', { user_id: u.id, role: newRole });
+      toast.push(`เปลี่ยนสิทธิ์เป็น ${ROLE_LABEL[newRole]} แล้ว`, 'success');
+      await load();
+    } catch (e) {
+      toast.push('เปลี่ยนสิทธิ์ไม่สำเร็จ: ' + e.message, 'error');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleDelete = async (u) => {
+    if (u.id === meId) {
+      toast.push('ลบบัญชีตัวเองไม่ได้', 'error');
+      return;
+    }
+    const ok = await askConfirm({
+      title: 'ลบผู้ใช้นี้?',
+      message: `อีเมล ${u.email}\nการลบจะเอาบัญชีออกจากระบบทันทีและคืนค่าไม่ได้`,
+      okLabel: 'ลบ', cancelLabel: 'ยกเลิก', danger: true,
+    });
+    if (!ok) return;
+    setBusyId(u.id);
+    try {
+      await callAdminUsers('delete', { user_id: u.id });
+      toast.push('ลบผู้ใช้แล้ว', 'success');
+      await load();
+    } catch (e) {
+      toast.push('ลบไม่สำเร็จ: ' + e.message, 'error');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleCreate = async () => {
+    const email = (draft.email || '').trim().toLowerCase();
+    const password = draft.password || '';
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.push('กรอกอีเมลให้ถูกต้อง', 'error'); return;
+    }
+    if (password.length < 6) {
+      toast.push('รหัสผ่านต้องยาวอย่างน้อย 6 ตัวอักษร', 'error'); return;
+    }
+    setCreating(true);
+    try {
+      await callAdminUsers('create', {
+        email, password, role: draft.role,
+        mfa_required: draft.mfa_required === true,
+      });
+      toast.push(`สร้างผู้ใช้ ${email} แล้ว`, 'success');
+      setDraft({ email: '', password: '', role: 'visitor', mfa_required: true });
+      setShowCreate(false);
+      await load();
+    } catch (e) {
+      toast.push('สร้างผู้ใช้ไม่สำเร็จ: ' + e.message, 'error');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title="การตั้งค่า user" wide
+      footer={<button className="btn-secondary" onClick={onClose}>ปิด</button>}>
+
+      {/* ── Header bar: count + create toggle ── */}
+      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+        <div className="text-sm text-muted">
+          {loading ? 'กำลังโหลด…' : `ทั้งหมด ${users.length} บัญชี`}
+        </div>
+        <div className="flex items-center gap-2">
+          <button className="btn-ghost !py-1.5 !px-2.5 !text-xs"
+            onClick={load} disabled={loading} title="รีเฟรช">
+            <Icon name="refresh" size={14}/>
+          </button>
+          <button className="btn-primary !py-1.5 !px-3 !text-sm"
+            onClick={() => setShowCreate(v => !v)}>
+            <Icon name={showCreate ? 'x' : 'check'} size={14}/>
+            {showCreate ? 'ยกเลิกการสร้าง' : 'สร้างผู้ใช้ใหม่'}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Inline create form (collapsed by default) ── */}
+      {showCreate && (
+        <div className="rounded-xl border hairline p-4 mb-4 bg-surface-soft space-y-3 fade-in">
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted">อีเมล</label>
+              <input type="email" autoComplete="off" className="input mt-1 !py-2 !h-10"
+                placeholder="user@example.com" value={draft.email}
+                onChange={e => setDraft(d => ({ ...d, email: e.target.value }))}/>
+            </div>
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted">รหัสผ่าน</label>
+              <input type="text" autoComplete="off" className="input mt-1 !py-2 !h-10 font-mono"
+                placeholder="อย่างน้อย 6 ตัวอักษร" value={draft.password}
+                onChange={e => setDraft(d => ({ ...d, password: e.target.value }))}/>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs uppercase tracking-wider text-muted">สิทธิ์เริ่มต้น</label>
+            <div className="grid sm:grid-cols-3 gap-2 mt-1.5">
+              {ROLE_OPTIONS.map(opt => {
+                const active = draft.role === opt.id;
+                return (
+                  <button key={opt.id} type="button"
+                    onClick={() => setDraft(d => ({ ...d, role: opt.id }))}
+                    className={
+                      'text-left rounded-lg border p-3 transition ' +
+                      (active
+                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                        : 'border-hairline hover:border-ink/20 hover:bg-white/40')
+                    }>
+                    <div className={'font-medium text-sm ' + opt.tone}>{opt.label}</div>
+                    <div className="text-[11px] text-muted-soft leading-snug mt-0.5">{opt.hint}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <label className="flex items-start gap-3 cursor-pointer select-none rounded-lg border hairline p-3 hover:bg-white/40">
+            <span className={"relative flex items-center justify-center w-5 h-5 rounded border transition-colors flex-shrink-0 mt-0.5 " + (draft.mfa_required?"bg-primary border-primary":"bg-white border-hairline")}>
+              <input type="checkbox" className="sr-only"
+                checked={draft.mfa_required}
+                onChange={e => setDraft(d => ({ ...d, mfa_required: e.target.checked }))}/>
+              {draft.mfa_required && <Icon name="check" size={14} className="text-white" strokeWidth={2.5}/>}
+            </span>
+            <div className="flex-1">
+              <div className="text-sm font-medium text-ink">บังคับให้ตั้ง MFA ตอน login ครั้งแรก</div>
+              <div className="text-[11px] text-muted-soft mt-0.5">
+                เพิ่มความปลอดภัย — ผู้ใช้ต้องสแกน QR ด้วย Google Authenticator/1Password ก่อนเข้าระบบครั้งแรก
+              </div>
+            </div>
+          </label>
+          <div className="flex justify-end gap-2 pt-1">
+            <button className="btn-secondary !py-2 !px-3" onClick={() => setShowCreate(false)} disabled={creating}>ยกเลิก</button>
+            <button className="btn-primary !py-2 !px-3" onClick={handleCreate} disabled={creating}>
+              {creating ? <span className="spinner"/> : <Icon name="check" size={14}/>}
+              สร้างบัญชี
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── User list ── */}
+      <div className="rounded-xl border hairline divide-y divide-hairline overflow-hidden">
+        {loading && users.length === 0 && (
+          <div className="p-6 text-sm text-muted flex items-center gap-2 justify-center">
+            <span className="spinner"/> กำลังโหลดผู้ใช้…
+          </div>
+        )}
+        {!loading && users.length === 0 && (
+          <div className="p-6 text-sm text-muted text-center">ยังไม่มีผู้ใช้ในระบบ</div>
+        )}
+        {users.map(u => {
+          const isMe = u.id === meId;
+          const busy = busyId === u.id;
+          // MFA badge — three states surface different colors so the
+          // super_admin can scan the list and know who's protected.
+          //   has_totp  → "ตั้งแล้ว" (เขียว, ปลอดภัย)
+          //   mfa_required && !has_totp → "บังคับ – ยังไม่ตั้ง" (เหลือง, จะต้องตั้งตอน login)
+          //   else      → "ปิด" (เทาอ่อน — ไม่บังคับ)
+          const mfaBadge = u.has_totp
+            ? { label: 'MFA ตั้งแล้ว', cls: 'bg-success/15 text-success', icon: 'check' }
+            : u.mfa_required
+              ? { label: 'บังคับ — ยังไม่ตั้ง', cls: 'bg-warning/15 text-warning', icon: 'alert' }
+              : { label: 'MFA ปิด',     cls: 'bg-muted-soft/20 text-muted', icon: 'lock' };
+          return (
+            <div key={u.id} className="p-3.5 flex items-center gap-3 flex-wrap">
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-sm truncate flex items-center gap-2 flex-wrap">
+                  {u.email || <span className="text-muted-soft italic">ไม่มีอีเมล</span>}
+                  {isMe && <span className="text-[10px] uppercase tracking-wider text-primary bg-primary/10 rounded px-1.5 py-0.5">คุณ</span>}
+                  <span className={'text-[10px] inline-flex items-center gap-1 rounded px-1.5 py-0.5 ' + mfaBadge.cls}>
+                    <Icon name={mfaBadge.icon} size={10}/>{mfaBadge.label}
+                  </span>
+                </div>
+                <div className="text-[11px] text-muted-soft mt-0.5">
+                  {u.last_sign_in_at
+                    ? `เข้าระบบล่าสุด ${new Date(u.last_sign_in_at).toLocaleString('th-TH')}`
+                    : 'ยังไม่เคยเข้าระบบ'}
+                </div>
+              </div>
+              {/* "บังคับ MFA" toggle pill — tap to flip mfa_required.
+                  Compact + tooltip-only label so the row stays scan-friendly. */}
+              <button
+                onClick={() => handleToggleMfaRequired(u)}
+                disabled={busy}
+                title={u.mfa_required ? 'ปิดการบังคับ MFA' : 'บังคับ MFA'}
+                className={
+                  'btn-ghost !py-1.5 !px-2 !text-xs inline-flex items-center gap-1 ' +
+                  (u.mfa_required ? 'text-warning' : 'text-muted-soft hover:text-ink')
+                }>
+                <Icon name="lock" size={14}/>
+                <span className="hidden sm:inline">{u.mfa_required ? 'บังคับ' : 'ไม่บังคับ'}</span>
+              </button>
+              {/* Reset MFA — only meaningful if user has actually set it up. */}
+              <button
+                onClick={() => handleResetMfa(u)}
+                disabled={busy || !u.has_totp}
+                title={u.has_totp ? 'รีเซ็ต MFA (ผู้ใช้จะตั้งใหม่ตอน login รอบหน้า)' : 'ผู้ใช้ยังไม่ได้ตั้ง MFA'}
+                className="btn-ghost !p-2 text-muted hover:text-ink disabled:opacity-30">
+                <Icon name="refresh" size={14}/>
+              </button>
+              <select className="input !py-1.5 !h-9 !w-auto !text-sm"
+                disabled={busy}
+                value={u.role || 'visitor'}
+                onChange={e => handleChangeRole(u, e.target.value)}>
+                {ROLE_OPTIONS.map(opt => (
+                  <option key={opt.id} value={opt.id}>{opt.label}</option>
+                ))}
+              </select>
+              <button className="btn-ghost !p-2 text-error hover:bg-error/10"
+                onClick={() => handleDelete(u)} disabled={busy || isMe}
+                title={isMe ? 'ลบบัญชีตัวเองไม่ได้' : 'ลบผู้ใช้'}>
+                {busy ? <span className="spinner"/> : <Icon name="trash" size={16}/>}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 text-[11px] text-muted-soft leading-relaxed">
+        <strong>หมายเหตุ:</strong> การเปลี่ยนสิทธิ์จะมีผลครั้งถัดไปที่ผู้ใช้คนนั้น refresh / sign in ใหม่
+      </div>
+    </Modal>
+  );
+}
+
+/* =========================================================
+   MFA — TOTP enroll + challenge modals
+   ----------------------------------------------------------
+   - Enroll: shown when the user has `app_metadata.mfa_required === true`
+     but has no verified TOTP factor yet. Generates a QR + secret, asks
+     the user to scan with an authenticator app (Google Authenticator,
+     1Password, Authy, ...), then verifies a 6-digit code to mark the
+     factor as confirmed.
+   - Challenge: shown on every login for users with a verified factor
+     once their session is `aal1` (password only). Verifying upgrades
+     the session to `aal2` for the rest of the SDK lifetime.
+   Both modals are non-dismissable when "blocking" — the App shell
+   renders them OVER the rest of the UI until satisfied, so the user
+   cannot bypass the gate by hitting Escape.
+========================================================= */
+function TOTPEnrollModal({ open, onSuccess, onCancel }) {
+  const toast = useToast();
+  // Lazy-load enroll() so the QR is only generated when the modal
+  // actually mounts. Returns: { id (factorId), totp: { qr_code, secret } }.
+  const [factor, setFactor] = useState(null);
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) { setFactor(null); setCode(''); setErr(''); return; }
+    let cancelled = false;
+    (async () => {
+      // First, clean up any orphaned unverified factors from a previous
+      // aborted enrollment — the API refuses to create a new TOTP factor
+      // while an "unverified" one exists for the same user.
+      try {
+        const { data: list } = await sb.auth.mfa.listFactors();
+        const stale = (list?.all ?? []).filter(f => f.factor_type === 'totp' && f.status !== 'verified');
+        for (const f of stale) { try { await sb.auth.mfa.unenroll({ factorId: f.id }); } catch {} }
+      } catch {}
+      const { data, error } = await sb.auth.mfa.enroll({ factorType: 'totp' });
+      if (cancelled) return;
+      if (error) { setErr(error.message || 'enroll_failed'); return; }
+      setFactor(data);
+      setTimeout(() => inputRef.current?.focus(), 60);
+    })();
+    return () => { cancelled = true; };
+  }, [open]);
+
+  const verify = async () => {
+    if (!factor) return;
+    const clean = code.replace(/\D/g, '');
+    if (clean.length !== 6) { setErr('กรอกรหัส 6 หลัก'); return; }
+    setBusy(true); setErr('');
+    try {
+      const { data: ch, error: chErr } = await sb.auth.mfa.challenge({ factorId: factor.id });
+      if (chErr) throw chErr;
+      const { error: vErr } = await sb.auth.mfa.verify({
+        factorId: factor.id, challengeId: ch.id, code: clean,
+      });
+      if (vErr) throw vErr;
+      toast.push('ตั้ง MFA สำเร็จ', 'success');
+      onSuccess?.();
+    } catch (e) {
+      setErr(e?.message || 'รหัสไม่ถูกต้อง');
+      setCode('');
+      setTimeout(() => inputRef.current?.focus(), 60);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={() => {}} title="ตั้งค่า MFA (จำเป็น)"
+      footer={<>
+        {onCancel && (
+          <button className="btn-secondary" onClick={onCancel} disabled={busy}>
+            ออกจากระบบ
+          </button>
+        )}
+        <button className="btn-primary" onClick={verify} disabled={busy || !factor}>
+          {busy ? <span className="spinner"/> : <Icon name="check" size={16}/>}
+          ยืนยัน
+        </button>
+      </>}>
+      <div className="space-y-4">
+        <div className="text-sm text-muted leading-relaxed">
+          เพื่อความปลอดภัย กรุณาเปิดแอป <strong>Google Authenticator</strong>,
+          <strong> 1Password</strong> หรือ <strong>Authy</strong> บนมือถือ
+          แล้วสแกน QR ด้านล่างเพื่อผูกบัญชี
+        </div>
+        {!factor && !err && (
+          <div className="flex items-center justify-center py-8 text-muted gap-2">
+            <span className="spinner"/> กำลังสร้าง QR…
+          </div>
+        )}
+        {factor && (
+          <div className="flex flex-col items-center gap-3">
+            <div className="bg-white p-3 rounded-xl border hairline">
+              {/* qr_code is an inline SVG data URL */}
+              <img src={factor.totp.qr_code} alt="QR ตั้งค่า MFA" style={{width:200,height:200}}/>
+            </div>
+            <details className="text-xs text-muted-soft self-stretch">
+              <summary className="cursor-pointer">สแกนไม่ได้? ใส่รหัสด้วยตัวเอง</summary>
+              <div className="font-mono text-[11px] bg-surface-soft rounded px-2 py-1.5 mt-1.5 break-all select-all">
+                {factor.totp.secret}
+              </div>
+            </details>
+          </div>
+        )}
+        <div>
+          <label className="text-xs uppercase tracking-wider text-muted font-medium">รหัส 6 หลักจากแอป</label>
+          <input ref={inputRef} type="text" inputMode="numeric" maxLength={6}
+            className="input mt-1 !h-12 text-center text-2xl tracking-[0.5em] font-mono"
+            value={code} placeholder="••••••"
+            onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            onKeyDown={e => { if (e.key === 'Enter' && code.length === 6) verify(); }}
+            disabled={busy || !factor}/>
+        </div>
+        {err && (
+          <div className="text-sm text-error bg-error/10 px-3 py-2 rounded-md flex items-center gap-2">
+            <Icon name="alert" size={16}/>{err}
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+function TOTPChallengeModal({ open, onSuccess, onCancel }) {
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  // Lockout after 3 wrong attempts in a row — mirrors PinPromptModal.
+  const [attempts, setAttempts] = useState(0);
+  const [lockUntil, setLockUntil] = useState(0);
+  const inputRef = useRef(null);
+  const [factorId, setFactorId] = useState(null);
+
+  useEffect(() => {
+    if (!open) { setCode(''); setErr(''); setAttempts(0); setLockUntil(0); setFactorId(null); return; }
+    (async () => {
+      const { data, error } = await sb.auth.mfa.listFactors();
+      if (error) { setErr(error.message || 'list_factors_failed'); return; }
+      // `totp` already filters to verified factors — exactly what we need.
+      const totp = data?.totp?.[0];
+      if (!totp) { setErr('ไม่พบ MFA factor — ติดต่อผู้ดูแล'); return; }
+      setFactorId(totp.id);
+      setTimeout(() => inputRef.current?.focus(), 60);
+    })();
+  }, [open]);
+
+  const locked = Date.now() < lockUntil;
+
+  const verify = async () => {
+    if (!factorId || locked) return;
+    const clean = code.replace(/\D/g, '');
+    if (clean.length !== 6) { setErr('กรอกรหัส 6 หลัก'); return; }
+    setBusy(true); setErr('');
+    try {
+      const { data: ch, error: chErr } = await sb.auth.mfa.challenge({ factorId });
+      if (chErr) throw chErr;
+      const { error: vErr } = await sb.auth.mfa.verify({
+        factorId, challengeId: ch.id, code: clean,
+      });
+      if (vErr) throw vErr;
+      onSuccess?.();
+    } catch (e) {
+      const next = attempts + 1;
+      setAttempts(next);
+      setCode('');
+      if (next >= 3) {
+        const until = Date.now() + 30_000;
+        setLockUntil(until);
+        setErr('ผิดเกินกำหนด — ลองใหม่ใน 30 วินาที');
+      } else {
+        setErr((e?.message || 'รหัสไม่ถูกต้อง') + ` (${next}/3)`);
+      }
+      setTimeout(() => inputRef.current?.focus(), 60);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={() => {}} title="ยืนยันรหัส MFA"
+      footer={<>
+        <button className="btn-secondary" onClick={onCancel} disabled={busy}>
+          ออกจากระบบ
+        </button>
+        <button className="btn-primary" onClick={verify} disabled={busy || !factorId || locked}>
+          {busy ? <span className="spinner"/> : <Icon name="check" size={16}/>}
+          ยืนยัน
+        </button>
+      </>}>
+      <div className="space-y-4">
+        <div className="text-sm text-muted leading-relaxed">
+          กรอกรหัส 6 หลักจากแอป Authenticator บนมือถือของคุณ
+        </div>
+        <div>
+          <input ref={inputRef} type="text" inputMode="numeric" maxLength={6} autoFocus
+            className="input !h-14 text-center text-3xl tracking-[0.5em] font-mono"
+            value={code} placeholder="••••••"
+            onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            onKeyDown={e => { if (e.key === 'Enter' && code.length === 6 && !locked) verify(); }}
+            disabled={busy || locked}/>
+        </div>
+        {err && (
+          <div className="text-sm text-error bg-error/10 px-3 py-2 rounded-md flex items-center gap-2">
+            <Icon name="alert" size={16}/>{err}
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
 
@@ -2273,17 +2867,41 @@ function LoginScreen() {
 
 /* =========================================================
    ROLE / RBAC
-   - Source of truth: auth.users.raw_app_meta_data->>'app_role' (set by admin only)
-   - 'admin' = full access; anything else (incl. unset) defaults to 'cashier'.
-   - DB enforces this via RLS (see supabase-migrations/005_user_roles.sql).
-   - Client uses it ONLY to hide menus/buttons. Never trust the client gate alone.
+   - Source of truth: auth.users.raw_app_meta_data->>'app_role' (set by
+     super_admin via the admin-users edge function, or directly via SQL).
+   - Three roles:
+       super_admin → full access + user management (yellow sidebar button)
+       admin       → full access EXCEPT user management, Telegram settings,
+                     paylater formula, and the "Anomalies" dashboard tab
+       visitor     → read-only access to the products list (no editor)
+   - DB enforces the admin/super_admin distinction via RLS — see
+     supabase-migrations/005_user_roles.sql + 014_super_admin_role.sql.
+     `is_admin()` returns true for BOTH admin and super_admin, so DB
+     write policies don't need to change.
+   - Client uses role only to hide / disable UI. Never trust the client
+     gate alone.
 ========================================================= */
-const getUserRole = (session) =>
-  session?.user?.app_metadata?.app_role === 'admin' ? 'admin' : 'cashier';
+const getUserRole = (session) => {
+  const r = session?.user?.app_metadata?.app_role;
+  if (r === 'super_admin' || r === 'admin' || r === 'visitor') return r;
+  // Legacy 'cashier' rows are migrated to 'visitor' in migration 014,
+  // but defend against any session that still carries it.
+  if (r === 'cashier') return 'visitor';
+  return 'visitor';
+};
 
-const RoleCtx = React.createContext('cashier');
+const RoleCtx = React.createContext('visitor');
 const useRole = () => React.useContext(RoleCtx);
-const useIsAdmin = () => useRole() === 'admin';
+// "Admin-or-above" — the gate that matches the DB's `is_admin()` helper.
+// Use this everywhere an action requires admin DB write permission;
+// super_admin inherits it.
+const useIsAdmin = () => {
+  const r = useRole();
+  return r === 'admin' || r === 'super_admin';
+};
+// Strict super-admin gate. Use ONLY for user-management UI and for
+// hiding settings tabs that even regular admins shouldn't see.
+const useIsSuperAdmin = () => useRole() === 'super_admin';
 
 // Nav config + role filter — extracted to ./lib/nav-config.js
 
@@ -2293,9 +2911,17 @@ const CLAIM_REASONS = ["ชำรุดจากโรงงาน", "ส่ง�
 /* =========================================================
    DESKTOP SIDEBAR
 ========================================================= */
-function Sidebar({ view, setView, userEmail, onOpenSettings }) {
+function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagement }) {
   const role = useRole();
+  const isSuperAdmin = role === 'super_admin';
   const items = navForRole(role);
+  // Short, human-readable role tag for the email footer line.
+  const roleTag = role === 'super_admin' ? 'super admin'
+                : role === 'admin'       ? 'admin'
+                : 'visitor';
+  const roleColour = role === 'super_admin' ? 'text-warning'
+                   : role === 'admin'       ? 'text-primary'
+                   : 'text-muted-soft';
   return (
     <aside className="sidebar hidden lg:flex w-64 flex-col">
       <div className="sidebar-header px-6 py-6 flex items-center gap-3 border-b">
@@ -2303,25 +2929,45 @@ function Sidebar({ view, setView, userEmail, onOpenSettings }) {
         <div style={{fontFamily:"'Jost', sans-serif", fontWeight:600}} className="text-2xl leading-none self-center">TIMES</div>
       </div>
       <nav className="p-3 flex-1 overflow-y-auto" aria-label="เมนูหลัก">
-        {items.map(it => (
-          <button
-            key={it.k}
-            type="button"
-            className={"nav-item w-full text-left bg-transparent " + (view===it.k?"active":"")}
-            onClick={()=>setView(it.k)}
-            aria-current={view===it.k ? 'page' : undefined}
-          >
-            <Icon name={it.icon} size={22} strokeWidth={view===it.k?2.1:1.85}/>
-            <span>{it.labelLong}</span>
-          </button>
-        ))}
+        {items.map(it => {
+          const allowed = canNavigate(role, it);
+          // Visitor sees every nav row, but only `products` is interactive.
+          // Disabled rows get a lock icon + reduced opacity + no click handler.
+          return (
+            <button
+              key={it.k}
+              type="button"
+              disabled={!allowed}
+              className={
+                "nav-item w-full text-left bg-transparent " +
+                (view===it.k && allowed ? "active " : "") +
+                (allowed ? "" : "opacity-40 cursor-not-allowed")
+              }
+              onClick={allowed ? (()=>setView(it.k)) : undefined}
+              aria-current={view===it.k ? 'page' : undefined}
+              title={allowed ? undefined : 'ไม่มีสิทธิ์เข้าถึง'}
+            >
+              <Icon name={it.icon} size={22} strokeWidth={view===it.k && allowed ?2.1:1.85}/>
+              <span className="flex-1">{it.labelLong}</span>
+              {!allowed && <Icon name="lock" size={13} className="opacity-70"/>}
+            </button>
+          );
+        })}
       </nav>
       <div className="sidebar-footer p-4 border-t space-y-2">
+        {/* User-management button — super_admin only. Reuses the yellow
+            `.btn-settings-sidebar` style so it visually contrasts with
+            the coral "การตั้งค่า" below and signals "privileged action". */}
+        {isSuperAdmin && (
+          <button className="btn-settings-sidebar" onClick={onOpenUserManagement}>
+            <Icon name="settings" size={16}/> การตั้งค่า user
+          </button>
+        )}
         <button className="btn-app-settings-sidebar" onClick={onOpenSettings}>
           <Icon name="settings" size={16}/> การตั้งค่า
         </button>
         <div className="sidebar-email text-xs truncate pt-1">
-          {userEmail} {role === 'admin' && <span className="text-primary">· admin</span>}
+          {userEmail} <span className={roleColour}>· {roleTag}</span>
         </div>
         <button className="btn-danger-sidebar" onClick={()=>sb.auth.signOut()}>
           <Icon name="logout" size={16}/> ออกจากระบบ
@@ -2334,9 +2980,13 @@ function Sidebar({ view, setView, userEmail, onOpenSettings }) {
 /* =========================================================
    MOBILE TOP BAR + BOTTOM TABS
 ========================================================= */
-function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, view, setView }) {
+function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserManagement, view, setView }) {
   const [openMenu, setOpenMenu] = useState(false);
   const role = useRole();
+  const isAdminPlus = role === 'admin' || role === 'super_admin';
+  const isSuperAdmin = role === 'super_admin';
+  const roleTag = role === 'super_admin' ? 'super admin' : role === 'admin' ? 'admin' : 'visitor';
+  const roleColour = role === 'super_admin' ? 'text-warning' : role === 'admin' ? 'text-primary' : 'text-muted-soft';
   const { render: drawerRender, closing: drawerClosing } = useMountedToggle(openMenu, 220);
   return (
     <>
@@ -2361,7 +3011,7 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, view, setVie
             <button className="btn-ghost !p-2" onClick={()=>setOpenMenu(false)} aria-label="ปิดเมนู"><Icon name="x" size={20}/></button>
           </div>
           <div className="p-4 space-y-4">
-            {role === 'admin' && (
+            {isAdminPlus && (
               <div>
                 <div className="text-xs uppercase tracking-wider text-muted mb-2">รายงาน</div>
                 <button
@@ -2372,13 +3022,20 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, view, setVie
                 </button>
               </div>
             )}
+            {/* User-management button — super_admin only, sits ABOVE the
+                regular settings button so it visually outranks it. */}
+            {isSuperAdmin && (
+              <button className="btn-settings-sidebar" onClick={()=>{ setOpenMenu(false); onOpenUserManagement?.(); }}>
+                <Icon name="settings" size={16}/> การตั้งค่า user
+              </button>
+            )}
             <button className="btn-app-settings-sidebar" onClick={()=>{ setOpenMenu(false); onOpenSettings?.(); }}>
               <Icon name="settings" size={16}/> การตั้งค่า
             </button>
             <div>
               <div className="text-xs uppercase tracking-wider text-muted mb-2">บัญชี</div>
               <div className="text-sm text-ink truncate mb-3">
-                {userEmail} {role === 'admin' && <span className="text-primary">· admin</span>}
+                {userEmail} <span className={roleColour}>· {roleTag}</span>
               </div>
               <button className="btn-danger-sidebar" onClick={onLogout}>
                 <Icon name="logout" size={16}/> ออกจากระบบ
@@ -2417,19 +3074,34 @@ function MobileTabBar({ view, setView }) {
     return () => off?.();
   }, []);
 
-  const renderTab = (it) => (
-    <button
-      key={it.k}
-      className={"tab-btn pressable " + (view===it.k ? "active" : "")}
-      onClick={()=>setView(it.k)}
-      aria-label={it.label}
-      aria-current={view===it.k ? "page" : undefined}
-      title={it.label}
-    >
-      <Icon name={it.icon} size={20} strokeWidth={view===it.k?2.2:1.8}/>
-      <span className="tab-label">{it.label}</span>
-    </button>
-  );
+  const renderTab = (it) => {
+    // Visitor sees every tab in the bar but only `products` is interactive.
+    // Disabled tabs render with reduced opacity + no click handler so the
+    // bar shape stays consistent across roles.
+    const allowed = canNavigate(role, it);
+    return (
+      <button
+        key={it.k}
+        disabled={!allowed}
+        className={
+          "tab-btn pressable " +
+          (view===it.k && allowed ? "active " : "") +
+          (allowed ? "" : "opacity-40 cursor-not-allowed")
+        }
+        onClick={allowed ? (()=>setView(it.k)) : undefined}
+        aria-label={it.label}
+        aria-current={view===it.k ? "page" : undefined}
+        title={allowed ? it.label : 'ไม่มีสิทธิ์เข้าถึง'}
+      >
+        <Icon name={it.icon} size={20} strokeWidth={view===it.k && allowed ?2.2:1.8}/>
+        <span className="tab-label">{it.label}</span>
+      </button>
+    );
+  };
+
+  // The center FAB is the POS button. Visitor can't enter POS, so the FAB
+  // becomes disabled too — keeping the bar shape but removing interactivity.
+  const posAllowed = posItem ? canNavigate(role, posItem) : false;
 
   return (
     <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 pb-safe mobile-tabbar-wrap" role="navigation" aria-label="หลัก">
@@ -2437,11 +3109,17 @@ function MobileTabBar({ view, setView }) {
         {left.map(renderTab)}
         {posItem && (
           <button
-            className={"mobile-fab " + (view==='pos' ? "active " : "") + (queued>0 ? "has-queue" : "")}
-            onClick={()=>setView('pos')}
+            disabled={!posAllowed}
+            className={
+              "mobile-fab " +
+              (view==='pos' && posAllowed ? "active " : "") +
+              (queued>0 ? "has-queue " : "") +
+              (posAllowed ? "" : "opacity-40 cursor-not-allowed")
+            }
+            onClick={posAllowed ? (()=>setView('pos')) : undefined}
             aria-label={posItem.labelLong || posItem.label}
             aria-current={view==='pos' ? "page" : undefined}
-            title={posItem.labelLong || posItem.label}
+            title={posAllowed ? (posItem.labelLong || posItem.label) : 'ไม่มีสิทธิ์เข้าถึง'}
           >
             <Icon name="cart" size={28} strokeWidth={2.4}/>
             {queued > 0 && (
@@ -3848,12 +4526,21 @@ function POSView() {
 ========================================================= */
 function ProductsView() {
   const toast = useToast();
+  // Visitors can browse / filter / search the catalog but cannot open the
+  // editor. We hand a no-op opener to the row-click handlers so the rows
+  // still look interactive (hover, etc.) yet do nothing on click. Edit
+  // buttons elsewhere are gated by the same flag.
+  const role = useRole();
+  const canEdit = role === 'admin' || role === 'super_admin';
   // Whole catalog kept in memory + enriched with derived attrs (`_brand`,
   // `_series`, ...). Dataset is ~6k rows — well within client capacity, and
   // letting the browser do the filtering keeps chip interactions instant.
   const [allRows, setAllRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
+  // Wrapper so visitor row clicks become a no-op (the editor never opens).
+  // Use this in place of `setEditing` for every "open editor" callsite.
+  const openEditor = (p) => { if (canEdit) setEditing(p); };
   const [brands, setBrands] = useState([]);
   const [categories, setCategories] = useState([]);
   // latestCostMap[product_id] = { unit_price, receive_date } from the most
@@ -4277,7 +4964,9 @@ function ProductsView() {
             const lc = latestCostMap[p.id];
             const fmtPlain = (n) => roundMoney(n).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
             return (
-              <div key={p.id} className="grid grid-cols-12 px-4 py-3.5 items-center border-b hairline last:border-0 hover:bg-white/40 cursor-pointer transition-colors" onClick={()=>setEditing(p)}>
+              <div key={p.id}
+                className={"grid grid-cols-12 px-4 py-3.5 items-center border-b hairline last:border-0 transition-colors " + (canEdit ? "hover:bg-white/40 cursor-pointer" : "cursor-default")}
+                onClick={canEdit ? (()=>openEditor(p)) : undefined}>
                 <div className="col-span-3 font-medium truncate">{p.name}</div>
                 <div className="col-span-2 font-mono text-sm text-muted truncate">{p.barcode||'—'}</div>
                 <div className={"col-span-2 text-right tabular-nums " + (lc ? 'text-muted-soft' : 'font-medium text-ink')}>{fmtPlain(p.cost_price)}</div>
@@ -4333,7 +5022,9 @@ function ProductsView() {
         {visibleRows.map(p => {
           const lc = latestCostMap[p.id];
           return (
-            <div key={p.id} className="card-canvas pressable p-3.5 flex items-center gap-3" onClick={()=>setEditing(p)}>
+            <div key={p.id}
+              className={"card-canvas p-3.5 flex items-center gap-3 " + (canEdit ? "pressable" : "cursor-default")}
+              onClick={canEdit ? (()=>openEditor(p)) : undefined}>
               <span className={"stock-dot self-start mt-1.5 " + (p.current_stock<=0 ? 'is-empty' : 'is-ok')} aria-hidden="true" />
               <div className="flex-1 min-w-0">
                 <div className="font-semibold truncate text-[15px]">{p.name}</div>
@@ -7749,8 +8440,9 @@ function ExpenseRow({ category, value, onChange, monthSales, onApplyAll, disable
 ========================================================= */
 function OverviewView() {
   const today = todayISO();
+  const isSuperAdmin = useIsSuperAdmin();
   const [dateRange, setDateRange] = useState({ from: today, to: today });
-  const [tab, setTab] = useState('dashboard'); // 'dashboard' | 'insights' | 'pnl'
+  const [tab, setTab] = useState('dashboard'); // 'dashboard' | 'insights' | 'pnl' | 'anomalies'
   // Lazy-mount Insights + P&L on first click and then keep them mounted
   // so re-tabbing is instant (loaders don't refire). Dashboard already
   // self-refreshes via realtime so it's always mounted from the start.
@@ -7769,27 +8461,42 @@ function OverviewView() {
     { k: 'pnl',       label: 'กำไรขาดทุน', icon: 'trend-up',
       kicker: 'Profit & Loss', title: 'กำไร / ขาดทุน' },
     { k: 'anomalies', label: 'รายการผิดพลาด', icon: 'alert',
-      kicker: 'Anomalies',     title: 'รายการผิดพลาด' },
+      kicker: 'Anomalies',     title: 'รายการผิดพลาด', superAdminOnly: true },
   ];
   const activeTab = TABS.find((t) => t.k === tab) ?? TABS[0];
 
+  // Safety: if a regular admin somehow lands on the anomalies tab
+  // (browser back, role flip), redirect them to dashboard rather than
+  // showing a tab they don't have access to.
+  useEffect(() => {
+    if (tab === 'anomalies' && !isSuperAdmin) setTab('dashboard');
+  }, [tab, isSuperAdmin]);
+
   // Tab pill bar styled after `KindTabs` (stock-in page): glass-soft
   // rounded chip with the active button getting a solid white pill +
-  // shadow + hairline ring so it pops above the bar.
+  // shadow + hairline ring so it pops above the bar. `superAdminOnly`
+  // tabs are visible to regular admins but disabled (lock icon + dim).
   const Segment = ({ className = '' }) => (
     <div className={'inline-flex glass-soft rounded-xl p-1 shadow-sm ' + className}>
       {TABS.map((t) => {
         const active = tab === t.k;
+        const disabled = t.superAdminOnly && !isSuperAdmin;
         return (
-          <button key={t.k} type="button" onClick={() => setTab(t.k)}
+          <button key={t.k} type="button"
+            disabled={disabled}
+            onClick={disabled ? undefined : () => setTab(t.k)}
+            title={disabled ? 'เฉพาะ super admin เท่านั้น' : undefined}
             className={
               'px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-all ' +
-              (active
-                ? 'bg-white text-ink shadow-md ring-1 ring-hairline'
-                : 'text-muted hover:text-ink hover:bg-white/40')
+              (disabled
+                ? 'text-muted-soft opacity-40 cursor-not-allowed'
+                : active
+                  ? 'bg-white text-ink shadow-md ring-1 ring-hairline'
+                  : 'text-muted hover:text-ink hover:bg-white/40')
             }>
             <Icon name={t.icon} size={16} />
             {t.label}
+            {disabled && <Icon name="lock" size={11} className="opacity-70"/>}
           </button>
         );
       })}
@@ -9221,6 +9928,17 @@ function App() {
   const [session, setSession] = useState(undefined);
   const [view, setView] = useState("pos");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [userMgmtOpen, setUserMgmtOpen] = useState(false);
+  // MFA gate state:
+  //   'checking'  → still resolving aal + factor list (show splash)
+  //   'ok'        → user can use the app
+  //   'challenge' → user has a verified TOTP factor; needs to enter code
+  //   'enroll'    → operator forced MFA but user hasn't set up yet (QR flow)
+  const [mfaState, setMfaState] = useState('checking');
+  // Bumped after enroll/challenge succeeds so the effect below re-runs
+  // its aal check (Supabase upgrades the JWT in place, so `session`
+  // reference doesn't change).
+  const [mfaTick, setMfaTick] = useState(0);
 
   useEffect(() => {
     sb.auth.getSession().then(({ data }) => setSession(data.session));
@@ -9230,10 +9948,42 @@ function App() {
 
   const role = getUserRole(session);
 
-  // Defensive: if a cashier has stale URL state pointing at an admin-only view
-  // (or if the role flips during a session), drop them back to POS.
+  // Decide MFA gate state every time the session (or our manual tick)
+  // changes. Order matters: aal2 wins, then "have factor → must challenge",
+  // then "no factor but required → must enroll", then OK.
+  useEffect(() => {
+    if (!session) { setMfaState('checking'); return; }
+    let cancelled = false;
+    (async () => {
+      setMfaState('checking');
+      try {
+        const { data: aalData, error: aalErr } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (cancelled) return;
+        if (aalErr) { setMfaState('ok'); return; }   // fail open on infra hiccup
+        const current = aalData?.currentLevel;
+        const next    = aalData?.nextLevel;
+        if (current === 'aal2') { setMfaState('ok'); return; }
+        if (next === 'aal2')    { setMfaState('challenge'); return; }
+        const mfaRequired = session.user?.app_metadata?.mfa_required === true;
+        if (mfaRequired)        { setMfaState('enroll'); return; }
+        setMfaState('ok');
+      } catch {
+        setMfaState('ok');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [session?.access_token, mfaTick]);
+
+  // Defensive: if the current view isn't allowed for this role (visitor on
+  // a non-products view, role flip during a session, etc.) redirect:
+  //   visitor  → products (their only legal view)
+  //   admin+   → pos      (sensible default landing)
   useEffect(() => {
     if (!session) return;
+    if (role === 'visitor') {
+      if (view !== VISITOR_VIEW) setView(VISITOR_VIEW);
+      return;
+    }
     const allowed = navForRole(role).map(n => n.k);
     if (!allowed.includes(view)) setView('pos');
   }, [session, role, view]);
@@ -9261,6 +10011,31 @@ function App() {
   if (session === undefined) return <div className="min-h-screen flex items-center justify-center gap-3 text-muted"><span className="spinner lg"/>กำลังโหลด...</div>;
   if (!session) return <ToastProvider><DialogProvider><LoginScreen /></DialogProvider></ToastProvider>;
 
+  // MFA gate — fully blocks the rest of the app until satisfied. We wrap
+  // each branch in ToastProvider so the modals can call useToast(). The
+  // user can always sign out (logs them back to the LoginScreen).
+  if (mfaState === 'checking') {
+    return <div className="min-h-screen flex items-center justify-center gap-3 text-muted"><span className="spinner lg"/>กำลังตรวจสอบ MFA...</div>;
+  }
+  if (mfaState === 'enroll') {
+    return (
+      <ToastProvider><DialogProvider>
+        <TOTPEnrollModal open
+          onSuccess={() => setMfaTick(t => t + 1)}
+          onCancel={() => sb.auth.signOut()} />
+      </DialogProvider></ToastProvider>
+    );
+  }
+  if (mfaState === 'challenge') {
+    return (
+      <ToastProvider><DialogProvider>
+        <TOTPChallengeModal open
+          onSuccess={() => setMfaTick(t => t + 1)}
+          onCancel={() => sb.auth.signOut()} />
+      </DialogProvider></ToastProvider>
+    );
+  }
+
   const titles = {
     pos:       { t: "ขายสินค้า",            s: "POS" },
     products:  { t: "สินค้า",                s: "Inventory" },
@@ -9277,22 +10052,36 @@ function App() {
       <ShopProvider>
         <OfflineBanner />
         <div className="lg:flex">
-          <Sidebar view={view} setView={setView} userEmail={session.user?.email} onOpenSettings={()=>setSettingsOpen(true)}/>
+          <Sidebar view={view} setView={setView} userEmail={session.user?.email}
+            onOpenSettings={()=>setSettingsOpen(true)}
+            onOpenUserManagement={()=>setUserMgmtOpen(true)} />
           <main className="flex-1 min-h-screen pb-24 lg:pb-0 lg:pl-64">
-            <MobileTopBar title={titles[view].t} userEmail={session.user?.email} onLogout={()=>sb.auth.signOut()} onOpenSettings={()=>setSettingsOpen(true)} view={view} setView={setView}/>
+            <MobileTopBar title={titles[view].t} userEmail={session.user?.email}
+              onLogout={()=>sb.auth.signOut()}
+              onOpenSettings={()=>setSettingsOpen(true)}
+              onOpenUserManagement={()=>setUserMgmtOpen(true)}
+              view={view} setView={setView}/>
             {!['dashboard','receive','return','pos'].includes(view) && <PageHeader title={titles[view].t} subtitle={titles[view].s} />}
             <div key={view} className="view-fade">
               {view==='pos' && <POSView />}
               {view==='products' && <ProductsView />}
               {view==='sales' && <SalesView onGoPOS={()=>setView('pos')} />}
-              {view==='receive' && role==='admin' && <ReceiveView />}
+              {/* admin-or-above gate matches DB-side is_admin() — super_admin
+                  inherits everything an admin can do. */}
+              {view==='receive'   && (role==='admin' || role==='super_admin') && <ReceiveView />}
               {view==='return' && <ReturnView />}
-              {view==='dashboard' && role==='admin' && <OverviewView />}
+              {view==='dashboard' && (role==='admin' || role==='super_admin') && <OverviewView />}
             </div>
           </main>
         </div>
         <MobileTabBar view={view} setView={setView} />
         <AppSettingsModal open={settingsOpen} onClose={()=>setSettingsOpen(false)} />
+        {/* User-management modal — only mounts when super_admin opens it.
+            The button is gated in Sidebar/MobileTopBar so non-super-admins
+            never see the trigger; the gate here is belt-and-braces. */}
+        {role === 'super_admin' && (
+          <UserManagementModal open={userMgmtOpen} onClose={()=>setUserMgmtOpen(false)} />
+        )}
       </ShopProvider>
       </RoleCtx.Provider>
       </DialogProvider>

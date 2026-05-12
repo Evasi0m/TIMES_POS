@@ -639,7 +639,11 @@
     transform: translateY(-1px);
   }
 
-  .sidebar .btn-settings-sidebar {
+  /* Yellow "การตั้งค่า user" button — same shape as
+     .btn-app-settings-sidebar but with a gold gradient so super_admins
+     can tell the two settings buttons apart at a glance. Un-scoped from
+     `.sidebar` so the mobile-drawer mount also renders correctly. */
+  .btn-settings-sidebar {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
     width: 100%;
     background: linear-gradient(180deg, #d4a017 0%, #b8860b 100%);
@@ -654,11 +658,12 @@
     cursor: pointer;
     transition: all .18s var(--ease-out);
   }
-  .sidebar .btn-settings-sidebar:hover {
+  .btn-settings-sidebar:hover {
     background: linear-gradient(180deg, #e6b820 0%, #c8950d 100%);
     box-shadow: 0 4px 12px rgba(180,130,10,0.55), 0 1px 0 rgba(255,255,255,0.16) inset;
     transform: translateY(-1px);
   }
+  .btn-settings-sidebar:active { transform: scale(0.97); }
 
   /* ==========  MOBILE TOPBAR / TABBAR (glass)  ========== */
   .mobile-topbar {
