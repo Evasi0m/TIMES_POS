@@ -6142,6 +6142,63 @@ function SalesView({ onGoPOS }) {
   };
 
   const total = useMemo(()=> filteredOrders.reduce((s,o)=> s + Number(o.grand_total||0), 0), [filteredOrders]);
+  // Sum of per-order computed profit (revenue − cost, voided bills = 0).
+  // Depends on `orderSummary` being populated by load(); shows ฿0 briefly
+  // on first paint, which is fine — same single source of truth as the
+  // per-row profit column.
+  const totalProfit = useMemo(()=> filteredOrders.reduce((s,o)=> s + (orderSummary[o.id]?.profit || 0), 0), [filteredOrders, orderSummary]);
+
+  // Mini liquid-glass channel badge — card-cream visual recipe shrunk
+  // to a pill. Each channel gets its own tinted radial-gradient set so
+  // the row instantly tells the user where the sale came from.
+  const channelBadgeStyle = (ch) => {
+    const base = {
+      display: 'inline-block',
+      fontSize: '12px',
+      fontWeight: 500,
+      padding: '4px 12px',
+      borderRadius: '9999px',
+      whiteSpace: 'nowrap',
+      textAlign: 'center',
+      minWidth: '80px',
+      backdropFilter: 'blur(8px) saturate(140%)',
+      WebkitBackdropFilter: 'blur(8px) saturate(140%)',
+      lineHeight: 1.4,
+    };
+    const recipes = {
+      store: {
+        background: 'radial-gradient(circle at 14% 8%, rgba(76,175,80,0.18), transparent 34%), radial-gradient(circle at 90% 18%, rgba(129,199,132,0.16), transparent 32%), radial-gradient(circle at 50% 105%, rgba(232,245,233,0.50), transparent 44%), linear-gradient(135deg, rgba(200,230,201,0.92), rgba(165,214,167,0.78))',
+        border: '1px solid rgba(76,175,80,0.35)',
+        color: '#1b5e20',
+        boxShadow: '0 1px 0 rgba(255,255,255,0.85) inset, 0 -1px 0 rgba(76,175,80,0.10) inset, 0 4px 14px -4px rgba(20,20,19,0.08)',
+      },
+      shopee: {
+        background: 'radial-gradient(circle at 14% 8%, rgba(255,152,0,0.18), transparent 34%), radial-gradient(circle at 90% 18%, rgba(255,183,77,0.16), transparent 32%), radial-gradient(circle at 50% 105%, rgba(255,243,224,0.50), transparent 44%), linear-gradient(135deg, rgba(255,224,178,0.92), rgba(255,204,128,0.78))',
+        border: '1px solid rgba(255,152,0,0.35)',
+        color: '#e65100',
+        boxShadow: '0 1px 0 rgba(255,255,255,0.85) inset, 0 -1px 0 rgba(255,152,0,0.10) inset, 0 4px 14px -4px rgba(20,20,19,0.08)',
+      },
+      lazada: {
+        background: 'radial-gradient(circle at 14% 8%, rgba(63,81,181,0.18), transparent 34%), radial-gradient(circle at 90% 18%, rgba(121,134,203,0.16), transparent 32%), radial-gradient(circle at 50% 105%, rgba(232,234,246,0.50), transparent 44%), linear-gradient(135deg, rgba(197,202,233,0.92), rgba(159,168,218,0.78))',
+        border: '1px solid rgba(63,81,181,0.35)',
+        color: '#283593',
+        boxShadow: '0 1px 0 rgba(255,255,255,0.85) inset, 0 -1px 0 rgba(63,81,181,0.10) inset, 0 4px 14px -4px rgba(20,20,19,0.08)',
+      },
+      tiktok: {
+        background: 'radial-gradient(circle at 14% 8%, rgba(255,255,255,0.08), transparent 34%), radial-gradient(circle at 90% 18%, rgba(255,64,129,0.12), transparent 32%), radial-gradient(circle at 50% 105%, rgba(30,30,30,0.50), transparent 44%), linear-gradient(135deg, rgba(45,45,45,0.92), rgba(25,25,25,0.88))',
+        border: '1px solid rgba(255,255,255,0.18)',
+        color: '#ffffff',
+        boxShadow: '0 1px 0 rgba(255,255,255,0.15) inset, 0 -1px 0 rgba(0,0,0,0.25) inset, 0 4px 14px -4px rgba(0,0,0,0.20)',
+      },
+      facebook: {
+        background: 'radial-gradient(circle at 14% 8%, rgba(33,150,243,0.18), transparent 34%), radial-gradient(circle at 90% 18%, rgba(100,181,246,0.16), transparent 32%), radial-gradient(circle at 50% 105%, rgba(227,242,253,0.50), transparent 44%), linear-gradient(135deg, rgba(187,222,251,0.92), rgba(144,202,249,0.78))',
+        border: '1px solid rgba(33,150,243,0.35)',
+        color: '#1565c0',
+        boxShadow: '0 1px 0 rgba(255,255,255,0.85) inset, 0 -1px 0 rgba(33,150,243,0.10) inset, 0 4px 14px -4px rgba(20,20,19,0.08)',
+      },
+    };
+    return { ...base, ...(recipes[ch] || recipes.store) };
+  };
 
   const FilterControls = (
     <div className="space-y-3">
@@ -6211,26 +6268,42 @@ function SalesView({ onGoPOS }) {
 
   return (
     <div className="px-4 py-4 lg:px-10 lg:py-8">
-      {/* Summary card */}
-      <div className="card-cream p-4 lg:p-5 mb-4 flex items-center justify-between">
-        <div>
-          <div className="text-xs uppercase tracking-wider text-muted">รวมทั้งหมด</div>
-          <div className="font-display text-3xl lg:text-4xl mt-1">{fmtTHB(total)}</div>
-          <div className="text-xs text-muted mt-1">{filteredOrders.length} บิล</div>
-        </div>
-        {/* Mobile filter toggle — icon-only with a 44pt hit zone. Text
-            label moved to aria-label so screen readers still announce
-            "ตัวกรอง". Visible badge stays subtle so it doesn't compete
-            with the headline total. */}
+      {/* Summary cards — revenue (cream) + profit (Tiffany blue) split
+          50/50 on sm+. Mobile stacks; filter button moves out of the
+          revenue card to its own row above so the two summary tiles can
+          claim full width on phones (was cramped sharing space with the
+          icon button). */}
+      <div className="lg:hidden flex justify-end mb-2">
         <button
           type="button"
-          className="lg:hidden icon-btn-44 btn-secondary !p-0"
+          className="icon-btn-44 btn-secondary !p-0"
           onClick={()=>setFilterOpen(o=>!o)}
           aria-label="ตัวกรอง"
           aria-expanded={filterOpen}
         >
           <Icon name="filter" size={20}/>
         </button>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:gap-4 mb-4">
+        {/* Revenue (cream) */}
+        <div className="card-cream p-4 lg:p-5">
+          <div className="text-xs uppercase tracking-wider text-muted">รวมทั้งหมด</div>
+          <div className="font-display text-3xl lg:text-4xl mt-1 tabular-nums">{fmtTHB(total)}</div>
+          <div className="text-xs text-muted mt-1">{filteredOrders.length} บิล</div>
+        </div>
+        {/* Profit — simple liquid-glass card tinted tiffany blue (same
+            recipe family as card-cream, just shifted into the teal hue).
+            White text for contrast; no glossy gradient/sheen so it reads
+            as a calm sibling to the cream revenue card, not a billboard. */}
+        <div className="card-teal p-4 lg:p-5 rounded-2xl">
+          <div className="text-xs uppercase tracking-wider text-white/70">รวมกำไร</div>
+          <div className={"font-display text-3xl lg:text-4xl mt-1 tabular-nums " + (totalProfit >= 0 ? "text-white" : "text-[#ffd0d0]")}>
+            {totalProfit >= 0 ? '' : '−'}{fmtTHB(Math.abs(totalProfit))}
+          </div>
+          <div className="text-xs text-white/60 mt-1">
+            {total > 0 ? `${(totalProfit / total * 100).toFixed(1)}% ของยอดขาย` : 'ยังไม่มียอดขาย'}
+          </div>
+        </div>
       </div>
 
       {/* Filters */}
@@ -6287,7 +6360,7 @@ function SalesView({ onGoPOS }) {
                   <div className="truncate" title={sm?.productLabel || ''}>{sm?.productLabel ?? <span className="text-muted-soft">—</span>}</div>
                   {sm?.costApprox && <span className="badge-pill !bg-warning/15 !text-[#8a6500] !text-xs mt-0.5">ทุนประมาณ</span>}
                 </div>
-                <div className="col-span-2"><span className="badge-pill !text-xs">{CHANNEL_LABELS[o.channel] || o.channel || '—'}</span></div>
+                <div className="col-span-2"><span style={channelBadgeStyle(o.channel)}>{CHANNEL_LABELS[o.channel] || o.channel || '—'}</span></div>
                 <div className="col-span-1 text-xs text-muted truncate">{PAYMENTS.find(p=>p.v===o.payment_method)?.label || '—'}</div>
                 <div className={"col-span-2 text-right tabular-nums " + (o.status==='voided'?'line-through':'')}>
                   <div className="font-medium">{fmtMoney(o.grand_total)}</div>
@@ -6337,7 +6410,7 @@ function SalesView({ onGoPOS }) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-xs text-muted">#{o.id}</span>
-                      <span className="badge-pill !text-xs">{CHANNEL_LABELS[o.channel] || o.channel || '—'}</span>
+                      <span style={channelBadgeStyle(o.channel)}>{CHANNEL_LABELS[o.channel] || o.channel || '—'}</span>
                       {o.status==='voided' && <span className="badge-pill !bg-error/10 !text-error !text-xs">VOIDED</span>}
                     </div>
                     {sm && sm.itemCount > 0 && (
