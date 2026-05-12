@@ -4846,9 +4846,17 @@ function ProductsView() {
 
   return (
     <div className="px-4 py-4 lg:px-10 lg:py-6 lg:h-[calc(100vh-180px)] lg:flex lg:flex-col">
-      {/* Top bar: search + sort + advanced filter button */}
-      <div className="flex flex-col sm:flex-row gap-2 mb-2 flex-shrink-0">
-        <div className="relative flex-1">
+      {/* Top bar: search + sort + advanced filter button.
+          Layout strategy:
+          - Mobile (`< sm`): search input stays full-width on row 1 with
+            the filter icon button beside it (one tap to refine). Sort
+            dropdown lives on row 2 since it's a 5-option menu that's
+            painful when squeezed. This keeps "search + filter" together
+            (the user's primary intent) without orphaning the filter
+            button on its own row.
+          - Desktop (`sm+`): everything sits inline as before. */}
+      <div className="flex flex-wrap sm:flex-nowrap items-stretch gap-2 mb-2 flex-shrink-0">
+        <div className="relative flex-1 min-w-0 order-1">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted z-10"><Icon name="search" size={18} strokeWidth={2.25}/></span>
           <input className="input !pl-10 w-full" placeholder="ชื่อรุ่น หรือ บาร์โค้ด"
             value={queryInput} onChange={e=>setQueryInput(e.target.value)} autoFocus={!isMobileViewport()} />
@@ -4859,7 +4867,7 @@ function ProductsView() {
             </button>
           )}
         </div>
-        <select className="input !py-2 !text-sm sm:!w-auto" value={filter.sort}
+        <select className="input !py-2 !text-sm w-full sm:!w-auto order-3 sm:order-2" value={filter.sort}
           onChange={e=>setFilter(f=>({...f, sort: e.target.value}))}>
           <option value="newest">ใหม่ล่าสุด</option>
           <option value="oldest">เก่าสุด</option>
@@ -4870,10 +4878,16 @@ function ProductsView() {
         {/* Mobile: icon-only 44pt square. Desktop: icon + text + count
             chip. The count badge stays on both layouts so the user can
             see active filters without opening the sheet. */}
-        <button type="button" className="btn-secondary !py-2 !text-sm sm:!w-auto relative icon-btn-44 sm:!w-auto sm:!h-auto"
+        {/* `.input` is ~48px tall on mobile (12px padding + 22px line + 2px border),
+            so the filter chip needs to be 48×48 — not 44 — to align with the
+            search input's bottom edge. `sm:!w-auto` resets on desktop where
+            the button gains its text label. */}
+        <button type="button" className="btn-secondary !py-2 !text-sm sm:!w-auto relative icon-btn-44 !w-12 !h-12 sm:!w-auto sm:!h-auto order-2 sm:order-3 flex-shrink-0"
           onClick={()=>setSheetOpen(true)} title="ตัวกรองขั้นสูง (วัสดุ / สี / ราคา / สต็อก)"
           aria-label="ตัวกรองขั้นสูง">
-          <Icon name="filter" size={18}/>
+          {/* Bigger icon on mobile so the filter glyph dominates the 44pt
+              chip; desktop keeps the original 16px to sit beside text. */}
+          <Icon name="filter" size={22} className="sm:!w-[16px] sm:!h-[16px]"/>
           <span className="hidden sm:inline sm:ml-1">ตัวกรอง</span>
           {advancedCount > 0 && (
             <span className="absolute -top-1 -right-1 sm:static sm:ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-on-primary text-[10px] font-bold tabular-nums border border-canvas sm:border-0">
@@ -6090,7 +6104,12 @@ function SalesView({ onGoPOS }) {
       <div>
         <label className="text-xs uppercase tracking-wider text-muted">ค้นหา</label>
         <div className="relative mt-1">
-          <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-soft pointer-events-none"/>
+          {/* Wrap the icon in a `z-10` span so it stacks above the
+              `<input>` — sibling absolutes without an explicit z-index
+              fall behind the input's painted background, which was
+              hiding this magnifying glass entirely. Mirrors the pattern
+              used by every other search input in this file. */}
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 z-10 pointer-events-none text-muted-soft"><Icon name="search" size={16}/></span>
           <input
             type="text"
             className="input w-full !pl-9 !pr-9"
@@ -6535,20 +6554,24 @@ function ReceiveView() {
   // tabs without wrapping to a second line on iPhone-width screens.
   const ActionButtons = (
     <div className="flex items-center gap-2 lg:grid lg:grid-cols-2">
+      {/* Mobile: 48×48 to vertically align with the KindTabs pill bar
+          (which is ~48px tall due to its inner padding). Icon bumped
+          to 22px so it fills the larger tap area and reads clearly
+          without a text label. Desktop reverts to icon + text. */}
       <button
-        className="btn-add-product !py-2 !text-sm icon-btn-44 lg:!w-auto lg:!h-auto"
+        className="btn-add-product !py-2 !text-sm icon-btn-44 !w-12 !h-12 lg:!w-auto lg:!h-auto"
         onClick={()=>setAddProductOpen(true)}
         aria-label="เพิ่มรุ่นสินค้า"
       >
-        <Icon name="plus" size={18}/>
+        <Icon name="plus" size={22} className="lg:!w-[18px] lg:!h-[18px]"/>
         <span className="hidden lg:inline lg:ml-1">เพิ่มรุ่นสินค้า</span>
       </button>
       <button
-        className="btn-secondary !py-2 !text-sm icon-btn-44 lg:!w-auto lg:!h-auto"
+        className="btn-secondary !py-2 !text-sm icon-btn-44 !w-12 !h-12 lg:!w-auto lg:!h-auto"
         onClick={()=>setHistoryOpen(true)}
         aria-label="ดูประวัติ"
       >
-        <Icon name="receipt" size={18}/>
+        <Icon name="receipt" size={22} className="lg:!w-[18px] lg:!h-[18px]"/>
         <span className="hidden lg:inline lg:ml-1">ดูประวัติ</span>
       </button>
     </div>
@@ -6593,12 +6616,15 @@ function ReturnView()  {
   // Same pattern as ReceiveView's ActionButtons: icon-only on mobile,
   // icon + text on desktop. Keeps the iPhone header from wrapping.
   const HistoryBtn = (
+    // Mobile: 48×48 so it lines up with the form's search input
+    // (`!py-3 !text-base` ≈ 48px tall) and the camera-scan button next
+    // to it. Icon bumped to 22px to fill the larger button visually.
     <button
-      className="btn-secondary !py-2 !text-sm icon-btn-44 lg:!w-auto lg:!h-auto"
+      className="btn-secondary !py-2 !text-sm icon-btn-44 !w-12 !h-12 lg:!w-auto lg:!h-auto"
       onClick={()=>setHistoryOpen(true)}
       aria-label="ดูประวัติรับคืน"
     >
-      <Icon name="receipt" size={18}/>
+      <Icon name="receipt" size={22} className="lg:!w-[18px] lg:!h-[18px]"/>
       <span className="hidden lg:inline lg:ml-1">ดูประวัติรับคืน</span>
     </button>
   );
@@ -6613,8 +6639,10 @@ function ReturnView()  {
       </header>
 
       <div className="px-4 py-4 lg:px-10 lg:py-8">
-        <div className="flex justify-end mb-3 lg:hidden">{HistoryBtn}</div>
-        <StockMovementForm kind="return"/>
+        {/* On mobile, dock the history button inline with the form's
+            search row via the `headerAction` prop instead of giving it
+            its own row. Desktop keeps the button in the page header. */}
+        <StockMovementForm kind="return" headerAction={HistoryBtn}/>
         <MovementHistoryModal open={historyOpen} onClose={()=>setHistoryOpen(false)} kind="return"/>
       </div>
     </div>
@@ -6761,7 +6789,7 @@ function BillPickerPopup({ open, product, onPick, onClose }) {
   );
 }
 
-const StockMovementForm = React.forwardRef(function StockMovementForm({ kind }, ref) {
+const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, headerAction }, ref) {
   const toast = useToast();
   const productSearchRef = useRef(null);
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -7175,6 +7203,12 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind }, 
                   </button>
                 )}
               </div>
+              {/* Mobile-only slot for the parent view's "ดูประวัติ" etc.
+                  Lets us dock the action button on the same row as the
+                  search input on phones, instead of leaving it stranded
+                  on its own row above the card. Desktop already has the
+                  button in the page header so we hide this slot there. */}
+              {headerAction && <div className="lg:hidden flex-shrink-0">{headerAction}</div>}
               <button type="button" className="scan-inline-btn" onClick={()=>setScannerOpen(true)} aria-label="สแกนด้วยกล้อง">
                 <Icon name="camera" size={20}/>
               </button>

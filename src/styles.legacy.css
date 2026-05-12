@@ -1703,6 +1703,41 @@
        The wrapper uses flex-col-reverse to keep the primary action
        (rightmost in flex-row source order) at the top of the stack. */
     .modal-footer-row > button { width: 100%; }
+
+    /* `.btn-secondary`'s default background is `rgba(255,255,255,0.92)`
+       — on the warm cream canvas / sidebar drawer this reads as
+       "white-on-white" and the button visually disappears. On mobile we
+       swap to a warmer surface tint + slightly darker hairline so the
+       button shape is obvious. Desktop keeps its frosted-glass look. */
+    .btn-secondary {
+      background: var(--surface-card, #efe9de);
+      border-color: rgba(180, 168, 148, 0.45);
+      box-shadow: 0 1px 2px rgba(20, 20, 19, 0.04);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    .btn-secondary:hover { background: var(--surface-cream-strong, #e8e0d2); }
+    /* Icon-only mobile chips get an extra-firm outline so a single 18px
+       glyph still feels like a tappable affordance, not floating ink. */
+    .icon-btn-44.btn-secondary {
+      background: var(--surface-card, #efe9de);
+      border: 1px solid rgba(140, 128, 108, 0.35);
+    }
+    /* `btn-ghost` icon-only buttons (e.g. the menu toggle in the mobile
+       top bar) also benefit from a faint surface so they don't look
+       like decorative SVG. Subtle — keeps the airy feel. */
+    .icon-btn-44.btn-ghost {
+      background: rgba(232, 224, 210, 0.55);
+      border: 1px solid rgba(180, 168, 148, 0.28);
+    }
+    /* Critical: `.btn-secondary` (12px 22px) and `.btn-add-product`
+       (10px 16px) bake in horizontal padding that crushes the SVG
+       inside a 44–48px square — only ~4px is left for the icon and the
+       browser shrinks it to fit. When icon-btn-44 is active, the button
+       is icon-only, so wipe the inherited padding so the SVG can fill
+       the tappable square. Desktop unaffected because `lg:!w-auto`
+       removes the fixed sizing and lets the original padding apply. */
+    .icon-btn-44 { padding: 0 !important; }
   }
   /* Bottom padding for the main scroll area on mobile so content
      scrolls clear of the new bottom-attached tab bar (~76px) plus the
