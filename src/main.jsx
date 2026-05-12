@@ -3795,15 +3795,22 @@ function POSView() {
           const dispOpen = expandedDisp[idx];
           const hasDisp  = l.display_unit_price != null;
           return (
-            <div key={l.product_id} style={{ '--i': Math.min(idx, 8) }} className="glass-soft rounded-lg p-3 mb-2 hover-lift fade-in stagger">
+            // Cart line — bump opacity + ring/shadow so the row pops off
+            // the cream card behind it (was disappearing into the bg).
+            // The `glass-soft` base stays for the frosted feel; the
+            // `!bg-white/75` override + `ring-1 ring-hairline shadow-sm`
+            // raise contrast without losing the translucent character.
+            <div key={l.product_id} style={{ '--i': Math.min(idx, 8) }} className="glass-soft !bg-white/75 ring-1 ring-hairline shadow-sm rounded-lg p-3 mb-2.5 hover-lift fade-in stagger">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm truncate">{l.product_name}</div>
                   <div className="text-xs text-muted font-mono truncate">{l.barcode||''}</div>
                 </div>
-                <button className="btn-ruby-premium" onClick={()=>confirmRemoveLine(idx)} aria-label="ลบสินค้านี้">
-                  <Icon name="trash" size={13}/>
-                  <span>ลบ</span>
+                {/* Demoted from labeled ruby button → icon-only 32×32, so
+                    delete stays one-click but no longer steals attention
+                    from the primary "ชำระเงิน" CTA below. */}
+                <button className="btn-ruby-premium-icon flex-shrink-0" onClick={()=>confirmRemoveLine(idx)} aria-label="ลบสินค้านี้" title="ลบสินค้านี้">
+                  <Icon name="trash" size={14}/>
                 </button>
               </div>
               <div className="flex items-stretch gap-2 mt-2">
@@ -3901,36 +3908,57 @@ function POSView() {
         </button>
       ) : (
       <>
-        {/* Section: ข้อมูลบิล */}
-        <div className="text-[11px] uppercase tracking-[0.12em] text-muted-soft font-medium mb-1.5">ข้อมูลบิล</div>
-        <div className="grid grid-cols-2 gap-2 mb-4">
-          <div>
-            <label className="text-xs uppercase tracking-wider text-muted">ช่องทาง</label>
-            <select className="input mt-1 !h-10 !rounded-xl !py-2 !text-sm" value={channel} onChange={e=>setChannel(e.target.value)}>
-              {CHANNELS.map(c=> <option key={c.v} value={c.v}>{c.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs uppercase tracking-wider text-muted">ชำระโดย</label>
-            <select className="input mt-1 !h-10 !rounded-xl !py-2 !text-sm" value={payment} onChange={e=>setPayment(e.target.value)}>
-              {availablePayments.map(p=> <option key={p.v} value={p.v}>{p.label}</option>)}
-            </select>
+        {/* Section: ข้อมูลบิล — promoted to premium Tiffany-blue gradient
+            (same metallic 4-stop recipe as the gold ราคา card, just
+            shifted into the iconic Tiffany teal hue family). Dark teal
+            text + glass chip label so contrast holds against the bright
+            top stop. */}
+        <div className="relative overflow-hidden rounded-xl p-3 mb-2.5 border border-[rgba(10,80,75,0.50)] shadow-[0_1px_0_rgba(220,250,247,0.55)_inset,0_-1px_0_rgba(5,50,45,0.25)_inset]"
+             style={{ background: 'linear-gradient(180deg, #9ce0db 0%, #48c4ba 35%, #0fa39a 65%, #077169 100%)' }}>
+          {/* Top sheen — cool aqua tint matching the top stop */}
+          <div className="absolute top-0 left-0 right-0 h-[35%] pointer-events-none rounded-t-xl"
+               style={{ background: 'linear-gradient(180deg, rgba(225,250,247,0.40), transparent)' }}/>
+          <div className="relative">
+            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[rgba(5,50,45,0.18)] backdrop-blur text-[#053330] text-[10px] font-semibold uppercase tracking-wider border border-[rgba(5,50,45,0.30)] mb-2" style={{ textShadow: '0 1px 0 rgba(225,250,247,0.55)' }}>
+              <Icon name="wallet" size={11}/> ข้อมูลบิล
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs uppercase tracking-wider text-[#053330] font-medium" style={{ textShadow: '0 1px 0 rgba(225,250,247,0.45)' }}>ช่องทาง</label>
+                <select className="input mt-1 !h-10 !rounded-xl !py-2 !text-sm" value={channel} onChange={e=>setChannel(e.target.value)}>
+                  {CHANNELS.map(c=> <option key={c.v} value={c.v}>{c.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs uppercase tracking-wider text-[#053330] font-medium" style={{ textShadow: '0 1px 0 rgba(225,250,247,0.45)' }}>ชำระโดย</label>
+                <select className="input mt-1 !h-10 !rounded-xl !py-2 !text-sm" value={payment} onChange={e=>setPayment(e.target.value)}>
+                  {availablePayments.map(p=> <option key={p.v} value={p.v}>{p.label}</option>)}
+                </select>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Section: ราคา */}
-        <div className="text-[11px] uppercase tracking-[0.12em] text-muted-soft font-medium mb-1.5">ราคา</div>
-        <div className="mb-3">
-          <div className="flex items-center justify-between">
-            <label className="text-xs uppercase tracking-wider text-muted inline-flex items-center gap-1.5">
-              <Icon name="credit-card" size={12}/>
-              ราคาที่ลูกค้าจ่าย <span className="text-error">*</span>
-            </label>
+        {/* Section: ราคา — promoted to premium gold (matches
+            `.btn-settings-sidebar`'s 4-stop metallic gradient). Most-
+            edited field in the bill, so the gold surface anchors it
+            as a privileged action. Dark ink text + amber-tinted glass
+            chip label so contrast survives against the bright gradient. */}
+        <div className="relative overflow-hidden rounded-xl p-3 mb-2.5 border border-[rgba(120,85,15,0.55)] shadow-[0_1px_0_rgba(255,245,215,0.55)_inset,0_-1px_0_rgba(80,55,5,0.25)_inset]"
+             style={{ background: 'linear-gradient(180deg, #f5dc8a 0%, #e2bc55 35%, #c89a2a 65%, #9a7414 100%)' }}>
+          {/* Top sheen — warmer cream tint to blend with the gold mid-stop */}
+          <div className="absolute top-0 left-0 right-0 h-[35%] pointer-events-none rounded-t-xl"
+               style={{ background: 'linear-gradient(180deg, rgba(255,250,225,0.35), transparent)' }}/>
+          <div className="relative">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[rgba(60,40,5,0.18)] backdrop-blur text-[#3a2607] text-[10px] font-semibold uppercase tracking-wider border border-[rgba(80,55,5,0.30)]" style={{ textShadow: '0 1px 0 rgba(255,240,200,0.45)' }}>
+              <Icon name="credit-card" size={11}/> ราคาที่ลูกค้าจ่าย <span className="text-[#7a1414] ml-0.5">*</span>
+            </div>
             {discountAmount > 0 && (
-              <span className="text-xs text-primary tabular-nums">ส่วนลด −{fmtTHB(discountAmount)}</span>
+              <span className="text-[11px] text-[#3a2607] tabular-nums whitespace-nowrap font-medium" style={{ textShadow: '0 1px 0 rgba(255,240,200,0.45)' }}>ส่วนลด −{fmtTHB(discountAmount)}</span>
             )}
           </div>
-          <div className={netPriceErr ? "field-error-glow mt-1" : "mt-1"}>
+          <div className={netPriceErr ? "field-error-glow" : ""}>
             <input
               ref={netPriceRef}
               type="number"
@@ -3942,7 +3970,10 @@ function POSView() {
             />
           </div>
           {/* Quick-fill chips — eliminate manual typing for the common cases:
-              full subtotal, round down to next 10/100. Tap = instant set. */}
+              full subtotal, round down to next 10/100. Tap = instant set.
+              On the coral surface, inactive chips invert to white-glass
+              (translucent dark on light) so they pop without fighting the
+              background; active chip stays dark ink for unambiguous state. */}
           {subtotal > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-2">
               {[
@@ -3957,8 +3988,8 @@ function POSView() {
                   <button key={c.label} type="button" onClick={()=>setNetPrice(String(c.value))}
                     className={"px-2.5 py-1.5 rounded-md text-xs font-medium border transition tabular-nums " + (
                       active
-                        ? "bg-primary text-on-primary border-primary shadow-sm"
-                        : "bg-white text-muted border-hairline hover:text-ink hover:bg-white/90"
+                        ? "bg-ink text-white border-ink shadow-sm"
+                        : "bg-white/90 text-ink border-white/30 hover:bg-white"
                     )}>
                     {c.label} {c.hint && <span className="opacity-70 ml-0.5">· {c.hint}</span>}
                   </button>
@@ -3966,91 +3997,112 @@ function POSView() {
               })}
             </div>
           )}
+          </div>
         </div>
 
         {ECOMMERCE_CHANNELS.has(channel) && (
-          <div className={"rounded-xl p-3 mb-4 bg-primary/5 border border-primary/15 fade-in " + (netReceivedErr ? "field-error-glow" : "")}>
-            <div className="flex items-center justify-between">
-              <label className="text-xs uppercase tracking-wider text-primary inline-flex items-center gap-1.5 font-medium">
-                <Icon name="store" size={12}/>
-                เงินที่ร้านได้รับ
-                {requiresNetReceived(channel, payment)
-                  ? <span className="text-error ml-0.5">*</span>
-                  : <span className="text-muted-soft ml-0.5 font-normal normal-case tracking-normal">(ทีหลังได้)</span>}
-              </label>
-              {netReceived !== "" && Number(netReceived) > 0 && grand > 0 && (
-                <span className="text-xs text-muted-soft tabular-nums">
-                  ค่าธรรมเนียม {((grand - Number(netReceived)) / grand * 100).toFixed(1)}%
-                </span>
-              )}
-            </div>
-            {payment === 'cod' ? (
-              <div className="flex items-stretch gap-2 mt-1">
+          // Strong red mini-card — the cashier MUST notice this field
+          // because wrong values silently break the profit calc. Red
+          // gradient mirrors btn-primary's recipe (top sheen + 3-stop +
+          // inset rim) shifted to the danger hue. No outer glow per the
+          // user's request — only the inset rim for the glossy slab feel.
+          <div className={"relative overflow-hidden rounded-xl p-3 mb-2.5 fade-in border border-[rgba(255,180,180,0.18)] shadow-[0_1px_0_rgba(255,255,255,0.32)_inset,0_-1px_0_rgba(0,0,0,0.12)_inset] " + (netReceivedErr ? "field-error-glow" : "")}
+               style={{ background: 'linear-gradient(180deg, #e85555 0%, #c52828 50%, #9a1414 100%)' }}>
+            {/* Top sheen — white-to-transparent vertical fade matches
+                btn-primary::before so the surface reads as a glossy slab.
+                Pointer-events-none so input stays clickable. */}
+            <div className="absolute top-0 left-0 right-0 h-1/2 pointer-events-none rounded-t-xl"
+                 style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.22), transparent)' }}/>
+            <div className="relative">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur text-white text-[10px] font-semibold uppercase tracking-wider border border-white/25">
+                  <Icon name="store" size={11}/> เงินที่ร้านได้รับ
+                  {requiresNetReceived(channel, payment)
+                    ? <span className="text-white ml-0.5">*</span>
+                    : <span className="text-white/70 ml-0.5 font-normal normal-case tracking-normal">(ทีหลังได้)</span>}
+                </div>
+                {netReceived !== "" && Number(netReceived) > 0 && grand > 0 && (
+                  <span className="text-[11px] text-white/85 tabular-nums whitespace-nowrap">
+                    ค่าธรรมเนียม {((grand - Number(netReceived)) / grand * 100).toFixed(1)}%
+                  </span>
+                )}
+              </div>
+              {payment === 'cod' ? (
+                <div className="flex items-stretch gap-2">
+                  <input
+                    ref={netReceivedRef}
+                    type="number"
+                    inputMode="decimal"
+                    className="input !h-10 !rounded-xl !py-2 !text-sm flex-1 min-w-0"
+                    placeholder="รู้ทีหลังก็มาแก้ในหน้าขายได้"
+                    value={netReceived}
+                    onChange={e=>setNetReceived(e.target.value)}
+                    onBlur={handleNetReceivedBlur}
+                  />
+                  <NetReceivedAutoButton cart={cart} config={paylaterConfig}
+                    onApply={(v)=>{ setNetReceived(String(v)); netReceivedRef.current?.focus(); }}/>
+                </div>
+              ) : (
                 <input
                   ref={netReceivedRef}
                   type="number"
                   inputMode="decimal"
-                  className="input !h-10 !rounded-xl !py-2 !text-sm flex-1 min-w-0"
-                  placeholder="รู้ทีหลังก็มาแก้ในหน้าขายได้"
+                  className="input !h-10 !rounded-xl !py-2 !text-sm w-full"
+                  placeholder={`ยอดที่ ${CHANNEL_LABELS[channel]||channel} โอนเข้าร้าน (บาท)`}
                   value={netReceived}
                   onChange={e=>setNetReceived(e.target.value)}
                   onBlur={handleNetReceivedBlur}
                 />
-                <NetReceivedAutoButton cart={cart} config={paylaterConfig}
-                  onApply={(v)=>{ setNetReceived(String(v)); netReceivedRef.current?.focus(); }}/>
+              )}
+              <div className="text-[11px] text-white/70 mt-1.5">
+                ใช้คำนวณกำไร · ไม่แสดงในใบเสร็จลูกค้า
               </div>
-            ) : (
-              <input
-                ref={netReceivedRef}
-                type="number"
-                inputMode="decimal"
-                className="input !h-10 !rounded-xl !py-2 !text-sm mt-1 w-full"
-                placeholder={`ยอดที่ ${CHANNEL_LABELS[channel]||channel} โอนเข้าร้าน (บาท)`}
-                value={netReceived}
-                onChange={e=>setNetReceived(e.target.value)}
-                onBlur={handleNetReceivedBlur}
-              />
-            )}
-            <div className="text-xs text-muted-soft mt-1">
-              ใช้คำนวณกำไร · ไม่แสดงในใบเสร็จลูกค้า
             </div>
           </div>
         )}
 
-        {/* Section: ตัวเลือกเสริม */}
-        <div className="text-[11px] uppercase tracking-[0.12em] text-muted-soft font-medium mb-1.5">ตัวเลือกเสริม</div>
-        <div className="flex gap-2 mb-3">
-          <button type="button" onClick={()=>setTaxInvoiceModalOpen(true)}
-            className={"flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-md text-xs font-medium border transition " + (taxInvoice?"text-white":"bg-white text-muted border-hairline hover:text-ink hover:bg-white/90")}
-            style={taxInvoice ? { background: 'linear-gradient(180deg, rgba(204,120,92,0.85) 0%, rgba(184,100,72,0.92) 100%)', borderColor: 'rgba(255,255,255,0.18)', boxShadow: '0 2px 8px rgba(184,100,72,0.35), 0 1px 0 rgba(255,255,255,0.18) inset' } : {}}>
-            <Icon name={taxInvoice?"check":"plus"} size={13}/> ใบกำกับภาษี
-          </button>
-          <button type="button" onClick={()=>setShowNotes(v=>!v)}
-            className={"flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-md text-xs font-medium border transition " + (showNotes||notes?"text-white":"bg-white text-muted border-hairline hover:text-ink")}
-            style={showNotes||notes ? { background: 'linear-gradient(180deg, rgba(204,120,92,0.85) 0%, rgba(184,100,72,0.92) 100%)', borderColor: 'rgba(255,255,255,0.18)', boxShadow: '0 2px 8px rgba(184,100,72,0.35), 0 1px 0 rgba(255,255,255,0.18) inset' } : {}}>
-            <Icon name="edit" size={13}/> หมายเหตุ {notes && <span className="w-1.5 h-1.5 bg-white/70 rounded-full"/>}
-          </button>
+        {/* Section: ตัวเลือกเสริม — mini-card. Same glass-soft surface. */}
+        <div className="glass-soft !bg-white/75 ring-1 ring-hairline shadow-sm rounded-xl p-3 mb-3">
+          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface-cream-strong text-muted text-[10px] font-semibold uppercase tracking-wider mb-2">
+            <Icon name="plus" size={11}/> ตัวเลือกเสริม
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={()=>setTaxInvoiceModalOpen(true)}
+              className={"flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-md text-xs font-medium border transition " + (taxInvoice?"text-white":"bg-white text-muted border-hairline hover:text-ink hover:bg-white/90")}
+              style={taxInvoice ? { background: 'linear-gradient(180deg, rgba(204,120,92,0.85) 0%, rgba(184,100,72,0.92) 100%)', borderColor: 'rgba(255,255,255,0.18)', boxShadow: '0 2px 8px rgba(184,100,72,0.35), 0 1px 0 rgba(255,255,255,0.18) inset' } : {}}>
+              <Icon name={taxInvoice?"check":"plus"} size={13}/> ใบกำกับภาษี
+            </button>
+            <button type="button" onClick={()=>setShowNotes(v=>!v)}
+              className={"flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-md text-xs font-medium border transition " + (showNotes||notes?"text-white":"bg-white text-muted border-hairline hover:text-ink")}
+              style={showNotes||notes ? { background: 'linear-gradient(180deg, rgba(204,120,92,0.85) 0%, rgba(184,100,72,0.92) 100%)', borderColor: 'rgba(255,255,255,0.18)', boxShadow: '0 2px 8px rgba(184,100,72,0.35), 0 1px 0 rgba(255,255,255,0.18) inset' } : {}}>
+              <Icon name="edit" size={13}/> หมายเหตุ {notes && <span className="w-1.5 h-1.5 bg-white/70 rounded-full"/>}
+            </button>
+          </div>
+
+          {taxInvoice && (
+            <button type="button" onClick={()=>setTaxInvoiceModalOpen(true)}
+              className={"w-full text-left bg-surface-cream-strong/60 border rounded-md p-2.5 mt-2 fade-in flex items-center gap-2 hover:bg-surface-cream-strong transition " + (buyerNameErr ? "border-error" : "hairline")}>
+              <Icon name="receipt" size={14} className="text-primary flex-shrink-0"/>
+              <div className="flex-1 min-w-0 text-xs">
+                <div className="font-medium truncate">{buyer.name || <span className="text-error">— ยังไม่ได้กรอกชื่อ —</span>}</div>
+                <div className="text-muted-soft truncate text-xs">
+                  {[buyer.taxId, buyer.invoiceNo].filter(Boolean).join(' · ') || 'แตะเพื่อกรอกข้อมูลเพิ่มเติม'}
+                </div>
+              </div>
+              <Icon name="edit" size={12} className="text-muted-soft flex-shrink-0"/>
+            </button>
+          )}
+
+          {showNotes && (
+            <textarea className="input !py-2 !text-sm mt-2 fade-in" rows="2" placeholder="หมายเหตุบนบิล (เช่น ลูกค้ามีรอยขีดข่วน, รอของลอตต่อ)" value={notes} onChange={e=>setNotes(e.target.value)}/>
+          )}
         </div>
 
-        {taxInvoice && (
-          <button type="button" onClick={()=>setTaxInvoiceModalOpen(true)}
-            className={"w-full text-left bg-white border rounded-md p-2.5 mb-3 fade-in flex items-center gap-2 hover:bg-white/80 transition " + (buyerNameErr ? "border-error" : "hairline")}>
-            <Icon name="receipt" size={14} className="text-primary flex-shrink-0"/>
-            <div className="flex-1 min-w-0 text-xs">
-              <div className="font-medium truncate">{buyer.name || <span className="text-error">— ยังไม่ได้กรอกชื่อ —</span>}</div>
-              <div className="text-muted-soft truncate text-xs">
-                {[buyer.taxId, buyer.invoiceNo].filter(Boolean).join(' · ') || 'แตะเพื่อกรอกข้อมูลเพิ่มเติม'}
-              </div>
-            </div>
-            <Icon name="edit" size={12} className="text-muted-soft flex-shrink-0"/>
-          </button>
-        )}
-
-        {showNotes && (
-          <textarea className="input !py-2 !text-sm mb-3 fade-in" rows="2" placeholder="หมายเหตุบนบิล (เช่น ลูกค้ามีรอยขีดข่วน, รอของลอตต่อ)" value={notes} onChange={e=>setNotes(e.target.value)}/>
-        )}
-
-        <div className="border-t hairline pt-3">
+        {/* Total band — thicker top border + slight extra padding so the
+            grand-total rows + "ชำระเงิน" CTA visually separate from the
+            mini-cards above. No card wrapper here so the big number reads
+            as the natural climax of the receipt. */}
+        <div className="border-t-2 border-ink/10 pt-4 mt-1">
           <div className="flex justify-between text-sm text-muted mb-1"><span>รวมก่อนลด</span><span className="tabular-nums">{fmtTHB(subtotal)}</span></div>
           <div className="flex justify-between text-xs text-muted-soft mb-1"><span>ก่อนหัก VAT 7%</span><span className="tabular-nums">{fmtTHB(vatBreakdown(grand).exVat)}</span></div>
           <div className="flex justify-between text-xs text-muted-soft mb-2"><span>VAT 7%</span><span className="tabular-nums">{fmtTHB(vatBreakdown(grand).vat)}</span></div>
