@@ -120,6 +120,17 @@ const fmtTHB = (n) => roundMoney(n).toLocaleString("th-TH", { minimumFractionDig
 const fmtMoney = (n) => roundMoney(n).toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const fmtDate = (s) => s ? new Date(s).toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" }) : "-";
 const fmtDateTime = (s) => s ? new Date(s).toLocaleString("th-TH", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "-";
+
+// True when the viewport is at or below Tailwind's `lg` breakpoint
+// (1024px) — used to suppress page-entry auto-focus on phones/tablets
+// so the iOS keyboard doesn't pop up uninvited when the user lands on
+// a view. Desktop still gets auto-focus for fast keyboard workflows.
+// `matchMedia` is preferred over `innerWidth` because it stays in sync
+// with the browser's media-query evaluation (orientation, zoom, etc.).
+const isMobileViewport = () =>
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(max-width: 1023px)').matches;
 // Bangkok-local YYYY-MM-DD — avoids the off-by-one bug when the server/client clock is in UTC
 // and the sale happens after 17:00 UTC (= 00:00 next day in Bangkok).
 const dateISOBangkok = (d) => (d || new Date()).toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
@@ -358,9 +369,14 @@ function Modal({ open, onClose, title, children, footer, wide }) {
 
     // Focus the first focusable child after the dialog mounts and CSS lays
     // out (a 0ms timeout is enough; rAF here would skip a paint).
+    // On mobile we deliberately focus the dialog root instead of the
+    // first input — this keeps the focus trap working for a11y but
+    // prevents the iOS keyboard from auto-popping every time the user
+    // opens a modal. The user can tap the input themselves when ready.
     const t = setTimeout(() => {
       const root = dialogRef.current;
       if (!root) return;
+      if (isMobileViewport()) { root.focus(); return; }
       const first = root.querySelector(FOCUSABLE_SELECTOR);
       (first || root).focus();
     }, 0);
@@ -411,10 +427,17 @@ function Modal({ open, onClose, title, children, footer, wide }) {
       >
         <div className="px-5 py-4 border-b hairline flex items-center justify-between flex-shrink-0">
           <div className="font-display text-xl lg:text-2xl">{title}</div>
-          <button className="btn-ghost !p-2" onClick={onClose} aria-label="ปิด"><Icon name="x" size={20}/></button>
+          {/* Close button gets a 44pt hit zone on mobile so it's easy
+              to tap with a thumb. Visible icon size is unchanged. */}
+          <button className="btn-ghost icon-btn-44 lg:!p-2 lg:!w-auto lg:!h-auto" onClick={onClose} aria-label="ปิด"><Icon name="x" size={20}/></button>
         </div>
         <div className="p-5 overflow-y-auto flex-1">{children}</div>
-        {footer && <div className="px-5 py-4 border-t hairline flex justify-end gap-2 flex-shrink-0 pb-safe">{footer}</div>}
+        {/* Footer: on mobile we stack buttons vertically (primary on top
+            via flex-col-reverse since callers pass [secondary, primary]
+            left-to-right). Each child is forced full-width through
+            `.modal-footer-row > button` so the user can tap anywhere on
+            the bar. Desktop keeps the original right-aligned row. */}
+        {footer && <div className="px-5 py-4 border-t hairline flex flex-col-reverse lg:flex-row lg:justify-end gap-2 flex-shrink-0 pb-safe modal-footer-row">{footer}</div>}
       </div>
     </div>
   );
@@ -2839,7 +2862,7 @@ function LoginScreen() {
           <form onSubmit={submit} className="space-y-4">
             <div>
               <label className="text-xs uppercase tracking-wider text-muted font-medium">อีเมล</label>
-              <input type="email" autoFocus inputMode="email" autoComplete="email" className="input mt-1" value={email} onChange={e=>setEmail(e.target.value)} required />
+              <input type="email" autoFocus={!isMobileViewport()} inputMode="email" autoComplete="email" className="input mt-1" value={email} onChange={e=>setEmail(e.target.value)} required />
             </div>
             <div>
               <label className="text-xs uppercase tracking-wider text-muted font-medium">รหัสผ่าน</label>
@@ -3000,7 +3023,7 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
           <div className="text-muted-soft mx-1">·</div>
           <div className="text-sm text-muted">{title}</div>
         </div>
-        <button className="btn-ghost !p-2" onClick={()=>setOpenMenu(true)} aria-label="menu">
+        <button className="btn-ghost icon-btn-44 !p-0" onClick={()=>setOpenMenu(true)} aria-label="menu">
           <Icon name="menu" size={22}/>
         </button>
       </div>
@@ -3106,7 +3129,7 @@ function MobileTabBar({ view, setView }) {
   const posAllowed = posItem ? canNavigate(role, posItem) : false;
 
   return (
-    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 pb-safe mobile-tabbar-wrap" role="navigation" aria-label="หลัก">
+    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 mobile-tabbar-wrap" role="navigation" aria-label="หลัก">
       <div className="mobile-tabbar">
         {left.map(renderTab)}
         {posItem && (
@@ -3671,7 +3694,7 @@ function POSView() {
             }
             setSearch(v);
           }}
-          autoFocus
+          autoFocus={!isMobileViewport()}
         />
         {/* Always rendered so opacity transition can play on both
             directions. NOTE: we deliberately avoid `btn-ghost` here —
@@ -4096,9 +4119,12 @@ function POSView() {
         {ResultsList}
       </div>
 
-      {/* MOBILE FLOATING CART BUTTON */}
+      {/* MOBILE FLOATING CART BUTTON — sits just above the new bottom-
+          attached mobile tab bar (≈ 76px tall + iPhone home indicator).
+          Using calc() so the gap stays consistent across all iPhones
+          regardless of safe-area-inset-bottom value. */}
       {cart.length>0 && !cartOpen && (
-        <button className="lg:hidden fixed bottom-28 left-4 right-4 z-30 btn-primary !rounded-xl !py-4 !px-5 flex items-center justify-between fade-in" onClick={()=>setCartOpen(true)}>
+        <button className="lg:hidden fixed left-4 right-4 z-30 btn-primary !rounded-xl !py-4 !px-5 flex items-center justify-between fade-in" style={{ bottom: 'calc(84px + env(safe-area-inset-bottom))' }} onClick={()=>setCartOpen(true)}>
           <div className="flex items-center gap-3">
             <div className="relative">
               <Icon name="cart" size={24}/>
@@ -4825,7 +4851,7 @@ function ProductsView() {
         <div className="relative flex-1">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted z-10"><Icon name="search" size={18} strokeWidth={2.25}/></span>
           <input className="input !pl-10 w-full" placeholder="ชื่อรุ่น หรือ บาร์โค้ด"
-            value={queryInput} onChange={e=>setQueryInput(e.target.value)} autoFocus />
+            value={queryInput} onChange={e=>setQueryInput(e.target.value)} autoFocus={!isMobileViewport()} />
           {queryInput && (
             <button type="button" onClick={()=>{ setQueryInput(''); setFilter(f=>({...f, query: ''})); }}
               className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-muted-soft hover:text-ink rounded-md">
@@ -4841,11 +4867,16 @@ function ProductsView() {
           <option value="price-desc">ราคา สูง → ต่ำ</option>
           <option value="name">ชื่อรุ่น A-Z</option>
         </select>
-        <button type="button" className="btn-secondary !py-2 !text-sm sm:!w-auto relative"
-          onClick={()=>setSheetOpen(true)} title="ตัวกรองขั้นสูง (วัสดุ / สี / ราคา / สต็อก)">
-          <Icon name="filter" size={14}/> ตัวกรอง
+        {/* Mobile: icon-only 44pt square. Desktop: icon + text + count
+            chip. The count badge stays on both layouts so the user can
+            see active filters without opening the sheet. */}
+        <button type="button" className="btn-secondary !py-2 !text-sm sm:!w-auto relative icon-btn-44 sm:!w-auto sm:!h-auto"
+          onClick={()=>setSheetOpen(true)} title="ตัวกรองขั้นสูง (วัสดุ / สี / ราคา / สต็อก)"
+          aria-label="ตัวกรองขั้นสูง">
+          <Icon name="filter" size={18}/>
+          <span className="hidden sm:inline sm:ml-1">ตัวกรอง</span>
           {advancedCount > 0 && (
-            <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-on-primary text-[10px] font-bold tabular-nums">
+            <span className="absolute -top-1 -right-1 sm:static sm:ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-on-primary text-[10px] font-bold tabular-nums border border-canvas sm:border-0">
               {advancedCount}
             </span>
           )}
@@ -6103,8 +6134,18 @@ function SalesView({ onGoPOS }) {
           <div className="font-display text-3xl lg:text-4xl mt-1">{fmtTHB(total)}</div>
           <div className="text-xs text-muted mt-1">{filteredOrders.length} บิล</div>
         </div>
-        <button className="lg:hidden btn-secondary !py-2 !px-3" onClick={()=>setFilterOpen(o=>!o)}>
-          <Icon name="filter" size={16}/> ตัวกรอง
+        {/* Mobile filter toggle — icon-only with a 44pt hit zone. Text
+            label moved to aria-label so screen readers still announce
+            "ตัวกรอง". Visible badge stays subtle so it doesn't compete
+            with the headline total. */}
+        <button
+          type="button"
+          className="lg:hidden icon-btn-44 btn-secondary !p-0"
+          onClick={()=>setFilterOpen(o=>!o)}
+          aria-label="ตัวกรอง"
+          aria-expanded={filterOpen}
+        >
+          <Icon name="filter" size={20}/>
         </button>
       </div>
 
@@ -6489,13 +6530,26 @@ function ReceiveView() {
     { k: 'claim',   label: 'ส่งเคลม / คืน',   icon: 'package-out', hint: 'ส่งสินค้าคืนบริษัท · หักสต็อก' },
   ];
   const TabGroup = <KindTabs tabs={tabs} current={tab} onChange={setTab} Icon={Icon} />;
+  // Header actions. On desktop we render icon + text. On mobile we
+  // collapse to icon-only 44pt squares so the row fits beside the kind
+  // tabs without wrapping to a second line on iPhone-width screens.
   const ActionButtons = (
-    <div className="grid grid-cols-2 gap-2">
-      <button className="btn-add-product !py-2 !text-sm" onClick={()=>setAddProductOpen(true)}>
-        <Icon name="plus" size={15}/> เพิ่มรุ่นสินค้า
+    <div className="flex items-center gap-2 lg:grid lg:grid-cols-2">
+      <button
+        className="btn-add-product !py-2 !text-sm icon-btn-44 lg:!w-auto lg:!h-auto"
+        onClick={()=>setAddProductOpen(true)}
+        aria-label="เพิ่มรุ่นสินค้า"
+      >
+        <Icon name="plus" size={18}/>
+        <span className="hidden lg:inline lg:ml-1">เพิ่มรุ่นสินค้า</span>
       </button>
-      <button className="btn-secondary !py-2 !text-sm" onClick={()=>setHistoryOpen(true)}>
-        <Icon name="receipt" size={16}/> ดูประวัติ
+      <button
+        className="btn-secondary !py-2 !text-sm icon-btn-44 lg:!w-auto lg:!h-auto"
+        onClick={()=>setHistoryOpen(true)}
+        aria-label="ดูประวัติ"
+      >
+        <Icon name="receipt" size={18}/>
+        <span className="hidden lg:inline lg:ml-1">ดูประวัติ</span>
       </button>
     </div>
   );
@@ -6536,9 +6590,16 @@ function ReceiveView() {
 }
 function ReturnView()  {
   const [historyOpen, setHistoryOpen] = useState(false);
+  // Same pattern as ReceiveView's ActionButtons: icon-only on mobile,
+  // icon + text on desktop. Keeps the iPhone header from wrapping.
   const HistoryBtn = (
-    <button className="btn-secondary !py-2 !text-sm" onClick={()=>setHistoryOpen(true)}>
-      <Icon name="receipt" size={16}/> ดูประวัติรับคืน
+    <button
+      className="btn-secondary !py-2 !text-sm icon-btn-44 lg:!w-auto lg:!h-auto"
+      onClick={()=>setHistoryOpen(true)}
+      aria-label="ดูประวัติรับคืน"
+    >
+      <Icon name="receipt" size={18}/>
+      <span className="hidden lg:inline lg:ml-1">ดูประวัติรับคืน</span>
     </button>
   );
   return (
@@ -7106,7 +7167,7 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind }, 
                   }
                   value={search}
                   onChange={e=>setSearch(e.target.value)}
-                  autoFocus
+                  autoFocus={!isMobileViewport()}
                 />
                 {search && (
                   <button className="absolute right-3 top-1/2 -translate-y-1/2 btn-ghost !p-2 !min-h-0" onClick={()=>{setSearch("");setResults([]);}} aria-label="ล้างคำค้น">
@@ -10120,7 +10181,7 @@ function App() {
           <Sidebar view={view} setView={setView} userEmail={session.user?.email}
             onOpenSettings={()=>setSettingsOpen(true)}
             onOpenUserManagement={()=>setUserMgmtOpen(true)} />
-          <main className="flex-1 min-h-screen pb-24 lg:pb-0 lg:pl-64">
+          <main className="flex-1 min-h-screen lg:pl-64 main-mobile-pb">
             <MobileTopBar title={titles[view].t} userEmail={session.user?.email}
               onLogout={()=>sb.auth.signOut()}
               onOpenSettings={()=>setSettingsOpen(true)}

@@ -903,37 +903,40 @@
     border-bottom: 1px solid rgba(180, 168, 148, 0.30);
     box-shadow: 0 -1px 0 rgba(255,255,255,0.7) inset, 0 2px 8px -2px rgba(20,20,19,0.06);
   }
-  /* Phase 5: floating pill bar with center FAB ("ขาย") as a regular flex
-     child. Using flex layout (not absolute positioning) keeps the FAB
-     perfectly centered between the two tab halves regardless of viewport
-     width — no math, no notch geometry to keep in sync. The FAB is lifted
-     visually with a negative top margin while staying in flow. */
+  /* Mobile UI overhaul (iPhone-optimized): bottom-attached bar instead
+     of a floating pill so it doesn't blend into the cream canvas. The
+     `<nav>` element (.mobile-tabbar-wrap) is just a positioning shell;
+     the visual surface lives on .mobile-tabbar so we can keep flex
+     layout for the center FAB. The bar includes `safe-area-inset-bottom`
+     so the home indicator on iPhone never overlaps the tap targets. */
   .mobile-tabbar-wrap {
-    display: flex;
-    justify-content: center;
-    /* Match the floating cart button's `left-4 right-4` gutters so both
-       elements share the same horizontal footprint when stacked. */
-    padding: 0 16px 8px;
-    pointer-events: none; /* let taps fall through to .mobile-tabbar */
+    display: block;
+    padding: 0;
+    pointer-events: none; /* let taps fall through outside the bar */
   }
   .mobile-tabbar {
     pointer-events: auto;
     display: flex;
     align-items: center;
     gap: 4px;
-    background: linear-gradient(135deg, rgba(255, 254, 252, 0.94), rgba(250, 249, 245, 0.86));
-    backdrop-filter: blur(40px) saturate(200%);
-    -webkit-backdrop-filter: blur(40px) saturate(200%);
-    border: 1px solid rgba(255, 255, 255, 0.6);
-    border-radius: 24px;
+    /* Frosted glass with a slightly denser tint so the bar reads as a
+       distinct surface even when the page beneath is also cream. */
+    background: rgba(255, 251, 245, 0.88);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    /* Single hard top edge — no side/bottom border. Reads as "the bar"
+       rather than "a floating pill". */
+    border-top: 1px solid rgba(180, 168, 148, 0.45);
+    border-radius: 0;
     box-shadow:
-      0 8px 32px -8px rgba(20, 20, 19, 0.18),
-      0 2px 8px -2px rgba(20, 20, 19, 0.08),
-      0 1px 0 rgba(255, 255, 255, 0.75) inset,
-      0 -1px 0 rgba(180, 168, 148, 0.12) inset;
+      0 -4px 18px -8px rgba(20, 20, 19, 0.12),
+      0 1px 0 rgba(255, 255, 255, 0.70) inset;
     width: 100%;
-    max-width: 480px;
-    padding: 4px;
+    max-width: none;
+    /* `env(safe-area-inset-bottom)` is the iPhone home indicator height.
+       Adding it to the bar's own padding-bottom keeps the tab buttons
+       safely above the indicator without changing their visual size. */
+    padding: 6px 8px max(6px, env(safe-area-inset-bottom));
   }
 
   .tab-btn {
@@ -986,10 +989,13 @@
      lift while keeping the button in flow. Rounded-square shape matches the
      tab bar's rounded-pill aesthetic better than a full circle. */
   .mobile-fab {
-    flex: 0 0 56px;
-    width: 56px;
-    height: 56px;
-    margin: -10px 6px 0;        /* gentle lift, breathing room left/right */
+    flex: 0 0 58px;
+    width: 58px;
+    height: 58px;
+    /* Lifted slightly above the bar so the FAB still reads as primary
+       action. Lift is intentionally subtle (-6px) now that the bar is
+       full-width / flush to the bottom — over-lifting looked detached. */
+    margin: -6px 6px 0;
     border-radius: 18px;        /* rounded square, consistent with .tab-btn */
     display: flex;
     align-items: center;
@@ -1663,6 +1669,62 @@
   /* ==========  SAFE AREA  ========== */
   .pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 8px); }
   .pt-safe { padding-top: max(env(safe-area-inset-top), 0px); }
+  /* Position helper: pin an element to the bottom of the viewport while
+     respecting the iPhone home indicator inset. */
+  .bottom-safe { bottom: max(env(safe-area-inset-bottom), 0px); }
+
+  /* ==========  MOBILE TOUCH TARGETS (iPhone-optimized) ========== */
+  /* Below 1024px (Tailwind `lg` breakpoint) we enforce Apple HIG-style
+     44pt minimums on the primary interactive controls and prevent the
+     accidental 2-line wrapping that made some labels feel cramped. */
+  @media (max-width: 1023px) {
+    .btn-primary,
+    .btn-secondary,
+    .btn-danger,
+    .btn-ghost {
+      min-height: 44px;
+      white-space: nowrap;
+    }
+    /* `font-size: 16px` is the magic threshold that stops iOS Safari
+       from auto-zooming the viewport when an input is focused — keeping
+       it stops the page from "jumping" mid-checkout. */
+    .input,
+    select.input,
+    textarea.input,
+    input.input {
+      min-height: 44px;
+      font-size: 16px;
+    }
+    /* Sales-history filter row was overflowing into 2 lines on iPhone
+       SE width — `nowrap` + `truncate` keeps everything on one line. */
+    .badge-pill { white-space: nowrap; }
+    /* Modal action row: stack buttons full-width on mobile so the
+       cashier can confidently tap "ยืนยัน" / "ยกเลิก" with a thumb.
+       The wrapper uses flex-col-reverse to keep the primary action
+       (rightmost in flex-row source order) at the top of the stack. */
+    .modal-footer-row > button { width: 100%; }
+  }
+  /* Bottom padding for the main scroll area on mobile so content
+     scrolls clear of the new bottom-attached tab bar (~76px) plus the
+     iPhone home indicator (env(safe-area-inset-bottom)). Reset to 0 on
+     desktop where the sidebar replaces the tab bar. */
+  .main-mobile-pb { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+  @media (min-width: 1024px) {
+    .main-mobile-pb { padding-bottom: 0; }
+  }
+
+  /* Square 44pt hit target for icon-only buttons (e.g. the filter
+     toggle in SalesView header). Visible bounds can be smaller; the
+     element keeps the 44pt touch zone via padding. */
+  .icon-btn-44 {
+    width: 44px;
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    -webkit-tap-highlight-color: transparent;
+  }
 
   /* Reduce motion preference */
   @media (prefers-reduced-motion: reduce) {
