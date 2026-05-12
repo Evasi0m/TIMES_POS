@@ -1363,19 +1363,11 @@ function AppSettingsModal({ open, onClose }) {
 
   // Tab definitions. `adminOnly` filters them out for non-admin users so
   // the nav doesn't show locked/unreachable items. Order here = display order.
-  // `activeClass` is applied when the tab is selected — each topic gets its
-  // own tinted pill colour (display=blue, shop=amber, telegram=sky,
-  // paylater=emerald) so the user can visually associate the tab with the
-  // content category at a glance.
   const TABS = [
-    { id: 'display',  label: 'การแสดงผล',  icon: 'edit',       adminOnly: false,
-      activeClass: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200 shadow-sm' },
-    { id: 'shop',     label: 'ข้อมูลร้าน',  icon: 'store',      adminOnly: true,
-      activeClass: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200 shadow-sm' },
-    { id: 'telegram', label: 'Telegram',     icon: 'zap',        adminOnly: true,
-      activeClass: 'bg-sky-50 text-sky-700 ring-1 ring-sky-200 shadow-sm' },
-    { id: 'paylater', label: 'สูตรคำนวณ',    icon: 'calculator', adminOnly: true,
-      activeClass: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 shadow-sm' },
+    { id: 'display',  label: 'การแสดงผล',  icon: 'edit',       adminOnly: false },
+    { id: 'shop',     label: 'ข้อมูลร้าน',  icon: 'store',      adminOnly: true  },
+    { id: 'telegram', label: 'Telegram',     icon: 'zap',        adminOnly: true  },
+    { id: 'paylater', label: 'สูตรคำนวณ',    icon: 'calculator', adminOnly: true  },
   ];
   const visibleTabs = TABS.filter(t => isAdmin || !t.adminOnly);
   // Footer "บันทึก" is only meaningful on the shop-info tab. Other tabs
@@ -1397,33 +1389,30 @@ function AppSettingsModal({ open, onClose }) {
         )}
       </>}>
       {/* ── Tab nav ──
-          Glass-soft pill bar (same shape as the Insights/Dashboard `Segment`
-          on the analytics page). Each tab carries its own topic colour via
-          `activeClass` — display=blue, shop=amber, telegram=sky,
-          paylater=emerald — so the active section is both highlighted
-          and visually coded. Horizontal scroll keeps the row tidy on phones. */}
-      <div className="-mt-1 mb-4 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-        <div className="inline-flex glass-soft rounded-xl p-1 shadow-sm">
-          {visibleTabs.map(t => {
-            const active = activeTab === t.id;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setActiveTab(t.id)}
-                className={
-                  'px-3.5 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 whitespace-nowrap transition-all ' +
-                  (active
-                    ? t.activeClass
-                    : 'text-muted hover:text-ink hover:bg-white/40')
-                }
-              >
-                <Icon name={t.icon} size={14}/>
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
+          Horizontal scroll on small screens (visibleTabs may be 4 wide).
+          Underline indicator + colour swap make the active tab obvious;
+          chosen over pills because it reads less "buttony" and matches
+          common settings patterns (iOS/Android system settings, etc.). */}
+      <div className="flex gap-1 -mt-1 mb-4 border-b hairline overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+        {visibleTabs.map(t => {
+          const active = activeTab === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setActiveTab(t.id)}
+              className={
+                "flex items-center gap-1.5 px-3 py-2.5 text-sm whitespace-nowrap transition border-b-2 -mb-px " +
+                (active
+                  ? "border-primary text-primary font-semibold"
+                  : "border-transparent text-muted hover:text-ink")
+              }
+            >
+              <Icon name={t.icon} size={14}/>
+              {t.label}
+            </button>
+          );
+        })}
       </div>
 
       <div className="min-h-[280px]">
@@ -1515,13 +1504,10 @@ function FontSizePickerInline() {
           type="button"
           onClick={() => setSize(s.id)}
           aria-pressed={size === s.id}
-          className={"flex-1 rounded-lg font-medium transition text-sm " + (
+          className={"flex-1 py-2.5 rounded-lg font-medium transition text-sm " + (
             size === s.id
-              // Coral gradient pill — reuses the sidebar "การตั้งค่า"
-              // button style so the active-selection language stays
-              // consistent across the app.
-              ? "btn-app-settings-sidebar"
-              : "py-2.5 lg-tile text-muted hover:text-ink"
+              ? "bg-primary text-on-primary border border-primary shadow-sm"
+              : "lg-tile text-muted hover:text-ink"
           )}
           style={{ fontSize: s.px === 16 ? '13px' : s.px === 18 ? '15px' : '17px' }}
         >
@@ -2791,6 +2777,11 @@ function POSView() {
   };
   const lineNet = (l) => applyDiscounts(l.unit_price, l.quantity, l.discount1_value, l.discount1_type, l.discount2_value, l.discount2_type);
   const subtotal = useMemo(()=> cart.reduce((s,l)=> s + lineNet(l), 0), [cart]);
+  // Raw retail (sticker) total — `unit_price × quantity` ignoring line
+  // discounts. Used as the ceiling for "เงินที่ร้านได้รับ" because the
+  // platform CAN remit more than the customer paid (seller-side promo
+  // subsidies on TikTok/Shopee) but never above the printed sticker price.
+  const retailTotal = useMemo(()=> cart.reduce((s,l)=> s + (Number(l.unit_price)||0) * (Number(l.quantity)||0), 0), [cart]);
   const netPriceNum = netPrice === "" || netPrice == null ? null : Math.max(0, Math.min(Number(netPrice)||0, subtotal));
   const grand = netPriceNum == null ? subtotal : netPriceNum;
   // Phase 4.3: animate the displayed grand from previous value → new value over 250ms
@@ -2808,20 +2799,20 @@ function POSView() {
   const handleNetReceivedBlur = useCallback(async () => {
     const val = Number(netReceived);
     if (!Number.isFinite(val) || val <= 0) return;
-    if (grand <= 0) return;
-    if (val <= grand + 0.01) return;
+    if (retailTotal <= 0) return;
+    if (val <= retailTotal + 0.01) return;
     await askConfirm({
       title: 'ใส่ตัวเลขเกินราคาป้าย',
       message:
-        `ยอดที่ร้านได้รับ ${fmtTHB(val)} สูงกว่าราคาที่ลูกค้าจ่าย ${fmtTHB(grand)}\n` +
-        `ระบบจะล้างช่องนี้ — กรุณากรอกใหม่ให้ไม่เกินยอดที่ลูกค้าจ่าย`,
+        `ยอดที่ร้านได้รับ ${fmtTHB(val)} สูงกว่าราคาป้ายรวม ${fmtTHB(retailTotal)}\n` +
+        `ระบบจะล้างช่องนี้ — กรุณากรอกใหม่ให้ไม่เกินราคาป้าย`,
       okLabel: 'ตกลง',
       cancelLabel: 'ปิด',
     });
     setNetReceived('');
     // Defer focus so the dialog's close animation doesn't steal it back.
     setTimeout(() => { try { netReceivedRef.current?.focus(); } catch {} }, 60);
-  }, [netReceived, grand, askConfirm]);
+  }, [netReceived, retailTotal, askConfirm]);
 
   // Form validity — drives the submit button disabled state and the
   // submit() guard. Centralised so both stay in sync.
@@ -3869,11 +3860,6 @@ function ProductsView() {
   // recent active receive batch — surfaces "current cost" alongside the catalog
   // cost_price so the user can spot drift without opening each product.
   const [latestCostMap, setLatestCostMap] = useState({});
-  // Cost map is fetched *after* products land (separate, paginated query that
-  // can take a few seconds on first load). Track it independently so the
-  // "ทุนล่าสุด" column shows a spinner instead of an em-dash while we wait —
-  // an em-dash means "never received" which is misleading mid-fetch.
-  const [costLoading, setCostLoading] = useState(true);
   const [sheetOpen, setSheetOpen] = useState(false);
   // Render only the first N filtered rows; "ดูเพิ่ม" button bumps this. Keeps
   // initial paint fast even when the brand chip is "ทั้งหมด" (6k items).
@@ -3948,7 +3934,6 @@ function ProductsView() {
     // Latest receive cost per product (chunked because IN() can hold ~1000 ids)
     const ids = enriched.map(p => p.id).filter(Boolean);
     if (ids.length) {
-      setCostLoading(true);
       try {
         const map = {};
         for (let i = 0; i < ids.length; i += 500) {
@@ -3975,10 +3960,8 @@ function ProductsView() {
         }
         setLatestCostMap(map);
       } catch { /* non-fatal — table still renders without "ทุนล่าสุด" */ }
-      finally { setCostLoading(false); }
     } else {
       setLatestCostMap({});
-      setCostLoading(false);
     }
   }, [toast]);
 
@@ -4301,10 +4284,6 @@ function ProductsView() {
                 <div className="col-span-2 text-right tabular-nums">
                   {lc ? (
                     <span className="font-medium text-ink">{fmtPlain(lc.unit_price)}</span>
-                  ) : costLoading ? (
-                    <span className="inline-flex justify-end" title="กำลังโหลดทุนล่าสุด">
-                      <span className="spinner" aria-label="กำลังโหลด" />
-                    </span>
                   ) : (
                     <span className="text-muted-soft text-xs" title="ยังไม่เคยรับเข้า">—</span>
                   )}
@@ -6257,12 +6236,9 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind }, 
       // belt-and-braces: also reject at submit time so accidental keyboard
       // submits can't bypass it.
       m.origSale = !selectedSale || !origSaleId;
-      // Tri-state goods_returned: must be an explicit true/false. `null`
-      // means the user never ticked either box → block submit.
-      m.goodsReturned = goodsReturned === null;
     }
     return m;
-  }, [kind, date, supplierName, returnReason, selectedSale, origSaleId, goodsReturned]);
+  }, [kind, date, supplierName, returnReason, selectedSale, origSaleId]);
 
   const autoInvoiceNo = () => {
     const d = new Date();
@@ -6343,7 +6319,7 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind }, 
       const verb = kind==='receive' ? 'การรับ' : kind==='claim' ? 'ส่งเคลม' : 'การคืน';
       toast.push(`บันทึก${verb} #${head.id} สำเร็จ`, 'success');
       setItems([]); setNotes(""); setSupplierName(""); setSupplierInvoiceNo(""); setOrigSaleId(""); setReturnReason("");
-      setSelectedSale(null); setSaleSearch(""); setGoodsReturned(null);
+      setSelectedSale(null); setSaleSearch(""); setGoodsReturned(true);
       // Cost % toggle: 'once' resets after save, 'persist' stays on until leaving page
       if (costPctMode !== 'persist') { setCostPctEnabled(false); setCostPct(58); setCostPctMode('once'); }
       setAttemptedSubmit(false); setConfirmOpen(false);
@@ -6493,76 +6469,31 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind }, 
               />
             )}
 
-            {/* Refund flow choice (return form only) — two mutually-exclusive
-                checkboxes acting as a required radio group:
-                  ✓ ได้รับสินค้าคืน  → RPC adds stock back (normal return)
-                  ✓ ไม่ได้รับสินค้าคืน → RPC skips stock adjust (lost goods)
-                Neither defaults: user MUST tick one before save, otherwise
-                the form blocks submit. We use checkboxes (not <input radio>)
-                to keep the visual language identical to the rest of this
-                form — and because radios can't be unchecked, which would
-                hide the "you forgot to choose" failure mode from the user. */}
+            {/* Refund-only toggle (return form only). When checked, the save
+                still records the financial reversal but the RPC skips
+                stock += qty for every line — used when the platform
+                refunded but the physical product never came back. */}
             {kind==='return' && (
-              <div className={
-                "rounded-xl p-3 transition-colors " +
-                (attemptedSubmit && missing.goodsReturned
-                  ? "ring-1 ring-error/40 bg-error/5 field-error-glow"
-                  : "")
-              }>
-                <div className="text-xs uppercase tracking-wider text-muted mb-2 flex items-center gap-1.5">
-                  <span>สถานะสินค้า <span className="text-error">*</span></span>
-                  {attemptedSubmit && missing.goodsReturned && (
-                    <span className="text-error normal-case tracking-normal">— กรุณาเลือก</span>
-                  )}
+              <label className={"flex items-start gap-3 cursor-pointer select-none p-3 rounded-xl border transition-colors " +
+                (!goodsReturned ? "border-[#8a6500]/40 bg-warning/10" : "border-hairline hover:border-primary/30")}>
+                <span className={"relative flex items-center justify-center w-5 h-5 rounded border flex-shrink-0 mt-0.5 transition-colors " +
+                  (!goodsReturned ? "border-[#8a6500]" : "bg-white border-hairline")}
+                  style={!goodsReturned ? { background: '#8a6500' } : undefined}>
+                  <input type="checkbox" className="sr-only"
+                    checked={!goodsReturned}
+                    onChange={e => setGoodsReturned(!e.target.checked)} />
+                  {!goodsReturned && <Icon name="check" size={13} className="text-white"/>}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className={"text-sm font-medium " + (!goodsReturned ? "text-[#8a6500]" : "")}>
+                    ไม่ได้รับสินค้าคืน (เงินคืนอย่างเดียว)
+                  </div>
+                  <div className="text-xs text-muted mt-0.5 leading-relaxed">
+                    ใช้เคสสินค้าหาย / ลูกค้าไม่ส่งกลับ แต่ platform คืนเงินแล้ว —
+                    ระบบจะบันทึกการคืนเงินโดย<strong>ไม่บวก stock กลับ</strong> และแยกแสดงเป็น "ของหาย" ในรายงานกำไรขาดทุน
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {/* Option A — physically returned (stock adds back) */}
-                  <label className={"flex items-start gap-3 cursor-pointer select-none p-3 rounded-xl border transition-colors " +
-                    (goodsReturned === true
-                      ? "border-primary bg-primary/5"
-                      : "border-hairline hover:border-primary/30")}>
-                    <span className={"relative flex items-center justify-center w-5 h-5 rounded border flex-shrink-0 mt-0.5 transition-colors " +
-                      (goodsReturned === true ? "bg-primary border-primary" : "bg-white border-hairline")}>
-                      <input type="checkbox" className="sr-only"
-                        checked={goodsReturned === true}
-                        onChange={() => setGoodsReturned(true)} />
-                      {goodsReturned === true && <Icon name="check" size={13} className="text-white"/>}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className={"text-sm font-medium " + (goodsReturned === true ? "text-primary" : "")}>
-                        ได้รับสินค้าคืน
-                      </div>
-                      <div className="text-xs text-muted mt-0.5 leading-relaxed">
-                        ลูกค้าส่งของกลับมาตามปกติ — ระบบจะ<strong>บวก stock กลับ</strong>เข้าคลัง
-                      </div>
-                    </div>
-                  </label>
-
-                  {/* Option B — refund-only (no stock change, lost goods) */}
-                  <label className={"flex items-start gap-3 cursor-pointer select-none p-3 rounded-xl border transition-colors " +
-                    (goodsReturned === false
-                      ? "border-[#8a6500]/50 bg-warning/15"
-                      : "border-hairline hover:border-primary/30")}>
-                    <span className={"relative flex items-center justify-center w-5 h-5 rounded border flex-shrink-0 mt-0.5 transition-colors " +
-                      (goodsReturned === false ? "border-[#8a6500]" : "bg-white border-hairline")}
-                      style={goodsReturned === false ? { background: '#8a6500' } : undefined}>
-                      <input type="checkbox" className="sr-only"
-                        checked={goodsReturned === false}
-                        onChange={() => setGoodsReturned(false)} />
-                      {goodsReturned === false && <Icon name="check" size={13} className="text-white"/>}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className={"text-sm font-medium " + (goodsReturned === false ? "text-[#8a6500]" : "")}>
-                        ไม่ได้รับสินค้าคืน (เงินคืนอย่างเดียว)
-                      </div>
-                      <div className="text-xs text-muted mt-0.5 leading-relaxed">
-                        เคสสินค้าหาย / ลูกค้าไม่ส่งกลับ แต่ platform คืนเงินแล้ว —
-                        <strong>ไม่บวก stock กลับ</strong> และแยกเป็น "ของหาย" ใน P&L
-                      </div>
-                    </div>
-                  </label>
-                </div>
-              </div>
+              </label>
             )}
 
             <div>
