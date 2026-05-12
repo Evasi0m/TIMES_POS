@@ -1328,7 +1328,9 @@ function AppSettingsModal({ open, onClose }) {
     setPaylaterBusy(true);
     const { error } = await sb.from('shop_settings').update({
       paylater_config: paylaterDraft,
-      updated_at: new Date().toISOString(),
+      // updated_at is stamped server-side by the BEFORE UPDATE trigger
+      // (tg_set_updated_at) — using the Postgres clock guarantees the
+      // timestamp reflects real time, not the cashier device's clock.
     }).eq('id', 1);
     setPaylaterBusy(false);
     if (error) { toast.push("บันทึกสูตรไม่ได้: " + mapError(error), 'error'); return; }
@@ -1355,7 +1357,7 @@ function AppSettingsModal({ open, onClose }) {
       shop_phone:     draft.shop_phone?.trim()    || null,
       shop_tax_id:    draft.shop_tax_id?.trim()   || null,
       receipt_footer: draft.receipt_footer?.trim()|| null,
-      updated_at:     new Date().toISOString(),
+      // updated_at stamped server-side (see tg_set_updated_at trigger).
     }).eq('id', 1);
     setBusy(false);
     if (error) { toast.push("บันทึกไม่ได้: " + mapError(error), 'error'); return; }
@@ -3137,14 +3139,18 @@ function MobileTabBar({ view, setView }) {
    PAGE HEADER (desktop)
 ========================================================= */
 function PageHeader({ title, subtitle, right }) {
+  // `subtitle` is kept in the signature for API compatibility with the
+  // call-sites that still pass it (POS / Inventory / Sales History) but
+  // is no longer rendered — the Thai title alone is enough, and the
+  // English kicker made the header feel top-heavy.
+  void subtitle;
   return (
-    <header className="hidden lg:flex px-10 pt-10 pb-6 items-end justify-between border-b hairline">
+    <header className="hidden lg:flex px-10 pt-8 pb-6 items-end justify-between border-b hairline">
       <div>
-        <div className="text-xs uppercase tracking-[1.5px] text-muted">{subtitle}</div>
-        {/* Right slot sits beside the h1 specifically (not the subtitle+h1
-            block) and is vertically centred against the title text so a
-            count badge feels visually anchored to the heading. */}
-        <div className="flex items-center gap-4 mt-2">
+        {/* Right slot sits beside the h1 specifically and is vertically
+            centred against the title so a count badge feels anchored
+            to the heading. */}
+        <div className="flex items-center gap-4">
           <h1 className="font-display text-5xl leading-tight text-ink">{title}</h1>
           {right}
         </div>
@@ -3563,7 +3569,11 @@ function POSView() {
       const discountR = roundMoney(discountAmount);
       const { vat } = vatBreakdown(grandR, VAT_RATE_DEFAULT);
       const headerPayload = {
-        sale_date: new Date().toISOString(), channel, payment_method: payment,
+        // sale_date is omitted on purpose — the column DEFAULT now() on
+        // sale_orders means Postgres stamps the actual server time, so
+        // the recorded bill time is always real time (Asia/Bangkok when
+        // displayed) regardless of the cashier device's clock.
+        channel, payment_method: payment,
         discount_value: discountR, discount_type: discountR > 0 ? 'net' : null,
         subtotal: subtotalR, total_after_discount: grandR, grand_total: grandR,
         vat_rate: VAT_RATE_DEFAULT, vat_amount: vat, price_includes_vat: true,
@@ -3594,8 +3604,19 @@ function POSView() {
       // Offline path: stash the sale in IndexedDB and let the SW-aware drainer
       // send it when the network returns. We can't open a receipt (no order id
       // yet), so we just confirm it's queued.
+      //
+      // Important: when queueing offline we DO stamp sale_date with the
+      // device clock at queue-time, because the drain may happen hours
+      // later (when network returns) and we don't want the bill to be
+      // recorded with the drain time. For the normal online path we
+      // omit sale_date entirely so Postgres now() stamps the real
+      // server time (independent of the cashier device clock).
+      const queueArgs = () => ({
+        p_header: { ...headerPayload, sale_date: new Date().toISOString() },
+        p_items: itemsPayload,
+      });
       if (window._isOnline && !window._isOnline()) {
-        await window._queueSale(rpcArgs);
+        await window._queueSale(queueArgs());
         toast.push(`บันทึกในคิวออฟไลน์ · ${fmtTHB(grandR)} (จะส่งเมื่อออนไลน์)`, 'info');
       } else {
         // Atomic: header + items + adjust_stock all in one Postgres transaction.
@@ -3606,7 +3627,7 @@ function POSView() {
           // than asking the user to redo the bill.
           const networkish = /Failed to fetch|NetworkError|TypeError/i.test(String(e1.message || e1));
           if (networkish && window._queueSale) {
-            await window._queueSale(rpcArgs);
+            await window._queueSale(queueArgs());
             toast.push(`บันทึกในคิวออฟไลน์ · ${fmtTHB(grandR)} (จะส่งเมื่อออนไลน์)`, 'info');
           } else {
             throw e1;
@@ -4758,7 +4779,7 @@ function ProductsView() {
       };
       if (p.id) {
         payload.cost_price = p.cost_price || 0;
-        payload.updated_at = new Date().toISOString();
+        // updated_at stamped server-side (see tg_set_updated_at trigger).
         const { error } = await sb.from('products').update(payload).eq('id', p.id);
         if (error) throw error;
         toast.push("บันทึกสินค้าสำเร็จ", "success");
@@ -5771,6 +5792,11 @@ function SalesView({ onGoPOS }) {
   const [reprintId, setReprintId] = useState(null);
   const [channel, setChannel] = useState("");
   const [excludeVoided, setExcludeVoided] = useState(true);
+  // Free-text search across bill IDs + product names within the
+  // currently-loaded date range. Empty string = no filtering. We don't
+  // round-trip to Supabase per keystroke — the date+channel query has
+  // already pulled all candidate rows; we filter in-memory.
+  const [searchQuery, setSearchQuery] = useState("");
   const [orders, setOrders] = useState([]);
   // Per-order summary: { [orderId]: { productLabel, profit, itemCount, costApprox } }
   // Computed in load() by joining sale_order_items + receive_order_items + products.
@@ -5893,6 +5919,10 @@ function SalesView({ onGoPOS }) {
             : `${lines[0].product_name || '—'} +${lines.length - 1}`;
           summary[o.id] = {
             productLabel,
+            // Full list of product names in the bill — powers the
+            // free-text search filter. Stored lowercased once so the
+            // per-keystroke filter can do cheap .includes() checks.
+            allProductNames: lines.map(l => (l.product_name || '').toLowerCase()),
             profit: o.status === 'voided' ? 0 : totalProfit,
             itemCount: lines.length,
             costApprox,
@@ -5909,10 +5939,28 @@ function SalesView({ onGoPOS }) {
     setLoading(false);
   }, [from, to, channel, excludeVoided]);
 
+  // Apply the in-memory search filter. Empty query passes everything
+  // through. Query matches against:
+  //   - bill ID prefix (with or without leading "#")
+  //   - any product name in the bill (case-insensitive substring)
+  // We need orderSummary populated for the product-name match, so a
+  // freshly-loaded list briefly only filters by bill ID until the
+  // summary fetch resolves a moment later (acceptable trade-off).
+  const filteredOrders = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase().replace(/^#/, '');
+    if (!q) return orders;
+    return orders.filter(o => {
+      if (String(o.id).toLowerCase().includes(q)) return true;
+      const names = orderSummary[o.id]?.allProductNames;
+      if (names && names.some(n => n.includes(q))) return true;
+      return false;
+    });
+  }, [orders, orderSummary, searchQuery]);
+
   // Group orders by sale-date (YYYY-MM-DD) preserving DESC order
   const groupedByDay = useMemo(() => {
     const map = new Map();
-    for (const o of orders) {
+    for (const o of filteredOrders) {
       const key = (o.sale_date || '').slice(0, 10);
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(o);
@@ -5922,7 +5970,7 @@ function SalesView({ onGoPOS }) {
       count: list.length,
       total: list.filter(o=>o.status==='active').reduce((s,o)=>s+Number(o.grand_total||0),0),
     }));
-  }, [orders]);
+  }, [filteredOrders]);
 
   useEffect(()=>{ load(); }, [load]);
   // Realtime: new sale on another device → refresh the list. sale_order_items
@@ -5983,7 +6031,7 @@ function SalesView({ onGoPOS }) {
     } finally { setVoiding(false); voidLockRef.current = false; }
   };
 
-  const total = useMemo(()=> orders.reduce((s,o)=> s + Number(o.grand_total||0), 0), [orders]);
+  const total = useMemo(()=> filteredOrders.reduce((s,o)=> s + Number(o.grand_total||0), 0), [filteredOrders]);
 
   const FilterControls = (
     <div className="space-y-3">
@@ -6005,6 +6053,37 @@ function SalesView({ onGoPOS }) {
           </select>
         </div>
       </div>
+      {/* Free-text search — bill ID or product name. Searches only
+          within the currently-loaded date range, so picking a wider
+          date range expands the searchable pool. */}
+      <div>
+        <label className="text-xs uppercase tracking-wider text-muted">ค้นหา</label>
+        <div className="relative mt-1">
+          <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-soft pointer-events-none"/>
+          <input
+            type="text"
+            className="input w-full !pl-9 !pr-9"
+            placeholder="เลขบิล หรือ ชื่อรุ่นสินค้า…"
+            value={searchQuery}
+            onChange={e=>setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={()=>setSearchQuery("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted hover:text-ink hover:bg-black/5 transition"
+              aria-label="ล้างคำค้นหา"
+            >
+              <Icon name="x" size={14}/>
+            </button>
+          )}
+        </div>
+        {searchQuery && (
+          <div className="text-[11px] text-muted-soft mt-1">
+            ค้นหาในช่วงวันที่ที่เลือก · พบ {filteredOrders.length} บิล
+          </div>
+        )}
+      </div>
       <label className="flex items-center gap-2 cursor-pointer select-none">
         <span className={"relative flex items-center justify-center w-5 h-5 rounded border transition-colors " + (excludeVoided?"bg-primary border-primary":"bg-white border-hairline")}>
           <input type="checkbox" className="sr-only" checked={excludeVoided} onChange={e=>setExcludeVoided(e.target.checked)} />
@@ -6022,7 +6101,7 @@ function SalesView({ onGoPOS }) {
         <div>
           <div className="text-xs uppercase tracking-wider text-muted">รวมทั้งหมด</div>
           <div className="font-display text-3xl lg:text-4xl mt-1">{fmtTHB(total)}</div>
-          <div className="text-xs text-muted mt-1">{orders.length} บิล</div>
+          <div className="text-xs text-muted mt-1">{filteredOrders.length} บิล</div>
         </div>
         <button className="lg:hidden btn-secondary !py-2 !px-3" onClick={()=>setFilterOpen(o=>!o)}>
           <Icon name="filter" size={16}/> ตัวกรอง
@@ -6035,9 +6114,9 @@ function SalesView({ onGoPOS }) {
       {/* Desktop — grouped by day */}
       <div className="hidden lg:block space-y-4">
         {loading && <div className="card-canvas overflow-hidden"><SkeletonRows n={6} label="กำลังโหลดบิล" /></div>}
-        {!loading && orders.length===0 && (
+        {!loading && filteredOrders.length===0 && (
           <div className="card-canvas p-8 text-center">
-            <div className="text-muted text-sm">ไม่พบบิลในช่วงเวลานี้</div>
+            <div className="text-muted text-sm">{searchQuery ? `ไม่พบบิลที่ตรงกับ “${searchQuery}” ในช่วงวันที่เลือก` : 'ไม่พบบิลในช่วงเวลานี้'}</div>
             {onGoPOS && (
               <button className="btn-primary mt-4 !py-2.5 !px-5" onClick={onGoPOS}>
                 <Icon name="cart" size={16}/> เริ่มขายใหม่
@@ -6104,9 +6183,9 @@ function SalesView({ onGoPOS }) {
       {/* Mobile — grouped by day */}
       <div className="lg:hidden space-y-4">
         {loading && <div className="p-4 text-muted text-sm flex items-center gap-2"><span className="spinner"/>กำลังโหลด...</div>}
-        {!loading && orders.length===0 && (
+        {!loading && filteredOrders.length===0 && (
           <div className="p-6 text-center">
-            <div className="text-muted text-sm">ไม่พบบิลในช่วงเวลานี้</div>
+            <div className="text-muted text-sm">{searchQuery ? `ไม่พบบิลที่ตรงกับ “${searchQuery}” ในช่วงวันที่เลือก` : 'ไม่พบบิลในช่วงเวลานี้'}</div>
             {onGoPOS && (
               <button className="btn-primary mt-3 !py-2 !px-4" onClick={onGoPOS}>
                 <Icon name="cart" size={16}/> เริ่มขายใหม่
@@ -6423,10 +6502,9 @@ function ReceiveView() {
   return (
     <div>
       {/* Desktop header */}
-      <header className="hidden lg:flex px-10 pt-10 pb-6 items-end justify-between border-b hairline gap-4">
+      <header className="hidden lg:flex px-10 pt-8 pb-6 items-end justify-between border-b hairline gap-4">
         <div>
-          <div className="text-xs uppercase tracking-[1.5px] text-muted">Stock In · From Supplier</div>
-          <h1 className="font-display text-5xl mt-2 leading-tight text-ink">รับสินค้าจากบริษัท</h1>
+          <h1 className="font-display text-5xl leading-tight text-ink">รับสินค้าจากบริษัท</h1>
         </div>
         <div className="flex items-center gap-8 pb-1">
           {TabGroup}
@@ -6466,10 +6544,9 @@ function ReturnView()  {
   return (
     <div>
       {/* Desktop header */}
-      <header className="hidden lg:flex px-10 pt-10 pb-6 items-end justify-between border-b hairline gap-4">
+      <header className="hidden lg:flex px-10 pt-8 pb-6 items-end justify-between border-b hairline gap-4">
         <div>
-          <div className="text-xs uppercase tracking-[1.5px] text-muted">Customer Return</div>
-          <h1 className="font-display text-5xl mt-2 leading-tight text-ink">รับคืนจากลูกค้า</h1>
+          <h1 className="font-display text-5xl leading-tight text-ink">รับคืนจากลูกค้า</h1>
         </div>
         <div className="pb-1">{HistoryBtn}</div>
       </header>
@@ -7856,10 +7933,9 @@ function DashboardView({ embedded = false, dateRange: dateRangeProp, onDateRange
           is rendered inside <OverviewView/> — the wrapper supplies a
           shared header with the segment tabs. */}
       {!embedded && (
-        <header className="hidden lg:flex px-10 pt-10 pb-6 items-end justify-between border-b hairline">
+        <header className="hidden lg:flex px-10 pt-8 pb-6 items-end justify-between border-b hairline">
           <div>
-            <div className="text-xs uppercase tracking-[1.5px] text-muted">Dashboard</div>
-            <h1 className="font-display text-5xl mt-2 leading-tight text-ink">แดชบอร์ด</h1>
+            <h1 className="font-display text-5xl leading-tight text-ink">แดชบอร์ด</h1>
           </div>
           <div className="flex items-center gap-3 pb-1">
             <DatePicker mode="range" value={dateRange} onChange={setDateRange} placeholder="เลือกช่วงวันที่" className="w-64"/>
@@ -8495,10 +8571,9 @@ function OverviewView() {
       {/* Web header — title baseline-aligned with the tab segment.
           Matches DashboardView's standalone style (kicker + h1 5xl) so
           the page doesn't visually "shrink" when sub-views merged in. */}
-      <header className="hidden lg:flex px-10 pt-10 pb-6 items-end justify-between border-b hairline gap-6">
+      <header className="hidden lg:flex px-10 pt-8 pb-6 items-end justify-between border-b hairline gap-6">
         <div>
-          <div className="text-xs uppercase tracking-[1.5px] text-muted">{activeTab.kicker}</div>
-          <h1 className="font-display text-5xl mt-2 leading-tight text-ink">{activeTab.title}</h1>
+          <h1 className="font-display text-5xl leading-tight text-ink">{activeTab.title}</h1>
         </div>
         {/* Stack DatePicker above the Segment with items-stretch so the
             DatePicker (w-full) inherits the column's width — which is
@@ -8871,10 +8946,9 @@ function ProfitLossView({ embedded = false }) {
           above the content so the cashier can still pick a date / open
           the shop-expense modal. */}
       {!embedded && (
-        <header className="hidden lg:flex px-10 pt-10 pb-6 items-end justify-between border-b hairline gap-4">
+        <header className="hidden lg:flex px-10 pt-8 pb-6 items-end justify-between border-b hairline gap-4">
           <div>
-            <div className="text-xs uppercase tracking-[1.5px] text-muted">Profit & Loss</div>
-            <h1 className="font-display text-5xl mt-2 leading-tight text-ink">กำไร / ขาดทุน</h1>
+            <h1 className="font-display text-5xl leading-tight text-ink">กำไร / ขาดทุน</h1>
           </div>
           <div className="flex items-center gap-3 pb-1">{DateControls}</div>
         </header>
