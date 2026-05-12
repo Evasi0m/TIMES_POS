@@ -639,31 +639,261 @@
     transform: translateY(-1px);
   }
 
-  /* Yellow "การตั้งค่า user" button — same shape as
-     .btn-app-settings-sidebar but with a gold gradient so super_admins
-     can tell the two settings buttons apart at a glance. Un-scoped from
+  /* Premium gold "การตั้งค่า user" button — three-stop metallic gradient
+     (champagne highlight → rich gold → deep antique gold) plus a subtle
+     top inset rim and a soft amber glow on hover so it reads as
+     "privileged action" rather than just "yellow button". Un-scoped from
      `.sidebar` so the mobile-drawer mount also renders correctly. */
   .btn-settings-sidebar {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
     width: 100%;
-    background: linear-gradient(180deg, #d4a017 0%, #b8860b 100%);
-    color: #fff;
+    background:
+      linear-gradient(180deg,
+        #f5dc8a 0%,
+        #e2bc55 35%,
+        #c89a2a 65%,
+        #9a7414 100%);
+    color: #3a2607;
+    text-shadow: 0 1px 0 rgba(255, 240, 200, 0.45);
     padding: 8px 16px;
     min-height: 38px;
     border-radius: 10px;
-    font-weight: 500;
+    font-weight: 600;
     font-size: 14px;
-    border: 1px solid rgba(255,210,80,0.30);
-    box-shadow: 0 2px 8px rgba(180,130,10,0.40), 0 1px 0 rgba(255,255,255,0.12) inset;
+    letter-spacing: 0.2px;
+    border: 1px solid rgba(120, 85, 15, 0.55);
+    box-shadow:
+      0 2px 8px rgba(160, 110, 10, 0.40),
+      0 1px 0 rgba(255, 245, 215, 0.55) inset,
+      0 -1px 0 rgba(80, 55, 5, 0.25) inset;
     cursor: pointer;
     transition: all .18s var(--ease-out);
   }
   .btn-settings-sidebar:hover {
-    background: linear-gradient(180deg, #e6b820 0%, #c8950d 100%);
-    box-shadow: 0 4px 12px rgba(180,130,10,0.55), 0 1px 0 rgba(255,255,255,0.16) inset;
+    background:
+      linear-gradient(180deg,
+        #fce8a0 0%,
+        #ecc865 35%,
+        #d6a634 65%,
+        #a98018 100%);
+    box-shadow:
+      0 6px 16px rgba(180, 130, 10, 0.55),
+      0 0 0 1px rgba(255, 220, 130, 0.35),
+      0 1px 0 rgba(255, 250, 220, 0.65) inset,
+      0 -1px 0 rgba(80, 55, 5, 0.25) inset;
     transform: translateY(-1px);
   }
-  .btn-settings-sidebar:active { transform: scale(0.97); }
+  .btn-settings-sidebar:active {
+    transform: scale(0.97);
+    box-shadow:
+      0 1px 4px rgba(160, 110, 10, 0.40),
+      0 1px 0 rgba(255, 245, 215, 0.45) inset;
+  }
+  .btn-settings-sidebar svg { filter: drop-shadow(0 1px 0 rgba(255, 240, 200, 0.5)); }
+
+  /* Premium emerald variant of the gold sidebar button — same metallic
+     4-stop gradient feel + inset rim, just shifted into deep emerald
+     greens. Used for the "สร้างผู้ใช้ใหม่" action so it visually pairs
+     with the gold "การตั้งค่า user" button (both are super_admin-only
+     privileged actions) while still reading as a positive / create CTA. */
+  .btn-emerald-premium {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    background:
+      linear-gradient(180deg,
+        #6fd99a 0%,
+        #34b86c 35%,
+        #1a8a4b 65%,
+        #0f5c33 100%);
+    color: #f3fff5;
+    text-shadow: 0 1px 0 rgba(8, 50, 25, 0.55);
+    /* Match the previous `btn-primary !py-1.5 !px-3 !text-sm` sizing
+       exactly so swapping the class doesn't reflow the toolbar. */
+    padding: 6px 12px;
+    min-height: 44px;
+    border-radius: 11px;
+    font-weight: 500;
+    font-size: 14px;
+    letter-spacing: 0.01em;
+    border: 1px solid rgba(10, 60, 30, 0.55);
+    box-shadow:
+      0 2px 8px rgba(15, 90, 50, 0.40),
+      0 1px 0 rgba(220, 255, 230, 0.40) inset,
+      0 -1px 0 rgba(10, 50, 25, 0.30) inset;
+    cursor: pointer;
+    transition: all .18s var(--ease-out);
+  }
+  .btn-emerald-premium:hover {
+    background:
+      linear-gradient(180deg,
+        #87e3ad 0%,
+        #43c87a 35%,
+        #1f9c55 65%,
+        #126a3a 100%);
+    box-shadow:
+      0 6px 16px rgba(15, 100, 55, 0.55),
+      0 0 0 1px rgba(120, 230, 165, 0.35),
+      0 1px 0 rgba(225, 255, 235, 0.55) inset,
+      0 -1px 0 rgba(10, 50, 25, 0.30) inset;
+    transform: translateY(-1px);
+  }
+  .btn-emerald-premium:active {
+    transform: scale(0.97);
+    box-shadow:
+      0 1px 4px rgba(15, 90, 50, 0.40),
+      0 1px 0 rgba(220, 255, 230, 0.40) inset;
+  }
+  .btn-emerald-premium svg { filter: drop-shadow(0 1px 0 rgba(180, 240, 200, 0.40)); }
+
+  /* Premium ruby variant — same metallic 4-stop treatment as the gold
+     sidebar button, shifted into reds. Used for destructive actions
+     (line-item ลบ / ล้างตะกร้า / delete user) so they read as
+     "premium-tier dangerous" rather than just plain red.
+
+     Comes in two sizing flavours so it can drop into the existing
+     compact toolbars without reflowing them:
+       .btn-ruby-premium       → text/icon-text inline (px 10 / py 4)
+       .btn-ruby-premium-icon  → square icon-only (32×32)                */
+  .btn-ruby-premium {
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+    background:
+      linear-gradient(180deg,
+        #f48a8a 0%,
+        #d94343 35%,
+        #a91f1f 65%,
+        #6e0d0d 100%);
+    color: #fff5f5;
+    text-shadow: 0 1px 0 rgba(60, 5, 5, 0.55);
+    padding: 4px 10px;
+    min-height: 28px;
+    border-radius: 7px;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.2px;
+    border: 1px solid rgba(80, 10, 10, 0.55);
+    box-shadow:
+      0 2px 6px rgba(150, 25, 25, 0.40),
+      0 1px 0 rgba(255, 220, 220, 0.45) inset,
+      0 -1px 0 rgba(60, 5, 5, 0.30) inset;
+    cursor: pointer;
+    transition: all .18s var(--ease-out);
+  }
+  .btn-ruby-premium:hover {
+    background:
+      linear-gradient(180deg,
+        #ff9c9c 0%,
+        #ea5252 35%,
+        #c02929 65%,
+        #821111 100%);
+    box-shadow:
+      0 5px 14px rgba(170, 30, 30, 0.55),
+      0 0 0 1px rgba(255, 180, 180, 0.35),
+      0 1px 0 rgba(255, 230, 230, 0.55) inset,
+      0 -1px 0 rgba(60, 5, 5, 0.30) inset;
+    transform: translateY(-1px);
+  }
+  .btn-ruby-premium:active {
+    transform: scale(0.96);
+    box-shadow:
+      0 1px 3px rgba(150, 25, 25, 0.40),
+      0 1px 0 rgba(255, 220, 220, 0.45) inset;
+  }
+  .btn-ruby-premium:disabled {
+    opacity: 0.45; cursor: not-allowed; transform: none;
+    box-shadow: 0 1px 3px rgba(150, 25, 25, 0.20), 0 1px 0 rgba(255, 220, 220, 0.30) inset;
+  }
+  .btn-ruby-premium svg { filter: drop-shadow(0 1px 0 rgba(255, 200, 200, 0.45)); }
+
+  .btn-ruby-premium-icon {
+    /* Square icon-only variant — keeps the same visual but swaps the
+       horizontal padding for a fixed 32×32 footprint so it slots into
+       icon-button rows (e.g. trash on a user-list row) cleanly. */
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+    border-radius: 8px;
+    gap: 0;
+  }
+
+  /* Premium "tile" variants — non-interactive counterparts of the
+     premium buttons. Same metallic 4-stop gradient + inset rim, but
+     without cursor / hover / transform. Used for value badges
+     (price chips, stock counters) so they pick up the same luxe
+     tone as the privileged action buttons.
+
+     Each tile sets only the chrome (background / border / shadow /
+     text colour). Layout (size, padding, font) stays with the
+     consumer so we don't have to redefine width/height per use case. */
+  .tile-gold-premium {
+    background:
+      linear-gradient(180deg,
+        #f5dc8a 0%,
+        #e2bc55 35%,
+        #c89a2a 65%,
+        #9a7414 100%);
+    color: #3a2607;
+    text-shadow: 0 1px 0 rgba(255, 240, 200, 0.45);
+    border: 1px solid rgba(120, 85, 15, 0.55);
+    box-shadow:
+      0 2px 8px rgba(160, 110, 10, 0.40),
+      0 1px 0 rgba(255, 245, 215, 0.55) inset,
+      0 -1px 0 rgba(80, 55, 5, 0.25) inset;
+  }
+  .tile-emerald-premium {
+    background:
+      linear-gradient(180deg,
+        #6fd99a 0%,
+        #34b86c 35%,
+        #1a8a4b 65%,
+        #0f5c33 100%);
+    color: #f3fff5;
+    text-shadow: 0 1px 0 rgba(8, 50, 25, 0.55);
+    border: 1px solid rgba(10, 60, 30, 0.55);
+    box-shadow:
+      0 2px 8px rgba(15, 90, 50, 0.40),
+      0 1px 0 rgba(220, 255, 230, 0.45) inset,
+      0 -1px 0 rgba(10, 50, 25, 0.30) inset;
+  }
+  .tile-sapphire-premium {
+    background:
+      linear-gradient(180deg,
+        #6aa9f5 0%,
+        #2f78d6 35%,
+        #1a4fa8 65%,
+        #0c2d6e 100%);
+    color: #f4f9ff;
+    text-shadow: 0 1px 0 rgba(5, 20, 55, 0.55);
+    border: 1px solid rgba(10, 35, 90, 0.55);
+    box-shadow:
+      0 2px 8px rgba(20, 60, 140, 0.40),
+      0 1px 0 rgba(220, 235, 255, 0.45) inset,
+      0 -1px 0 rgba(5, 20, 55, 0.30) inset;
+  }
+  .tile-ruby-premium {
+    background:
+      linear-gradient(180deg,
+        #f48a8a 0%,
+        #d94343 35%,
+        #a91f1f 65%,
+        #6e0d0d 100%);
+    color: #fff5f5;
+    text-shadow: 0 1px 0 rgba(60, 5, 5, 0.55);
+    border: 1px solid rgba(80, 10, 10, 0.55);
+    box-shadow:
+      0 2px 8px rgba(150, 25, 25, 0.40),
+      0 1px 0 rgba(255, 220, 220, 0.45) inset,
+      0 -1px 0 rgba(60, 5, 5, 0.30) inset;
+  }
+
+  /* Matching gold accent for the "· super admin" tag in the sidebar
+     footer — keeps the visual story consistent with the gold button so
+     the super-admin signal feels intentional. */
+  .text-gold-premium {
+    color: #b8860b;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    text-shadow: 0 1px 0 rgba(255, 245, 215, 0.35);
+  }
 
   /* ==========  MOBILE TOPBAR / TABBAR (glass)  ========== */
   .mobile-topbar {

@@ -1743,9 +1743,9 @@ function UserManagementModal({ open, onClose }) {
             onClick={load} disabled={loading} title="รีเฟรช">
             <Icon name="refresh" size={14}/>
           </button>
-          <button className="btn-primary !py-1.5 !px-3 !text-sm"
+          <button className="btn-emerald-premium"
             onClick={() => setShowCreate(v => !v)}>
-            <Icon name={showCreate ? 'x' : 'check'} size={14}/>
+            <Icon name={showCreate ? 'x' : 'plus'} size={14}/>
             {showCreate ? 'ยกเลิกการสร้าง' : 'สร้างผู้ใช้ใหม่'}
           </button>
         </div>
@@ -1881,7 +1881,7 @@ function UserManagementModal({ open, onClose }) {
                   <option key={opt.id} value={opt.id}>{opt.label}</option>
                 ))}
               </select>
-              <button className="btn-ghost !p-2 text-error hover:bg-error/10"
+              <button className="btn-ruby-premium btn-ruby-premium-icon"
                 onClick={() => handleDelete(u)} disabled={busy || isMe}
                 title={isMe ? 'ลบบัญชีตัวเองไม่ได้' : 'ลบผู้ใช้'}>
                 {busy ? <span className="spinner"/> : <Icon name="trash" size={16}/>}
@@ -2919,7 +2919,7 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
   const roleTag = role === 'super_admin' ? 'super admin'
                 : role === 'admin'       ? 'admin'
                 : 'visitor';
-  const roleColour = role === 'super_admin' ? 'text-warning'
+  const roleColour = role === 'super_admin' ? 'text-gold-premium'
                    : role === 'admin'       ? 'text-primary'
                    : 'text-muted-soft';
   return (
@@ -2960,7 +2960,7 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
             the coral "การตั้งค่า" below and signals "privileged action". */}
         {isSuperAdmin && (
           <button className="btn-settings-sidebar" onClick={onOpenUserManagement}>
-            <Icon name="settings" size={16}/> การตั้งค่า user
+            <Icon name="crown" size={16}/> การตั้งค่า user
           </button>
         )}
         <button className="btn-app-settings-sidebar" onClick={onOpenSettings}>
@@ -2986,7 +2986,7 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
   const isAdminPlus = role === 'admin' || role === 'super_admin';
   const isSuperAdmin = role === 'super_admin';
   const roleTag = role === 'super_admin' ? 'super admin' : role === 'admin' ? 'admin' : 'visitor';
-  const roleColour = role === 'super_admin' ? 'text-warning' : role === 'admin' ? 'text-primary' : 'text-muted-soft';
+  const roleColour = role === 'super_admin' ? 'text-gold-premium' : role === 'admin' ? 'text-primary' : 'text-muted-soft';
   const { render: drawerRender, closing: drawerClosing } = useMountedToggle(openMenu, 220);
   return (
     <>
@@ -3026,7 +3026,7 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
                 regular settings button so it visually outranks it. */}
             {isSuperAdmin && (
               <button className="btn-settings-sidebar" onClick={()=>{ setOpenMenu(false); onOpenUserManagement?.(); }}>
-                <Icon name="settings" size={16}/> การตั้งค่า user
+                <Icon name="crown" size={16}/> การตั้งค่า user
               </button>
             )}
             <button className="btn-app-settings-sidebar" onClick={()=>{ setOpenMenu(false); onOpenSettings?.(); }}>
@@ -3749,8 +3749,8 @@ function POSView() {
                   <div className="font-medium text-sm truncate">{l.product_name}</div>
                   <div className="text-xs text-muted font-mono truncate">{l.barcode||''}</div>
                 </div>
-                <button className="inline-flex items-center gap-1 text-muted hover:text-error active:text-error px-2 py-1.5 rounded-md hover:bg-error/10 text-xs font-medium transition" onClick={()=>confirmRemoveLine(idx)} aria-label="ลบสินค้านี้">
-                  <Icon name="trash" size={16}/>
+                <button className="btn-ruby-premium" onClick={()=>confirmRemoveLine(idx)} aria-label="ลบสินค้านี้">
+                  <Icon name="trash" size={13}/>
                   <span>ลบ</span>
                 </button>
               </div>
@@ -4062,7 +4062,7 @@ function POSView() {
                 <div className="font-display text-2xl">ตะกร้า</div>
                 <div className="text-xs text-muted mt-0.5">{cart.length} รายการ · {totalQty} ชิ้น</div>
               </div>
-              {cart.length>0 && <button className="btn-ghost !text-xs text-muted hover:text-error" onClick={confirmClearCart}>ล้างตะกร้า</button>}
+              {cart.length>0 && <button className="btn-ruby-premium" onClick={confirmClearCart}><Icon name="trash" size={13}/>ล้างตะกร้า</button>}
             </div>
             {CartContent()}
           </div>
@@ -4141,8 +4141,8 @@ function POSView() {
                         <div className="font-medium text-sm truncate">{l.product_name}</div>
                         <div className="text-xs text-muted font-mono truncate">{l.barcode||''}</div>
                       </div>
-                      <button className="inline-flex items-center gap-1 text-muted hover:text-error active:text-error px-2 py-1.5 rounded-md hover:bg-error/10 text-xs font-medium transition" onClick={()=>confirmRemoveLine(idx)} aria-label="ลบสินค้านี้">
-                        <Icon name="trash" size={16}/>
+                      <button className="btn-ruby-premium" onClick={()=>confirmRemoveLine(idx)} aria-label="ลบสินค้านี้">
+                        <Icon name="trash" size={13}/>
                         <span>ลบ</span>
                       </button>
                     </div>
@@ -4978,23 +4978,18 @@ function ProductsView() {
                   )}
                 </div>
                 <div className="col-span-2 flex justify-center">
-                  <div className="lg-tile-dark inline-flex items-center justify-center min-w-[88px] h-9 px-3 rounded-[10px] font-display text-sm leading-none tabular-nums font-semibold">
+                  <div className="tile-sapphire-premium inline-flex items-center justify-center min-w-[88px] h-9 px-3 rounded-[10px] font-display text-sm leading-none tabular-nums font-semibold">
                     {fmtPlain(p.retail_price)}
                   </div>
                 </div>
                 <div className="col-span-1 flex justify-center">
-                  <div
-                    className="flex items-center justify-center w-10 h-10 rounded-[10px] text-white font-display text-base leading-none tabular-nums font-semibold"
-                    style={{
-                      background: p.current_stock<=0
-                        ? 'linear-gradient(180deg, #b91c1c 0%, #7f1d1d 100%)'
-                        : 'linear-gradient(180deg, #15803d 0%, #14532d 100%)',
-                      border: '1px solid rgba(255,255,255,0.18)',
-                      boxShadow: p.current_stock<=0
-                        ? '0 2px 8px rgba(127,29,29,0.45), 0 1px 0 rgba(255,255,255,0.18) inset'
-                        : '0 2px 8px rgba(20,83,45,0.45), 0 1px 0 rgba(255,255,255,0.18) inset',
-                    }}
-                  >
+                  {/* Stock badge — emerald-premium when in stock, ruby-premium
+                      when sold out. Same metallic chrome as the gold price
+                      tile so the row reads as one cohesive premium strip. */}
+                  <div className={
+                    'flex items-center justify-center w-10 h-10 rounded-[10px] font-display text-base leading-none tabular-nums font-semibold ' +
+                    (p.current_stock <= 0 ? 'tile-ruby-premium' : 'tile-emerald-premium')
+                  }>
                     {p.current_stock}
                   </div>
                 </div>
@@ -5034,18 +5029,10 @@ function ProductsView() {
                   <span className={"tabular-nums truncate " + (lc ? 'text-muted' : 'text-ink font-medium')}>ต้นทุน {roundMoney(lc ? lc.unit_price : p.cost_price).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
                 </div>
               </div>
-              <div
-                className="flex-shrink-0 flex items-center justify-center w-14 h-14 rounded-[10px] text-white font-display text-2xl leading-none tabular-nums font-semibold"
-                style={{
-                  background: p.current_stock<=0
-                    ? 'linear-gradient(180deg, #b91c1c 0%, #7f1d1d 100%)'
-                    : 'linear-gradient(180deg, #15803d 0%, #14532d 100%)',
-                  border: '1px solid rgba(255,255,255,0.18)',
-                  boxShadow: p.current_stock<=0
-                    ? '0 2px 8px rgba(127,29,29,0.45), 0 1px 0 rgba(255,255,255,0.18) inset'
-                    : '0 2px 8px rgba(20,83,45,0.45), 0 1px 0 rgba(255,255,255,0.18) inset',
-                }}
-              >
+              <div className={
+                'flex-shrink-0 flex items-center justify-center w-14 h-14 rounded-[10px] font-display text-2xl leading-none tabular-nums font-semibold ' +
+                (p.current_stock <= 0 ? 'tile-ruby-premium' : 'tile-emerald-premium')
+              }>
                 {p.current_stock}
               </div>
             </div>
@@ -8518,13 +8505,17 @@ function OverviewView() {
             in turn driven by the Segment's natural intrinsic width.
             Net effect: DatePicker width === Segment width, no JS / refs. */}
         <div className="flex flex-col items-stretch gap-2 pb-1">
-          {/* DatePicker only relevant to the Dashboard pane — Insights
-              uses fixed 365 / 90 / 30-day windows; P&L renders its own
-              date controls + expense button inside the pane.            */}
-          {tab === 'dashboard' && (
+          {/* DatePicker only relevant to the Dashboard pane. We ALWAYS
+              render it (with `invisible` + `pointer-events-none` on
+              non-dashboard tabs) so the header height stays constant
+              across all 4 tabs — preventing the layout from "jumping"
+              when the user swaps between ยอดขาย / วิเคราะห์ / กำไรขาดทุน /
+              รายการผิดพลาด. The slot still occupies its row in the flex
+              column, just visually hidden + non-interactive.            */}
+          <div className={tab === 'dashboard' ? '' : 'invisible pointer-events-none'} aria-hidden={tab !== 'dashboard'}>
             <DatePicker mode="range" value={dateRange} onChange={setDateRange}
               placeholder="เลือกช่วงวันที่" className="w-full" />
-          )}
+          </div>
           <Segment />
         </div>
       </header>
