@@ -582,48 +582,106 @@
   .sidebar .sidebar-email {
     color: rgba(20, 20, 19, 0.40);
   }
+  /* Premium ruby variant of the gold sidebar button — mirrors
+     `.btn-settings-sidebar`'s 4-stop metallic gradient + inset rim +
+     hover glow recipe so the sidebar footer feels visually unified,
+     just shifted into the danger/ruby hue family. */
   .btn-danger-sidebar {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
     width: 100%;
-    background: linear-gradient(180deg, #e53e3e 0%, #c53030 100%);
-    color: #fff;
+    background:
+      linear-gradient(180deg,
+        #f48a8a 0%,
+        #d94343 35%,
+        #a91f1f 65%,
+        #6e0d0d 100%);
+    color: #fff5f5;
+    text-shadow: 0 1px 0 rgba(60, 5, 5, 0.55);
     padding: 8px 16px;
     min-height: 38px;
     border-radius: 10px;
-    font-weight: 500;
+    font-weight: 600;
     font-size: 14px;
-    border: 1px solid rgba(255,120,120,0.25);
-    box-shadow: 0 2px 8px rgba(197, 48, 48, 0.4), 0 1px 0 rgba(255,255,255,0.10) inset;
+    letter-spacing: 0.2px;
+    border: 1px solid rgba(80, 10, 10, 0.55);
+    box-shadow:
+      0 2px 8px rgba(150, 25, 25, 0.40),
+      0 1px 0 rgba(255, 220, 220, 0.45) inset,
+      0 -1px 0 rgba(60, 5, 5, 0.30) inset;
     cursor: pointer;
     transition: all .18s var(--ease-out);
   }
   .btn-danger-sidebar:hover {
-    background: linear-gradient(180deg, #f05252 0%, #d63030 100%);
-    box-shadow: 0 4px 12px rgba(197, 48, 48, 0.55), 0 1px 0 rgba(255,255,255,0.14) inset;
+    background:
+      linear-gradient(180deg,
+        #ff9c9c 0%,
+        #e85555 35%,
+        #b92828 65%,
+        #7a1414 100%);
+    box-shadow:
+      0 6px 16px rgba(180, 30, 30, 0.55),
+      0 0 0 1px rgba(255, 140, 140, 0.35),
+      0 1px 0 rgba(255, 235, 235, 0.55) inset,
+      0 -1px 0 rgba(60, 5, 5, 0.30) inset;
     transform: translateY(-1px);
   }
-  /* Unified "การตั้งค่า" button — uses the brand primary gradient, visible
-     to all users. Sits above the danger logout button in the sidebar footer. */
+  .btn-danger-sidebar:active {
+    transform: scale(0.97);
+    box-shadow:
+      0 1px 4px rgba(150, 25, 25, 0.40),
+      0 1px 0 rgba(255, 220, 220, 0.45) inset;
+  }
+  .btn-danger-sidebar svg { filter: drop-shadow(0 1px 0 rgba(255, 200, 200, 0.45)); }
+  /* Premium coral/terracotta variant of the gold sidebar button — same
+     4-stop metallic recipe as `.btn-settings-sidebar`, retuned into the
+     brand coral hue. Visible to all users; sits above the danger logout
+     button in the sidebar footer. */
   .btn-app-settings-sidebar {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
     width: 100%;
-    background: linear-gradient(180deg, rgba(204,120,92,0.85) 0%, rgba(184,100,72,0.92) 100%);
-    color: #fff;
-    font-size: 14px;
-    font-weight: 500;
-    padding: 10px 16px;
+    background:
+      linear-gradient(180deg,
+        #e8a48a 0%,
+        #cc785c 35%,
+        #a85a3e 65%,
+        #6f3820 100%);
+    color: #fff5ec;
+    text-shadow: 0 1px 0 rgba(70, 30, 10, 0.50);
+    padding: 8px 16px;
+    min-height: 38px;
     border-radius: 10px;
-    border: 1px solid rgba(255,255,255,0.18);
-    box-shadow: 0 2px 8px rgba(184,100,72,0.35), 0 1px 0 rgba(255,255,255,0.18) inset;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.2px;
+    border: 1px solid rgba(90, 45, 20, 0.55);
+    box-shadow:
+      0 2px 8px rgba(150, 80, 50, 0.40),
+      0 1px 0 rgba(255, 225, 200, 0.45) inset,
+      0 -1px 0 rgba(70, 30, 10, 0.30) inset;
     cursor: pointer;
     transition: all .18s var(--ease-out);
   }
   .btn-app-settings-sidebar:hover {
-    background: linear-gradient(180deg, rgba(218,134,106,0.95) 0%, rgba(198,114,86,1) 100%);
-    box-shadow: 0 4px 12px rgba(184,100,72,0.50), 0 1px 0 rgba(255,255,255,0.2) inset;
+    background:
+      linear-gradient(180deg,
+        #f3b89e 0%,
+        #d98a6e 35%,
+        #b76a48 65%,
+        #804226 100%);
+    box-shadow:
+      0 6px 16px rgba(180, 90, 50, 0.55),
+      0 0 0 1px rgba(255, 180, 140, 0.35),
+      0 1px 0 rgba(255, 235, 215, 0.55) inset,
+      0 -1px 0 rgba(70, 30, 10, 0.30) inset;
     transform: translateY(-1px);
   }
-  .btn-app-settings-sidebar:active { transform: scale(0.97); }
+  .btn-app-settings-sidebar:active {
+    transform: scale(0.97);
+    box-shadow:
+      0 1px 4px rgba(150, 80, 50, 0.40),
+      0 1px 0 rgba(255, 225, 200, 0.45) inset;
+  }
+  .btn-app-settings-sidebar svg { filter: drop-shadow(0 1px 0 rgba(255, 215, 190, 0.5)); }
 
   /* Used by the OverviewView segment tabs (ยอดขาย / วิเคราะห์).
      Mirrors `.btn-app-settings-sidebar` so the brand identity feels

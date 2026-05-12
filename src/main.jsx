@@ -3367,6 +3367,14 @@ function POSView() {
   const sheetDragStartY = useRef(null);
   const sheetDragOffset = useRef(0);
   const onSheetDragStart = (e) => {
+    // The drag-handle header spans the full top of the sheet, including
+    // the "ล้าง" and close-X buttons in its right corner. Without this
+    // guard, `setPointerCapture` swallows the touch and the buttons'
+    // `click` events never fire — leaving the user unable to clear the
+    // cart or tap the X to close (they had to tap the backdrop instead).
+    // Bail out when the pointer lands on an interactive child so the
+    // tap propagates normally.
+    if (e.target.closest('button, a, input, [role="button"]')) return;
     e.currentTarget.setPointerCapture?.(e.pointerId);
     sheetDragStartY.current = e.clientY;
     sheetDragOffset.current = 0;
@@ -4106,7 +4114,7 @@ function POSView() {
                 <div className="font-display text-2xl">ตะกร้า</div>
                 <div className="text-xs text-muted mt-0.5">{cart.length} รายการ · {totalQty} ชิ้น</div>
               </div>
-              {cart.length>0 && <button className="btn-ruby-premium" onClick={confirmClearCart}><Icon name="trash" size={13}/>ล้างตะกร้า</button>}
+              {cart.length>0 && <button className="btn-ruby-premium !px-4 gap-1.5" onClick={confirmClearCart}><Icon name="trash" size={13}/>ล้างตะกร้า</button>}
             </div>
             {CartContent()}
           </div>
@@ -5144,7 +5152,12 @@ function ProductFilterSheet({ open, onClose, filter, setFilter, materialCounts, 
   return (
     <div className="fixed inset-0 z-[120] flex items-end sm:items-center sm:justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-ink/40 fade-in"/>
-      <div className="relative w-full sm:max-w-lg bg-canvas rounded-t-2xl sm:rounded-2xl shadow-2xl border hairline max-h-[85vh] flex flex-col fade-in" onClick={e=>e.stopPropagation()}>
+      {/* `overflow-hidden` clips the footer's `bg-surface-soft` block to
+          the sheet's rounded corners — without it, the footer extended
+          past the sheet's top-rounding and showed sharp bottom corners
+          on mobile. Also dropped `rounded-t-2xl` only → `rounded-2xl`
+          so the bottom edges are softened too. */}
+      <div className="relative w-full sm:max-w-lg bg-canvas rounded-2xl shadow-2xl border hairline max-h-[85vh] flex flex-col fade-in overflow-hidden" onClick={e=>e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b hairline">
           <div className="font-display text-lg flex items-center gap-2"><Icon name="filter" size={18}/> ตัวกรอง</div>
           <button type="button" className="btn-ghost !py-1.5 !px-2" onClick={onClose} aria-label="ปิด">
