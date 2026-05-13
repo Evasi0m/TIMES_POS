@@ -172,6 +172,75 @@
     outline-offset: 2px;
   }
 
+  /* Duplicate-bill guard pill — small amber chip rendered next to any
+     product line whose product_id was already received in the last
+     7 days. Goal: visible enough to make the user pause and check the
+     paper bill, soft enough to NOT look like a hard error. Uses warm
+     amber (NOT the error red) since this is advisory; the user might
+     legitimately receive the same SKU twice. */
+  .recent-receive-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 7px;
+    border-radius: 5px;
+    font-size: 10.5px;
+    font-weight: 600;
+    line-height: 1;
+    color: #92400e;       /* amber-800 ink */
+    background: rgba(251, 191, 36, 0.18);   /* amber-400 @ 18% */
+    border: 1px solid rgba(217, 119, 6, 0.35);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.45) inset,
+      0 1px 2px rgba(180, 83, 9, 0.10);
+    white-space: nowrap;
+    cursor: help;  /* hints that the title= attr has more detail */
+  }
+  .recent-receive-badge svg {
+    color: #d97706;       /* amber-600 — icon a touch stronger than text */
+    flex-shrink: 0;
+  }
+
+  /* Scroll well for `MovementItemsPanel` — subtle top+bottom inset
+     shadows so items appear to sit inside a recessed container. Inset
+     shadows are painted on the padding box and do NOT scroll with
+     content, so they correctly hint "there's an edge here" regardless
+     of scroll position. Kept soft (0.10 alpha, 8px spread) so the
+     already-delicate glass-soft item cards don't feel fenced in. */
+  .movement-items-scroll {
+    box-shadow:
+      inset 0 6px 8px -6px rgba(40, 22, 10, 0.12),
+      inset 0 -6px 8px -6px rgba(40, 22, 10, 0.12);
+  }
+
+  /* Big eye-catching index numeral for lines inside `MovementItemsPanel`.
+     Matches `.btn-add-product`'s terra-cotta palette (same "add" action
+     family) so the number visually connects to the button that created
+     the row. Text-only — no background — keeps the list feeling light
+     when there are 10+ items. */
+  .movement-item-index {
+    flex-shrink: 0;
+    display: inline-block;
+    min-width: 22px;
+    font-family: var(--font-display, inherit);
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1;
+    color: #b86448;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    text-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.6),
+      0 0 10px rgba(184, 100, 72, 0.28);
+    margin-top: -2px;  /* optical alignment with the product_name baseline */
+  }
+  .movement-item-index::after {
+    content: ".";
+    margin-left: 1px;
+    color: rgba(184, 100, 72, 0.55);
+  }
+
   .btn-add-product {
     display: inline-flex;
     align-items: center;
@@ -231,6 +300,57 @@
   .btn-primary:active { transform: translateY(0) scale(0.98); filter: brightness(0.95); transition-duration: .08s; }
   .btn-primary:disabled { background: #e6dfd8; color: #6c6a64; cursor: not-allowed; box-shadow: none; transform: none; filter: none; }
   .btn-primary:disabled::before { display: none; }
+
+  /* Gemini-style rainbow button used for AI features (currently "AI อ่านบิล").
+     Mirrors .btn-primary's geometry/states so all surrounding utility
+     classes (icon-btn-44, mobile sizing rules) still apply identically.
+     Stop placement follows the user-supplied Gemini sparkle reference:
+     red at top-left → orange/yellow on the upper-left arm → blue across
+     the body → green at the bottom-right tip. */
+  .btn-ai-gemini {
+    background: linear-gradient(125deg,
+      #ef4444 0%,
+      #f59e0b 22%,
+      #eab308 38%,
+      #3b82f6 62%,
+      #2563eb 78%,
+      #10b981 100%);
+    color: #fff;
+    padding: 12px 22px;
+    min-height: 44px;
+    border-radius: 11px;
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: 0.01em;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.38) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.10) inset,
+      0 6px 16px -4px rgba(59, 130, 246, 0.45);
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    transition: transform .15s var(--ease-out), box-shadow .2s var(--ease-out), filter .15s;
+    cursor: pointer;
+    position: relative; overflow: hidden;
+    /* Slight text shadow for contrast — pure white on yellow stops can
+       read washed-out without it. */
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.18);
+  }
+  .btn-ai-gemini::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.28), transparent);
+    pointer-events: none; border-radius: inherit; transition: opacity .2s;
+  }
+  .btn-ai-gemini:hover {
+    filter: brightness(1.06) saturate(1.05);
+    transform: translateY(-1px);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.5) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.10) inset,
+      0 12px 28px -6px rgba(59, 130, 246, 0.55);
+  }
+  .btn-ai-gemini:active { transform: translateY(0) scale(0.98); filter: brightness(0.95); transition-duration: .08s; }
+  .btn-ai-gemini:disabled { background: #e6dfd8; color: #6c6a64; cursor: not-allowed; box-shadow: none; transform: none; filter: none; }
+  .btn-ai-gemini:disabled::before { display: none; }
 
   .btn-secondary {
     background: var(--glass-bg-strong);
@@ -632,6 +752,57 @@
       0 1px 0 rgba(255, 220, 220, 0.45) inset;
   }
   .btn-danger-sidebar svg { filter: drop-shadow(0 1px 0 rgba(255, 200, 200, 0.45)); }
+
+  /* Icon-only 32×32 cousin of `.btn-danger-sidebar` — same ruby metallic
+     recipe (4-stop gradient + inset rim + hover glow) but compact, for
+     inline trash / delete buttons that live next to data rows. Sized
+     small enough to not dominate a row card but still tappable on
+     mobile (32 < 44 hit-target — wrap in a padded label if mobile-only
+     use becomes an issue). */
+  .btn-danger-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    background:
+      linear-gradient(180deg,
+        #f48a8a 0%,
+        #d94343 35%,
+        #a91f1f 65%,
+        #6e0d0d 100%);
+    color: #fff5f5;
+    border-radius: 8px;
+    border: 1px solid rgba(80, 10, 10, 0.55);
+    box-shadow:
+      0 2px 6px rgba(150, 25, 25, 0.35),
+      0 1px 0 rgba(255, 220, 220, 0.40) inset,
+      0 -1px 0 rgba(60, 5, 5, 0.30) inset;
+    cursor: pointer;
+    transition: all .15s var(--ease-out);
+  }
+  .btn-danger-icon:hover {
+    background:
+      linear-gradient(180deg,
+        #ff9c9c 0%,
+        #e85555 35%,
+        #b92828 65%,
+        #7a1414 100%);
+    box-shadow:
+      0 5px 14px rgba(180, 30, 30, 0.50),
+      0 0 0 1px rgba(255, 140, 140, 0.35),
+      0 1px 0 rgba(255, 235, 235, 0.50) inset,
+      0 -1px 0 rgba(60, 5, 5, 0.30) inset;
+    transform: translateY(-1px);
+  }
+  .btn-danger-icon:active {
+    transform: scale(0.94);
+    box-shadow:
+      0 1px 3px rgba(150, 25, 25, 0.40),
+      0 1px 0 rgba(255, 220, 220, 0.40) inset;
+  }
+  .btn-danger-icon svg { filter: drop-shadow(0 1px 0 rgba(255, 200, 200, 0.45)); }
   /* Premium coral/terracotta variant of the gold sidebar button — same
      4-stop metallic recipe as `.btn-settings-sidebar`, retuned into the
      brand coral hue. Visible to all users; sits above the danger logout
@@ -1578,6 +1749,119 @@
   .drawer-in  { animation: drawerIn  .26s var(--ease-out); }
   .drawer-out { animation: drawerOut .22s var(--ease-out) forwards; }
 
+  /* ===== "Holographic materialization" — used by CmgBillUploadModal =====
+     Not a fade. The card un-folds from a horizontal slit in the centre
+     (clip-path iris), tilts off a slight perspective angle, and clears
+     a small blur — meant to feel like a sci-fi holo display snapping
+     into focus. A one-shot diagonal scan-line travels across the card
+     while it materialises, then disappears. */
+
+  /* Backdrop: ramp the blur (not just opacity) so the world behind the
+     modal physically shifts focus. Same easing curve as the card so they
+     read as one motion. */
+  @keyframes holoBackdropIn {
+    from { opacity: 0; backdrop-filter: blur(0px) saturate(100%); -webkit-backdrop-filter: blur(0px) saturate(100%); }
+    to   { opacity: 1; backdrop-filter: blur(10px) saturate(140%); -webkit-backdrop-filter: blur(10px) saturate(140%); }
+  }
+  @keyframes holoBackdropOut {
+    from { opacity: 1; backdrop-filter: blur(10px) saturate(140%); -webkit-backdrop-filter: blur(10px) saturate(140%); }
+    to   { opacity: 0; backdrop-filter: blur(0px) saturate(100%);  -webkit-backdrop-filter: blur(0px) saturate(100%); }
+  }
+
+  /* Card: iris-reveal from horizontal slit + perspective un-tilt +
+     blur dissolve. The clip-path is the headliner — opacity goes 0→1
+     too but only briefly because the slit covers most of the perceived
+     "fade" naturally. */
+  @keyframes holoCardIn {
+    0% {
+      clip-path: inset(48% 30% 48% 30% round 24px);
+      transform: perspective(1400px) rotateX(10deg) translateY(14px) scale(0.94);
+      filter: blur(6px);
+      opacity: 0;
+    }
+    35% {
+      filter: blur(2px);
+      opacity: 1;
+    }
+    100% {
+      clip-path: inset(0 0 0 0 round 16px);
+      transform: perspective(1400px) rotateX(0) translateY(0) scale(1);
+      filter: blur(0);
+      opacity: 1;
+    }
+  }
+  @keyframes holoCardOut {
+    0% {
+      clip-path: inset(0 0 0 0 round 16px);
+      transform: perspective(1400px) rotateX(0) translateY(0) scale(1);
+      filter: blur(0);
+      opacity: 1;
+    }
+    100% {
+      clip-path: inset(46% 28% 46% 28% round 24px);
+      transform: perspective(1400px) rotateX(-6deg) translateY(-6px) scale(0.96);
+      filter: blur(4px);
+      opacity: 0;
+    }
+  }
+
+  /* One-shot scan-line: a thin diagonal gradient strip that sweeps
+     across the card during enter, then fades. Lives in ::after so it
+     doesn't affect layout. */
+  @keyframes holoScanSweep {
+    0%   { transform: translate(-120%, -120%) rotate(18deg); opacity: 0; }
+    15%  { opacity: 0.55; }
+    85%  { opacity: 0.25; }
+    100% { transform: translate(120%, 120%)  rotate(18deg); opacity: 0; }
+  }
+
+  .holo-backdrop-in  { animation: holoBackdropIn  .32s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .holo-backdrop-out { animation: holoBackdropOut .24s cubic-bezier(0.7, 0, 0.84, 0)  forwards; }
+
+  .holo-card-in {
+    animation: holoCardIn .42s cubic-bezier(0.22, 1, 0.36, 1) both;
+    transform-origin: 50% 50%;
+    position: relative;
+  }
+  .holo-card-in::after {
+    content: "";
+    position: absolute;
+    inset: -40%;
+    pointer-events: none;
+    background: linear-gradient(115deg,
+      transparent 42%,
+      rgba(255, 255, 255, 0.55) 48%,
+      rgba(120, 180, 255, 0.45) 50%,
+      rgba(255, 255, 255, 0.55) 52%,
+      transparent 58%);
+    mix-blend-mode: screen;
+    border-radius: inherit;
+    animation: holoScanSweep .55s cubic-bezier(0.22, 1, 0.36, 1) .05s both;
+  }
+  .holo-card-out {
+    animation: holoCardOut .28s cubic-bezier(0.7, 0, 0.84, 0) forwards;
+    transform-origin: 50% 50%;
+  }
+
+  /* Respect users who've asked for reduced motion — skip the dramatic
+     reveal but keep a tiny opacity transition so the modal doesn't pop. */
+  @media (prefers-reduced-motion: reduce) {
+    .holo-backdrop-in,
+    .holo-backdrop-out,
+    .holo-card-in,
+    .holo-card-out {
+      animation-duration: .15s !important;
+      animation-timing-function: linear !important;
+    }
+    .holo-card-in,
+    .holo-card-out {
+      clip-path: none !important;
+      filter: none !important;
+      transform: none !important;
+    }
+    .holo-card-in::after { display: none; }
+  }
+
   /* Loading spinner — coral arc on light track */
   @keyframes spin { to { transform: rotate(360deg); } }
   .spinner {
@@ -1737,6 +2021,7 @@
      accidental 2-line wrapping that made some labels feel cramped. */
   @media (max-width: 1023px) {
     .btn-primary,
+    .btn-ai-gemini,
     .btn-secondary,
     .btn-danger,
     .btn-ghost {
@@ -2121,6 +2406,357 @@
   .scan-inline-btn:active { transform: scale(0.94); filter: brightness(0.95); }
   @media (min-width: 1024px) {
     .scan-inline-btn { display: none; }
+  }
+
+  /* "AI อ่านบิล" inline button — docked next to the search input in the
+     receive movement form. Uses a 3-layer radial mesh (orange top-left,
+     red top-right, purple bottom) over a diagonal linear base so the
+     colours blend the way a Figma mesh-gradient would. Mirrors
+     `.btn-settings-sidebar`'s inset-rim + glow-on-hover recipe so it
+     fits the premium-button visual family. Sized 48px tall to align
+     vertically with `.input !py-3 !text-base`. */
+  .btn-ai-mesh {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    /* Height + radius match `.input !py-3 !text-base` exactly:
+       py-3 (24px) + text-base line-height (24px) + 1px border × 2 = 50px,
+       border-radius 10px from `.input`. */
+    height: 50px;
+    padding: 0 16px;
+    border-radius: 10px;
+    color: #fff;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.2px;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background:
+      radial-gradient(circle at 15% 20%,  #fb923c 0%, transparent 55%),
+      radial-gradient(circle at 85% 25%,  #ef4444 0%, transparent 55%),
+      radial-gradient(circle at 50% 110%, #8b5cf6 0%, transparent 65%),
+      linear-gradient(135deg, #f97316 0%, #dc2626 50%, #7c3aed 100%);
+    box-shadow:
+      0 4px 14px -2px rgba(220, 38, 38, 0.40),
+      0 1px 0 rgba(255, 255, 255, 0.32) inset,
+      0 -1px 0 rgba(60, 10, 80, 0.32) inset;
+    cursor: pointer;
+    transition: transform .15s var(--ease-out), box-shadow .2s ease, filter .15s;
+    position: relative;
+    overflow: hidden;
+    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn-ai-mesh::before {
+    content: "";
+    position: absolute; top: 0; left: 0; right: 0; height: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.26), transparent);
+    pointer-events: none;
+    border-radius: inherit;
+  }
+  .btn-ai-mesh:hover {
+    filter: brightness(1.06) saturate(1.04);
+    transform: translateY(-1px);
+    box-shadow:
+      0 8px 22px -2px rgba(220, 38, 38, 0.55),
+      0 0 0 1px rgba(255, 200, 200, 0.25),
+      0 1px 0 rgba(255, 255, 255, 0.42) inset,
+      0 -1px 0 rgba(60, 10, 80, 0.30) inset;
+  }
+  .btn-ai-mesh:active {
+    transform: scale(0.96);
+    filter: brightness(0.92);
+    transition-duration: .08s;
+  }
+  .btn-ai-mesh svg { filter: drop-shadow(0 1px 1px rgba(40, 5, 30, 0.30)); }
+
+  /* On narrow phone widths collapse to an icon-only 48×48 square so the
+     search row stays single-line on iPhone SE / 320-360px viewports.
+     The Thai label inside the button uses `hidden sm:inline` so React
+     toggles the visibility — we only need to drop the horizontal
+     padding here.
+     `.btn-ai-mesh-wide` opts OUT of this collapse — used by full-text
+     CTAs like EmptyLanding's "เริ่มสแกนบิล", the DoneSummary's
+     "เริ่มรอบใหม่", and the bulk-upload modal's "AI อ่านทั้งหมด" button
+     where hiding the label would hurt far more than saving 150-200px
+     of horizontal space. */
+  @media (max-width: 639px) {
+    .btn-ai-mesh:not(.btn-ai-mesh-wide) {
+      width: 50px;
+      padding: 0;
+    }
+  }
+
+  /* ===== AI palette companions to .btn-ai-mesh ===== */
+
+  /* AI-themed tab states for `<KindTabs ai>` entries. The goal is a
+     "premium" visual that hints at the gradient CTA without being as
+     loud as `.btn-ai-mesh`. Two states:
+
+       .ai-tab-inactive — transparent background, text takes a warm
+         red/orange tint and a soft outer halo (text-shadow). The
+         glow intensifies on hover as the first affordance cue.
+
+       .ai-tab-active — the tab is selected; gets a very low-opacity
+         mesh gradient (≈12-16% alpha so it reads as a tinted panel
+         rather than a solid button), plus an outer box-shadow halo
+         in warm red so the pill "lights up" within the neutral
+         KindTabs strip.
+
+     Palette is the same 3 stops as `.btn-ai-mesh` (#f97316 orange →
+     #dc2626 red → #7c3aed purple) to keep the brand cohesion. */
+
+  /* ─── INACTIVE ────────────────────────────────────────────────────
+     Gradient-filled text: the label LITERALLY becomes the AI palette.
+     `background-clip: text` + transparent fill draws the gradient
+     inside the glyphs. A soft pulse animation on the drop-shadow
+     keeps the tab "alive" without jumping around. */
+  .ai-tab-inactive {
+    position: relative;
+    background: linear-gradient(135deg,
+      #f97316 0%, #dc2626 50%, #7c3aed 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    animation: ai-tab-pulse 3.6s ease-in-out infinite;
+    transition: filter 0.2s var(--ease-out), transform 0.2s var(--ease-out);
+  }
+  .ai-tab-inactive:hover {
+    transform: translateY(-0.5px);
+    filter: brightness(1.10) saturate(1.08);
+  }
+  /* The svg lives inside the button but background-clip:text doesn't
+     apply to it — drive the icon colour + glow directly. */
+  .ai-tab-inactive svg {
+    color: #dc2626;
+    -webkit-text-fill-color: currentColor;
+    filter: drop-shadow(0 0 4px rgba(249, 115, 22, 0.50))
+            drop-shadow(0 0 8px rgba(220, 38, 38, 0.30));
+    transition: filter 0.25s var(--ease-out), color 0.2s var(--ease-out);
+  }
+  .ai-tab-inactive:hover svg {
+    color: #b91c1c;
+    filter: drop-shadow(0 0 5px rgba(249, 115, 22, 0.70))
+            drop-shadow(0 0 12px rgba(220, 38, 38, 0.48));
+  }
+
+  /* ─── ACTIVE ─────────────────────────────────────────────────────
+     Full mesh-gradient pill — this is the only tab that LOOKS like
+     btn-ai-mesh inside an otherwise neutral strip. A diagonal white
+     sheen stripe sweeps across every ~3s, and the outer halo breathes
+     to give the button a faint "processing" feel. All colour
+     references use the same 3 stops as .btn-ai-mesh to stay on-brand. */
+  .ai-tab-active {
+    position: relative;
+    overflow: hidden;
+    color: #fff;
+    -webkit-text-fill-color: #fff;
+    font-weight: 600;
+    letter-spacing: 0.1px;
+    text-shadow: 0 1px 2px rgba(60, 10, 40, 0.45);
+    background:
+      radial-gradient(circle at 15% 20%,  #fb923c 0%, transparent 55%),
+      radial-gradient(circle at 85% 25%,  #ef4444 0%, transparent 55%),
+      radial-gradient(circle at 50% 110%, #8b5cf6 0%, transparent 65%),
+      linear-gradient(135deg, #f97316 0%, #dc2626 50%, #7c3aed 100%);
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.35) inset,
+      0 -1px 0 rgba(60, 10, 80, 0.28) inset,
+      0 4px 12px -2px rgba(220, 38, 38, 0.42),
+      0 0 18px 0 rgba(249, 115, 22, 0.35);
+    animation: ai-tab-halo 3s ease-in-out infinite;
+  }
+  /* Gloss highlight — static top-half sheen so the pill reads as
+     convex / lit from above. Same trick as .btn-ai-mesh::before. */
+  .ai-tab-active::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.28), transparent);
+    border-radius: inherit;
+    pointer-events: none;
+  }
+  /* Animated diagonal shine — a narrow white stripe sweeps from left
+     to right every 3s, signalling "AI is the special sauce". We animate
+     `transform: translateX` on a 30%-wide stripe positioned off-screen
+     left; at 60% it's fully across, then rests off-screen right for
+     the remaining 40% so the sweep feels deliberate, not constant. */
+  .ai-tab-active::after {
+    content: "";
+    position: absolute;
+    top: 0; bottom: 0;
+    left: -50%;
+    width: 35%;
+    background: linear-gradient(105deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.00) 30%,
+      rgba(255, 255, 255, 0.35) 50%,
+      rgba(255, 255, 255, 0.00) 70%,
+      transparent 100%);
+    transform: skewX(-18deg);
+    pointer-events: none;
+    animation: ai-tab-sheen 3s ease-in-out infinite;
+  }
+  .ai-tab-active svg {
+    filter: drop-shadow(0 1px 1px rgba(40, 5, 30, 0.40));
+  }
+
+  @keyframes ai-tab-pulse {
+    0%, 100% {
+      filter: drop-shadow(0 0 2px rgba(249, 115, 22, 0.18));
+    }
+    50% {
+      filter: drop-shadow(0 0 6px rgba(249, 115, 22, 0.42))
+              drop-shadow(0 0 12px rgba(220, 38, 38, 0.25));
+    }
+  }
+  @keyframes ai-tab-halo {
+    0%, 100% {
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.35) inset,
+        0 -1px 0 rgba(60, 10, 80, 0.28) inset,
+        0 4px 12px -2px rgba(220, 38, 38, 0.42),
+        0 0 14px 0 rgba(249, 115, 22, 0.30);
+    }
+    50% {
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.35) inset,
+        0 -1px 0 rgba(60, 10, 80, 0.28) inset,
+        0 5px 16px -2px rgba(220, 38, 38, 0.55),
+        0 0 22px 2px rgba(249, 115, 22, 0.48);
+    }
+  }
+  @keyframes ai-tab-sheen {
+    0%   { left: -50%; }
+    55%  { left: 120%; }
+    100% { left: 120%; }
+  }
+
+  /* ─── Tiny "AI" chip inside the tab button ───────────────────────
+     Inactive variant: solid mesh-gradient pill (same as .ai-chip but
+     smaller and tighter — this one sits inline with the label).
+     Active variant: inverted to white so it stays readable on the
+     hot gradient background of the selected pill. */
+  .ai-tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 17px;
+    padding: 0 6px;
+    margin-right: 1px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    line-height: 1;
+    border-radius: 4px;
+    color: #fff;
+    -webkit-text-fill-color: #fff;
+    text-shadow: 0 1px 1px rgba(30, 5, 40, 0.30);
+    background:
+      radial-gradient(circle at 25% 20%, #fb923c 0%, transparent 60%),
+      radial-gradient(circle at 80% 25%, #ef4444 0%, transparent 60%),
+      linear-gradient(135deg, #f97316 0%, #dc2626 55%, #7c3aed 100%);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    box-shadow:
+      0 1px 2px rgba(220, 38, 38, 0.35),
+      0 1px 0 rgba(255, 255, 255, 0.30) inset;
+    flex-shrink: 0;
+  }
+  .ai-tab-active .ai-tab-badge {
+    color: #b91c1c;
+    -webkit-text-fill-color: #b91c1c;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.95);
+    border-color: rgba(255, 255, 255, 0.85);
+    box-shadow:
+      0 1px 2px rgba(60, 10, 40, 0.25),
+      0 1px 0 rgba(255, 255, 255, 0.55) inset;
+  }
+
+  /* Respect the user's motion preference — the pulse + sheen + halo
+     are eye-candy and drop away cleanly without breaking legibility. */
+  @media (prefers-reduced-motion: reduce) {
+    .ai-tab-inactive { animation: none; }
+    .ai-tab-active   { animation: none; }
+    .ai-tab-active::after { animation: none; display: none; }
+  }
+
+  /* ─── Sidebar nav-item variant: AI-flagged row ───────────────────
+     Applied via `className += "nav-item-ai "` when a nav entry has
+     `ai: true` in nav-config. Replaces the icon's plain currentColor
+     stroke with the same 3-stop gradient the .ai-tab-badge uses
+     (orange → red → purple), referenced through an SVG linearGradient
+     injected once at the top of the Sidebar (id=ai-icon-gradient).
+     Paired with a warm drop-shadow for the same "live / AI" glow as
+     .ai-tab-inactive — keeps every AI surface in the app visually
+     coherent so users learn "orange-red glow = AI feature" once. */
+  .nav-item-ai > svg {
+    stroke: url(#ai-icon-gradient);
+    filter: drop-shadow(0 0 3px rgba(249, 115, 22, 0.45))
+            drop-shadow(0 0 6px rgba(220, 38, 38, 0.25));
+  }
+
+  /* Tiny inline chip used to label AI-driven surfaces (e.g. the modal
+     header "AI · สแกนบิล CMG"). Same mesh gradient but flatter so it
+     reads as a tag rather than a CTA. */
+  .ai-chip {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    color: #fff;
+    text-shadow: 0 1px 1px rgba(30, 5, 40, 0.30);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background:
+      radial-gradient(circle at 15% 25%, #fb923c 0%, transparent 55%),
+      radial-gradient(circle at 85% 25%, #ef4444 0%, transparent 55%),
+      radial-gradient(circle at 50% 115%, #8b5cf6 0%, transparent 65%),
+      linear-gradient(135deg, #f97316 0%, #dc2626 50%, #7c3aed 100%);
+    box-shadow:
+      0 1px 3px rgba(220, 38, 38, 0.32),
+      0 1px 0 rgba(255, 255, 255, 0.32) inset;
+    flex-shrink: 0;
+  }
+
+  /* Row-number badge for the AI bill review modal. Big enough (40×40)
+     to work as a "you are here" indicator while the user scrolls through
+     6-20 parsed lines — the number is the anchor the eye tracks between
+     cards. Solid ink (#141413) so the bright mesh-gradient palette stays
+     reserved for the primary AI-action button. */
+  .ai-row-badge {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    /* Translucent ink at 90% — heavier than the original 55% per user
+       feedback ("ขอเข้มอีก 35%") so the number reads more decisively,
+       while a touch of transparency + backdrop-blur keeps the badge
+       feeling integrated with the card's status tint rather than
+       stamped on top. */
+    background: rgba(20, 20, 19, 0.90);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: 1px solid rgba(0, 0, 0, 0.35);
+    box-shadow:
+      0 2px 5px rgba(0, 0, 0, 0.22),
+      0 1px 0 rgba(255, 255, 255, 0.14) inset;
+    flex-shrink: 0;
   }
 
   /* ==========  MOBILE CART SHEET  ==========

@@ -62,6 +62,7 @@ const Icon = ({ name, size = 20, className = '', strokeWidth = 1.75, color }) =>
     case 'camera':       return <svg {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3.5"/></svg>;
     case 'flashlight':   return <svg {...p}><path d="M18 6 6 18"/><path d="M14 4h6v6"/><path d="M10 20H4v-6"/><circle cx="12" cy="12" r="2"/></svg>;
     case 'flip-cam':     return <svg {...p}><path d="M3 7h4l2-3h6l2 3h4v12H3z"/><path d="m9 13 3-3 3 3"/><path d="M12 10v6"/></svg>;
+    case 'scan':         return <svg {...p}><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M3 12h18"/></svg>;
     case 'zap':          return <svg {...p}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>;
     case 'user':         return <svg {...p}><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/></svg>;
     case 'wallet':       return <svg {...p}><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M16 12h4"/><circle cx="17" cy="12" r="0.5" fill="currentColor"/></svg>;

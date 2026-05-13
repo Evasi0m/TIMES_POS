@@ -14,7 +14,7 @@ export const NAV = [
   { k: 'pos',       label: 'ขาย',     labelLong: 'ขายสินค้า',        icon: 'cart' },
   { k: 'products',  label: 'สินค้า',  labelLong: 'สินค้า',           icon: 'box' },
   { k: 'sales',     label: 'ประวัติ', labelLong: 'ประวัติการขาย',    icon: 'receipt' },
-  { k: 'receive',   label: 'รับเข้า', labelLong: 'รับสินค้าจากบริษัท', icon: 'arrow-up',  adminOnly: true },
+  { k: 'receive',   label: 'รับเข้า', labelLong: 'รับสินค้าจากบริษัท', icon: 'arrow-up',  adminOnly: true, ai: true },
   { k: 'return',    label: 'รับคืน',  labelLong: 'รับคืนจากลูกค้า',   icon: 'arrow-down' },
   { k: 'dashboard', label: 'ภาพรวม',  labelLong: 'แดชบอร์ด',         icon: 'dashboard', adminOnly: true },
   // P&L was previously a top-level nav entry; it now lives as a tab

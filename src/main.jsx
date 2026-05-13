@@ -43,10 +43,13 @@ import { playScanBeep, playScanError, vibrateScan, vibrateError } from './lib/ba
 import KindTabs from './components/movement/KindTabs.jsx';
 import CostPercentToggle from './components/movement/CostPercentToggle.jsx';
 import MovementItemsPanel from './components/movement/MovementItemsPanel.jsx';
+import { useRecentReceivesMap } from './lib/recent-receives.js';
 import SupplierForm from './components/movement/SupplierForm.jsx';
 import SalePickerForReturn from './components/movement/SalePickerForReturn.jsx';
 import InsightsView from './views/InsightsView.jsx';
 import TelegramSettings from './components/settings/TelegramSettings.jsx';
+import AISettings from './components/settings/AISettings.jsx';
+import BulkReceiveView from './components/ai/BulkReceiveView.jsx';
 import './styles.css';
 
 // `supabase.createClient(...)` from the CDN UMD bundle becomes a one-method
@@ -1496,6 +1499,7 @@ function AppSettingsModal({ open, onClose }) {
     { id: 'display',  label: 'การแสดงผล',  icon: 'edit',       adminOnly: false },
     { id: 'shop',     label: 'ข้อมูลร้าน',  icon: 'store',      adminOnly: true  },
     { id: 'telegram', label: 'Telegram',     icon: 'zap',        adminOnly: true, superAdminOnly: true },
+    { id: 'ai',       label: 'AI',           icon: 'scan',       adminOnly: true, superAdminOnly: true },
     { id: 'paylater', label: 'สูตรคำนวณ',    icon: 'calculator', adminOnly: true, superAdminOnly: true },
   ];
   // Visitor: only `display`. admin+: every tab (but superAdminOnly ones are
@@ -1609,6 +1613,13 @@ function AppSettingsModal({ open, onClose }) {
         {activeTab === 'telegram' && isAdmin && (
           <div className="fade-in">
             <TelegramSettings toast={toast} />
+          </div>
+        )}
+
+        {/* ── Tab: AI ── */}
+        {activeTab === 'ai' && isAdmin && (
+          <div className="fade-in">
+            <AISettings toast={toast} />
           </div>
         )}
 
@@ -3052,6 +3063,22 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
                    : 'text-muted-soft';
   return (
     <aside className="sidebar hidden lg:flex w-64 flex-col">
+      {/* Hidden SVG defs — one-shot linearGradient referenced by
+          `.nav-item-ai > svg { stroke: url(#ai-icon-gradient) }` so
+          AI-flagged nav icons inherit the same orange→red→purple sweep
+          as the .ai-tab-badge. userSpaceOnUse + viewBox coords (0–24)
+          keeps the gradient spatially consistent across all icons
+          regardless of their internal path shape. */}
+      <svg width="0" height="0" aria-hidden="true" style={{position:'absolute'}}>
+        <defs>
+          <linearGradient id="ai-icon-gradient" gradientUnits="userSpaceOnUse"
+                          x1="0" y1="0" x2="24" y2="24">
+            <stop offset="0%"   stopColor="#f97316"/>
+            <stop offset="55%"  stopColor="#dc2626"/>
+            <stop offset="100%" stopColor="#7c3aed"/>
+          </linearGradient>
+        </defs>
+      </svg>
       <div className="sidebar-header px-6 py-6 flex items-center gap-3 border-b">
         <img src="icons/logo_web3_512.png" alt="TIMES logo" style={{width:41,height:41,objectFit:'contain'}} />
         <div style={{fontFamily:"'Jost', sans-serif", fontWeight:600}} className="text-2xl leading-none self-center">TIMES</div>
@@ -3069,6 +3096,7 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
               className={
                 "nav-item w-full text-left bg-transparent " +
                 (view===it.k && allowed ? "active " : "") +
+                (it.ai ? "nav-item-ai " : "") +
                 (allowed ? "" : "opacity-40 cursor-not-allowed")
               }
               onClick={allowed ? (()=>setView(it.k)) : undefined}
@@ -3076,7 +3104,14 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
               title={allowed ? undefined : 'ไม่มีสิทธิ์เข้าถึง'}
             >
               <Icon name={it.icon} size={22} strokeWidth={view===it.k && allowed ?2.1:1.85}/>
-              <span className="flex-1">{it.labelLong}</span>
+              <span className="flex-1">
+                {it.labelLong}
+                {/* Inline AI chip for nav items that host AI features
+                    (currently just `receive`, whose รับเข้า×10 sub-tab
+                    uses Gemini bill OCR). Reuses the same .ai-tab-badge
+                    class as KindTabs so both surfaces stay consistent. */}
+                {it.ai && <span className="ai-tab-badge ml-1.5 align-middle">AI</span>}
+              </span>
               {!allowed && <Icon name="lock" size={13} className="opacity-70"/>}
             </button>
           );
@@ -6788,14 +6823,23 @@ function ReceiveView() {
   // Ref to the active StockMovementForm so AddProductModal can push the
   // newly-created product straight into "รายการรับเข้า".
   const formRef = useRef(null);
+  // Tabs in display order. The third tab (`bulk_receive`) renders a
+  // completely different view — the AI-driven multi-bill wizard — so
+  // we branch rendering below instead of feeding it through
+  // StockMovementForm. AI scanning lives ONLY on this tab now; the
+  // regular receive tab is purely manual.
   const tabs = [
-    { k: 'receive', label: 'รับเข้า',         icon: 'package-in',  hint: 'รับสินค้าจากบริษัท · เพิ่มสต็อก' },
-    { k: 'claim',   label: 'ส่งเคลม / คืน',   icon: 'package-out', hint: 'ส่งสินค้าคืนบริษัท · หักสต็อก' },
+    { k: 'receive',      label: 'รับเข้า',        icon: 'package-in',  hint: 'รับสินค้าจากบริษัท · เพิ่มสต็อก' },
+    { k: 'bulk_receive', label: 'รับเข้า ×10',    icon: 'scan',        hint: 'สแกนบิล CMG หลายใบในครั้งเดียวด้วย AI', ai: true },
+    { k: 'claim',        label: 'ส่งเคลม / คืน',  icon: 'package-out', hint: 'ส่งสินค้าคืนบริษัท · หักสต็อก', divideBefore: true },
   ];
   const TabGroup = <KindTabs tabs={tabs} current={tab} onChange={setTab} Icon={Icon} />;
   // Header actions. On desktop we render icon + text. On mobile we
   // collapse to icon-only 44pt squares so the row fits beside the kind
   // tabs without wrapping to a second line on iPhone-width screens.
+  // History button uses the active tab's kind — except for bulk_receive
+  // which shares the 'receive' history (one receive_orders table).
+  const historyKind = tab === 'bulk_receive' ? 'receive' : tab;
   const ActionButtons = (
     <div className="flex items-center gap-2 lg:grid lg:grid-cols-2">
       {/* Mobile: 48×48 to vertically align with the KindTabs pill bar
@@ -6803,7 +6847,7 @@ function ReceiveView() {
           to 22px so it fills the larger tap area and reads clearly
           without a text label. Desktop reverts to icon + text. */}
       <button
-        className="btn-add-product !py-2 !text-sm icon-btn-44 !w-12 !h-12 lg:!w-auto lg:!h-auto"
+        className="btn-add-product !py-2 !text-sm icon-btn-44 !w-12 !h-12 lg:!w-auto lg:!h-10"
         onClick={()=>setAddProductOpen(true)}
         aria-label="เพิ่มรุ่นสินค้า"
       >
@@ -6811,7 +6855,7 @@ function ReceiveView() {
         <span className="hidden lg:inline lg:ml-1">เพิ่มรุ่นสินค้า</span>
       </button>
       <button
-        className="btn-secondary !py-2 !text-sm icon-btn-44 !w-12 !h-12 lg:!w-auto lg:!h-auto"
+        className="btn-secondary !py-2 !text-sm icon-btn-44 !w-12 !h-12 lg:!w-auto lg:!h-10"
         onClick={()=>setHistoryOpen(true)}
         aria-label="ดูประวัติ"
       >
@@ -6840,14 +6884,22 @@ function ReceiveView() {
           {ActionButtons}
         </div>
         <div className="text-xs text-muted mb-4 ml-1">{tabs.find(t=>t.k===tab).hint}</div>
-        <StockMovementForm key={tab} kind={tab} ref={formRef}/>
-        <MovementHistoryModal open={historyOpen} onClose={()=>setHistoryOpen(false)} kind={tab}/>
+        {tab === 'bulk_receive' ? (
+          // Bulk receive flow owns its own state (multi-image upload,
+          // wizard review, sequential submit). Mounting under a stable
+          // `key` ensures switching away and back doesn't reset progress
+          // mid-batch.
+          <BulkReceiveView key="bulk_receive" />
+        ) : (
+          <StockMovementForm key={tab} kind={tab} ref={formRef} />
+        )}
+        <MovementHistoryModal open={historyOpen} onClose={()=>setHistoryOpen(false)} kind={historyKind}/>
         <AddProductModal
           open={addProductOpen}
           onClose={()=>setAddProductOpen(false)}
           onAdded={(product)=>{
             // Only push into the receive list when on the "receive" tab —
-            // the claim/return tabs use the same form but a different list.
+            // the claim/bulk tabs use different lists/forms.
             if (tab === 'receive') formRef.current?.addItemFromCreated(product);
           }}
         />
@@ -7033,10 +7085,18 @@ function BillPickerPopup({ open, product, onPick, onClose }) {
   );
 }
 
-const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, headerAction }, ref) {
+const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, headerAction, searchRowAction }, ref) {
   const toast = useToast();
   const productSearchRef = useRef(null);
   const [scannerOpen, setScannerOpen] = useState(false);
+  // Duplicate-bill guard — fetched once on form mount. Used only for
+  // `kind === 'receive'` but the hook runs unconditionally to honour
+  // React's rules of hooks. The query is cheap (≤7-day window) and the
+  // result powers the small "พึ่งรับ X วันก่อน" badges in MovementItemsPanel.
+  // Destructure the new { map, refresh } shape; we don't need refresh
+  // here (StockMovementForm isn't a batch flow), but pulling the map
+  // out keeps the prop name unchanged downstream in MovementItemsPanel.
+  const { map: recentReceivesMap } = useRecentReceivesMap();
   const [date, setDate] = useState(todayISO());
   const [channel, setChannel] = useState("store");
   const [items, setItems] = useState([]);
@@ -7270,6 +7330,38 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
         }];
       });
     },
+    /**
+     * Push a batch of items parsed by the CMG AI bill scanner.
+     * Auto-fills supplier=CMG, invoice_no, and hasVat=true (CMG always
+     * issues VAT invoices). Each line uses the unit_cost from the bill
+     * as unit_price + manualPrice=true so the costPct auto-recompute
+     * doesn't clobber it.
+     */
+    addItemsFromAi({ supplier_invoice_no, items: aiItems }) {
+      if (!Array.isArray(aiItems) || aiItems.length === 0) return;
+      setSupplierName('CMG');
+      if (supplier_invoice_no) setSupplierInvoiceNo(supplier_invoice_no);
+      setHasVat(true);
+      setItems((it) => {
+        const existingIds = new Set(it.map((l) => l.product_id));
+        const fresh = aiItems
+          .filter((x) => x.product && !existingIds.has(x.product.id))
+          .map((x) => ({
+            _uid: (crypto.randomUUID?.() || `r${Math.random().toString(36).slice(2)}${Date.now()}`),
+            product_id:   x.product.id,
+            product_name: x.product.name,
+            retail_price: Number(x.product.retail_price) || 0,
+            cost_price:   Number(x.product.cost_price)   || 0,
+            quantity:     Math.max(1, Number(x.quantity) || 1),
+            unit: 'เรือน',
+            unit_price:   Number(x.unit_cost) || 0,
+            manualPrice:  true,
+            discount1_value: 0, discount1_type: null,
+            discount2_value: 0, discount2_type: null,
+          }));
+        return [...it, ...fresh];
+      });
+    },
   }), []);
   // Camera scanner — lookup by barcode and add to items on hit.
   // Returns true on confirmed success / false otherwise (mirrors POSView).
@@ -7453,6 +7545,10 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
                   on its own row above the card. Desktop already has the
                   button in the page header so we hide this slot there. */}
               {headerAction && <div className="lg:hidden flex-shrink-0">{headerAction}</div>}
+              {/* Cross-platform slot — currently used by the receive view
+                  to dock the "AI อ่านบิล" mesh-gradient button right of
+                  the search input on both mobile and desktop. */}
+              {searchRowAction && <div className="flex-shrink-0">{searchRowAction}</div>}
               <button type="button" className="scan-inline-btn" onClick={()=>setScannerOpen(true)} aria-label="สแกนด้วยกล้อง">
                 <Icon name="camera" size={20}/>
               </button>
@@ -7518,6 +7614,7 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
             costPctEnabled={costPctEnabled} costPct={costPct}
             onUpdItem={upd} onUpdPrice={updPrice} onRemoveItem={rm}
             showItemsError={attemptedSubmit && !items.length}
+            recentReceivesMap={recentReceivesMap}
           />
 
           {/* BILL DETAILS — moved from left panel */}
