@@ -10,6 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:deploy": "node scripts/test-subpath-deploy.mjs",
+    "build:verify": "npm run build && npm run test:deploy",
     "lint": "eslint . --ext .js,.jsx,.cjs --max-warnings=9999",
     "lint:fix": "eslint . --ext .js,.jsx,.cjs --fix",
     "format": "prettier --write \"src/**/*.{js,jsx,css}\" \"tests/**/*.{js,jsx}\" \"*.{json,md}\"",

@@ -19,9 +19,19 @@ describe('mapError', () => {
   it('handles login failure', () => {
     expect(mapError({ message: 'Invalid login credentials' })).toBe('อีเมลหรือรหัสผ่านไม่ถูกต้อง');
   });
-  it('handles network errors', () => {
+  it('handles network errors — default (generic) context', () => {
     expect(mapError({ message: 'Failed to fetch' }))
-      .toMatch(/เน็ตไม่ตอบสนอง/);
+      .toMatch(/เชื่อมต่อเซิร์ฟเวอร์ไม่ได้/);
+  });
+  it('handles network errors — save_bill context mentions the offline queue', () => {
+    expect(mapError({ message: 'Failed to fetch' }, { context: 'save_bill' }))
+      .toMatch(/บันทึกในคิวออฟไลน์/);
+  });
+  it('handles network errors — login context never mentions the offline queue', () => {
+    const msg = mapError({ message: 'Failed to fetch' }, { context: 'login' });
+    expect(msg).toMatch(/เชื่อมต่อเซิร์ฟเวอร์ไม่ได้/);
+    expect(msg).not.toMatch(/ออฟไลน์/);
+    expect(msg).not.toMatch(/บิล/);
   });
   it('handles RPC raise() messages (insufficient stock)', () => {
     expect(mapError({ message: 'insufficient stock for product 42' })).toBe('สต็อกไม่พอ');

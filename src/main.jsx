@@ -17,6 +17,7 @@ import {
 } from './lib/offline-queue.js';
 import { onOnlineChange, isOnline } from './lib/online-status.js';
 import { mapError } from './lib/error-map.js';
+import { runSelfHeal, manualReset } from './lib/sw-self-heal.js';
 import { fetchAll } from './lib/sb-paginate.js';
 import { sb } from './lib/supabase-client.js';
 import {
@@ -60,6 +61,16 @@ registerSW({
   immediate: true,
   onRegisterError(err) { console.warn('[sw] register failed', err); },
 });
+
+// Self-heal: if the previously-installed SW is broken (e.g. the May 2026
+// `bad-precaching-response` incident, where a hardcoded `/` precache entry
+// 404'd on the GitHub Pages subpath and left every device with a stuck
+// controller), this detects it 3s after boot and force-unregisters + reloads
+// ONCE per hour. Without this, fixing the SW upstream doesn't help cashiers
+// whose devices already cached the broken one.
+runSelfHeal().catch((e) => console.warn('[sw-heal] failed', e));
+// Expose for the manual "ล้าง cache" button in Settings (super_admin only).
+window._manualReset = manualReset;
 
 // Drain the offline-sale queue any time the browser comes back online.
 // Errors are mapped to Thai via mapError() and surfaced to OfflineBanner
@@ -1314,6 +1325,93 @@ function PinPromptModal({ open, onClose, onSuccess, hint }) {
    Replaces both the old SettingsModal and the inline FontSizePicker in
    the sidebar footer / mobile drawer.
 ========================================================= */
+// Super-admin only. Surface SW / cache state and a manual reset button
+// so a stuck install can be fixed in-app instead of via DevTools. The
+// reset deliberately PRESERVES IndexedDB because that's where the
+// offline sale queue lives — wiping it could lose unsent bills.
+function SystemDiagnosticsSection({ toast }) {
+  const [diag, setDiag] = useState({ swVersion: '…', regs: '…', caches: '…' });
+  const [busy, setBusy] = useState(false);
+
+  const refresh = useCallback(async () => {
+    let regs = 0, cacheCount = 0, swVersion = 'no controller';
+    if ('serviceWorker' in navigator) {
+      try {
+        const list = await navigator.serviceWorker.getRegistrations();
+        regs = list.length;
+      } catch {}
+      const ctrl = navigator.serviceWorker.controller;
+      if (ctrl) {
+        // Ask the SW for its version (set in src/sw.js).
+        swVersion = await new Promise((resolve) => {
+          const ch = new MessageChannel();
+          const t = setTimeout(() => resolve('no reply (2s)'), 2000);
+          ch.port1.onmessage = (e) => { clearTimeout(t); resolve(e.data?.version || '?'); };
+          try { ctrl.postMessage({ type: 'GET_VERSION' }, [ch.port2]); }
+          catch { clearTimeout(t); resolve('postMessage failed'); }
+        });
+      }
+    }
+    if ('caches' in window) {
+      try { cacheCount = (await caches.keys()).length; } catch {}
+    }
+    setDiag({ swVersion, regs, caches: cacheCount });
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const doReset = async () => {
+    if (busy) return;
+    const ok = window.confirm(
+      'ล้าง cache และรีเซ็ตแอป?\n\n' +
+      '• ยกเลิก Service Worker ทุกตัว\n' +
+      '• ลบ cache ทั้งหมด\n' +
+      '• โหลดแอปใหม่อัตโนมัติ\n\n' +
+      'ไม่ลบบิลที่ค้างคิวออฟไลน์ (ปลอดภัย)\n' +
+      'ไม่ออกจากระบบ'
+    );
+    if (!ok) return;
+    setBusy(true);
+    try {
+      if (typeof window._manualReset === 'function') {
+        await window._manualReset();
+        // _manualReset triggers a hard reload; this toast usually never
+        // shows, but if reload is suppressed (some browsers) we surface it.
+        toast.push('รีเซ็ตเรียบร้อย — กำลังโหลดใหม่', 'success');
+      } else {
+        toast.push('ไม่พบฟังก์ชันรีเซ็ต (เวอร์ชันเก่า?)', 'error');
+      }
+    } catch (e) {
+      toast.push('รีเซ็ตไม่สำเร็จ: ' + (e?.message || e), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div>
+      <div className="text-sm text-ink mb-1 font-medium">ระบบ</div>
+      <div className="text-[11px] text-muted-soft mb-3">
+        ใช้เมื่อแอปขึ้น "offline" / โหลดสินค้าไม่ได้ทั้งที่เน็ตปกติ — สาเหตุมักเป็น Service Worker ค้าง
+      </div>
+      <div className="text-[11px] font-mono text-muted bg-surface-soft rounded-md p-2 mb-3 space-y-0.5">
+        <div>SW version: <span className="text-ink">{String(diag.swVersion)}</span></div>
+        <div>SW registrations: <span className="text-ink">{String(diag.regs)}</span></div>
+        <div>Cache storages: <span className="text-ink">{String(diag.caches)}</span></div>
+      </div>
+      <div className="flex gap-2 flex-wrap">
+        <button type="button" className="btn-secondary !py-2 !px-3 text-sm" onClick={refresh} disabled={busy}>
+          <Icon name="refresh" size={14}/> ตรวจสอบใหม่
+        </button>
+        <button type="button" className="btn-primary !py-2 !px-3 text-sm" onClick={doReset} disabled={busy}>
+          {busy ? <span className="spinner"/> : <Icon name="alert" size={14}/>}
+          ล้าง cache + รีเซ็ตแอป
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AppSettingsModal({ open, onClose }) {
   const toast = useToast();
   const { shop, refreshShop } = useShop();
@@ -1470,6 +1568,11 @@ function AppSettingsModal({ open, onClose }) {
               <div className="text-[11px] text-muted-soft mb-2">ใช้กับทุกหน้า — ยกเว้นใบเสร็จ</div>
               <FontPickerInline />
             </div>
+            {isSuperAdmin && (
+              <div className="border-t hairline-soft pt-4">
+                <SystemDiagnosticsSection toast={toast}/>
+              </div>
+            )}
           </div>
         )}
 
@@ -2847,7 +2950,7 @@ function LoginScreen() {
     else          localStorage.removeItem(LAST_EMAIL_KEY);
     const { error } = await sb.auth.signInWithPassword({ email, password });
     setBusy(false);
-    if (error) setErr(mapError(error));
+    if (error) setErr(mapError(error, { context: 'login' }));
   };
   return (
     <div className="min-h-screen flex items-center justify-center bg-canvas px-5">
@@ -3646,27 +3749,30 @@ function POSView() {
         p_header: { ...headerPayload, sale_date: new Date().toISOString() },
         p_items: itemsPayload,
       });
-      if (window._isOnline && !window._isOnline()) {
-        await window._queueSale(queueArgs());
-        toast.push(`บันทึกในคิวออฟไลน์ · ${fmtTHB(grandR)} (จะส่งเมื่อออนไลน์)`, 'info');
-      } else {
-        // Atomic: header + items + adjust_stock all in one Postgres transaction.
-        // See supabase-migrations/001_create_sale_order_with_items.sql.
-        const { data: order, error: e1 } = await sb.rpc('create_sale_order_with_items', rpcArgs);
-        if (e1) {
-          // Network failure mid-call → fall back to the offline queue rather
-          // than asking the user to redo the bill.
-          const networkish = /Failed to fetch|NetworkError|TypeError/i.test(String(e1.message || e1));
-          if (networkish && window._queueSale) {
-            await window._queueSale(queueArgs());
-            toast.push(`บันทึกในคิวออฟไลน์ · ${fmtTHB(grandR)} (จะส่งเมื่อออนไลน์)`, 'info');
-          } else {
-            throw e1;
-          }
+      // Strategy: ALWAYS attempt the RPC first, regardless of what
+      // navigator.onLine claims. The OS flag is unreliable (Windows can
+      // stick at false despite working WiFi — exactly the May 2026
+      // incident at the front counter). Only fall back to the offline
+      // queue when the actual fetch fails with a network error. This
+      // costs us nothing when truly offline (fetch rejects instantly)
+      // and saves us from queueing bills that could've gone through.
+      //
+      // Atomic: header + items + adjust_stock all in one Postgres transaction.
+      // See supabase-migrations/001_create_sale_order_with_items.sql.
+      const { data: order, error: e1 } = await sb.rpc('create_sale_order_with_items', rpcArgs);
+      if (e1) {
+        // Network failure mid-call → fall back to the offline queue rather
+        // than asking the user to redo the bill.
+        const networkish = /Failed to fetch|NetworkError|TypeError/i.test(String(e1.message || e1));
+        if (networkish && window._queueSale) {
+          await window._queueSale(queueArgs());
+          toast.push(`บันทึกในคิวออฟไลน์ · ${fmtTHB(grandR)} (จะส่งเมื่อออนไลน์)`, 'info');
         } else {
-          toast.push(`บันทึกบิล #${order.id} · ${fmtTHB(grandR)}`, 'success');
-          setReceiptOrderId(order.id);  // open receipt modal for this new bill
+          throw e1;
         }
+      } else {
+        toast.push(`บันทึกบิล #${order.id} · ${fmtTHB(grandR)}`, 'success');
+        setReceiptOrderId(order.id);  // open receipt modal for this new bill
       }
 
       setCart([]); setNetPrice(""); setNetReceived("");
@@ -3674,7 +3780,7 @@ function POSView() {
       setNotes(""); setShowNotes(false);
       setTaxInvoice(false); setBuyer({ name: "", taxId: "", address: "", invoiceNo: "" });
     } catch (err) {
-      toast.push("บันทึกไม่สำเร็จ: " + mapError(err), 'error');
+      toast.push("บันทึกไม่สำเร็จ: " + mapError(err, { context: 'save_bill' }), 'error');
     } finally { setSubmitting(false); submitLockRef.current = false; }
   };
 

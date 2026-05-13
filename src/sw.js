@@ -17,8 +17,31 @@ import { CacheFirst, NetworkFirst, NetworkOnly } from 'workbox-strategies';
 import { ExpirationPlugin } from 'workbox-expiration';
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 
+// Bump when the SW logic itself changes (not just the precache manifest —
+// Workbox already revisions that). Use this to correlate client behavior
+// with a specific SW build: cashier reads the version from console and we
+// know exactly which code is running on their device.
+const SW_VERSION = '2025-05-13-hardened';
+
+self.addEventListener('install', () => {
+  // eslint-disable-next-line no-console
+  console.info('[sw] install v' + SW_VERSION);
+});
 self.skipWaiting();
-self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+self.addEventListener('activate', (e) => {
+  // eslint-disable-next-line no-console
+  console.info('[sw] activate v' + SW_VERSION);
+  e.waitUntil(self.clients.claim());
+});
+
+// Expose version to clients so the self-heal hook in main.jsx can compare
+// against what it expected and force-unregister a stale SW that's been
+// running for too long without an update reaching the device.
+self.addEventListener('message', (e) => {
+  if (e.data?.type === 'GET_VERSION' && e.ports?.[0]) {
+    e.ports[0].postMessage({ version: SW_VERSION });
+  }
+});
 
 cleanupOutdatedCaches();
 

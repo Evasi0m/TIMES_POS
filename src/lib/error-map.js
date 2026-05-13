@@ -22,8 +22,15 @@ const RULES = [
     text: 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร' },
 
   // === Network ============================================================
+  // Text varies by context — the offline-queue message only makes sense
+  // when saving a sale; on login or generic reads it confuses users into
+  // thinking the system saved something it didn't.
   { match: (e) => /Failed to fetch|NetworkError|TypeError.*fetch/i.test(e?.message || ''),
-    text: 'เน็ตไม่ตอบสนอง — บิลถูกบันทึกในคิวออฟไลน์แล้ว' },
+    text: (_e, ctx) => {
+      if (ctx === 'save_bill') return 'เน็ตไม่ตอบสนอง — บิลถูกบันทึกในคิวออฟไลน์แล้ว';
+      if (ctx === 'login')     return 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ตรวจสอบเน็ตแล้วลองใหม่';
+      return 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ลองใหม่อีกครั้ง';
+    } },
 
   // === Postgres data integrity ============================================
   { match: (e) => e?.code === '23505',
@@ -46,14 +53,20 @@ const RULES = [
 
 /**
  * @param {Error|{code?:string,message?:string}|string} err
+ * @param {object} [opts]
+ * @param {'login'|'save_bill'|'generic'} [opts.context]
+ *        Lets context-sensitive rules vary their text. The network rule
+ *        above uses this to avoid telling a user on the login screen that
+ *        "บิลถูกบันทึกในคิวออฟไลน์แล้ว" (there's no bill at login).
  * @returns {string} a Thai user-facing message
  */
-export function mapError(err) {
+export function mapError(err, opts = {}) {
   if (!err) return 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ';
   if (typeof err === 'string') return err;
+  const ctx = opts.context || 'generic';
   for (const rule of RULES) {
     if (rule.match(err)) {
-      return typeof rule.text === 'function' ? rule.text(err) : rule.text;
+      return typeof rule.text === 'function' ? rule.text(err, ctx) : rule.text;
     }
   }
   return err.message || String(err);
