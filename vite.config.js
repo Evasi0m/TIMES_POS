@@ -32,7 +32,11 @@ export default defineConfig({
       injectManifest: {
         // Don't precache the app-shell file twice (singlefile already
         // inlined everything; the icons + manifest are the precache list).
-        globPatterns: ['**/*.{png,ico,json}'],
+        // Include `html` so Workbox precaches index.html itself with the
+        // correct relative URL (matches `base: './'`) and a real revision
+        // hash. Without this, the SW would install fine but the app shell
+        // wouldn't be cached for true offline boot.
+        globPatterns: ['**/*.{html,png,ico,json}'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
       },
       manifest: false, // we already ship a hand-written manifest.json

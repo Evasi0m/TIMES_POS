@@ -23,13 +23,12 @@ self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 cleanupOutdatedCaches();
 
 // === 1. App shell precache (HTML + JS + CSS bundled by Vite) ============
+// Workbox injects the real, hashed asset list here at build time. Do NOT
+// add extra hardcoded entries like { url: '/' } — those assume the app is
+// served at the origin root and 404 on any subpath deploy (GitHub Pages
+// project sites, Netlify previews, etc.), which aborts SW install with
+// `bad-precaching-response` and silently breaks the whole offline layer.
 precacheAndRoute(self.__WB_MANIFEST || []);
-
-// Also precache the singlefile index.html and root assets explicitly.
-precacheAndRoute([
-  { url: '/', revision: null },
-  { url: '/index.html', revision: null },
-]);
 
 // === 2. Icons / manifest — cache-first, change rarely =================
 registerRoute(
