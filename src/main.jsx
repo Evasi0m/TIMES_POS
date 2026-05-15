@@ -6152,7 +6152,14 @@ function SalesView({ onGoPOS }) {
             const qty = Number(it.quantity)||0;
             const lineRev = lineRevenues[idx] * ratio;
             let unitCost = 0;
-            if (it.product_id) {
+            // Authoritative source: cost_price snapshot taken at sale time
+            // (sale_order_items.cost_price). Added 2026-05-15 — locks in the
+            // actual COGS so profit can't drift when receive history changes
+            // or admins correct cost_price retroactively. Legacy rows have
+            // NULL → fall back to receive-history lookup, then product cost.
+            if (it.cost_price != null) {
+              unitCost = Number(it.cost_price) || 0;
+            } else if (it.product_id) {
               const list = recvMap[it.product_id];
               if (list && list.length) {
                 const found = list.find(r => r.date <= saleTs);
@@ -9181,7 +9188,12 @@ function ProfitLossView({ embedded = false }) {
           const lineRev = lineRevenues[idx] * ratio;
           let unitCost = 0;
           let costSource = 'fallback';
-          if (it.product_id) {
+          // Same priority cascade as the sales-history view: authoritative
+          // snapshot first, then receive history, then product fallback.
+          if (it.cost_price != null) {
+            unitCost = Number(it.cost_price) || 0;
+            costSource = 'snapshot';
+          } else if (it.product_id) {
             const list = recvMap[it.product_id];
             if (list && list.length) {
               const found = list.find(r => r.date <= saleTs);
