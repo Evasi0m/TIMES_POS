@@ -3054,6 +3054,31 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
   const role = useRole();
   const isSuperAdmin = role === 'super_admin';
   const items = navForRole(role);
+
+  // ─── Today's bill count (for the "ประวัติการขาย" badge) ───
+  // Counts only active sale_orders dated today (Asia/Bangkok). Refreshes
+  // via realtime on insert/update/delete to sale_orders, and a 60s
+  // polling tick covers midnight rollover (so the badge resets to 0
+  // shortly after 00:00 even on tabs that stay open overnight).
+  const [todaySalesCount, setTodaySalesCount] = useState(null);
+  const loadTodaySalesCount = useCallback(async () => {
+    const today = todayISO();
+    const { count, error } = await sb
+      .from('sale_orders')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'active')
+      .gte('sale_date', startOfDayBangkok(today))
+      .lte('sale_date', endOfDayBangkok(today));
+    if (!error) setTodaySalesCount(count ?? 0);
+  }, []);
+  useEffect(() => {
+    loadTodaySalesCount();
+    // 60s tick: cheap COUNT(*) HEAD request; doubles as midnight rollover
+    // safety net for tabs that stay open across the day boundary.
+    const t = setInterval(loadTodaySalesCount, 60_000);
+    return () => clearInterval(t);
+  }, [loadTodaySalesCount]);
+  useRealtimeInvalidate(sb, ['sale_orders'], loadTodaySalesCount);
   // Short, human-readable role tag for the email footer line.
   const roleTag = role === 'super_admin' ? 'super admin'
                 : role === 'admin'       ? 'admin'
@@ -3111,6 +3136,19 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
                     uses Gemini bill OCR). Reuses the same .ai-tab-badge
                     class as KindTabs so both surfaces stay consistent. */}
                 {it.ai && <span className="ai-tab-badge ml-1.5 align-middle">AI</span>}
+                {/* Today's bill count — only on the "sales" row. Hidden
+                    until the count is loaded (null) so the row doesn't
+                    flash a "0" before the first fetch resolves. Hidden
+                    when 0 too — an empty red dot is noise. Cap at 99+
+                    to keep the pill from blowing up the row width. */}
+                {it.k === 'sales' && allowed && todaySalesCount > 0 && (
+                  <span
+                    className="nav-count-badge ml-1.5 align-middle"
+                    title={`วันนี้ขายไปแล้ว ${todaySalesCount} บิล`}
+                  >
+                    {todaySalesCount > 99 ? '99+' : todaySalesCount}
+                  </span>
+                )}
               </span>
               {!allowed && <Icon name="lock" size={13} className="opacity-70"/>}
             </button>
