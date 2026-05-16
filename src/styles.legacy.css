@@ -2678,6 +2678,44 @@
       0 1px 0 rgba(255, 255, 255, 0.55) inset;
   }
 
+  /* ─── "ใหม่" badge for products added within NEW_PRODUCT_DAYS ──────
+     Same shape/size as .ai-tab-badge so the two stay in the same
+     visual family — but the gradient is a clean red (no purple) to
+     signal "new arrival / attention" rather than "AI feature".
+     Sits inline next to product names in ProductsView and POS
+     search results. */
+  .new-product-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 17px;
+    padding: 0 6px;
+    margin-right: 1px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    line-height: 1;
+    border-radius: 4px;
+    color: #fff;
+    -webkit-text-fill-color: #fff;
+    text-shadow: 0 1px 1px rgba(80, 0, 0, 0.30);
+    background:
+      radial-gradient(circle at 25% 20%, #fb7185 0%, transparent 60%),
+      radial-gradient(circle at 80% 25%, #f97316 0%, transparent 55%),
+      linear-gradient(180deg, #ef4444 0%, #dc2626 55%, #b91c1c 100%);
+    border: 1px solid rgba(255, 255, 255, 0.30);
+    box-shadow:
+      0 1px 2px rgba(220, 38, 38, 0.40),
+      0 1px 0 rgba(255, 255, 255, 0.35) inset;
+    flex-shrink: 0;
+    /* Don't stretch alongside truncated names — the parent uses
+       `truncate` (overflow:hidden), but the badge needs to stay
+       visible. Vertical-align keeps it sitting on the text baseline
+       rather than the line box top. */
+    vertical-align: middle;
+    user-select: none;
+  }
+
   /* Respect the user's motion preference — the pulse + sheen + halo
      are eye-candy and drop away cleanly without breaking legibility. */
   @media (prefers-reduced-motion: reduce) {

@@ -188,6 +188,18 @@ const UNITS = ["เรือน", "เส้น", "ก้อน", "ใบ"];
 const RETURN_REASONS = ["ชำรุด", "ผิดรุ่น/ผิดสี", "ลูกค้าเปลี่ยนใจ", "ขายผิดราคา", "อื่นๆ"];
 const VAT_RATE_DEFAULT = 7;
 
+// "ใหม่" badge window — products created in the last NEW_PRODUCT_DAYS days
+// get a red "ใหม่" pill rendered next to their name on the catalog and
+// POS search lists. Tunable in one place so the threshold stays
+// consistent everywhere it's surfaced.
+const NEW_PRODUCT_DAYS = 30;
+const NEW_PRODUCT_WINDOW_MS = NEW_PRODUCT_DAYS * 24 * 60 * 60 * 1000;
+const isNewProduct = (p) => {
+  if (!p?.created_at) return false;
+  const t = new Date(p.created_at).getTime();
+  return Number.isFinite(t) && (Date.now() - t) < NEW_PRODUCT_WINDOW_MS;
+};
+
 // VAT-inclusive pricing (retail standard in Thailand): the displayed grand_total already includes VAT.
 // Returns { vat, exVat } where roundMoney(vat) + roundMoney(exVat) == roundMoney(grand).
 function vatBreakdown(grandTotal, vatRate = VAT_RATE_DEFAULT) {
@@ -3934,7 +3946,10 @@ function POSView() {
             className={"fade-in stagger px-4 lg:px-5 py-3.5 border-b hairline last:border-0 flex items-center gap-3 transition-colors " + (oos ? "opacity-60 cursor-not-allowed" : "hover:bg-white/40 cursor-pointer")}
             onClick={oos ? undefined : ()=>addToCart(p)}>
             <div className="flex-1 min-w-0">
-              <div className="font-medium text-ink truncate text-base">{p.name}</div>
+              <div className="font-medium text-ink truncate text-base">
+                {p.name}
+                {isNewProduct(p) && <span className="new-product-badge ml-1.5 align-middle">ใหม่</span>}
+              </div>
               <div className="text-xs text-muted mt-0.5 font-mono truncate">{p.barcode || '— ไม่มีบาร์โค้ด —'}</div>
             </div>
             <div className="text-right flex-shrink-0">
@@ -5272,7 +5287,10 @@ function ProductsView() {
               <div key={p.id}
                 className={"grid grid-cols-12 px-4 py-3.5 items-center border-b hairline last:border-0 transition-colors " + (canEdit ? "hover:bg-white/40 cursor-pointer" : "cursor-default")}
                 onClick={canEdit ? (()=>openEditor(p)) : undefined}>
-                <div className="col-span-3 font-medium truncate">{p.name}</div>
+                <div className="col-span-3 font-medium truncate">
+                  {p.name}
+                  {isNewProduct(p) && <span className="new-product-badge ml-1.5 align-middle">ใหม่</span>}
+                </div>
                 <div className="col-span-2 font-mono text-sm text-muted truncate">{p.barcode||'—'}</div>
                 <div className={"col-span-2 text-right tabular-nums " + (lc ? 'text-muted-soft' : 'font-medium text-ink')}>{fmtPlain(p.cost_price)}</div>
                 <div className="col-span-2 text-right tabular-nums">
@@ -5327,7 +5345,10 @@ function ProductsView() {
               onClick={canEdit ? (()=>openEditor(p)) : undefined}>
               <span className={"stock-dot self-start mt-1.5 " + (p.current_stock<=0 ? 'is-empty' : 'is-ok')} aria-hidden="true" />
               <div className="flex-1 min-w-0">
-                <div className="font-semibold truncate text-[15px]">{p.name}</div>
+                <div className="font-semibold truncate text-[15px]">
+                  {p.name}
+                  {isNewProduct(p) && <span className="new-product-badge ml-1.5 align-middle">ใหม่</span>}
+                </div>
                 <div className="flex items-baseline gap-2 mt-1.5 min-w-0 text-sm">
                   <span className="tabular-nums text-primary truncate">ป้าย {roundMoney(p.retail_price).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
                   <span className="text-muted-soft leading-none">|</span>
