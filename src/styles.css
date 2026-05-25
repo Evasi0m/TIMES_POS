@@ -1,0 +1,15 @@
+/* All custom CSS below was lifted verbatim from the inline <style> block
+ * of legacy-index.html. Tokens, glass primitives, hover utilities, button
+ * styles, sidebar / mobile chrome, print rules — everything the React
+ * components reference by class name. Keep edits surgical; large rewrites
+ * belong in dedicated files split by concern.
+ *
+ * NOTE: @import MUST come before @tailwind (CSS spec rule).
+ */
+@import './styles.legacy.css';
+
+/* Tailwind layers — purges unused classes at build time (vs the JIT runtime
+ * the legacy CDN setup loaded on every page view). */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

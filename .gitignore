@@ -1,0 +1,21 @@
+.DS_Store
+.claude/worktrees/
+*.pyc
+__pycache__/
+.env
+
+# Internal reference + data — contains service_role key and source CSVs
+TIMES-POS-Architecture/
+
+# Node / Vite
+node_modules/
+dist/
+*.log
+.vite/
+coverage/
+
+# Real shop stock/cost data — keep out of public repo
+stock_balance_2567_2568.csv
+
+# Local analysis tool output (graphify) — regenerable, large cache
+graphify-out/

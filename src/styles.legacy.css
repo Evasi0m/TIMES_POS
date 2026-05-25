@@ -1,0 +1,3498 @@
+  /* ==========  TOKENS  ==========
+     Brand colours live as `--c-NAME` triplets (space-separated rgb so
+     Tailwind can interpolate alpha via `rgb(var(--c-NAME) / X)`).
+     Surface/shadow/rim tokens are paired with each theme so liquid-glass
+     primitives below auto-adapt. Light theme matches the original palette
+     1:1; dark theme is "warm charcoal" — a brown-tinted slate that
+     extends the cream/coral DNA rather than fighting it.            */
+  :root {
+    /* ── Semantic colour tokens (rgb triplets) ── */
+    --c-primary:              204 120 92;
+    --c-primary-active:       169  88 62;
+    --c-primary-disabled:     230 223 216;
+    --c-ink:                   20  20 19;
+    --c-body:                  61  61 58;
+    --c-body-strong:           37  37 35;
+    --c-muted:                108 106 100;
+    --c-muted-soft:           142 139 130;
+    --c-hairline:             230 223 216;
+    --c-hairline-soft:        235 230 223;
+    --c-canvas:               250 249 245;
+    --c-surface-soft:         245 240 232;
+    --c-surface-card:         239 233 222;
+    --c-surface-cream-strong: 232 224 210;
+    --c-surface-strong:       255 255 255;   /* "pure white" surface — flips to elevated dark */
+    --c-surface-dark:          24  23 21;
+    --c-surface-dark-elevated: 37  35 32;
+    --c-surface-dark-soft:     31  30 27;
+    --c-nightshade:            24  23 21;    /* literal dark — never flips */
+    --c-on-primary:           255 255 255;
+    --c-on-dark:              250 249 245;
+    --c-on-dark-soft:         160 157 150;
+    --c-accent-teal:           93 184 166;
+    --c-accent-amber:         232 165  90;
+    --c-success:               93 184 114;
+    --c-warning:              212 160  23;
+    --c-error:                198  69  69;
+    /* ── Glass surfaces (cream-white frosted) ── */
+    --glass-bg:        rgba(255, 254, 252, 0.74);
+    --glass-bg-strong: rgba(255, 255, 255, 0.92);
+    --glass-bg-soft:   rgba(255, 253, 250, 0.55);
+    --glass-cream:     rgba(232, 224, 210, 0.78);
+    --glass-dark:      rgba(24, 23, 21, 0.85);
+    /* Borders: visibly darker than the canvas so edges read clearly */
+    --glass-border:        rgba(180, 168, 148, 0.35);
+    --glass-border-cream:  rgba(180, 168, 148, 0.35);
+    --glass-border-dark:   rgba(255, 255, 255, 0.10);
+    /* Inset rim highlights + shadow base — light uses warm white,
+       dark uses a much dimmer warm-rim + heavier shadow. Recipes
+       below resolve to a single shadow string per elevation.        */
+    --rim-top:    rgba(255, 255, 255, 0.85);
+    --rim-top-strong: rgba(255, 255, 255, 0.92);
+    --rim-top-bright: rgba(255, 255, 255, 0.98);
+    --rim-bot:    rgba(180, 170, 155, 0.10);
+    --rim-bot-mid:    rgba(180, 170, 155, 0.12);
+    --rim-bot-strong: rgba(180, 170, 155, 0.16);
+    --shadow-rgb: 20 20 19;
+    --shadow-low:  0 1px 0 var(--rim-top) inset, 0 -1px 0 var(--rim-bot) inset, 0 4px 14px -4px rgb(var(--shadow-rgb) / 0.08);
+    --shadow-mid:  0 1px 0 var(--rim-top-strong) inset, 0 -1px 0 var(--rim-bot-mid) inset, 0 10px 28px -6px rgb(var(--shadow-rgb) / 0.14);
+    --shadow-high: 0 1px 0 var(--rim-top-bright) inset, 0 -1px 0 var(--rim-bot-strong) inset, 0 18px 44px -10px rgb(var(--shadow-rgb) / 0.20);
+    /* Body mesh — 3 radial accents over the canvas. Same recipe in
+       both themes so the colour story is preserved; alpha values just
+       work harder on a darker base.                                  */
+    --body-mesh:
+      radial-gradient(ellipse 60% 55% at 100% 0%, rgba(204, 120, 92, 0.10), transparent 65%),
+      radial-gradient(ellipse 60% 55% at 0% 100%, rgba(232, 165, 90, 0.07), transparent 65%),
+      radial-gradient(ellipse 50% 45% at 50% 50%, rgba(204, 120, 92, 0.025), transparent 70%);
+    --ease-out: cubic-bezier(.2,.7,.2,1);
+  }
+
+  /* ── Dark theme: warm charcoal ──
+     Brown-tinted slate (#1a1815 base) so the cream/coral palette still
+     reads as a sibling family rather than a separate brand. Mesh
+     gradient alphas are bumped ~1.5× because rgba(coral, 0.10) on a
+     dark base is nearly invisible; same accents at 0.15–0.18 produce
+     the same perceived warmth.                                      */
+  :root[data-theme="dark"] {
+    --c-ink:                  250 249 245;
+    --c-body:                 205 198 183;
+    --c-body-strong:          230 224 210;
+    --c-muted:                160 154 142;
+    --c-muted-soft:           128 122 110;
+    --c-hairline:              60  54  46;
+    --c-hairline-soft:         52  47  40;
+    --c-canvas:                26  24  21;     /* #1a1815 — warm charcoal */
+    --c-surface-soft:          37  35  30;
+    --c-surface-card:          48  43  37;
+    --c-surface-cream-strong:  56  50  42;
+    --c-surface-strong:        38  35  30;     /* "white card" → dark elevated */
+    --c-on-primary:           255 255 255;     /* coral btn still gets white text */
+    /* Glass surfaces — dark frosted with warm undertones */
+    --glass-bg:        rgba(38, 34, 28, 0.62);
+    --glass-bg-strong: rgba(44, 40, 33, 0.88);
+    --glass-bg-soft:   rgba(34, 30, 25, 0.50);
+    --glass-cream:     rgba(56, 50, 42, 0.70);
+    --glass-dark:      rgba(12, 11, 10, 0.92);
+    --glass-border:        rgba(255, 244, 220, 0.10);
+    --glass-border-cream:  rgba(255, 244, 220, 0.10);
+    --glass-border-dark:   rgba(255, 244, 220, 0.08);
+    /* Rim highlights — much dimmer + warm; shadows go full black so
+       cards lift visibly off the charcoal canvas. */
+    --rim-top:        rgba(255, 244, 220, 0.08);
+    --rim-top-strong: rgba(255, 244, 220, 0.10);
+    --rim-top-bright: rgba(255, 244, 220, 0.14);
+    --rim-bot:        rgba(0, 0, 0, 0.18);
+    --rim-bot-mid:    rgba(0, 0, 0, 0.22);
+    --rim-bot-strong: rgba(0, 0, 0, 0.28);
+    --shadow-rgb: 0 0 0;
+    --shadow-low:  0 1px 0 var(--rim-top) inset, 0 -1px 0 var(--rim-bot) inset, 0 4px 14px -4px rgb(var(--shadow-rgb) / 0.32);
+    --shadow-mid:  0 1px 0 var(--rim-top-strong) inset, 0 -1px 0 var(--rim-bot-mid) inset, 0 10px 28px -6px rgb(var(--shadow-rgb) / 0.46);
+    --shadow-high: 0 1px 0 var(--rim-top-bright) inset, 0 -1px 0 var(--rim-bot-strong) inset, 0 18px 44px -10px rgb(var(--shadow-rgb) / 0.60);
+    /* Mesh alphas bumped so warm glow still reads on dark base */
+    --body-mesh:
+      radial-gradient(ellipse 60% 55% at 100% 0%, rgba(204, 120, 92, 0.18), transparent 65%),
+      radial-gradient(ellipse 60% 55% at 0% 100%, rgba(232, 165, 90, 0.12), transparent 65%),
+      radial-gradient(ellipse 50% 45% at 50% 50%, rgba(204, 120, 92, 0.06), transparent 70%);
+  }
+
+  html, body, #root { height: 100%; }
+  /* Body cross-fades between themes (background-color transitions but
+     gradient layers swap instantly — that's fine because they're
+     near-transparent and the eye reads the canvas change).         */
+  body {
+    background: var(--body-mesh), rgb(var(--c-canvas));
+    background-attachment: fixed;
+    color: rgb(var(--c-ink));
+    font-family: 'Taviraj', serif;
+    font-weight: 400;
+    -webkit-tap-highlight-color: transparent;
+    font-feature-settings: "kern", "liga";
+    transition: background-color .25s var(--ease-out), color .25s var(--ease-out);
+  }
+
+  /* ==========  TYPOGRAPHY  ========== */
+  .font-display { font-family: 'Taviraj', serif; font-weight: 600; letter-spacing: -0.015em; line-height: 1.1; }
+  .font-display-light { font-family: 'Taviraj', serif; font-weight: 500; letter-spacing: -0.01em; line-height: 1.1; }
+  .font-italic { font-style: italic; }
+  input, select, textarea, button { font-family: 'Taviraj', serif; }
+  .uppercase { font-weight: 500; }
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+  .stat-value {
+    font-size: clamp(1.25rem, 5.2vw, 2.25rem);
+    line-height: 1.05;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  @media (min-width: 1024px) {
+    .stat-value {
+      font-size: clamp(1.25rem, 2.4vw, 2.25rem);
+    }
+  }
+  .font-mono { font-family: 'JetBrains Mono', ui-monospace, monospace !important; font-weight: 400; }
+
+  /* ==========  SPIKE LOGO  ========== */
+  .spike { display:inline-block; width:14px; height:14px; position:relative; flex-shrink: 0; }
+  .spike::before, .spike::after { content:''; position:absolute; background: rgb(var(--c-ink)); }
+  .spike::before { top:0; left:50%; width:2px; height:100%; transform:translateX(-50%); }
+  .spike::after { left:0; top:50%; width:100%; height:2px; transform:translateY(-50%); }
+  .spike.lg { width:18px; height:18px; }
+  /* `.spike.dark` is the inverted variant — used on top of dark slabs in
+     light mode. In dark mode the canvas itself is dark, so the inverted
+     spike would disappear; we keep it ink-coloured for safety. */
+  .spike.dark::before, .spike.dark::after { background: rgb(var(--c-canvas)); }
+  :root[data-theme="dark"] .spike.dark::before,
+  :root[data-theme="dark"] .spike.dark::after { background: rgb(var(--c-on-dark)); }
+
+  /* ==========  SCROLLBAR  ========== */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgb(var(--c-hairline) / 0.7); border-radius: 8px; backdrop-filter: blur(4px); }
+  ::-webkit-scrollbar-thumb:hover { background: rgb(var(--c-muted-soft) / 0.7); }
+
+  /* ==========  LIQUID GLASS PRIMITIVES  ========== */
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-low);
+  }
+  .glass-strong {
+    background: var(--glass-bg-strong);
+    backdrop-filter: blur(28px) saturate(160%);
+    -webkit-backdrop-filter: blur(28px) saturate(160%);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-mid);
+  }
+  .glass-soft {
+    background: var(--glass-bg-soft);
+    backdrop-filter: blur(14px) saturate(130%);
+    -webkit-backdrop-filter: blur(14px) saturate(130%);
+    border: 1px solid var(--glass-border);
+  }
+
+  /* ==========  LIQUID-GLASS TILES  ==========
+     Small-surface liquid glass for chips, badges, icon tiles, and
+     toggle buttons. Frosted translucent fill + crisp top rim highlight
+     so the element reads as a thin slab of glass on top of the canvas.
+     Variants:
+       .lg-tile        — neutral cream/white glass (light surfaces)
+       .lg-tile-dark   — dark slate glass (used as active/primary chips)
+       .lg-tile-tint   — caller supplies the tint via bg-*; this only adds
+                         the glass character (blur + rim) on top.        */
+  .lg-tile {
+    background: rgb(var(--c-surface-strong) / 0.55);
+    backdrop-filter: blur(10px) saturate(140%);
+    -webkit-backdrop-filter: blur(10px) saturate(140%);
+    border: 1px solid rgb(var(--c-surface-strong) / 0.70);
+    box-shadow:
+      inset 0 1px 0 var(--rim-top-strong),
+      inset 0 -1px 0 var(--rim-bot-strong),
+      0 2px 8px -2px rgb(var(--shadow-rgb) / 0.08);
+  }
+  :root[data-theme="dark"] .lg-tile {
+    /* Darken the fill so the rim still reads as glass on the charcoal
+       canvas — without this the tile looks like a flat dark rectangle. */
+    background: rgb(var(--c-surface-card) / 0.55);
+    border-color: rgb(var(--c-surface-cream-strong) / 0.45);
+    box-shadow:
+      inset 0 1px 0 var(--rim-top-strong),
+      inset 0 -1px 0 var(--rim-bot-strong),
+      0 2px 8px -2px rgb(var(--shadow-rgb) / 0.40);
+  }
+  .lg-tile-dark {
+    background: linear-gradient(180deg, rgba(31, 41, 55, 0.86), rgba(15, 23, 42, 0.94));
+    backdrop-filter: blur(10px) saturate(140%);
+    -webkit-backdrop-filter: blur(10px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.22),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.40),
+      0 2px 8px -2px rgba(15, 23, 42, 0.45);
+    color: #ffffff;
+  }
+  .lg-tile-tint {
+    backdrop-filter: blur(10px) saturate(140%);
+    -webkit-backdrop-filter: blur(10px) saturate(140%);
+    border: 1px solid rgb(var(--c-surface-strong) / 0.55);
+    box-shadow:
+      inset 0 1px 0 rgb(var(--c-surface-strong) / 0.55),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.04),
+      0 2px 6px -2px rgb(var(--shadow-rgb) / 0.06);
+  }
+  :root[data-theme="dark"] .lg-tile-tint {
+    border-color: rgb(var(--c-on-dark) / 0.10);
+    box-shadow:
+      inset 0 1px 0 rgb(var(--c-on-dark) / 0.10),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.22),
+      0 2px 6px -2px rgb(var(--shadow-rgb) / 0.30);
+  }
+
+  /* Specular highlight overlay for glass surfaces — top-half white
+     gradient that simulates light bouncing off the curved glass. In
+     dark mode we soften it (warm-cream at 12% alpha) so it doesn't
+     create a harsh white blob over a dark surface.                  */
+  .specular { position: relative; overflow: hidden; }
+  .specular::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.42) 0%, rgba(255,255,255,0) 100%);
+    pointer-events: none;
+    border-radius: inherit;
+    opacity: 0.55;
+    transition: opacity .35s var(--ease-out);
+  }
+  .specular:hover::before { opacity: 0.9; }
+  :root[data-theme="dark"] .specular::before {
+    background: linear-gradient(180deg, rgba(255, 244, 220, 0.12) 0%, rgba(255, 244, 220, 0) 100%);
+    opacity: 0.75;
+  }
+
+  /* ==========  HOVER / PRESS UTILITIES  ========== */
+  .hover-lift {
+    transition: transform .25s var(--ease-out), box-shadow .25s var(--ease-out), background-color .18s, border-color .18s, filter .18s;
+    will-change: transform;
+  }
+  .hover-lift:hover { transform: translateY(-1px); box-shadow: var(--shadow-mid); }
+  .hover-lift:active { transform: translateY(0) scale(0.997); transition-duration: .08s; }
+
+  .pressable {
+    transition: transform .2s var(--ease-out), box-shadow .2s var(--ease-out), background-color .15s, border-color .15s;
+    will-change: transform;
+    cursor: pointer;
+  }
+  .pressable:hover { transform: translateY(-1px); box-shadow: var(--shadow-mid); }
+  .pressable:active { transform: scale(0.992); transition-duration: .08s; }
+
+  /* ==========  BUTTONS  ========== */
+  /* Phase 4.4: outline-offset 2px gives the focus ring breathing room
+     so it reads as a "halo" around the input rather than a hard border. */
+  input:focus, select:focus, textarea:focus {
+    outline: 3px solid rgba(204, 120, 92, 0.22);
+    outline-offset: 2px;
+    border-color: #cc785c !important;
+    box-shadow: 0 0 0 3px rgba(204, 120, 92, 0.08);
+  }
+  button:focus-visible, a:focus-visible, [role="button"]:focus-visible {
+    outline: 2px solid rgba(204, 120, 92, 0.55);
+    outline-offset: 2px;
+  }
+
+  /* Duplicate-bill guard pill — small amber chip rendered next to any
+     product line whose product_id was already received in the last
+     7 days. Goal: visible enough to make the user pause and check the
+     paper bill, soft enough to NOT look like a hard error. Uses warm
+     amber (NOT the error red) since this is advisory; the user might
+     legitimately receive the same SKU twice. */
+  .recent-receive-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 7px;
+    border-radius: 5px;
+    font-size: 10.5px;
+    font-weight: 600;
+    line-height: 1;
+    color: #92400e;       /* amber-800 ink */
+    background: rgba(251, 191, 36, 0.18);   /* amber-400 @ 18% */
+    border: 1px solid rgba(217, 119, 6, 0.35);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.45) inset,
+      0 1px 2px rgba(180, 83, 9, 0.10);
+    white-space: nowrap;
+    cursor: help;  /* hints that the title= attr has more detail */
+  }
+  .recent-receive-badge svg {
+    color: #d97706;       /* amber-600 — icon a touch stronger than text */
+    flex-shrink: 0;
+  }
+
+  /* Scroll well for `MovementItemsPanel` — subtle top+bottom inset
+     shadows so items appear to sit inside a recessed container. Inset
+     shadows are painted on the padding box and do NOT scroll with
+     content, so they correctly hint "there's an edge here" regardless
+     of scroll position. Kept soft (0.10 alpha, 8px spread) so the
+     already-delicate glass-soft item cards don't feel fenced in. */
+  .movement-items-scroll {
+    box-shadow:
+      inset 0 6px 8px -6px rgba(40, 22, 10, 0.12),
+      inset 0 -6px 8px -6px rgba(40, 22, 10, 0.12);
+  }
+
+  /* Big eye-catching index numeral for lines inside `MovementItemsPanel`.
+     Matches `.btn-add-product`'s terra-cotta palette (same "add" action
+     family) so the number visually connects to the button that created
+     the row. Text-only — no background — keeps the list feeling light
+     when there are 10+ items. */
+  .movement-item-index {
+    flex-shrink: 0;
+    display: inline-block;
+    min-width: 22px;
+    font-family: var(--font-display, inherit);
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1;
+    color: #b86448;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    text-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.6),
+      0 0 10px rgba(184, 100, 72, 0.28);
+    margin-top: -2px;  /* optical alignment with the product_name baseline */
+  }
+  .movement-item-index::after {
+    content: ".";
+    margin-left: 1px;
+    color: rgba(184, 100, 72, 0.55);
+  }
+
+  .btn-add-product {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: linear-gradient(180deg, rgba(204,120,92,0.85) 0%, rgba(184,100,72,0.92) 100%);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 10px 16px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.18);
+    box-shadow: 0 2px 8px rgba(184,100,72,0.35), 0 1px 0 rgba(255,255,255,0.18) inset;
+    cursor: pointer;
+    transition: all .18s var(--ease-out);
+    text-decoration: none;
+  }
+  .btn-add-product:hover {
+    background: linear-gradient(180deg, rgba(218,134,106,0.95) 0%, rgba(198,114,86,1) 100%);
+    box-shadow: 0 4px 12px rgba(184,100,72,0.50), 0 1px 0 rgba(255,255,255,0.2) inset;
+    transform: translateY(-1px);
+  }
+  .btn-add-product:active { transform: scale(0.97); }
+
+  .btn-primary {
+    background: linear-gradient(180deg, #d18467 0%, #cc785c 50%, #c06c50 100%);
+    color: #fff;
+    padding: 12px 22px;
+    min-height: 44px;
+    border-radius: 11px;
+    font-weight: 500;
+    font-size: 15px;
+    letter-spacing: 0.01em;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.38) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.10) inset,
+      0 6px 16px -4px rgba(204, 120, 92, 0.5);
+    display:inline-flex; align-items:center; justify-content:center; gap: 8px;
+    transition: transform .15s var(--ease-out), box-shadow .2s var(--ease-out), filter .15s;
+    cursor: pointer;
+    position: relative; overflow: hidden;
+  }
+  .btn-primary::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.22), transparent);
+    pointer-events: none; border-radius: inherit; transition: opacity .2s;
+  }
+  .btn-primary:hover {
+    filter: brightness(1.05);
+    transform: translateY(-1px);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.5) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.10) inset,
+      0 12px 28px -6px rgba(204, 120, 92, 0.55);
+  }
+  .btn-primary:active { transform: translateY(0) scale(0.98); filter: brightness(0.95); transition-duration: .08s; }
+  .btn-primary:disabled { background: rgb(var(--c-primary-disabled)); color: rgb(var(--c-muted)); cursor: not-allowed; box-shadow: none; transform: none; filter: none; }
+  .btn-primary:disabled::before { display: none; }
+  :root[data-theme="dark"] .btn-primary:disabled { background: rgb(var(--c-surface-card)); color: rgb(var(--c-muted-soft)); }
+
+  /* Gemini-style rainbow button used for AI features (currently "AI อ่านบิล").
+     Mirrors .btn-primary's geometry/states so all surrounding utility
+     classes (icon-btn-44, mobile sizing rules) still apply identically.
+     Stop placement follows the user-supplied Gemini sparkle reference:
+     red at top-left → orange/yellow on the upper-left arm → blue across
+     the body → green at the bottom-right tip. */
+  .btn-ai-gemini {
+    background: linear-gradient(125deg,
+      #ef4444 0%,
+      #f59e0b 22%,
+      #eab308 38%,
+      #3b82f6 62%,
+      #2563eb 78%,
+      #10b981 100%);
+    color: #fff;
+    padding: 12px 22px;
+    min-height: 44px;
+    border-radius: 11px;
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: 0.01em;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.38) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.10) inset,
+      0 6px 16px -4px rgba(59, 130, 246, 0.45);
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    transition: transform .15s var(--ease-out), box-shadow .2s var(--ease-out), filter .15s;
+    cursor: pointer;
+    position: relative; overflow: hidden;
+    /* Slight text shadow for contrast — pure white on yellow stops can
+       read washed-out without it. */
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.18);
+  }
+  .btn-ai-gemini::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.28), transparent);
+    pointer-events: none; border-radius: inherit; transition: opacity .2s;
+  }
+  .btn-ai-gemini:hover {
+    filter: brightness(1.06) saturate(1.05);
+    transform: translateY(-1px);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.5) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.10) inset,
+      0 12px 28px -6px rgba(59, 130, 246, 0.55);
+  }
+  .btn-ai-gemini:active { transform: translateY(0) scale(0.98); filter: brightness(0.95); transition-duration: .08s; }
+  .btn-ai-gemini:disabled { background: #e6dfd8; color: #6c6a64; cursor: not-allowed; box-shadow: none; transform: none; filter: none; }
+  .btn-ai-gemini:disabled::before { display: none; }
+
+  .btn-secondary {
+    background: var(--glass-bg-strong);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    color: rgb(var(--c-ink));
+    padding: 12px 22px;
+    min-height: 44px;
+    border-radius: 11px;
+    font-weight: 500;
+    font-size: 15px;
+    letter-spacing: 0.01em;
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-low);
+    display:inline-flex; align-items:center; justify-content:center; gap: 8px;
+    transition: transform .15s var(--ease-out), box-shadow .2s var(--ease-out), background-color .15s, color .15s;
+    cursor: pointer;
+  }
+  .btn-secondary:hover { background: rgb(var(--c-canvas) / 0.96); transform: translateY(-1px); box-shadow: var(--shadow-mid); }
+  .btn-secondary:active { transform: translateY(0) scale(0.98); transition-duration: .08s; }
+  :root[data-theme="dark"] .btn-secondary:hover { background: rgb(var(--c-surface-cream-strong) / 0.94); }
+
+  .btn-danger-modal {
+    background:
+      linear-gradient(180deg,
+        #f48a8a 0%,
+        #d94343 35%,
+        #a91f1f 65%,
+        #6e0d0d 100%);
+    color: #fff5f5;
+    text-shadow: 0 1px 0 rgba(60, 5, 5, 0.55);
+    border-color: rgba(80, 10, 10, 0.55);
+    box-shadow:
+      0 2px 8px rgba(150, 25, 25, 0.40),
+      0 1px 0 rgba(255, 220, 220, 0.45) inset,
+      0 -1px 0 rgba(60, 5, 5, 0.30) inset;
+  }
+  .btn-danger-modal:hover {
+    background:
+      linear-gradient(180deg,
+        #ff9c9c 0%,
+        #e85555 35%,
+        #b92828 65%,
+        #7a1414 100%);
+    color: #fff5f5;
+    box-shadow:
+      0 6px 16px rgba(180, 30, 30, 0.55),
+      0 0 0 1px rgba(255, 140, 140, 0.35),
+      0 1px 0 rgba(255, 235, 235, 0.55) inset,
+      0 -1px 0 rgba(60, 5, 5, 0.30) inset;
+  }
+  .btn-danger-modal svg { filter: drop-shadow(0 1px 0 rgba(255, 200, 200, 0.45)); }
+
+  .btn-danger {
+    background: #c64545;
+    color: #ffffff;
+    padding: 10px 16px;
+    min-height: 40px;
+    border-radius: 9px;
+    font-weight: 500;
+    font-size: 14px;
+    line-height: 1;
+    border: none;
+    cursor: pointer;
+    transition: background-color .18s var(--ease-out), transform .15s var(--ease-out), box-shadow .15s var(--ease-out), filter .18s;
+    box-shadow: var(--shadow-low);
+  }
+  .btn-danger:hover { background: #ad3838; transform: translateY(-1px); box-shadow: var(--shadow-mid); }
+  .btn-danger:active { transform: translateY(0) scale(0.98); filter: brightness(0.95); transition-duration: .08s; }
+  .btn-danger:disabled { background: rgb(var(--c-primary-disabled)); color: rgb(var(--c-muted)); cursor: not-allowed; box-shadow: none; transform: none; filter: none; }
+  :root[data-theme="dark"] .btn-danger:disabled { background: rgb(var(--c-surface-card)); color: rgb(var(--c-muted-soft)); }
+
+  .btn-ghost {
+    background: transparent;
+    color: rgb(var(--c-ink));
+    padding: 8px 14px;
+    min-height: 38px;
+    border-radius: 9px;
+    font-weight: 500;
+    font-size: 14px;
+    display:inline-flex; align-items:center; justify-content:center; gap: 8px;
+    transition: background-color .15s, transform .15s var(--ease-out), backdrop-filter .15s, color .15s;
+    cursor: pointer;
+  }
+  .btn-ghost:hover { background: rgb(var(--c-surface-card) / 0.7); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+  .btn-ghost:active { transform: scale(0.96); }
+  :root[data-theme="dark"] .btn-ghost:hover { background: rgb(var(--c-surface-cream-strong) / 0.50); }
+
+  /* ==========  INPUTS  ========== */
+  .input {
+    background: rgb(var(--c-surface-strong) / 0.85);     /* leans white — clearly distinct from cream canvas */
+    backdrop-filter: blur(12px) saturate(125%);
+    -webkit-backdrop-filter: blur(12px) saturate(125%);
+    border: 1px solid rgba(165, 152, 130, 0.45); /* darker border so edges are visible */
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 15px;
+    font-weight: 400;
+    color: rgb(var(--c-ink));
+    width: 100%;
+    transition: border-color .15s, background-color .15s, box-shadow .15s, transform .15s var(--ease-out), color .15s;
+    box-shadow:
+      0 1px 0 var(--rim-top) inset,
+      0 1px 3px rgb(var(--shadow-rgb) / 0.04);
+  }
+  .input::placeholder { color: rgb(var(--c-muted) / 0.7); }
+  .input:hover {
+    background: rgb(var(--c-surface-strong) / 0.97);
+    border-color: rgba(140, 128, 105, 0.55);
+  }
+  /* Dark theme: input becomes an elevated dark surface with a soft warm
+     border so the field stays legible against the charcoal canvas.    */
+  :root[data-theme="dark"] .input {
+    background: rgb(var(--c-surface-strong) / 0.92);
+    border-color: rgb(var(--c-hairline) / 0.95);
+  }
+  :root[data-theme="dark"] .input:hover {
+    background: rgb(var(--c-surface-card) / 0.95);
+    border-color: rgb(var(--c-hairline-soft) / 1);
+  }
+
+  /* ==========  SELECT / DROPDOWN BUTTON  ========== */
+  /* Style only the trigger button — leave the native option list alone */
+  select.input {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    color-scheme: light;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b3a26' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px 16px;
+    padding-right: 38px;
+    cursor: pointer;
+  }
+  select.input option,
+  select.input optgroup {
+    background-color: rgb(var(--c-surface-strong));
+    color: rgb(var(--c-ink));
+  }
+  select.input option:checked {
+    background-color: rgb(var(--c-primary));
+    color: rgb(var(--c-on-primary));
+  }
+  select.input option:disabled {
+    color: rgb(var(--c-muted-soft));
+  }
+  select.input:hover,
+  select.input:focus {
+    background-color: rgb(var(--c-surface-strong) / 0.97);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23cc785c' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px 16px;
+  }
+  /* In dark theme the default chevron stroke (#6b3a26, dark brown) blends
+     with the dark elevated surface — use a warmer cream tone instead. */
+  :root[data-theme="dark"] select.input {
+    color-scheme: dark;
+    background-color: rgb(var(--c-surface-strong) / 0.92);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23cdc6b7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    /* The dark `.input { background: ... }` shorthand resets these
+       longhands back to their initial values (repeat, 0% 0%, auto),
+       which caused the chevron to tile across the trigger. Restore. */
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px 16px;
+  }
+  :root[data-theme="dark"] select.input:hover,
+  :root[data-theme="dark"] select.input:focus {
+    background-color: rgb(var(--c-surface-card) / 0.95);
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px 16px;
+  }
+  :root[data-theme="dark"] select.input.\!py-1,
+  :root[data-theme="dark"] select.input.\!py-1\.5 {
+    background-position: right 8px center;
+    background-size: 14px 14px;
+  }
+  :root[data-theme="dark"] select.input option,
+  :root[data-theme="dark"] select.input optgroup {
+    background-color: rgb(var(--c-surface-card));
+    background-image: none;
+    color: rgb(var(--c-ink));
+  }
+  :root[data-theme="dark"] select.input option:checked {
+    background-color: rgb(var(--c-primary-active));
+    color: rgb(var(--c-on-primary));
+  }
+  :root[data-theme="dark"] select.input option:disabled {
+    color: rgb(var(--c-muted-soft));
+  }
+  select.input.\!py-1:hover,
+  select.input.\!py-1:focus,
+  select.input.\!py-1\.5:hover,
+  select.input.\!py-1\.5:focus {
+    background-position: right 8px center;
+    background-size: 14px 14px;
+  }
+  /* Compact variants — keep the chevron tucked closer */
+  select.input.\!py-1,
+  select.input.\!py-1\.5 {
+    background-position: right 8px center;
+    background-size: 14px 14px;
+    padding-right: 28px;
+  }
+
+  /* ==========  CARDS (glass)  ========== */
+  .card-canvas {
+    background:
+      radial-gradient(circle at 12% 10%, rgba(204, 120, 92, 0.10), transparent 34%),
+      radial-gradient(circle at 88% 18%, rgba(232, 165, 90, 0.09), transparent 30%),
+      radial-gradient(circle at 55% 95%, rgba(232, 224, 210, 0.42), transparent 42%),
+      linear-gradient(135deg, rgba(255, 254, 252, 0.86), rgba(255, 253, 250, 0.72));   /* warm-white — pops off the cream canvas */
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid var(--glass-border);
+    border-radius: 14px;
+    box-shadow: var(--shadow-low);
+  }
+  /* Dark variant: same colour-mesh recipe but the linear base layer
+     swaps to elevated dark surfaces. Mesh accent alphas are bumped
+     ~1.5× so the coral/amber glow still reads on charcoal.         */
+  :root[data-theme="dark"] .card-canvas {
+    background:
+      radial-gradient(circle at 12% 10%, rgba(204, 120, 92, 0.18), transparent 36%),
+      radial-gradient(circle at 88% 18%, rgba(232, 165, 90, 0.14), transparent 32%),
+      radial-gradient(circle at 55% 95%, rgba(56, 50, 42, 0.55), transparent 44%),
+      linear-gradient(135deg, rgba(44, 40, 33, 0.92), rgba(36, 32, 27, 0.82));
+  }
+  .card-cream {
+    background:
+      radial-gradient(circle at 14% 8%, rgba(204, 120, 92, 0.14), transparent 34%),
+      radial-gradient(circle at 90% 18%, rgba(232, 165, 90, 0.14), transparent 32%),
+      radial-gradient(circle at 50% 105%, rgba(255, 254, 252, 0.48), transparent 44%),
+      linear-gradient(135deg, rgba(239, 233, 222, 0.92), rgba(232, 224, 210, 0.78));   /* deeper cream — clearly different from page */
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid var(--glass-border-cream);
+    border-radius: 14px;
+    box-shadow: var(--shadow-low);
+  }
+  :root[data-theme="dark"] .card-cream {
+    background:
+      radial-gradient(circle at 14% 8%, rgba(204, 120, 92, 0.22), transparent 36%),
+      radial-gradient(circle at 90% 18%, rgba(232, 165, 90, 0.20), transparent 34%),
+      radial-gradient(circle at 50% 105%, rgba(56, 50, 42, 0.60), transparent 46%),
+      linear-gradient(135deg, rgba(56, 50, 42, 0.94), rgba(48, 43, 37, 0.82));
+  }
+  .card-dark {
+    background:
+      radial-gradient(circle at 12% 8%, rgba(204, 120, 92, 0.28), transparent 36%),
+      radial-gradient(circle at 92% 18%, rgba(93, 184, 166, 0.14), transparent 34%),
+      radial-gradient(circle at 55% 110%, rgba(232, 165, 90, 0.12), transparent 44%),
+      linear-gradient(135deg, rgba(37, 35, 32, 0.94), rgba(24, 23, 21, 0.88));
+    backdrop-filter: blur(24px) saturate(120%);
+    -webkit-backdrop-filter: blur(24px) saturate(120%);
+    color: #faf9f5;
+    border: 1px solid var(--glass-border-dark);
+    border-radius: 14px;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.18) inset,
+      0 -1px 0 rgba(255,255,255,0.06) inset,
+      inset 0 0 0 1px rgba(255,255,255,0.05),
+      0 18px 44px -12px rgba(0,0,0,0.45);
+  }
+  .card-primary-mesh {
+    background:
+      radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.24), transparent 34%),
+      radial-gradient(circle at 88% 20%, rgba(232, 165, 90, 0.30), transparent 36%),
+      radial-gradient(circle at 50% 110%, rgba(169, 88, 62, 0.30), transparent 44%),
+      linear-gradient(135deg, #d98874 0%, #cc785c 58%, #a9583e 100%);
+    border: 1px solid rgba(255,255,255,0.45);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.35) inset,
+      0 -1px 0 rgba(120, 55, 36, 0.18) inset,
+      inset 0 0 0 1px rgba(255,255,255,0.10),
+      0 14px 34px -14px rgba(204, 120, 92, 0.60);
+  }
+  /* Teal liquid-glass — used for the "real net profit" card so it stands
+     out from card-dark / card-primary-mesh / card-cream / card-canvas. */
+  .card-teal {
+    background:
+      radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.24), transparent 34%),
+      radial-gradient(circle at 88% 20%, rgba(168, 230, 207, 0.32), transparent 36%),
+      radial-gradient(circle at 50% 110%, rgba(40, 110, 96, 0.34), transparent 44%),
+      linear-gradient(135deg, #5db8a6 0%, #459886 58%, #2f6e5e 100%);
+    color: #faf9f5;
+    border: 1px solid rgba(255,255,255,0.45);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.35) inset,
+      0 -1px 0 rgba(30, 80, 68, 0.22) inset,
+      inset 0 0 0 1px rgba(255,255,255,0.10),
+      0 14px 34px -14px rgba(56, 142, 122, 0.55);
+  }
+  .card-dark-tile {
+    background:
+      radial-gradient(circle at 12% 10%, rgba(204, 120, 92, 0.16), transparent 36%),
+      radial-gradient(circle at 90% 90%, rgba(255,255,255,0.06), transparent 40%),
+      rgba(37, 35, 32, 0.74);
+    backdrop-filter: blur(16px) saturate(130%);
+    -webkit-backdrop-filter: blur(16px) saturate(130%);
+    border: 1px solid rgba(255,255,255,0.10);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.10) inset,
+      inset 0 0 0 1px rgba(255,255,255,0.04);
+  }
+  .channel-chart {
+    min-height: 220px;
+    background:
+      radial-gradient(circle at 16% 8%, rgba(255,255,255,0.10), transparent 34%),
+      radial-gradient(circle at 86% 18%, rgba(93, 184, 166, 0.20), transparent 36%),
+      rgba(255,255,255,0.04);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    border: 1px solid rgba(255,255,255,0.12);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.12) inset,
+      inset 0 0 0 1px rgba(255,255,255,0.04);
+  }
+  .channel-bar-track {
+    height: 152px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.025));
+    border: 1px solid rgba(255,255,255,0.09);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.08) inset;
+  }
+  .channel-bar {
+    min-height: 4px;
+    position: relative;
+    overflow: hidden;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.55), rgba(255,255,255,0.12) 18%, transparent 34%),
+      linear-gradient(180deg, #8ddcc9 0%, #5db8a6 55%, #3f8f80 100%);
+    box-shadow:
+      0 -4px 14px -4px rgba(93, 184, 166, 0.55),
+      0 2px 0 rgba(255,255,255,0.55) inset,
+      inset 0 0 0 1px rgba(255,255,255,0.16);
+  }
+  .channel-bar::before {
+    content: '';
+    position: absolute;
+    left: 10%;
+    right: 10%;
+    top: 3px;
+    height: 5px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.78), rgba(255,255,255,0));
+    pointer-events: none;
+  }
+  .channel-bar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 78% 92%, rgba(40, 100, 88, 0.45), transparent 58%);
+    pointer-events: none;
+  }
+
+  /* ==========  BADGES  ========== */
+  .badge-pill {
+    background: rgb(var(--c-surface-card) / 0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: rgb(var(--c-ink));
+    font-size: 12px;
+    font-weight: 500;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    display:inline-block;
+    white-space:nowrap;
+    border: 1px solid rgb(var(--c-surface-strong) / 0.45);
+  }
+  :root[data-theme="dark"] .badge-pill {
+    /* On dark, the cream→charcoal flip makes the pill blend with the
+       surface card. Lift the pill with a slightly elevated bg + warmer
+       rim so it still reads as a pill rather than a flat tag. */
+    background: rgb(var(--c-surface-cream-strong) / 0.85);
+    border-color: rgb(255 244 220 / 0.10);
+  }
+  .badge-coral {
+    background: linear-gradient(180deg, #d18467, #c06c50);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    box-shadow: 0 2px 8px -2px rgba(204, 120, 92, 0.4), 0 1px 0 rgba(255,255,255,0.25) inset;
+  }
+
+  /* ==========  NAV ITEMS (sidebar)  ========== */
+  /* Bumped padding 12→14, font 15→16, gap 12→14 so 50+ users can scan
+     the menu and tap items without leaning in. */
+  .nav-item {
+    display:flex; align-items:center; gap:14px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    color: #6c6a64;
+    font-weight: 500;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all .2s var(--ease-out);
+    position: relative; overflow: hidden;
+    border: 1px solid transparent;
+  }
+  .nav-item::before {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.4), rgba(255,255,255,0));
+    opacity: 0; transition: opacity .2s;
+    pointer-events: none; border-radius: inherit;
+  }
+  .nav-item:hover {
+    background: rgb(var(--c-surface-card) / 0.55);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: rgb(var(--c-ink));
+    transform: translateX(2px);
+    border-color: rgb(var(--c-on-primary) / 0.4);
+  }
+  .nav-item:hover::before { opacity: 1; }
+  .nav-item.active {
+    background: rgb(var(--c-surface-card) / 0.88);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    color: rgb(var(--c-ink));
+    border-color: var(--glass-border-cream);
+    box-shadow: 0 1px 0 var(--rim-top) inset, 0 4px 12px -4px rgb(var(--shadow-rgb) / 0.08);
+  }
+
+  /* ==========  SIDEBAR (matches canvas / mobile drawer) ========== */
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0;
+    z-index: 50;
+    height: 100vh;
+    background: rgb(var(--c-canvas));
+    border-right: 1px solid rgb(var(--c-hairline) / 0.7);
+    box-shadow: 2px 0 14px rgb(var(--shadow-rgb) / 0.06);
+  }
+  :root[data-theme="dark"] .sidebar {
+    box-shadow: 2px 0 14px rgb(0 0 0 / 0.32);
+  }
+  .sidebar::after { display: none; }
+  .sidebar .sidebar-header {
+    border-bottom-color: rgb(var(--c-hairline) / 0.6);
+  }
+  .sidebar .nav-item {
+    color: rgb(var(--c-ink) / 0.55);
+  }
+  .sidebar .nav-item:hover {
+    background: rgb(var(--c-surface-card) / 0.55);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: rgb(var(--c-ink));
+    border-color: rgb(var(--c-ink) / 0.04);
+  }
+  .sidebar .nav-item.active {
+    background: rgb(var(--c-surface-card) / 0.88);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    color: rgb(var(--c-ink));
+    border-color: rgb(var(--c-ink) / 0.05);
+    box-shadow: 0 1px 3px rgb(var(--shadow-rgb) / 0.06) inset;
+  }
+  /* Dark mode: bump active-item contrast — surface-card on dark is too
+     close to the canvas, so we lift it with a warmer elevated tone. */
+  :root[data-theme="dark"] .sidebar .nav-item.active {
+    background: rgb(var(--c-surface-cream-strong) / 0.85);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.25) inset;
+  }
+  :root[data-theme="dark"] .sidebar .nav-item:hover {
+    background: rgb(var(--c-surface-card) / 0.70);
+  }
+  .sidebar .sidebar-footer {
+    border-top-color: rgb(var(--c-hairline) / 0.6);
+  }
+  .sidebar .sidebar-email {
+    color: rgb(var(--c-ink) / 0.40);
+  }
+  /* Premium ruby variant of the gold sidebar button — mirrors
+     `.btn-settings-sidebar`'s 4-stop metallic gradient + inset rim +
+     hover glow recipe so the sidebar footer feels visually unified,
+     just shifted into the danger/ruby hue family. */
+  .btn-danger-sidebar {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%;
+    background:
+      linear-gradient(180deg,
+        #f48a8a 0%,
+        #d94343 35%,
+        #a91f1f 65%,
+        #6e0d0d 100%);
+    color: #fff5f5;
+    text-shadow: 0 1px 0 rgba(60, 5, 5, 0.55);
+    padding: 8px 16px;
+    min-height: 38px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.2px;
+    border: 1px solid rgba(80, 10, 10, 0.55);
+    box-shadow:
+      0 2px 8px rgba(150, 25, 25, 0.40),
+      0 1px 0 rgba(255, 220, 220, 0.45) inset,
+      0 -1px 0 rgba(60, 5, 5, 0.30) inset;
+    cursor: pointer;
+    transition: all .18s var(--ease-out);
+  }
+  .btn-danger-sidebar:hover {
+    background:
+      linear-gradient(180deg,
+        #ff9c9c 0%,
+        #e85555 35%,
+        #b92828 65%,
+        #7a1414 100%);
+    box-shadow:
+      0 6px 16px rgba(180, 30, 30, 0.55),
+      0 0 0 1px rgba(255, 140, 140, 0.35),
+      0 1px 0 rgba(255, 235, 235, 0.55) inset,
+      0 -1px 0 rgba(60, 5, 5, 0.30) inset;
+    transform: translateY(-1px);
+  }
+  .btn-danger-sidebar:active {
+    transform: scale(0.97);
+    box-shadow:
+      0 1px 4px rgba(150, 25, 25, 0.40),
+      0 1px 0 rgba(255, 220, 220, 0.45) inset;
+  }
+  .btn-danger-sidebar svg { filter: drop-shadow(0 1px 0 rgba(255, 200, 200, 0.45)); }
+
+  /* Icon-only 32×32 cousin of `.btn-danger-sidebar` — same ruby metallic
+     recipe (4-stop gradient + inset rim + hover glow) but compact, for
+     inline trash / delete buttons that live next to data rows. Sized
+     small enough to not dominate a row card but still tappable on
+     mobile (32 < 44 hit-target — wrap in a padded label if mobile-only
+     use becomes an issue). */
+  .btn-danger-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    background:
+      linear-gradient(180deg,
+        #f48a8a 0%,
+        #d94343 35%,
+        #a91f1f 65%,
+        #6e0d0d 100%);
+    color: #fff5f5;
+    border-radius: 8px;
+    border: 1px solid rgba(80, 10, 10, 0.55);
+    box-shadow:
+      0 2px 6px rgba(150, 25, 25, 0.35),
+      0 1px 0 rgba(255, 220, 220, 0.40) inset,
+      0 -1px 0 rgba(60, 5, 5, 0.30) inset;
+    cursor: pointer;
+    transition: all .15s var(--ease-out);
+  }
+  .btn-danger-icon:hover {
+    background:
+      linear-gradient(180deg,
+        #ff9c9c 0%,
+        #e85555 35%,
+        #b92828 65%,
+        #7a1414 100%);
+    box-shadow:
+      0 5px 14px rgba(180, 30, 30, 0.50),
+      0 0 0 1px rgba(255, 140, 140, 0.35),
+      0 1px 0 rgba(255, 235, 235, 0.50) inset,
+      0 -1px 0 rgba(60, 5, 5, 0.30) inset;
+    transform: translateY(-1px);
+  }
+  .btn-danger-icon:active {
+    transform: scale(0.94);
+    box-shadow:
+      0 1px 3px rgba(150, 25, 25, 0.40),
+      0 1px 0 rgba(255, 220, 220, 0.40) inset;
+  }
+  .btn-danger-icon svg { filter: drop-shadow(0 1px 0 rgba(255, 200, 200, 0.45)); }
+  /* Premium coral/terracotta variant of the gold sidebar button — same
+     4-stop metallic recipe as `.btn-settings-sidebar`, retuned into the
+     brand coral hue. Visible to all users; sits above the danger logout
+     button in the sidebar footer. */
+  .btn-app-settings-sidebar {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%;
+    background:
+      linear-gradient(180deg,
+        #e8a48a 0%,
+        #cc785c 35%,
+        #a85a3e 65%,
+        #6f3820 100%);
+    color: #fff5ec;
+    text-shadow: 0 1px 0 rgba(70, 30, 10, 0.50);
+    padding: 8px 16px;
+    min-height: 38px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.2px;
+    border: 1px solid rgba(90, 45, 20, 0.55);
+    box-shadow:
+      0 2px 8px rgba(150, 80, 50, 0.40),
+      0 1px 0 rgba(255, 225, 200, 0.45) inset,
+      0 -1px 0 rgba(70, 30, 10, 0.30) inset;
+    cursor: pointer;
+    transition: all .18s var(--ease-out);
+  }
+  .btn-app-settings-sidebar:hover {
+    background:
+      linear-gradient(180deg,
+        #f3b89e 0%,
+        #d98a6e 35%,
+        #b76a48 65%,
+        #804226 100%);
+    box-shadow:
+      0 6px 16px rgba(180, 90, 50, 0.55),
+      0 0 0 1px rgba(255, 180, 140, 0.35),
+      0 1px 0 rgba(255, 235, 215, 0.55) inset,
+      0 -1px 0 rgba(70, 30, 10, 0.30) inset;
+    transform: translateY(-1px);
+  }
+  .btn-app-settings-sidebar:active {
+    transform: scale(0.97);
+    box-shadow:
+      0 1px 4px rgba(150, 80, 50, 0.40),
+      0 1px 0 rgba(255, 225, 200, 0.45) inset;
+  }
+  .btn-app-settings-sidebar svg { filter: drop-shadow(0 1px 0 rgba(255, 215, 190, 0.5)); }
+
+  /* Used by the OverviewView segment tabs (ยอดขาย / วิเคราะห์).
+     Mirrors `.btn-app-settings-sidebar` so the brand identity feels
+     consistent — same coral gradient, same shadow recipe — but applies
+     to a smaller pill-shaped control sized to match `.input` (h-10). */
+  .btn-segment-active {
+    background: linear-gradient(180deg, rgba(204,120,92,0.85) 0%, rgba(184,100,72,0.92) 100%);
+    box-shadow: 0 2px 8px rgba(184,100,72,0.35), 0 1px 0 rgba(255,255,255,0.18) inset;
+  }
+  .btn-segment-active:hover {
+    background: linear-gradient(180deg, rgba(218,134,106,0.95) 0%, rgba(198,114,86,1) 100%);
+    box-shadow: 0 4px 12px rgba(184,100,72,0.50), 0 1px 0 rgba(255,255,255,0.2) inset;
+    transform: translateY(-1px);
+  }
+
+  /* Premium gold "การตั้งค่า user" button — three-stop metallic gradient
+     (champagne highlight → rich gold → deep antique gold) plus a subtle
+     top inset rim and a soft amber glow on hover so it reads as
+     "privileged action" rather than just "yellow button". Un-scoped from
+     `.sidebar` so the mobile-drawer mount also renders correctly. */
+  .btn-settings-sidebar {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%;
+    background:
+      linear-gradient(180deg,
+        #f5dc8a 0%,
+        #e2bc55 35%,
+        #c89a2a 65%,
+        #9a7414 100%);
+    color: #3a2607;
+    text-shadow: 0 1px 0 rgba(255, 240, 200, 0.45);
+    padding: 8px 16px;
+    min-height: 38px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.2px;
+    border: 1px solid rgba(120, 85, 15, 0.55);
+    box-shadow:
+      0 2px 8px rgba(160, 110, 10, 0.40),
+      0 1px 0 rgba(255, 245, 215, 0.55) inset,
+      0 -1px 0 rgba(80, 55, 5, 0.25) inset;
+    cursor: pointer;
+    transition: all .18s var(--ease-out);
+  }
+  .btn-settings-sidebar:hover {
+    background:
+      linear-gradient(180deg,
+        #fce8a0 0%,
+        #ecc865 35%,
+        #d6a634 65%,
+        #a98018 100%);
+    box-shadow:
+      0 6px 16px rgba(180, 130, 10, 0.55),
+      0 0 0 1px rgba(255, 220, 130, 0.35),
+      0 1px 0 rgba(255, 250, 220, 0.65) inset,
+      0 -1px 0 rgba(80, 55, 5, 0.25) inset;
+    transform: translateY(-1px);
+  }
+  .btn-settings-sidebar:active {
+    transform: scale(0.97);
+    box-shadow:
+      0 1px 4px rgba(160, 110, 10, 0.40),
+      0 1px 0 rgba(255, 245, 215, 0.45) inset;
+  }
+  .btn-settings-sidebar svg { filter: drop-shadow(0 1px 0 rgba(255, 240, 200, 0.5)); }
+
+  /* Premium emerald variant of the gold sidebar button — same metallic
+     4-stop gradient feel + inset rim, just shifted into deep emerald
+     greens. Used for the "สร้างผู้ใช้ใหม่" action so it visually pairs
+     with the gold "การตั้งค่า user" button (both are super_admin-only
+     privileged actions) while still reading as a positive / create CTA. */
+  .btn-emerald-premium {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    background:
+      linear-gradient(180deg,
+        #6fd99a 0%,
+        #34b86c 35%,
+        #1a8a4b 65%,
+        #0f5c33 100%);
+    color: #f3fff5;
+    text-shadow: 0 1px 0 rgba(8, 50, 25, 0.55);
+    /* Match the previous `btn-primary !py-1.5 !px-3 !text-sm` sizing
+       exactly so swapping the class doesn't reflow the toolbar. */
+    padding: 6px 12px;
+    min-height: 44px;
+    border-radius: 11px;
+    font-weight: 500;
+    font-size: 14px;
+    letter-spacing: 0.01em;
+    border: 1px solid rgba(10, 60, 30, 0.55);
+    box-shadow:
+      0 2px 8px rgba(15, 90, 50, 0.40),
+      0 1px 0 rgba(220, 255, 230, 0.40) inset,
+      0 -1px 0 rgba(10, 50, 25, 0.30) inset;
+    cursor: pointer;
+    transition: all .18s var(--ease-out);
+  }
+  .btn-emerald-premium:hover {
+    background:
+      linear-gradient(180deg,
+        #87e3ad 0%,
+        #43c87a 35%,
+        #1f9c55 65%,
+        #126a3a 100%);
+    box-shadow:
+      0 6px 16px rgba(15, 100, 55, 0.55),
+      0 0 0 1px rgba(120, 230, 165, 0.35),
+      0 1px 0 rgba(225, 255, 235, 0.55) inset,
+      0 -1px 0 rgba(10, 50, 25, 0.30) inset;
+    transform: translateY(-1px);
+  }
+  .btn-emerald-premium:active {
+    transform: scale(0.97);
+    box-shadow:
+      0 1px 4px rgba(15, 90, 50, 0.40),
+      0 1px 0 rgba(220, 255, 230, 0.40) inset;
+  }
+  .btn-emerald-premium svg { filter: drop-shadow(0 1px 0 rgba(180, 240, 200, 0.40)); }
+
+  /* Premium ruby variant — same metallic 4-stop treatment as the gold
+     sidebar button, shifted into reds. Used for destructive actions
+     (line-item ลบ / ล้างตะกร้า / delete user) so they read as
+     "premium-tier dangerous" rather than just plain red.
+
+     Comes in two sizing flavours so it can drop into the existing
+     compact toolbars without reflowing them:
+       .btn-ruby-premium       → text/icon-text inline (px 10 / py 4)
+       .btn-ruby-premium-icon  → square icon-only (32×32)                */
+  .btn-ruby-premium {
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+    background:
+      linear-gradient(180deg,
+        #f48a8a 0%,
+        #d94343 35%,
+        #a91f1f 65%,
+        #6e0d0d 100%);
+    color: #fff5f5;
+    text-shadow: 0 1px 0 rgba(60, 5, 5, 0.55);
+    padding: 4px 10px;
+    min-height: 28px;
+    border-radius: 7px;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.2px;
+    border: 1px solid rgba(80, 10, 10, 0.55);
+    box-shadow:
+      0 2px 6px rgba(150, 25, 25, 0.40),
+      0 1px 0 rgba(255, 220, 220, 0.45) inset,
+      0 -1px 0 rgba(60, 5, 5, 0.30) inset;
+    cursor: pointer;
+    transition: all .18s var(--ease-out);
+  }
+  .btn-ruby-premium:hover {
+    background:
+      linear-gradient(180deg,
+        #ff9c9c 0%,
+        #ea5252 35%,
+        #c02929 65%,
+        #821111 100%);
+    box-shadow:
+      0 5px 14px rgba(170, 30, 30, 0.55),
+      0 0 0 1px rgba(255, 180, 180, 0.35),
+      0 1px 0 rgba(255, 230, 230, 0.55) inset,
+      0 -1px 0 rgba(60, 5, 5, 0.30) inset;
+    transform: translateY(-1px);
+  }
+  .btn-ruby-premium:active {
+    transform: scale(0.96);
+    box-shadow:
+      0 1px 3px rgba(150, 25, 25, 0.40),
+      0 1px 0 rgba(255, 220, 220, 0.45) inset;
+  }
+  .btn-ruby-premium:disabled {
+    opacity: 0.45; cursor: not-allowed; transform: none;
+    box-shadow: 0 1px 3px rgba(150, 25, 25, 0.20), 0 1px 0 rgba(255, 220, 220, 0.30) inset;
+  }
+  .btn-ruby-premium svg { filter: drop-shadow(0 1px 0 rgba(255, 200, 200, 0.45)); }
+
+  .btn-ruby-premium-icon {
+    /* Square icon-only variant — keeps the same visual but swaps the
+       horizontal padding for a fixed 32×32 footprint so it slots into
+       icon-button rows (e.g. trash on a user-list row) cleanly. */
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+    border-radius: 8px;
+    gap: 0;
+  }
+
+  /* Premium "tile" variants — non-interactive counterparts of the
+     premium buttons. Same metallic 4-stop gradient + inset rim, but
+     without cursor / hover / transform. Used for value badges
+     (price chips, stock counters) so they pick up the same luxe
+     tone as the privileged action buttons.
+
+     Each tile sets only the chrome (background / border / shadow /
+     text colour). Layout (size, padding, font) stays with the
+     consumer so we don't have to redefine width/height per use case. */
+  .tile-gold-premium {
+    background:
+      linear-gradient(180deg,
+        #f5dc8a 0%,
+        #e2bc55 35%,
+        #c89a2a 65%,
+        #9a7414 100%);
+    color: #3a2607;
+    text-shadow: 0 1px 0 rgba(255, 240, 200, 0.45);
+    border: 1px solid rgba(120, 85, 15, 0.55);
+    box-shadow:
+      0 2px 8px rgba(160, 110, 10, 0.40),
+      0 1px 0 rgba(255, 245, 215, 0.55) inset,
+      0 -1px 0 rgba(80, 55, 5, 0.25) inset;
+  }
+  .tile-emerald-premium {
+    background:
+      linear-gradient(180deg,
+        #6fd99a 0%,
+        #34b86c 35%,
+        #1a8a4b 65%,
+        #0f5c33 100%);
+    color: #f3fff5;
+    text-shadow: 0 1px 0 rgba(8, 50, 25, 0.55);
+    border: 1px solid rgba(10, 60, 30, 0.55);
+    box-shadow:
+      0 2px 8px rgba(15, 90, 50, 0.40),
+      0 1px 0 rgba(220, 255, 230, 0.45) inset,
+      0 -1px 0 rgba(10, 50, 25, 0.30) inset;
+  }
+  .tile-sapphire-premium {
+    background:
+      linear-gradient(180deg,
+        #6aa9f5 0%,
+        #2f78d6 35%,
+        #1a4fa8 65%,
+        #0c2d6e 100%);
+    color: #f4f9ff;
+    text-shadow: 0 1px 0 rgba(5, 20, 55, 0.55);
+    border: 1px solid rgba(10, 35, 90, 0.55);
+    box-shadow:
+      0 2px 8px rgba(20, 60, 140, 0.40),
+      0 1px 0 rgba(220, 235, 255, 0.45) inset,
+      0 -1px 0 rgba(5, 20, 55, 0.30) inset;
+  }
+  .tile-ruby-premium {
+    background:
+      linear-gradient(180deg,
+        #f48a8a 0%,
+        #d94343 35%,
+        #a91f1f 65%,
+        #6e0d0d 100%);
+    color: #fff5f5;
+    text-shadow: 0 1px 0 rgba(60, 5, 5, 0.55);
+    border: 1px solid rgba(80, 10, 10, 0.55);
+    box-shadow:
+      0 2px 8px rgba(150, 25, 25, 0.40),
+      0 1px 0 rgba(255, 220, 220, 0.45) inset,
+      0 -1px 0 rgba(60, 5, 5, 0.30) inset;
+  }
+
+  /* Matching gold accent for the "· super admin" tag in the sidebar
+     footer — keeps the visual story consistent with the gold button so
+     the super-admin signal feels intentional. */
+  .text-gold-premium {
+    color: #b8860b;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    text-shadow: 0 1px 0 rgba(255, 245, 215, 0.35);
+  }
+
+  /* ==========  MOBILE TOPBAR / TABBAR (glass)  ========== */
+  .mobile-topbar {
+    background: rgb(var(--c-surface-strong) / 0.85);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border-bottom: 1px solid rgb(var(--c-hairline) / 0.65);
+    box-shadow: 0 -1px 0 var(--rim-top) inset, 0 2px 8px -2px rgb(var(--shadow-rgb) / 0.06);
+  }
+  :root[data-theme="dark"] .mobile-topbar {
+    background: rgb(var(--c-surface-soft) / 0.88);
+    box-shadow: 0 -1px 0 var(--rim-top) inset, 0 2px 8px -2px rgb(0 0 0 / 0.30);
+  }
+  /* Mobile UI overhaul (iPhone-optimized): bottom-attached bar instead
+     of a floating pill so it doesn't blend into the cream canvas. The
+     `<nav>` element (.mobile-tabbar-wrap) is just a positioning shell;
+     the visual surface lives on .mobile-tabbar so we can keep flex
+     layout for the center FAB. The bar includes `safe-area-inset-bottom`
+     so the home indicator on iPhone never overlaps the tap targets. */
+  .mobile-tabbar-wrap {
+    display: block;
+    padding: 0;
+    pointer-events: none; /* let taps fall through outside the bar */
+  }
+  .mobile-tabbar {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    /* Frosted glass with a slightly denser tint so the bar reads as a
+       distinct surface even when the page beneath is also cream. */
+    background: rgb(var(--c-surface-strong) / 0.88);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    /* Single hard top edge — no side/bottom border. Reads as "the bar"
+       rather than "a floating pill". */
+    border-top: 1px solid rgb(var(--c-hairline) / 0.75);
+    border-radius: 0;
+    box-shadow:
+      0 -4px 18px -8px rgb(var(--shadow-rgb) / 0.12),
+      0 1px 0 var(--rim-top) inset;
+    width: 100%;
+    max-width: none;
+    /* `env(safe-area-inset-bottom)` is the iPhone home indicator height.
+       Adding it to the bar's own padding-bottom keeps the tab buttons
+       safely above the indicator without changing their visual size. */
+    padding: 6px 8px max(6px, env(safe-area-inset-bottom));
+  }
+
+  .tab-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    flex: 1 1 0;
+    min-width: 0;
+    height: 56px;
+    color: rgb(var(--c-ink) / 0.55);
+    position: relative;
+    /* Match the bar's outer radius (24) minus the bar's 4px padding so the
+       active pill sits concentric with the bar — feels like a polished inset. */
+    border-radius: 20px;
+    padding: 4px 2px;
+    transition: color .2s var(--ease-out), background-color .2s var(--ease-out);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .tab-btn .tab-label {
+    /* Bumped 10.5 → 13px so 50+ users can recognize the menu without
+       leaning in. Active state goes 600 weight (set below). */
+    font-size: 13px;
+    line-height: 1.1;
+    letter-spacing: 0.01em;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .tab-btn:hover { color: rgb(var(--c-ink) / 0.85); }
+  .tab-btn.active {
+    color: #fff;
+    background: linear-gradient(135deg, #d98874 0%, #cc785c 55%, #b86a4e 100%);
+    box-shadow:
+      0 3px 10px -2px rgba(204, 120, 92, 0.45),
+      0 1px 0 rgba(255, 255, 255, 0.22) inset;
+  }
+  .tab-btn.active .tab-label { font-weight: 600; }
+  .tab-btn:active { transform: scale(0.94); transition-duration: .08s; }
+  .tab-btn svg {
+    transition: transform .25s var(--ease-out);
+  }
+  .tab-btn.active svg {
+    transform: scale(1.06);
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.15));
+  }
+
+  /* FAB — flex sibling to the tab buttons; negative top margin gives a subtle
+     lift while keeping the button in flow. Rounded-square shape matches the
+     tab bar's rounded-pill aesthetic better than a full circle. */
+  .mobile-fab {
+    flex: 0 0 58px;
+    width: 58px;
+    height: 58px;
+    /* Lifted slightly above the bar so the FAB still reads as primary
+       action. Lift is intentionally subtle (-6px) now that the bar is
+       full-width / flush to the bottom — over-lifting looked detached. */
+    margin: -6px 6px 0;
+    border-radius: 18px;        /* rounded square, consistent with .tab-btn */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background: linear-gradient(150deg, #d98874 0%, #cc785c 45%, #b86448 100%);
+    border: 2.5px solid rgba(255, 254, 252, 0.90);
+    box-shadow:
+      0 8px 20px -4px rgba(184, 82, 40, 0.50),
+      0 3px 8px -2px rgba(184, 82, 40, 0.28),
+      0 1px 0 rgba(255, 255, 255, 0.28) inset;
+    cursor: pointer;
+    transition: transform .18s var(--ease-out), box-shadow .25s var(--ease-out);
+    -webkit-tap-highlight-color: transparent;
+    position: relative;
+    overflow: hidden;
+    z-index: 2;
+    animation: fabBounce .42s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .mobile-fab::before {
+    content: "";
+    position: absolute; top: 0; left: 0; right: 0; height: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.20), transparent);
+    pointer-events: none;
+    border-radius: 16px 16px 0 0;
+  }
+  .mobile-fab:hover { transform: translateY(-2px); }
+  .mobile-fab:active { transform: scale(0.94); transition-duration: .08s; }
+  .mobile-fab.active {
+    box-shadow:
+      0 0 0 3px rgba(204, 120, 92, 0.22),
+      0 10px 24px -4px rgba(184, 82, 40, 0.60),
+      0 4px 10px -2px rgba(184, 82, 40, 0.38),
+      0 1px 0 rgba(255, 255, 255, 0.28) inset;
+  }
+  .mobile-fab.has-queue { animation: fabBounce .42s cubic-bezier(0.34, 1.56, 0.64, 1), fabPulse 2.4s ease-in-out 2; }
+
+  .fab-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 20px;
+    text-align: center;
+    border: 2px solid rgba(255, 254, 252, 0.95);
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.45);
+    pointer-events: none;
+    font-variant-numeric: tabular-nums;
+  }
+
+  @keyframes fabBounce {
+    0%   { opacity: 0; transform: translateY(10px) scale(0.6); }
+    60%  { opacity: 1; transform: translateY(0)    scale(1.08); }
+    100% { opacity: 1; transform: translateY(0)    scale(1); }
+  }
+  /* Pulse halo when offline-queue picks up new items. */
+  @keyframes fabPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.45), 0 10px 24px -4px rgba(184, 82, 40, 0.55), 0 4px 10px -2px rgba(184, 82, 40, 0.35), 0 1px 0 rgba(255, 255, 255, 0.32) inset; }
+    50%      { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0), 0 12px 28px -4px rgba(184, 82, 40, 0.65), 0 4px 10px -2px rgba(184, 82, 40, 0.4), 0 1px 0 rgba(255, 255, 255, 0.32) inset; }
+  }
+
+  /* ==========  PER-ICON CLICK ANIMATIONS  ==========
+     Each nav icon gets a personality-matching tween that fires once whenever
+     the parent button transitions to `.active` (i.e., the user enters that
+     menu). The animations are scoped to nav contexts so the same icons used
+     elsewhere (page headers, badges) stay still.
+
+     IMPORTANT: SVG <path>/<rect>/<circle> children are positioned in the
+     viewBox's coordinate system, but `transform` on them inherits `%` units
+     against the parent's bbox. To rotate/scale around a known point we set
+     `transform-origin` in `px` (which equals viewBox units thanks to the
+     fixed 24x24 viewBox + matching width/height).                          */
+
+  /* --- cart: rolls forward, wheels spin --- */
+  @keyframes icon-cart-roll {
+    0%   { transform: translateX(0)   rotate(0); }
+    25%  { transform: translateX(-1.5px) rotate(-4deg); }
+    55%  { transform: translateX(2px)  rotate(3deg); }
+    80%  { transform: translateX(-0.5px) rotate(-1deg); }
+    100% { transform: translateX(0)   rotate(0); }
+  }
+  @keyframes icon-cart-wheel {
+    0%   { transform: rotate(0); }
+    100% { transform: rotate(360deg); }
+  }
+
+  /* --- box: jiggle + label dash widens like opening a flap --- */
+  @keyframes icon-box-jiggle {
+    0%, 100% { transform: rotate(0); }
+    25%      { transform: rotate(-6deg); }
+    60%      { transform: rotate(4deg); }
+    85%      { transform: rotate(-2deg); }
+  }
+  @keyframes icon-box-label {
+    0%   { stroke-dasharray: 0 8; }
+    100% { stroke-dasharray: 8 0; }
+  }
+
+  /* --- receipt: tiny eject/bob, like the slip emerging from a printer --- */
+  @keyframes icon-clock-tick {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-1.5px); }
+  }
+
+  /* --- barcode: 6 bars rise/fall in a continuous wave. Each bar scales
+         vertically around its own midpoint (y=12) so it grows up + down
+         symmetrically. Staggered delays produce the travelling-wave look. */
+  @keyframes icon-barcode-wave {
+    0%, 100% { transform: scaleY(1);    }
+    50%      { transform: scaleY(1.25); }
+  }
+  svg[data-icon="barcode"] path {
+    transform-origin: center;            /* fallback; overridden per-bar below */
+    transform-box: fill-box;             /* makes transform-origin relative to the path's own bbox */
+    animation: icon-barcode-wave 1.4s ease-in-out infinite;
+  }
+  svg[data-icon="barcode"] path:nth-of-type(1) { animation-delay: 0s;    }
+  svg[data-icon="barcode"] path:nth-of-type(2) { animation-delay: 0.12s; }
+  svg[data-icon="barcode"] path:nth-of-type(3) { animation-delay: 0.24s; }
+  svg[data-icon="barcode"] path:nth-of-type(4) { animation-delay: 0.36s; }
+  svg[data-icon="barcode"] path:nth-of-type(5) { animation-delay: 0.48s; }
+  svg[data-icon="barcode"] path:nth-of-type(6) { animation-delay: 0.60s; }
+  @media (prefers-reduced-motion: reduce) {
+    svg[data-icon="barcode"] path { animation: none; }
+  }
+  @keyframes icon-clock-pulse {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.04); }
+  }
+
+  /* --- arrow-up (รับเข้า): hop upward like dropping a parcel in --- */
+  @keyframes icon-bounce-up {
+    0%   { transform: translateY(0); }
+    35%  { transform: translateY(-4px) scale(1.05); }
+    65%  { transform: translateY(1px)  scale(0.97); }
+    100% { transform: translateY(0)    scale(1); }
+  }
+
+  /* --- arrow-down (รับคืน): drop downward, soft squash --- */
+  @keyframes icon-bounce-down {
+    0%   { transform: translateY(0); }
+    35%  { transform: translateY(4px)  scale(1.05); }
+    65%  { transform: translateY(-1px) scale(0.97); }
+    100% { transform: translateY(0)    scale(1); }
+  }
+
+  /* --- dashboard: 4 tiles cascade-pop --- */
+  @keyframes icon-tile-pop {
+    0%   { transform: scale(1);    opacity: 1; }
+    35%  { transform: scale(0.7);  opacity: 0.6; }
+    70%  { transform: scale(1.15); opacity: 1; }
+    100% { transform: scale(1);    opacity: 1; }
+  }
+
+  /* --- trend-up: line draws on, then arrowhead pops --- */
+  @keyframes icon-line-draw {
+    0%   { stroke-dashoffset: 30; }
+    100% { stroke-dashoffset: 0; }
+  }
+  @keyframes icon-arrowhead-pop {
+    0%   { transform: scale(0.4); opacity: 0; }
+    60%  { transform: scale(1.2); opacity: 1; }
+    100% { transform: scale(1);   opacity: 1; }
+  }
+
+  /* Bind animations only inside nav contexts. Both the desktop sidebar
+     `.nav-item.active` and the mobile `.tab-btn.active` share these rules.
+
+     CART */
+  .nav-item.active svg[data-icon="cart"],
+  .tab-btn.active  svg[data-icon="cart"] {
+    animation: icon-cart-roll .55s cubic-bezier(.34,1.56,.64,1);
+  }
+  .nav-item.active svg[data-icon="cart"] circle,
+  .tab-btn.active  svg[data-icon="cart"] circle {
+    transform-origin: center;
+    animation: icon-cart-wheel .55s linear;
+  }
+  /* Each wheel rotates around its own center */
+  .nav-item.active svg[data-icon="cart"] circle:nth-of-type(1),
+  .tab-btn.active  svg[data-icon="cart"] circle:nth-of-type(1) { transform-origin: 10.5px 19.5px; }
+  .nav-item.active svg[data-icon="cart"] circle:nth-of-type(2),
+  .tab-btn.active  svg[data-icon="cart"] circle:nth-of-type(2) { transform-origin: 17.5px 19.5px; }
+
+  /* BOX */
+  .nav-item.active svg[data-icon="box"],
+  .tab-btn.active  svg[data-icon="box"] {
+    transform-origin: 12px 14px;
+    animation: icon-box-jiggle .5s cubic-bezier(.34,1.56,.64,1);
+  }
+  .nav-item.active svg[data-icon="box"] path:last-of-type,
+  .tab-btn.active  svg[data-icon="box"] path:last-of-type {
+    animation: icon-box-label .45s ease-out;
+  }
+
+  /* RECEIPT (clock) */
+  .nav-item.active svg[data-icon="receipt"] circle,
+  .tab-btn.active  svg[data-icon="receipt"] circle {
+    transform-origin: 12px 12px;
+    animation: icon-clock-pulse .55s ease-out;
+  }
+  .nav-item.active svg[data-icon="receipt"] path,
+  .tab-btn.active  svg[data-icon="receipt"] path {
+    transform-origin: 12px 12px;
+    animation: icon-clock-tick .65s cubic-bezier(.34,1.56,.64,1);
+  }
+
+  /* ARROW-UP (รับเข้า) */
+  .nav-item.active svg[data-icon="arrow-up"],
+  .tab-btn.active  svg[data-icon="arrow-up"] {
+    animation: icon-bounce-up .5s cubic-bezier(.34,1.56,.64,1);
+  }
+
+  /* ARROW-DOWN (รับคืน) */
+  .nav-item.active svg[data-icon="arrow-down"],
+  .tab-btn.active  svg[data-icon="arrow-down"] {
+    animation: icon-bounce-down .5s cubic-bezier(.34,1.56,.64,1);
+  }
+
+  /* DASHBOARD — 4 tiles pop in cascade. transform-origin centered to each rect. */
+  .nav-item.active svg[data-icon="dashboard"] rect:nth-of-type(1),
+  .tab-btn.active  svg[data-icon="dashboard"] rect:nth-of-type(1) {
+    transform-origin: 6.5px 7.5px;
+    animation: icon-tile-pop .45s cubic-bezier(.34,1.56,.64,1) 0ms;
+  }
+  .nav-item.active svg[data-icon="dashboard"] rect:nth-of-type(2),
+  .tab-btn.active  svg[data-icon="dashboard"] rect:nth-of-type(2) {
+    transform-origin: 17.5px 5.5px;
+    animation: icon-tile-pop .45s cubic-bezier(.34,1.56,.64,1) 60ms;
+  }
+  .nav-item.active svg[data-icon="dashboard"] rect:nth-of-type(3),
+  .tab-btn.active  svg[data-icon="dashboard"] rect:nth-of-type(3) {
+    transform-origin: 17.5px 16.5px;
+    animation: icon-tile-pop .45s cubic-bezier(.34,1.56,.64,1) 120ms;
+  }
+  .nav-item.active svg[data-icon="dashboard"] rect:nth-of-type(4),
+  .tab-btn.active  svg[data-icon="dashboard"] rect:nth-of-type(4) {
+    transform-origin: 6.5px 18.5px;
+    animation: icon-tile-pop .45s cubic-bezier(.34,1.56,.64,1) 180ms;
+  }
+
+  /* TREND-UP — line draws, then arrowhead pops in */
+  .nav-item.active svg[data-icon="trend-up"] polyline:nth-of-type(1),
+  .tab-btn.active  svg[data-icon="trend-up"] polyline:nth-of-type(1) {
+    stroke-dasharray: 30;
+    animation: icon-line-draw .55s ease-out;
+  }
+  .nav-item.active svg[data-icon="trend-up"] polyline:nth-of-type(2),
+  .tab-btn.active  svg[data-icon="trend-up"] polyline:nth-of-type(2) {
+    transform-origin: 18px 10px;
+    animation: icon-arrowhead-pop .45s cubic-bezier(.34,1.56,.64,1) .35s both;
+  }
+
+  /* ==========  GENERIC SVG HOVER ANIMATIONS  ==========
+     Every <svg> inside an interactive ancestor (button, link, .pressable)
+     gets a subtle scale on hover so the UI feels alive without being noisy.
+     Per-icon personalities below override the generic rule for icons whose
+     metaphor calls for something more specific (rotating gear, sliding
+     chevron, wobbling pencil, etc.).
+
+     We anchor the hover styles to interactive elements only — not on the
+     bare svg — so static decorative SVGs (logo, empty-state illustrations)
+     don't twitch when the cursor brushes past.                              */
+
+  /* Smooth transition baseline: any svg inside an interactive parent eases
+     transform/filter changes. Animations defined below replace this when
+     they're more expressive than a single tween.                            */
+  button svg, a svg, .pressable svg, label svg, [role="button"] svg {
+    transition: transform .22s var(--ease-out), filter .22s var(--ease-out);
+    transform-origin: center;
+  }
+
+  /* Generic hover lift — applies to anything that doesn't have a per-icon
+     rule overriding it. Uses scale(1.12) for subtle "wake up" feel. */
+  button:not(:disabled):hover  > svg,
+  a:hover                      > svg,
+  .pressable:hover             > svg,
+  label:hover                  > svg,
+  [role="button"]:hover        > svg {
+    transform: scale(1.12);
+  }
+
+  /* ----- per-icon hover personalities ----- */
+
+  /* SETTINGS — gear rotates while hovered (continuous, slow), settles back. */
+  button:hover  > svg[data-icon="settings"],
+  a:hover       > svg[data-icon="settings"],
+  .pressable:hover > svg[data-icon="settings"] {
+    animation: icon-gear-spin 2.4s linear infinite;
+    transform: none; /* defer to keyframes */
+  }
+  @keyframes icon-gear-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* PLUS (+) — quarter turn telegraphs "click to add" */
+  button:hover  > svg[data-icon="plus"],
+  a:hover       > svg[data-icon="plus"] {
+    transform: rotate(90deg) scale(1.05);
+  }
+
+  /* X (close/dismiss) — quick pop + slight twist */
+  button:hover  > svg[data-icon="x"] {
+    transform: rotate(90deg) scale(1.15);
+  }
+
+  /* TRASH — wiggle like shaking out crumbs */
+  button:hover  > svg[data-icon="trash"] {
+    animation: icon-wobble .42s ease-in-out;
+  }
+  @keyframes icon-wobble {
+    0%, 100% { transform: rotate(0); }
+    25%      { transform: rotate(-10deg); }
+    50%      { transform: rotate(8deg); }
+    75%      { transform: rotate(-4deg); }
+  }
+
+  /* EDIT (pencil) — tiny jitter like the tip is writing */
+  button:hover  > svg[data-icon="edit"],
+  .pressable:hover > svg[data-icon="edit"] {
+    animation: icon-pencil-jitter .4s ease-in-out;
+  }
+  @keyframes icon-pencil-jitter {
+    0%, 100% { transform: translate(0,0) rotate(0); }
+    25%      { transform: translate(0.5px,-0.5px) rotate(-3deg); }
+    50%      { transform: translate(-0.5px,0.5px) rotate(2deg); }
+    75%      { transform: translate(0.5px,0) rotate(-1deg); }
+  }
+
+  /* SEARCH — magnifier scoots & tilts as if scanning */
+  button:hover  > svg[data-icon="search"],
+  label:hover   > svg[data-icon="search"] {
+    transform: scale(1.12) rotate(-10deg) translateX(-1px);
+  }
+
+  /* CHEVRONS — slide in their pointing direction */
+  button:hover  > svg[data-icon="chevron-r"],
+  a:hover       > svg[data-icon="chevron-r"] { transform: translateX(2px) scale(1.05); }
+  button:hover  > svg[data-icon="chevron-l"],
+  a:hover       > svg[data-icon="chevron-l"] { transform: translateX(-2px) scale(1.05); }
+  button:hover  > svg[data-icon="chevron-u"] { transform: translateY(-2px) scale(1.05); }
+  button:hover  > svg[data-icon="chevron-d"] { transform: translateY(2px)  scale(1.05); }
+
+  /* MENU (hamburger) — bars compress into a stack */
+  button:hover  > svg[data-icon="menu"] {
+    transform: scaleX(0.85) scale(1.1);
+  }
+
+  /* CHECK — gentle scale + nudge, like a stamp */
+  button:hover  > svg[data-icon="check"] {
+    transform: scale(1.18) rotate(-4deg);
+  }
+
+  /* Sidebar nav icons — replay the same keyframes used on .active click,
+     so hover preview matches the click reward. Generic `scale(1.12)` was
+     too subtle to read against the button's own `translateX(2px)` hover
+     shift; explicit animations give each icon a distinct micro-story.   */
+
+  /* CART — rolls forward + wheels spin */
+  button:hover  > svg[data-icon="cart"] {
+    animation: icon-cart-roll .55s cubic-bezier(.34,1.56,.64,1);
+    transform: none; /* defer to keyframes */
+  }
+  button:hover  > svg[data-icon="cart"] circle {
+    transform-origin: center;
+    animation: icon-cart-wheel .55s linear;
+  }
+  button:hover  > svg[data-icon="cart"] circle:nth-of-type(1) { transform-origin: 10.5px 19.5px; }
+  button:hover  > svg[data-icon="cart"] circle:nth-of-type(2) { transform-origin: 17.5px 19.5px; }
+
+  /* BOX — jiggle + label dash widens */
+  button:hover  > svg[data-icon="box"] {
+    transform-origin: 12px 14px;
+    animation: icon-box-jiggle .5s cubic-bezier(.34,1.56,.64,1);
+  }
+  button:hover  > svg[data-icon="box"] path:last-of-type {
+    animation: icon-box-label .45s ease-out;
+  }
+
+  /* RECEIPT (clock) — pulse face + hand sweep */
+  button:hover  > svg[data-icon="receipt"] circle {
+    transform-origin: 12px 12px;
+    animation: icon-clock-pulse .55s ease-out;
+  }
+  button:hover  > svg[data-icon="receipt"] path {
+    transform-origin: 12px 12px;
+    animation: icon-clock-tick .65s cubic-bezier(.34,1.56,.64,1);
+  }
+
+  /* ARROW-UP / ARROW-DOWN — full bounce instead of subtle slide */
+  button:hover  > svg[data-icon="arrow-up"] {
+    animation: icon-bounce-up .5s cubic-bezier(.34,1.56,.64,1);
+    transform: none;
+  }
+  button:hover  > svg[data-icon="arrow-down"] {
+    animation: icon-bounce-down .5s cubic-bezier(.34,1.56,.64,1);
+    transform: none;
+  }
+
+  /* DASHBOARD — tiles "breathe" via a slow pulse on hover */
+  button:hover  > svg[data-icon="dashboard"] rect {
+    animation: icon-tile-pop .42s cubic-bezier(.34,1.56,.64,1);
+    transform-origin: center;
+  }
+
+  /* TREND-UP — re-draw the line on hover so it feels live */
+  button:hover  > svg[data-icon="trend-up"] polyline {
+    stroke-dasharray: 30;
+    animation: icon-line-draw .5s ease-out;
+  }
+
+  /* CALENDAR — gentle tilt like flipping a page */
+  button:hover  > svg[data-icon="calendar"] {
+    transform: rotate(-4deg) scale(1.08);
+  }
+
+  /* BARCODE — bars shimmer (slight horizontal squash) */
+  button:hover  > svg[data-icon="barcode"] {
+    transform: scaleX(1.08) scaleY(1.05);
+  }
+
+  /* LOGOUT — door icon nudges right */
+  button:hover  > svg[data-icon="logout"] {
+    transform: translateX(2px) scale(1.06);
+  }
+
+  /* INFO / ALERT — subtle bounce to draw attention */
+  button:hover  > svg[data-icon="info"],
+  button:hover  > svg[data-icon="alert"] {
+    animation: icon-bounce-up .4s cubic-bezier(.34,1.56,.64,1);
+  }
+
+  /* Keep the nav-active click animations winning over hover lift. The click
+     animations are short (~0.5s) and finish on their own; afterwards hover
+     can take over normally. */
+  .nav-item.active:hover  > svg,
+  .tab-btn.active:hover   > svg {
+    transform: none;
+  }
+
+  /* Respect users who prefer reduced motion — disable click + hover anims. */
+  @media (prefers-reduced-motion: reduce) {
+    .nav-item.active svg, .nav-item.active svg *,
+    .tab-btn.active  svg, .tab-btn.active  svg *,
+    button:hover svg, a:hover svg, .pressable:hover svg, label:hover svg {
+      animation: none !important;
+      transform: none !important;
+    }
+  }
+
+  /* ==========  STEPPER (qty - / +)  ========== */
+  /* Bumped 36 → 40px so 50+ users with less precise tap targets can hit
+     +/− buttons reliably. Still compact enough to fit beside the qty input. */
+  .stepper-btn {
+    width: 40px; height: 40px;
+    display: flex; align-items: center; justify-content: center;
+    transition: background-color .15s, transform .15s var(--ease-out);
+    cursor: pointer;
+  }
+  .stepper-btn:hover { background: rgba(232, 224, 210, 0.85); }
+  .stepper-btn:active { transform: scale(0.88); }
+
+  /* ==========  MODAL / SHEET  ========== */
+  .modal-overlay {
+    background: rgba(20, 20, 19, 0.42);
+    backdrop-filter: blur(8px) saturate(110%);
+    -webkit-backdrop-filter: blur(8px) saturate(110%);
+  }
+
+  /* ==========  ANIMATIONS  ========== */
+
+  /* Required-field error indicator — soft, refined */
+  @keyframes errorPulseSoft {
+    0%, 100% { box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.16), 0 6px 16px -2px rgba(239, 68, 68, 0.10); }
+    50%      { box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.28), 0 8px 22px -2px rgba(239, 68, 68, 0.20); }
+  }
+  .field-error-glow {
+    position: relative;
+    border-radius: 14px;
+    padding: 6px;
+    margin: -6px;
+    animation: errorPulseSoft 1.8s ease-in-out infinite;
+    background: linear-gradient(180deg, rgba(254, 242, 242, 0.65), rgba(254, 242, 242, 0.35));
+  }
+  .field-error-glow .input,
+  .field-error-glow > input,
+  .field-error-glow > select,
+  .field-error-glow > textarea {
+    border-color: rgba(239, 68, 68, 0.5) !important;
+    background: rgb(var(--c-surface-strong) / 0.92) !important;
+  }
+  :root[data-theme="dark"] .field-error-glow {
+    background: linear-gradient(180deg, rgba(80, 18, 18, 0.55), rgba(60, 14, 14, 0.40));
+  }
+  .field-error-glow::after {
+    content: "ต้องกรอก";
+    position: absolute;
+    top: -8px; right: 10px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 10px;
+    line-height: 1;
+    padding: 3px 8px;
+    border-radius: 999px;
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.35);
+    letter-spacing: 0.02em;
+    pointer-events: none;
+  }
+
+  /* Generic fade in/out (for popovers, inline expansions) */
+  @keyframes fadeIn  { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes fadeOut { from { opacity: 1; transform: translateY(0); }    to { opacity: 0; transform: translateY(4px); } }
+  .fade-in  { animation: fadeIn  .25s var(--ease-out); }
+  .fade-out { animation: fadeOut .2s var(--ease-out) forwards; }
+
+  /* Modal backdrop fade */
+  @keyframes overlayIn  { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes overlayOut { from { opacity: 1; } to { opacity: 0; } }
+  .overlay-in  { animation: overlayIn  .22s var(--ease-out); }
+  .overlay-out { animation: overlayOut .2s var(--ease-out) forwards; }
+
+  /* Modal inner: bottom-sheet on mobile, scale-fade on desktop */
+  @keyframes sheetUp   { from { transform: translateY(100%); opacity: 0.6; } to { transform: translateY(0); opacity: 1; } }
+  @keyframes sheetDown { from { transform: translateY(0); opacity: 1; }     to { transform: translateY(100%); opacity: 0.3; } }
+  @keyframes scaleIn   { from { transform: scale(0.94); opacity: 0; }       to { transform: scale(1); opacity: 1; } }
+  @keyframes scaleOut  { from { transform: scale(1); opacity: 1; }          to { transform: scale(0.96); opacity: 0; } }
+
+  .sheet-anim { animation: sheetUp   .28s var(--ease-out); }
+  .sheet-out  { animation: sheetDown .22s var(--ease-out) forwards; }
+  @media (min-width: 1024px) {
+    .sheet-anim { animation: scaleIn  .24s var(--ease-out); }
+    .sheet-out  { animation: scaleOut .2s  var(--ease-out) forwards; }
+  }
+
+  /* Side drawer (mobile menu) */
+  @keyframes drawerIn  { from { transform: translateX(100%); } to { transform: translateX(0); } }
+  @keyframes drawerOut { from { transform: translateX(0); }    to { transform: translateX(100%); } }
+  .drawer-in  { animation: drawerIn  .26s var(--ease-out); }
+  .drawer-out { animation: drawerOut .22s var(--ease-out) forwards; }
+
+  /* ===== "Holographic materialization" — used by CmgBillUploadModal =====
+     Not a fade. The card un-folds from a horizontal slit in the centre
+     (clip-path iris), tilts off a slight perspective angle, and clears
+     a small blur — meant to feel like a sci-fi holo display snapping
+     into focus. A one-shot diagonal scan-line travels across the card
+     while it materialises, then disappears. */
+
+  /* Backdrop: ramp the blur (not just opacity) so the world behind the
+     modal physically shifts focus. Same easing curve as the card so they
+     read as one motion. */
+  @keyframes holoBackdropIn {
+    from { opacity: 0; backdrop-filter: blur(0px) saturate(100%); -webkit-backdrop-filter: blur(0px) saturate(100%); }
+    to   { opacity: 1; backdrop-filter: blur(10px) saturate(140%); -webkit-backdrop-filter: blur(10px) saturate(140%); }
+  }
+  @keyframes holoBackdropOut {
+    from { opacity: 1; backdrop-filter: blur(10px) saturate(140%); -webkit-backdrop-filter: blur(10px) saturate(140%); }
+    to   { opacity: 0; backdrop-filter: blur(0px) saturate(100%);  -webkit-backdrop-filter: blur(0px) saturate(100%); }
+  }
+
+  /* Card: iris-reveal from horizontal slit + perspective un-tilt +
+     blur dissolve. The clip-path is the headliner — opacity goes 0→1
+     too but only briefly because the slit covers most of the perceived
+     "fade" naturally. */
+  @keyframes holoCardIn {
+    0% {
+      clip-path: inset(48% 30% 48% 30% round 24px);
+      transform: perspective(1400px) rotateX(10deg) translateY(14px) scale(0.94);
+      filter: blur(6px);
+      opacity: 0;
+    }
+    35% {
+      filter: blur(2px);
+      opacity: 1;
+    }
+    100% {
+      clip-path: inset(0 0 0 0 round 16px);
+      transform: perspective(1400px) rotateX(0) translateY(0) scale(1);
+      filter: blur(0);
+      opacity: 1;
+    }
+  }
+  @keyframes holoCardOut {
+    0% {
+      clip-path: inset(0 0 0 0 round 16px);
+      transform: perspective(1400px) rotateX(0) translateY(0) scale(1);
+      filter: blur(0);
+      opacity: 1;
+    }
+    100% {
+      clip-path: inset(46% 28% 46% 28% round 24px);
+      transform: perspective(1400px) rotateX(-6deg) translateY(-6px) scale(0.96);
+      filter: blur(4px);
+      opacity: 0;
+    }
+  }
+
+  /* One-shot scan-line: a thin diagonal gradient strip that sweeps
+     across the card during enter, then fades. Lives in ::after so it
+     doesn't affect layout. */
+  @keyframes holoScanSweep {
+    0%   { transform: translate(-120%, -120%) rotate(18deg); opacity: 0; }
+    15%  { opacity: 0.55; }
+    85%  { opacity: 0.25; }
+    100% { transform: translate(120%, 120%)  rotate(18deg); opacity: 0; }
+  }
+
+  .holo-backdrop-in  { animation: holoBackdropIn  .32s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .holo-backdrop-out { animation: holoBackdropOut .24s cubic-bezier(0.7, 0, 0.84, 0)  forwards; }
+
+  .holo-card-in {
+    animation: holoCardIn .42s cubic-bezier(0.22, 1, 0.36, 1) both;
+    transform-origin: 50% 50%;
+    position: relative;
+  }
+  .holo-card-in::after {
+    content: "";
+    position: absolute;
+    inset: -40%;
+    pointer-events: none;
+    background: linear-gradient(115deg,
+      transparent 42%,
+      rgba(255, 255, 255, 0.55) 48%,
+      rgba(120, 180, 255, 0.45) 50%,
+      rgba(255, 255, 255, 0.55) 52%,
+      transparent 58%);
+    mix-blend-mode: screen;
+    border-radius: inherit;
+    animation: holoScanSweep .55s cubic-bezier(0.22, 1, 0.36, 1) .05s both;
+  }
+  .holo-card-out {
+    animation: holoCardOut .28s cubic-bezier(0.7, 0, 0.84, 0) forwards;
+    transform-origin: 50% 50%;
+  }
+
+  /* Respect users who've asked for reduced motion — skip the dramatic
+     reveal but keep a tiny opacity transition so the modal doesn't pop. */
+  @media (prefers-reduced-motion: reduce) {
+    .holo-backdrop-in,
+    .holo-backdrop-out,
+    .holo-card-in,
+    .holo-card-out {
+      animation-duration: .15s !important;
+      animation-timing-function: linear !important;
+    }
+    .holo-card-in,
+    .holo-card-out {
+      clip-path: none !important;
+      filter: none !important;
+      transform: none !important;
+    }
+    .holo-card-in::after { display: none; }
+  }
+
+  /* Loading spinner — coral arc on light track */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid rgba(204, 120, 92, 0.18);
+    border-top-color: #cc785c;
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+    display: inline-block;
+    vertical-align: middle;
+    flex-shrink: 0;
+  }
+  .spinner.lg { width: 28px; height: 28px; border-width: 2.5px; }
+
+  /* Skeleton loaders — shimmering rectangles used while data is fetching.
+     Less visually jarring than a centered spinner because the eye sees
+     the layout immediately and just waits for the content to fill in.   */
+  @keyframes skeleton-shimmer {
+    0%   { background-position: -240px 0; }
+    100% { background-position:  240px 0; }
+  }
+  .skeleton {
+    display: inline-block;
+    background: linear-gradient(90deg,
+      rgba(230, 223, 216, 0.55) 0%,
+      rgba(245, 240, 232, 0.85) 50%,
+      rgba(230, 223, 216, 0.55) 100%);
+    background-size: 480px 100%;
+    border-radius: 6px;
+    animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  }
+
+  /* View transition (fades when switching nav) */
+  @keyframes viewIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .view-fade { animation: viewIn .3s var(--ease-out); }
+
+  /* POS cart-count glow badge. Continuous red halo pulse that lives next
+     to the "ขายสินค้า" page title so the cashier has an unmistakable
+     peripheral cue for how many items are in the cart. Visibility is
+     controlled by the React component (rendered = has items). The halo
+     expands+fades via box-shadow ring (0 → 10px) while the chip gently
+     scales 1 → 1.05 to give it life without being twitchy. */
+  @keyframes cartGlowPulse {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.55),
+                  0 2px 6px rgba(0, 0, 0, 0.18);
+      transform: scale(1);
+    }
+    50% {
+      box-shadow: 0 0 0 10px rgba(220, 38, 38, 0),
+                  0 2px 6px rgba(0, 0, 0, 0.18);
+      transform: scale(1.05);
+    }
+  }
+  .cart-glow-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    height: 36px;
+    padding: 0 8px;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, #ef4444 0%, #dc2626 55%, #b91c1c 100%);
+    color: #fff;
+    font-weight: 700;
+    font-size: 16px;
+    line-height: 1;
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.55),
+                0 2px 6px rgba(0, 0, 0, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    animation: cartGlowPulse 1.8s ease-in-out infinite;
+    user-select: none;
+  }
+
+  /* Stock-status dot — small glowing pulse used in product list rows. */
+  .stock-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 9999px;
+    flex-shrink: 0;
+    animation: stockDotPulse 3.6s ease-in-out infinite;
+  }
+  .stock-dot.is-ok      { background: #22c55e; --dot-glow: rgba(34,197,94,0.65); }
+  .stock-dot.is-empty   { background: #ef4444; --dot-glow: rgba(239,68,68,0.65); }
+  @keyframes stockDotPulse {
+    0%, 100% { box-shadow: 0 0 0 0 var(--dot-glow), 0 0 4px 1px var(--dot-glow); }
+    50%      { box-shadow: 0 0 0 4px transparent,   0 0 10px 3px var(--dot-glow); }
+  }
+
+  /* ==========  PHASE 4 — MICRO-INTERACTIONS  ========== */
+
+  /* 4.1 Toast exit — keep mounted briefly while toastOut runs so
+     dismiss feels gradual instead of pop-out. */
+  @keyframes toastIn  { from { opacity: 0; transform: translateY(8px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  @keyframes toastOut { from { opacity: 1; transform: translateY(0) scale(1); }     to { opacity: 0; transform: translateY(-6px) scale(0.96); } }
+  .toast-in  { animation: toastIn  .22s var(--ease-out); }
+  .toast-out { animation: toastOut .2s var(--ease-out) forwards; pointer-events: none; }
+
+  /* 4.2 List stagger — opt-in via inline `style={{ '--i': i }}`.
+     Apply alongside `.fade-in` (`.stagger.fade-in`) and items animate in sequence. */
+  .stagger { animation-delay: calc(var(--i, 0) * 25ms); animation-fill-mode: backwards; }
+
+  /* 4.6 Shake — used on checkout panel when validation fails.
+     280ms keeps it short enough that nobody waits on an animation. */
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%      { transform: translateX(-4px); }
+    40%      { transform: translateX(4px); }
+    60%      { transform: translateX(-3px); }
+    80%      { transform: translateX(2px); }
+  }
+  .shake-error { animation: shake .28s var(--ease-out); }
+
+  /* 4.5 Ripple — CSS-only press feedback for tap on .pressable.
+     A radial gradient overlay pinned to the element scales out + fades on :active. */
+  .pressable { position: relative; overflow: hidden; }
+  .pressable::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, rgba(204,120,92,0.25) 0%, rgba(204,120,92,0) 60%);
+    opacity: 0;
+    transform: scale(0.6);
+    transition: opacity .35s var(--ease-out), transform .35s var(--ease-out);
+    pointer-events: none;
+    border-radius: inherit;
+  }
+  .pressable:active::after { opacity: 1; transform: scale(1.6); transition-duration: .08s; }
+
+  /* 4.7 View transition cascade — header/summary/list slide in sequentially.
+     Pair with inline style={{ '--i': n }} on each direct child. */
+  @keyframes cascadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .cascade > * {
+    opacity: 0;
+    animation: cascadeIn .32s var(--ease-out) forwards;
+    animation-delay: calc(var(--i, 0) * 60ms);
+  }
+
+  /* 4.8 Skeleton → content cross-fade — apply `.skeleton-out` for
+     the brief 200ms overlap when data arrives. */
+  @keyframes skeletonOut { from { opacity: 1; } to { opacity: 0; } }
+  .skeleton-out { animation: skeletonOut .2s var(--ease-out) forwards; }
+
+  /* ==========  HAIRLINE  ========== */
+  .hairline { border-color: rgb(var(--c-hairline) / 0.6); }
+
+  /* ==========  DARK-MODE OVERRIDES FOR ARBITRARY TAILWIND COLOURS  ==========
+     Several call-sites use Tailwind arbitrary-value classes with literal
+     hex colours (gold-brown, deep brown, forest-green, amber) that were
+     designed for the cream canvas and become illegible on the dark
+     charcoal. Refactoring each JSX site to add `dark:` variants would
+     touch dozens of lines; instead we centralise the dark counterpart
+     here. Escaped selectors match Tailwind's generated arbitrary-value
+     class names verbatim.  */
+
+  /* Gold-brown #8a6500 — refund-only / approx-cost warnings */
+  :root[data-theme="dark"] .text-\[\#8a6500\]       { color: rgb(252 211 77); }
+  :root[data-theme="dark"] .border-\[\#8a6500\]     { border-color: rgb(252 211 77); }
+  :root[data-theme="dark"] .border-\[\#8a6500\]\/40 { border-color: rgb(252 211 77 / 0.4); }
+
+  /* Deep brown #6b3a26 — barcode-edit chip + "apply to all months" chip
+     on the expense form. Flip to a warm cream tone so the brown link
+     still reads as a soft action chip on the charcoal canvas.        */
+  :root[data-theme="dark"] .text-\[\#6b3a26\]         { color: rgb(232 192 156); }
+  :root[data-theme="dark"] .bg-\[\#6b3a26\]\/10      { background-color: rgb(232 192 156 / 0.12); }
+  :root[data-theme="dark"] .bg-\[\#6b3a26\]\/20      { background-color: rgb(232 192 156 / 0.20); }
+  :root[data-theme="dark"] .hover\:bg-\[\#6b3a26\]\/10:hover { background-color: rgb(232 192 156 / 0.12); }
+  :root[data-theme="dark"] .hover\:bg-\[\#6b3a26\]\/20:hover { background-color: rgb(232 192 156 / 0.20); }
+  :root[data-theme="dark"] .border-\[\#6b3a26\]\/20  { border-color: rgb(232 192 156 / 0.25); }
+  :root[data-theme="dark"] .hover\:border-\[\#6b3a26\]\/40:hover { border-color: rgb(232 192 156 / 0.45); }
+
+  /* Forest-green #1f3d27 — positive delta + high-margin pills + success
+     toast accent. Flip to a brighter green for legibility on dark.   */
+  :root[data-theme="dark"] .text-\[\#1f3d27\]        { color: rgb(134 239 172); }
+  :root[data-theme="dark"] .bg-\[\#1f3d27\]\/12     { background-color: rgb(134 239 172 / 0.18); }
+  :root[data-theme="dark"] .border-\[\#1f3d27\]\/15 { border-color: rgb(134 239 172 / 0.25); }
+
+  /* Amber pair #92400e / #b45309 — mid-margin warning pills */
+  :root[data-theme="dark"] .text-\[\#92400e\]        { color: rgb(252 211 77); }
+  :root[data-theme="dark"] .bg-\[\#b45309\]\/15     { background-color: rgb(180 83 9 / 0.25); }
+
+  /* Cream surface tracks #f1ebe2 / #fdf5ef — progress-bar tracks +
+     cost-calculator card. Flip to surface-card so they don't glare. */
+  :root[data-theme="dark"] .bg-\[\#f1ebe2\]  { background-color: rgb(var(--c-surface-card)); }
+  :root[data-theme="dark"] .bg-\[\#fdf5ef\]  { background-color: rgb(var(--c-surface-soft)); }
+
+  /* Forest-green #2c6b3a — stock-movement "+qty" pill text on
+     `!bg-success/15`. Dark green on dim green = hard to see; bump
+     to a brighter emerald for the dark theme.                     */
+  :root[data-theme="dark"] .text-\[\#2c6b3a\] { color: rgb(134 239 172); }
+
+  /* ==========  SAFE AREA  ========== */
+  .pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 8px); }
+  .pt-safe { padding-top: max(env(safe-area-inset-top), 0px); }
+  /* Position helper: pin an element to the bottom of the viewport while
+     respecting the iPhone home indicator inset. */
+  .bottom-safe { bottom: max(env(safe-area-inset-bottom), 0px); }
+
+  /* ==========  MOBILE TOUCH TARGETS (iPhone-optimized) ========== */
+  /* Below 1024px (Tailwind `lg` breakpoint) we enforce Apple HIG-style
+     44pt minimums on the primary interactive controls and prevent the
+     accidental 2-line wrapping that made some labels feel cramped. */
+  @media (max-width: 1023px) {
+    .btn-primary,
+    .btn-ai-gemini,
+    .btn-secondary,
+    .btn-danger,
+    .btn-ghost {
+      min-height: 44px;
+      white-space: nowrap;
+    }
+    /* `font-size: 16px` is the magic threshold that stops iOS Safari
+       from auto-zooming the viewport when an input is focused — keeping
+       it stops the page from "jumping" mid-checkout. */
+    .input,
+    select.input,
+    textarea.input,
+    input.input {
+      min-height: 44px;
+      font-size: 16px;
+    }
+    /* Sales-history filter row was overflowing into 2 lines on iPhone
+       SE width — `nowrap` + `truncate` keeps everything on one line. */
+    .badge-pill { white-space: nowrap; }
+    /* Modal action row: stack buttons full-width on mobile so the
+       cashier can confidently tap "ยืนยัน" / "ยกเลิก" with a thumb.
+       The wrapper uses flex-col-reverse to keep the primary action
+       (rightmost in flex-row source order) at the top of the stack. */
+    .modal-footer-row > button { width: 100%; }
+
+    /* `.btn-secondary`'s default background is `rgba(255,255,255,0.92)`
+       — on the warm cream canvas / sidebar drawer this reads as
+       "white-on-white" and the button visually disappears. On mobile we
+       swap to a warmer surface tint + slightly darker hairline so the
+       button shape is obvious. Desktop keeps its frosted-glass look. */
+    .btn-secondary {
+      background: var(--surface-card, #efe9de);
+      border-color: rgba(180, 168, 148, 0.45);
+      box-shadow: 0 1px 2px rgba(20, 20, 19, 0.04);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    .btn-secondary:hover { background: var(--surface-cream-strong, #e8e0d2); }
+    /* Icon-only mobile chips get an extra-firm outline so a single 18px
+       glyph still feels like a tappable affordance, not floating ink. */
+    .icon-btn-44.btn-secondary {
+      background: var(--surface-card, #efe9de);
+      border: 1px solid rgba(140, 128, 108, 0.35);
+    }
+    /* `btn-ghost` icon-only buttons (e.g. the menu toggle in the mobile
+       top bar) also benefit from a faint surface so they don't look
+       like decorative SVG. Subtle — keeps the airy feel. */
+    .icon-btn-44.btn-ghost {
+      background: rgba(232, 224, 210, 0.55);
+      border: 1px solid rgba(180, 168, 148, 0.28);
+    }
+    /* Critical: `.btn-secondary` (12px 22px) and `.btn-add-product`
+       (10px 16px) bake in horizontal padding that crushes the SVG
+       inside a 44–48px square — only ~4px is left for the icon and the
+       browser shrinks it to fit. When icon-btn-44 is active, the button
+       is icon-only, so wipe the inherited padding so the SVG can fill
+       the tappable square. Desktop unaffected because `lg:!w-auto`
+       removes the fixed sizing and lets the original padding apply. */
+    .icon-btn-44 { padding: 0 !important; }
+  }
+  /* Bottom padding for the main scroll area on mobile so content
+     scrolls clear of the new bottom-attached tab bar (~76px) plus the
+     iPhone home indicator (env(safe-area-inset-bottom)). Reset to 0 on
+     desktop where the sidebar replaces the tab bar. */
+  .main-mobile-pb { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+  @media (min-width: 1024px) {
+    .main-mobile-pb { padding-bottom: 0; }
+  }
+
+  /* Square 44pt hit target for icon-only buttons (e.g. the filter
+     toggle in SalesView header). Visible bounds can be smaller; the
+     element keeps the 44pt touch zone via padding. */
+  .icon-btn-44 {
+    width: 44px;
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Reduce motion preference */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration: .05s !important; animation-duration: .05s !important; }
+  }
+
+  /* ==========  RECEIPT (100mm thermal sticker)  ==========
+     Single visual style: `.r-theme-minimal` — thin solid lines,
+     generous whitespace, mono numbers. Classic + modern variants were
+     removed per shop request (see git history if you need them back).
+     Print-safe: pure black on white only. */
+  /* Base layout. Sizes here are the 'classic' defaults; the minimal
+     theme below overrides most of them — sizes were bumped ~+15–25%
+     and weights pushed 1 step heavier so EPSON TM-T82 thermal printers
+     produce crisp, high-contrast glyphs (thin strokes render as dotty
+     artifacts on 180dpi thermal heads). */
+  /* Width is 76mm — sized for the EPSON TM-T82 (and most 80mm thermal
+     printers), whose physical print head only reaches ~72mm of the
+     80mm paper roll. Going wider causes both edges to be sliced off
+     when the printer scales the page down. The legacy class name
+     `.receipt-100mm` is kept for git stability; "100mm" is now a
+     historical artefact, not the actual width. */
+  .receipt-100mm {
+    width: 76mm;
+    max-width: 76mm;
+    font-family: 'Sarabun', sans-serif;
+    font-size: 13px;
+    line-height: 1.4;
+    color: #000;
+    background: #fff;
+    padding: 4mm 3mm;
+    box-sizing: border-box;
+  }
+  .receipt-100mm .r-header     { text-align: center; }
+  .receipt-100mm .r-title      { text-align: center; font-size: 14px; font-weight: 700; margin: 4px 0; }
+  .receipt-100mm .r-claim-note { text-align: center; }
+  .receipt-100mm .r-footer     { text-align: center; font-size: 15px; font-weight: 700; margin-top: 2px; }
+  .receipt-100mm .r-printed-at { text-align: center; font-size: 13px; margin-top: 3mm; opacity: 0.85; }
+  .receipt-100mm .r-shop  { font-size: 24px; font-weight: 700; letter-spacing: 0.02em; margin-bottom: 3px; }
+  .receipt-100mm .r-addr  { font-size: 13px; color: #222; line-height: 1.45; }
+  .receipt-100mm .r-meta  { margin: 4px 0; }
+  .receipt-100mm .r-row   { display: flex; justify-content: space-between; gap: 6px; line-height: 1.5; }
+  .receipt-100mm .r-bold  { font-weight: 700; }
+  .receipt-100mm .r-hr    { border: 0; border-top: 1.5px dashed #000; margin: 6px 0; }
+  .receipt-100mm .r-double{ border: 0; border-top: 2.5px solid #000; margin: 6px 0; }
+  .receipt-100mm .r-sm    { font-size: 12.5px; }
+  .receipt-100mm .r-xs    { font-size: 11px; }
+  .receipt-100mm .r-items { margin: 4px 0; }
+  .receipt-100mm .r-item  { margin-bottom: 6px; }
+  .receipt-100mm .r-item:last-child { margin-bottom: 0; }
+  .receipt-100mm .r-name  { font-weight: 700; font-size: 14px; word-break: break-word; line-height: 1.35; margin-bottom: 1px; }
+  .receipt-100mm .r-line  { display: flex; justify-content: space-between; gap: 6px; font-size: 13px; font-weight: 500; }
+  .receipt-100mm .r-totals{ margin: 4px 0; }
+  .receipt-100mm .r-grand { font-size: 18px; font-weight: 800; }
+
+  /* ── Theme: MINIMAL (the only theme shipped) ──
+     Clean thin lines, slightly tighter line-height, mono-style numeric
+     columns. Every size/weight here has been tuned so 180dpi EPSON
+     thermal printers produce crisp output — avoid dropping below 13px
+     for Thai text or the vowel diacritics fall apart. */
+  .receipt-100mm.r-theme-minimal {
+    font-size: 13px;
+    line-height: 1.5;
+    padding: 5mm 3.5mm;
+  }
+  .receipt-100mm.r-theme-minimal .r-shop   { font-family: 'Jost', sans-serif; font-size: 22px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 3px; }
+  .receipt-100mm.r-theme-minimal .r-addr   { font-size: 13px; color: #222; font-weight: 500; line-height: 1.45; }
+  .receipt-100mm.r-theme-minimal .r-title  { font-size: 13px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: #000; }
+  /* Thermal printers render light grey as dithered dots, which looks
+     blurry. Push the hr to near-black so dividers stay crisp lines. */
+  .receipt-100mm.r-theme-minimal .r-hr     { border-top: 0.8px solid #666; margin: 8px 0; }
+  .receipt-100mm.r-theme-minimal .r-double { border-top: 1.5px solid #000; margin: 8px 0; }
+  .receipt-100mm.r-theme-minimal .r-row    { font-weight: 500; line-height: 1.7; }
+  .receipt-100mm.r-theme-minimal .r-row > span:last-child,
+  .receipt-100mm.r-theme-minimal .r-line > span:last-child,
+  .receipt-100mm.r-theme-minimal .r-grand > span:last-child {
+    font-family: 'Inter', 'Helvetica Neue', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .receipt-100mm.r-theme-minimal .r-grand  { font-size: 18px; font-weight: 800; padding-top: 2px; }
+  .receipt-100mm.r-theme-minimal .r-name   { font-weight: 700; font-size: 14px; }
+  .receipt-100mm.r-theme-minimal .r-line   { font-size: 13px; font-weight: 500; }
+  /* Bottom block (claim policy + thank-you + printed-at) — bumped a
+     second time after the first round still looked dotty on the EPSON
+     TM-T82. These three lines are the most common "is this real?"
+     readability complaints from customers, so they're now the largest
+     non-headline text on the receipt. */
+  .receipt-100mm.r-theme-minimal .r-claim-note { font-size: 14px; color: #000; font-weight: 600; line-height: 1.5; }
+  .receipt-100mm.r-theme-minimal .r-claim-note .r-bold { font-weight: 700; }
+  .receipt-100mm.r-theme-minimal .r-footer { font-size: 16px; font-weight: 700; letter-spacing: 0.04em; margin-top: 4px; }
+  .receipt-100mm.r-theme-minimal .r-printed-at { font-size: 13px; opacity: 0.9; font-weight: 500; }
+
+  /* Print portal — a copy of the receipt mounted as a direct child of
+     <body> by ReceiptModal via React.createPortal. On screen it's
+     invisible (the modal already shows a preview); during print it's
+     the only thing the browser paginates, because every other body
+     child gets `display: none`. This avoids the multi-blank-page bug
+     that `visibility: hidden` produced (hidden elements still occupy
+     layout, so the printer paginated 4–5 empty pages after the
+     receipt). Plain `body > *:not(...)` selectors — no `:has()` needed,
+     so it works in 100% of browsers. */
+  .receipt-print-portal { display: none; }
+
+  /* Force-light receipt — on dark theme the in-app preview should still
+     render as black-on-white because it's a faithful preview of the
+     printer output. Wrap in a colour-scheme reset that locks the
+     tokens used by `.receipt-100mm` to their light values. The class
+     itself sets its own background/colour, but we belt-and-braces it. */
+  :root[data-theme="dark"] .receipt-100mm,
+  :root[data-theme="dark"] .receipt-print-portal { color-scheme: light; }
+
+  @media print {
+    /* Reset every theme token to its light value during print so even
+       a dark-mode app prints black-on-white. */
+    :root, :root[data-theme="dark"] {
+      --c-canvas:    255 255 255;
+      --c-ink:        20  20  19;
+      --c-body:       61  61  58;
+      --c-muted:     108 106 100;
+      --c-hairline:  230 223 216;
+    }
+    /* Page size matches the EPSON TM-T82's 80mm paper roll. The receipt
+       content itself is 76mm (see `.receipt-100mm`), giving 2mm of
+       safety margin on each side so the print head's physical edge
+       limits don't slice text. */
+    @page { size: 80mm auto; margin: 0; }
+    html, body {
+      background: #fff !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      height: auto !important;
+      min-height: 0 !important;
+      overflow: visible !important;
+    }
+    /* Hide every body subtree EXCEPT the print portal. The original POS
+       app (modal, sidebar, sales history table, etc) all live under
+       #root, which we hide entirely. */
+    body > *:not(.receipt-print-portal) { display: none !important; }
+    /* Centre the receipt horizontally on the page. Without this the
+       receipt sits flush-left because the user's printable paper width
+       (often slightly larger than 100mm — e.g. 100mm sticker on a
+       104mm-wide roll, or 80mm thermal head on a 100mm @page) leaves
+       leftover whitespace that all collects on the right edge.
+       `display: flex` + `margin: 0 auto` works whether the printer
+       driver respects `@page size: 100mm` exactly or pads the page out
+       to its native paper width. */
+    body {
+      display: flex !important;
+      justify-content: center !important;
+      align-items: flex-start !important;
+    }
+    .receipt-print-portal {
+      display: block !important;
+      position: static !important;
+      width: 76mm !important;
+      margin: 0 auto !important;
+      padding: 0 !important;
+    }
+    .receipt-print-portal .receipt-100mm {
+      box-shadow: none !important;
+      border: 0 !important;
+      background: #fff !important;
+      margin: 0 auto !important;
+    }
+  }
+
+  /* ========================================================================
+     BARCODE SCANNER (camera) — mobile-first overlay used by BarcodeScannerModal.
+     The video sits below an SVG-free CSS reticle; corners + scanning line guide
+     the user. .scanner-reticle--hit briefly tints green to confirm a read.
+     ======================================================================== */
+  .scanner-viewport {
+    position: relative;
+    width: 100%;
+    /* 4:3 portrait-ish frame plays well with EAN-13 horizontal codes. */
+    aspect-ratio: 4 / 5;
+    background: #000;
+    overflow: hidden;
+  }
+  @media (min-width: 1024px) {
+    .scanner-viewport { aspect-ratio: 4 / 3; }
+  }
+  .scanner-video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .scanner-toolbar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    color: #fff;
+    background: linear-gradient(to bottom, rgba(0,0,0,.55), rgba(0,0,0,0));
+  }
+  .scanner-icon-btn {
+    width: 36px; height: 36px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    transition: background-color 0.15s ease, transform 0.15s ease;
+  }
+  .scanner-icon-btn:hover { background: rgba(255,255,255,0.25); }
+  .scanner-icon-btn:active { transform: scale(0.94); }
+  .scanner-icon-btn--active { background: #f5d04a; color: #1a1208; }
+  .scanner-icon-btn--active:hover { background: #ffd957; }
+
+  .scanner-reticle {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    /* Cutout effect: dark vignette OUTSIDE the reticle box. The box itself
+       (280×170) is implied by the corner brackets — the dim layer covers
+       everything; corners visually frame the scan area. */
+    --scan-w: min(78vw, 320px);
+    --scan-h: calc(var(--scan-w) * 0.62);
+  }
+  .scanner-reticle::before {
+    content: "";
+    position: absolute;
+    width: var(--scan-w);
+    height: var(--scan-h);
+    border-radius: 14px;
+    box-shadow: 0 0 0 9999px rgba(0,0,0,0.55);
+    transition: box-shadow 0.2s ease;
+  }
+  .scanner-reticle--hit::before {
+    box-shadow: 0 0 0 9999px rgba(0, 80, 30, 0.35);
+  }
+  .scanner-reticle-corner {
+    position: absolute;
+    width: 22px; height: 22px;
+    border-color: #f5d04a;
+    border-style: solid;
+    border-width: 0;
+    transition: border-color 0.2s ease;
+  }
+  .scanner-reticle--hit .scanner-reticle-corner { border-color: #5fe28b; }
+  .scanner-reticle-corner.tl { top: calc(50% - var(--scan-h) / 2); left: calc(50% - var(--scan-w) / 2); border-top-width: 3px; border-left-width: 3px; border-top-left-radius: 12px; }
+  .scanner-reticle-corner.tr { top: calc(50% - var(--scan-h) / 2); right: calc(50% - var(--scan-w) / 2); border-top-width: 3px; border-right-width: 3px; border-top-right-radius: 12px; }
+  .scanner-reticle-corner.bl { bottom: calc(50% - var(--scan-h) / 2); left: calc(50% - var(--scan-w) / 2); border-bottom-width: 3px; border-left-width: 3px; border-bottom-left-radius: 12px; }
+  .scanner-reticle-corner.br { bottom: calc(50% - var(--scan-h) / 2); right: calc(50% - var(--scan-w) / 2); border-bottom-width: 3px; border-right-width: 3px; border-bottom-right-radius: 12px; }
+  .scanner-reticle-line {
+    position: absolute;
+    width: var(--scan-w);
+    height: 2px;
+    background: linear-gradient(to right, transparent, #f5d04a, transparent);
+    box-shadow: 0 0 8px rgba(245, 208, 74, 0.5);
+    animation: scanLine 1.6s ease-in-out infinite;
+  }
+  @keyframes scanLine {
+    0%   { transform: translateY(calc(var(--scan-h) / -2 + 4px)); opacity: 0.2; }
+    50%  { transform: translateY(calc(var(--scan-h) /  2 - 4px)); opacity: 1; }
+    100% { transform: translateY(calc(var(--scan-h) / -2 + 4px)); opacity: 0.2; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .scanner-reticle-line { animation: none; opacity: 0.6; }
+  }
+  .scanner-status {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    color: #fff;
+    background: rgba(0,0,0,0.75);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+
+  /* Inline camera scan button — sits as a flex sibling of the search input.
+     Explicit 48×48 square; flex layout doesn't reliably honor aspect-ratio
+     when align-self:stretch is set, so we just pin both dimensions.
+     Inputs that pair with this button should use `!py-3 !text-base` so heights
+     align visually. Styled as a compact btn-primary variant. */
+  .scan-inline-btn {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    background: linear-gradient(160deg, #d18467 0%, #cc785c 50%, #c06c50 100%);
+    color: #fff;
+    border: none;
+    box-shadow:
+      0 4px 12px -2px rgba(204, 120, 92, 0.38),
+      0 1px 0 rgba(255, 255, 255, 0.22) inset;
+    transition: transform 0.15s var(--ease-out), box-shadow 0.15s ease, filter 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .scan-inline-btn::before {
+    content: "";
+    position: absolute; top: 0; left: 0; right: 0; height: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.18), transparent);
+    pointer-events: none;
+    border-radius: inherit;
+  }
+  .scan-inline-btn:hover {
+    filter: brightness(1.06);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px -2px rgba(204, 120, 92, 0.48), 0 1px 0 rgba(255,255,255,0.22) inset;
+  }
+  .scan-inline-btn:active { transform: scale(0.94); filter: brightness(0.95); }
+  @media (min-width: 1024px) {
+    .scan-inline-btn { display: none; }
+  }
+
+  /* "AI อ่านบิล" inline button — docked next to the search input in the
+     receive movement form. Uses a 3-layer radial mesh (orange top-left,
+     red top-right, purple bottom) over a diagonal linear base so the
+     colours blend the way a Figma mesh-gradient would. Mirrors
+     `.btn-settings-sidebar`'s inset-rim + glow-on-hover recipe so it
+     fits the premium-button visual family. Sized 48px tall to align
+     vertically with `.input !py-3 !text-base`. */
+  .btn-ai-mesh {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    /* Height + radius match `.input !py-3 !text-base` exactly:
+       py-3 (24px) + text-base line-height (24px) + 1px border × 2 = 50px,
+       border-radius 10px from `.input`. */
+    height: 50px;
+    padding: 0 16px;
+    border-radius: 10px;
+    color: #fff;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.2px;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background:
+      radial-gradient(circle at 15% 20%,  #fb923c 0%, transparent 55%),
+      radial-gradient(circle at 85% 25%,  #ef4444 0%, transparent 55%),
+      radial-gradient(circle at 50% 110%, #8b5cf6 0%, transparent 65%),
+      linear-gradient(135deg, #f97316 0%, #dc2626 50%, #7c3aed 100%);
+    box-shadow:
+      0 4px 14px -2px rgba(220, 38, 38, 0.40),
+      0 1px 0 rgba(255, 255, 255, 0.32) inset,
+      0 -1px 0 rgba(60, 10, 80, 0.32) inset;
+    cursor: pointer;
+    transition: transform .15s var(--ease-out), box-shadow .2s ease, filter .15s;
+    position: relative;
+    overflow: hidden;
+    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn-ai-mesh::before {
+    content: "";
+    position: absolute; top: 0; left: 0; right: 0; height: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.26), transparent);
+    pointer-events: none;
+    border-radius: inherit;
+  }
+  .btn-ai-mesh:hover {
+    filter: brightness(1.06) saturate(1.04);
+    transform: translateY(-1px);
+    box-shadow:
+      0 8px 22px -2px rgba(220, 38, 38, 0.55),
+      0 0 0 1px rgba(255, 200, 200, 0.25),
+      0 1px 0 rgba(255, 255, 255, 0.42) inset,
+      0 -1px 0 rgba(60, 10, 80, 0.30) inset;
+  }
+  .btn-ai-mesh:active {
+    transform: scale(0.96);
+    filter: brightness(0.92);
+    transition-duration: .08s;
+  }
+  .btn-ai-mesh svg { filter: drop-shadow(0 1px 1px rgba(40, 5, 30, 0.30)); }
+
+  /* On narrow phone widths collapse to an icon-only 48×48 square so the
+     search row stays single-line on iPhone SE / 320-360px viewports.
+     The Thai label inside the button uses `hidden sm:inline` so React
+     toggles the visibility — we only need to drop the horizontal
+     padding here.
+     `.btn-ai-mesh-wide` opts OUT of this collapse — used by full-text
+     CTAs like EmptyLanding's "เริ่มสแกนบิล", the DoneSummary's
+     "เริ่มรอบใหม่", and the bulk-upload modal's "AI อ่านทั้งหมด" button
+     where hiding the label would hurt far more than saving 150-200px
+     of horizontal space. */
+  @media (max-width: 639px) {
+    .btn-ai-mesh:not(.btn-ai-mesh-wide) {
+      width: 50px;
+      padding: 0;
+    }
+  }
+
+  /* ===== AI palette companions to .btn-ai-mesh ===== */
+
+  /* AI-themed tab states for `<KindTabs ai>` entries. The goal is a
+     "premium" visual that hints at the gradient CTA without being as
+     loud as `.btn-ai-mesh`. Two states:
+
+       .ai-tab-inactive — transparent background, text takes a warm
+         red/orange tint and a soft outer halo (text-shadow). The
+         glow intensifies on hover as the first affordance cue.
+
+       .ai-tab-active — the tab is selected; gets a very low-opacity
+         mesh gradient (≈12-16% alpha so it reads as a tinted panel
+         rather than a solid button), plus an outer box-shadow halo
+         in warm red so the pill "lights up" within the neutral
+         KindTabs strip.
+
+     Palette is the same 3 stops as `.btn-ai-mesh` (#f97316 orange →
+     #dc2626 red → #7c3aed purple) to keep the brand cohesion. */
+
+  /* ─── INACTIVE ────────────────────────────────────────────────────
+     Gradient-filled text: the label LITERALLY becomes the AI palette.
+     `background-clip: text` + transparent fill draws the gradient
+     inside the glyphs. A soft pulse animation on the drop-shadow
+     keeps the tab "alive" without jumping around. */
+  .ai-tab-inactive {
+    position: relative;
+    background: linear-gradient(135deg,
+      #f97316 0%, #dc2626 50%, #7c3aed 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    animation: ai-tab-pulse 3.6s ease-in-out infinite;
+    transition: filter 0.2s var(--ease-out), transform 0.2s var(--ease-out);
+  }
+  .ai-tab-inactive:hover {
+    transform: translateY(-0.5px);
+    filter: brightness(1.10) saturate(1.08);
+  }
+  /* The svg lives inside the button but background-clip:text doesn't
+     apply to it — drive the icon colour + glow directly. */
+  .ai-tab-inactive svg {
+    color: #dc2626;
+    -webkit-text-fill-color: currentColor;
+    filter: drop-shadow(0 0 4px rgba(249, 115, 22, 0.50))
+            drop-shadow(0 0 8px rgba(220, 38, 38, 0.30));
+    transition: filter 0.25s var(--ease-out), color 0.2s var(--ease-out);
+  }
+  .ai-tab-inactive:hover svg {
+    color: #b91c1c;
+    filter: drop-shadow(0 0 5px rgba(249, 115, 22, 0.70))
+            drop-shadow(0 0 12px rgba(220, 38, 38, 0.48));
+  }
+
+  /* ─── ACTIVE ─────────────────────────────────────────────────────
+     Full mesh-gradient pill — this is the only tab that LOOKS like
+     btn-ai-mesh inside an otherwise neutral strip. A diagonal white
+     sheen stripe sweeps across every ~3s, and the outer halo breathes
+     to give the button a faint "processing" feel. All colour
+     references use the same 3 stops as .btn-ai-mesh to stay on-brand. */
+  .ai-tab-active {
+    position: relative;
+    overflow: hidden;
+    color: #fff;
+    -webkit-text-fill-color: #fff;
+    font-weight: 600;
+    letter-spacing: 0.1px;
+    text-shadow: 0 1px 2px rgba(60, 10, 40, 0.45);
+    background:
+      radial-gradient(circle at 15% 20%,  #fb923c 0%, transparent 55%),
+      radial-gradient(circle at 85% 25%,  #ef4444 0%, transparent 55%),
+      radial-gradient(circle at 50% 110%, #8b5cf6 0%, transparent 65%),
+      linear-gradient(135deg, #f97316 0%, #dc2626 50%, #7c3aed 100%);
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.35) inset,
+      0 -1px 0 rgba(60, 10, 80, 0.28) inset,
+      0 4px 12px -2px rgba(220, 38, 38, 0.42),
+      0 0 18px 0 rgba(249, 115, 22, 0.35);
+    animation: ai-tab-halo 3s ease-in-out infinite;
+  }
+  /* Gloss highlight — static top-half sheen so the pill reads as
+     convex / lit from above. Same trick as .btn-ai-mesh::before. */
+  .ai-tab-active::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.28), transparent);
+    border-radius: inherit;
+    pointer-events: none;
+  }
+  /* Animated diagonal shine — a narrow white stripe sweeps from left
+     to right every 3s, signalling "AI is the special sauce". We animate
+     `transform: translateX` on a 30%-wide stripe positioned off-screen
+     left; at 60% it's fully across, then rests off-screen right for
+     the remaining 40% so the sweep feels deliberate, not constant. */
+  .ai-tab-active::after {
+    content: "";
+    position: absolute;
+    top: 0; bottom: 0;
+    left: -50%;
+    width: 35%;
+    background: linear-gradient(105deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.00) 30%,
+      rgba(255, 255, 255, 0.35) 50%,
+      rgba(255, 255, 255, 0.00) 70%,
+      transparent 100%);
+    transform: skewX(-18deg);
+    pointer-events: none;
+    animation: ai-tab-sheen 3s ease-in-out infinite;
+  }
+  .ai-tab-active svg {
+    filter: drop-shadow(0 1px 1px rgba(40, 5, 30, 0.40));
+  }
+
+  @keyframes ai-tab-pulse {
+    0%, 100% {
+      filter: drop-shadow(0 0 2px rgba(249, 115, 22, 0.18));
+    }
+    50% {
+      filter: drop-shadow(0 0 6px rgba(249, 115, 22, 0.42))
+              drop-shadow(0 0 12px rgba(220, 38, 38, 0.25));
+    }
+  }
+  @keyframes ai-tab-halo {
+    0%, 100% {
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.35) inset,
+        0 -1px 0 rgba(60, 10, 80, 0.28) inset,
+        0 4px 12px -2px rgba(220, 38, 38, 0.42),
+        0 0 14px 0 rgba(249, 115, 22, 0.30);
+    }
+    50% {
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.35) inset,
+        0 -1px 0 rgba(60, 10, 80, 0.28) inset,
+        0 5px 16px -2px rgba(220, 38, 38, 0.55),
+        0 0 22px 2px rgba(249, 115, 22, 0.48);
+    }
+  }
+  @keyframes ai-tab-sheen {
+    0%   { left: -50%; }
+    55%  { left: 120%; }
+    100% { left: 120%; }
+  }
+
+  /* ─── Tiny "AI" chip inside the tab button ───────────────────────
+     Inactive variant: solid mesh-gradient pill (same as .ai-chip but
+     smaller and tighter — this one sits inline with the label).
+     Active variant: inverted to white so it stays readable on the
+     hot gradient background of the selected pill. */
+  .ai-tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 17px;
+    padding: 0 6px;
+    margin-right: 1px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    line-height: 1;
+    border-radius: 4px;
+    color: #fff;
+    -webkit-text-fill-color: #fff;
+    text-shadow: 0 1px 1px rgba(30, 5, 40, 0.30);
+    background:
+      radial-gradient(circle at 25% 20%, #fb923c 0%, transparent 60%),
+      radial-gradient(circle at 80% 25%, #ef4444 0%, transparent 60%),
+      linear-gradient(135deg, #f97316 0%, #dc2626 55%, #7c3aed 100%);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    box-shadow:
+      0 1px 2px rgba(220, 38, 38, 0.35),
+      0 1px 0 rgba(255, 255, 255, 0.30) inset;
+    flex-shrink: 0;
+  }
+  .ai-tab-active .ai-tab-badge {
+    color: #b91c1c;
+    -webkit-text-fill-color: #b91c1c;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.95);
+    border-color: rgba(255, 255, 255, 0.85);
+    box-shadow:
+      0 1px 2px rgba(60, 10, 40, 0.25),
+      0 1px 0 rgba(255, 255, 255, 0.55) inset;
+  }
+
+  /* ─── "ใหม่" badge for products added within NEW_PRODUCT_DAYS ──────
+     Same shape/size as .ai-tab-badge so the two stay in the same
+     visual family — but the gradient is a clean red (no purple) to
+     signal "new arrival / attention" rather than "AI feature".
+     Sits inline next to product names in ProductsView and POS
+     search results. */
+  .new-product-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 17px;
+    padding: 0 6px;
+    margin-right: 1px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    line-height: 1;
+    border-radius: 4px;
+    color: #fff;
+    -webkit-text-fill-color: #fff;
+    text-shadow: 0 1px 1px rgba(80, 0, 0, 0.30);
+    background:
+      radial-gradient(circle at 25% 20%, #fb7185 0%, transparent 60%),
+      radial-gradient(circle at 80% 25%, #f97316 0%, transparent 55%),
+      linear-gradient(180deg, #ef4444 0%, #dc2626 55%, #b91c1c 100%);
+    border: 1px solid rgba(255, 255, 255, 0.30);
+    box-shadow:
+      0 1px 2px rgba(220, 38, 38, 0.40),
+      0 1px 0 rgba(255, 255, 255, 0.35) inset;
+    flex-shrink: 0;
+    /* Don't stretch alongside truncated names — the parent uses
+       `truncate` (overflow:hidden), but the badge needs to stay
+       visible. Vertical-align keeps it sitting on the text baseline
+       rather than the line box top. */
+    vertical-align: middle;
+    user-select: none;
+  }
+
+  /* Respect the user's motion preference — the pulse + sheen + halo
+     are eye-candy and drop away cleanly without breaking legibility. */
+  @media (prefers-reduced-motion: reduce) {
+    .ai-tab-inactive { animation: none; }
+    .ai-tab-active   { animation: none; }
+    .ai-tab-active::after { animation: none; display: none; }
+  }
+
+  /* ─── Sidebar nav-item variant: AI-flagged row ───────────────────
+     Applied via `className += "nav-item-ai "` when a nav entry has
+     `ai: true` in nav-config. Replaces the icon's plain currentColor
+     stroke with the same 3-stop gradient the .ai-tab-badge uses
+     (orange → red → purple), referenced through an SVG linearGradient
+     injected once at the top of the Sidebar (id=ai-icon-gradient).
+     Paired with a warm drop-shadow for the same "live / AI" glow as
+     .ai-tab-inactive — keeps every AI surface in the app visually
+     coherent so users learn "orange-red glow = AI feature" once. */
+  .nav-item-ai > svg {
+    stroke: url(#ai-icon-gradient);
+    filter: drop-shadow(0 0 3px rgba(249, 115, 22, 0.45))
+            drop-shadow(0 0 6px rgba(220, 38, 38, 0.25));
+  }
+
+  /* ─── Sidebar count badge (e.g. today's bill count) ─────────────
+     Same visual language as .cart-glow-badge — red 3-stop gradient
+     pill with a glowing halo pulse — but compact (20px) so it fits
+     inline next to the nav label without dominating the row. The
+     pulsing halo gives the same "live counter" affordance the POS
+     cart badge has, which is exactly the semantic we want here too:
+     "this number changes throughout the day, watch it." */
+  @keyframes navCountPulse {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.55),
+                  0 1px 2px rgba(0, 0, 0, 0.18);
+      transform: scale(1);
+    }
+    50% {
+      box-shadow: 0 0 0 6px rgba(220, 38, 38, 0),
+                  0 1px 2px rgba(0, 0, 0, 0.18);
+      transform: scale(1.05);
+    }
+  }
+  .nav-count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, #ef4444 0%, #dc2626 55%, #b91c1c 100%);
+    color: #fff;
+    font-weight: 700;
+    font-size: 11px;
+    line-height: 1;
+    letter-spacing: 0.01em;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.55),
+                0 1px 2px rgba(0, 0, 0, 0.18);
+    animation: navCountPulse 1.8s ease-in-out infinite;
+    user-select: none;
+  }
+
+  /* Tiny inline chip used to label AI-driven surfaces (e.g. the modal
+     header "AI · สแกนบิล CMG"). Same mesh gradient but flatter so it
+     reads as a tag rather than a CTA. */
+  .ai-chip {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    color: #fff;
+    text-shadow: 0 1px 1px rgba(30, 5, 40, 0.30);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background:
+      radial-gradient(circle at 15% 25%, #fb923c 0%, transparent 55%),
+      radial-gradient(circle at 85% 25%, #ef4444 0%, transparent 55%),
+      radial-gradient(circle at 50% 115%, #8b5cf6 0%, transparent 65%),
+      linear-gradient(135deg, #f97316 0%, #dc2626 50%, #7c3aed 100%);
+    box-shadow:
+      0 1px 3px rgba(220, 38, 38, 0.32),
+      0 1px 0 rgba(255, 255, 255, 0.32) inset;
+    flex-shrink: 0;
+  }
+
+  /* Row-number badge for the AI bill review modal. Big enough (40×40)
+     to work as a "you are here" indicator while the user scrolls through
+     6-20 parsed lines — the number is the anchor the eye tracks between
+     cards. Solid ink (#141413) so the bright mesh-gradient palette stays
+     reserved for the primary AI-action button. */
+  .ai-row-badge {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    /* Translucent ink at 90% — heavier than the original 55% per user
+       feedback ("ขอเข้มอีก 35%") so the number reads more decisively,
+       while a touch of transparency + backdrop-blur keeps the badge
+       feeling integrated with the card's status tint rather than
+       stamped on top. */
+    background: rgba(20, 20, 19, 0.90);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: 1px solid rgba(0, 0, 0, 0.35);
+    box-shadow:
+      0 2px 5px rgba(0, 0, 0, 0.22),
+      0 1px 0 rgba(255, 255, 255, 0.14) inset;
+    flex-shrink: 0;
+  }
+
+  /* ==========  MOBILE CART SHEET  ==========
+     Three-section layout (header / items / bill+checkout) so the items list
+     keeps a real share of the viewport instead of getting squeezed by a long
+     footer. The bill section toggles between a one-tap-to-expand summary bar
+     and an inline form. Checkout is always visible at the bottom. */
+  .cart-sheet-mobile {
+    width: 100%;
+    max-height: 92vh;
+    border-top-left-radius: 1.25rem;
+    border-top-right-radius: 1.25rem;
+    /* Hard cap so we never clip the iOS notch/status bar. */
+    margin-top: env(safe-area-inset-top, 0);
+  }
+  .cart-sheet-header {
+    padding: 0.5rem 1.25rem 0.75rem;
+    border-bottom: 1px solid rgb(var(--c-hairline) / 0.6);
+    background: linear-gradient(180deg, rgb(var(--c-surface-strong) / 0.96), rgb(var(--c-canvas) / 0.86));
+  }
+  /* Items list: flex-1 fill, but with a sane minimum so the user never loses
+     sight of what they're paying for even when the bill panel is expanded. */
+  .cart-items-area {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    min-height: 22vh;
+    padding: 0.75rem;
+  }
+  /* Bill section wraps both states (collapsed bar + expanded form). */
+  .cart-bill-section {
+    flex-shrink: 0;
+    border-top: 1px solid rgb(var(--c-hairline) / 0.6);
+    background: rgb(var(--c-canvas) / 0.55);
+  }
+  .cart-bill-collapsed {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    text-align: left;
+    transition: background-color 0.15s var(--ease-out);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .cart-bill-collapsed:hover { background: rgb(var(--c-surface-strong) / 0.6); }
+  .cart-bill-collapsed:active { background: rgb(var(--c-primary) / 0.06); }
+  .cart-bill-collapsed-summary {
+    flex: 1;
+    min-width: 0;
+  }
+  .cart-bill-expanded {
+    padding: 0.75rem 1rem 0.5rem;
+    max-height: 55vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    animation: billExpand 200ms var(--ease-out);
+  }
+  @keyframes billExpand {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  /* Sticky checkout bar — total + pay button. backdrop-blur lets the items
+     show through subtly while keeping the CTA legible. */
+  .cart-checkout-sticky {
+    flex-shrink: 0;
+    padding: 0.75rem 1rem max(0.75rem, env(safe-area-inset-bottom, 0));
+    border-top: 1px solid rgb(var(--c-hairline) / 0.55);
+    background: linear-gradient(180deg, rgb(var(--c-surface-strong) / 0.92), rgb(var(--c-canvas) / 0.96));
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    box-shadow: 0 -4px 12px -6px rgb(var(--shadow-rgb) / 0.08);
+  }
+  :root[data-theme="dark"] .cart-checkout-sticky {
+    box-shadow: 0 -4px 12px -6px rgb(0 0 0 / 0.30);
+  }
+
+  /* ==========  DASHBOARD / P&L REDESIGN  ==========
+     Liquid-glass-forward analytics screens. Keyframes drive the SVG
+     chart entrances so React just renders the SVG once and CSS does
+     the heavy work — keeps state simple, animation buttery.            */
+
+  /* Hero stat card — coral-teal mesh that shifts subtly. Used by P&L hero
+     when in profit (teal version below). 'card-hero-mesh' adds a slow
+     gradient drift so the card feels alive even when idle. */
+  .card-hero-mesh {
+    position: relative;
+    background:
+      radial-gradient(ellipse 80% 60% at 0% 0%, rgba(204, 120, 92, 0.18), transparent 65%),
+      radial-gradient(ellipse 70% 60% at 100% 100%, rgba(232, 165, 90, 0.14), transparent 65%),
+      linear-gradient(135deg, rgba(255, 254, 252, 0.86), rgba(245, 240, 232, 0.78));
+    backdrop-filter: blur(22px) saturate(160%);
+    -webkit-backdrop-filter: blur(22px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.95) inset,
+      0 -1px 0 rgba(180, 170, 155, 0.15) inset,
+      0 24px 60px -18px rgba(204, 120, 92, 0.30),
+      0 8px 24px -8px rgba(20, 20, 19, 0.10);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .card-hero-mesh::before {
+    content: '';
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 30% 20%, rgba(204, 120, 92, 0.08), transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(232, 165, 90, 0.06), transparent 50%);
+    animation: mesh-drift 12s ease-in-out infinite alternate;
+    pointer-events: none;
+  }
+  /* Dark hero — the same mesh recipe but the linear base goes to elevated
+     dark surfaces and the coral/amber accents are bumped so the glow
+     dominates. Shadow goes blacker + warmer coral drop. The ::before
+     drift overlay also gets stronger accents.                         */
+  :root[data-theme="dark"] .card-hero-mesh {
+    background:
+      radial-gradient(ellipse 80% 60% at 0% 0%, rgba(204, 120, 92, 0.32), transparent 65%),
+      radial-gradient(ellipse 70% 60% at 100% 100%, rgba(232, 165, 90, 0.22), transparent 65%),
+      linear-gradient(135deg, rgba(48, 43, 37, 0.92), rgba(36, 32, 27, 0.85));
+    border-color: rgba(255, 244, 220, 0.12);
+    box-shadow:
+      0 1px 0 rgba(255, 244, 220, 0.14) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.30) inset,
+      0 24px 60px -18px rgba(204, 120, 92, 0.40),
+      0 8px 24px -8px rgba(0, 0, 0, 0.55);
+  }
+  :root[data-theme="dark"] .card-hero-mesh::before {
+    background:
+      radial-gradient(circle at 30% 20%, rgba(204, 120, 92, 0.14), transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(232, 165, 90, 0.10), transparent 50%);
+  }
+  .card-hero-teal {
+    position: relative;
+    background:
+      radial-gradient(ellipse 80% 60% at 0% 0%, rgba(60, 132, 122, 0.22), transparent 65%),
+      radial-gradient(ellipse 70% 60% at 100% 100%, rgba(110, 180, 160, 0.16), transparent 65%),
+      linear-gradient(135deg, rgba(28, 60, 56, 0.92), rgba(20, 45, 42, 0.95));
+    color: #f4f1ea;
+    backdrop-filter: blur(22px) saturate(160%);
+    -webkit-backdrop-filter: blur(22px) saturate(160%);
+    border: 1px solid rgba(170, 220, 200, 0.38);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.28) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.30) inset,
+      0 24px 60px -18px rgba(28, 60, 56, 0.50),
+      0 8px 24px -8px rgba(20, 20, 19, 0.22);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .card-hero-teal::before {
+    content: '';
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 30% 20%, rgba(110, 180, 160, 0.14), transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(60, 132, 122, 0.10), transparent 50%);
+    animation: mesh-drift 12s ease-in-out infinite alternate;
+    pointer-events: none;
+  }
+  .card-hero-coral {
+    position: relative;
+    background:
+      radial-gradient(ellipse 80% 60% at 0% 0%, rgba(229, 62, 62, 0.25), transparent 65%),
+      radial-gradient(ellipse 70% 60% at 100% 100%, rgba(204, 80, 60, 0.20), transparent 65%),
+      linear-gradient(135deg, rgba(180, 50, 50, 0.90), rgba(140, 38, 38, 0.95));
+    color: #fff5f3;
+    backdrop-filter: blur(22px) saturate(160%);
+    -webkit-backdrop-filter: blur(22px) saturate(160%);
+    border: 1px solid rgba(255, 200, 195, 0.38);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.28) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.30) inset,
+      0 24px 60px -18px rgba(180, 50, 50, 0.50),
+      0 8px 24px -8px rgba(20, 20, 19, 0.22);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .card-hero-coral::before {
+    content: '';
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 30% 20%, rgba(255, 180, 170, 0.18), transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(204, 80, 60, 0.14), transparent 50%);
+    animation: mesh-drift 12s ease-in-out infinite alternate;
+    pointer-events: none;
+  }
+  @keyframes mesh-drift {
+    0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.85; }
+    50%      { transform: translate(2%, -1%) scale(1.04); opacity: 1; }
+  }
+
+  /* Skeleton shimmer — used while loading. Non-color so it inherits
+     from the card it sits inside, just sweeps a brighter band across. */
+  .shimmer {
+    position: relative;
+    overflow: hidden;
+    background: rgba(180, 170, 155, 0.10);
+    border-radius: 8px;
+  }
+  .shimmer::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.45) 50%,
+      transparent 100%
+    );
+    transform: translateX(-100%);
+    animation: shimmer-sweep 1.4s ease-in-out infinite;
+  }
+  @keyframes shimmer-sweep {
+    100% { transform: translateX(100%); }
+  }
+
+  /* SVG chart entrances. Apply via class on the <path> / <rect>. */
+  .draw-line {
+    stroke-dasharray: var(--len, 600);
+    stroke-dashoffset: var(--len, 600);
+    animation: draw-line 1s cubic-bezier(.2,.7,.2,1) forwards;
+  }
+  @keyframes draw-line {
+    to { stroke-dashoffset: 0; }
+  }
+  .draw-arc {
+    stroke-dasharray: var(--len, 360);
+    stroke-dashoffset: var(--len, 360);
+    animation: draw-line 0.9s cubic-bezier(.2,.7,.2,1) forwards;
+  }
+  /* Bar grow — vertical bars start collapsed at bottom, scale up.
+     Apply via class on <rect>; supply --grow-delay for stagger. */
+  .bar-grow {
+    transform-origin: center bottom;
+    transform: scaleY(0);
+    animation: bar-grow 0.7s cubic-bezier(.2,.7,.2,1) forwards;
+    animation-delay: var(--grow-delay, 0ms);
+  }
+  @keyframes bar-grow {
+    to { transform: scaleY(1); }
+  }
+  /* Horizontal bar grow — used in top-products & channel rows. */
+  .bar-grow-x {
+    transform-origin: left center;
+    transform: scaleX(0);
+    animation: bar-grow-x 0.65s cubic-bezier(.2,.7,.2,1) forwards;
+    animation-delay: var(--grow-delay, 0ms);
+  }
+  @keyframes bar-grow-x {
+    to { transform: scaleX(1); }
+  }
+  /* Subtle pop on the just-finished number — runs once. */
+  .number-pop {
+    animation: number-pop 0.45s cubic-bezier(.34,1.56,.64,1);
+  }
+  @keyframes number-pop {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.04); }
+    100% { transform: scale(1); }
+  }
+  /* Donut segment hover — others dim, hovered scales.
+     `overflow: visible` on the host SVG is required because the segment
+     scales up on hover; without it, the outer edge of the hovered slice
+     (which already sits right at the svg's bounding box) gets clipped
+     at the top/bottom/sides — visible as a flat "cut" on big slices. */
+  .donut-chart { overflow: visible; }
+  .donut-segment {
+    transition: transform .25s var(--ease-out), opacity .25s var(--ease-out);
+    transform-origin: center;
+  }
+  .donut-chart:hover .donut-segment:not(:hover) {
+    opacity: 0.35;
+  }
+  .donut-chart .donut-segment:hover {
+    transform: scale(1.04);
+  }
+
+  /* Range preset chip — tap punches a quick scale + color flash. */
+  .preset-chip {
+    transition: all .15s var(--ease-out);
+  }
+  .preset-chip:active {
+    transform: scale(0.95);
+  }
+
+  .vat-chip {
+    display: inline-flex;
+    align-items: center;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 5px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    color: #fff;
+    text-shadow: 0 1px 1px rgba(5, 40, 20, 0.30);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    box-shadow:
+      0 1px 3px rgba(5, 150, 105, 0.32),
+      0 1px 0 rgba(255, 255, 255, 0.32) inset;
+    flex-shrink: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .draw-line, .draw-arc, .bar-grow, .bar-grow-x,
+    .shimmer::after, .card-hero-mesh::before,
+    .card-hero-teal::before, .card-hero-coral::before {
+      animation: none !important;
+    }
+    .draw-line, .draw-arc { stroke-dashoffset: 0 !important; }
+    .bar-grow   { transform: scaleY(1) !important; }
+    .bar-grow-x { transform: scaleX(1) !important; }
+  }

@@ -1,0 +1,66 @@
+# Build the Vite bundle and publish dist/ to GitHub Pages.
+#
+# How it works
+#   - Triggers on every push to main (the merge that lands a feature PR).
+#   - Installs node_modules from the npm cache, runs `npm run build`, then
+#     hands dist/ to actions/upload-pages-artifact.
+#   - actions/deploy-pages publishes the artifact at the project's
+#     GitHub Pages URL (https://<owner>.github.io/<repo>/).
+#
+# One-time repo setup the user must do (cannot be automated from CI):
+#   Settings → Pages → "Build and deployment" → Source: "GitHub Actions"
+# After that, every push to main auto-deploys. No more "did I forget to
+# build before uploading?".
+
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:  # allow manual re-run from the Actions tab
+
+# Standard permissions for the deploy-pages action.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Cancel an in-flight deploy if a newer commit lands — only ship the latest.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Build dist/
+        run: npm run build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

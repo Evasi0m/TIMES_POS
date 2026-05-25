@@ -1,0 +1,8 @@
+dist
+node_modules
+graphify-out
+legacy-index.html
+package-lock.json
+*.min.js
+public
+.windsurf
