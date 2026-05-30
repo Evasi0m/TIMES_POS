@@ -36,6 +36,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { sb } from '../../lib/supabase-client.js';
 import { mapError } from '../../lib/error-map.js';
 import Icon from '../ui/Icon.jsx';
+import ProductImageBackfillCard from './ProductImageBackfillCard.jsx';
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
@@ -340,6 +341,9 @@ export default function AISettings({ toast }) {
           <ToggleSwitch checked={masterOn} onChange={toggleMaster} disabled={busy || loading}/>
         </div>
       </div>
+
+      {/* ── Product image backfill (admin-only edge function trigger) ── */}
+      <ProductImageBackfillCard toast={toast} />
 
       {/* ── Section 2: Key pool ── */}
       <div className="card-canvas overflow-hidden">
