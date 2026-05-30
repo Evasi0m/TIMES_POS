@@ -31,7 +31,6 @@ import {
 } from './lib/expense-calc.js';
 import {
   estimateNetReceivedPerUnit,
-  estimateNetReceivedTotal,
   mergePaylaterConfig,
   DEFAULT_PAYLATER_CONFIG,
 } from './lib/money.js';
@@ -51,6 +50,7 @@ import SalePickerForReturn from './components/movement/SalePickerForReturn.jsx';
 import InsightsView from './views/InsightsView.jsx';
 import AISettings from './components/settings/AISettings.jsx';
 import BulkReceiveView from './components/ai/BulkReceiveView.jsx';
+import PendingNetBell from './components/pos/PendingNetBell.jsx';
 import './styles.css';
 
 // `supabase.createClient(...)` from the CDN UMD bundle becomes a one-method
@@ -3597,29 +3597,26 @@ function DisplayPricePanel({ line, onApply, onClear }) {
   );
 }
 
-// "คำนวณอัตโนมัติ" — pre-fills "เงินที่ร้านได้รับ" with an estimate.
-// Shown ONLY for COD on e-commerce channels: the platform's actual
-// remit is unknown until the courier delivers, so an estimate via the
-// per-line shop formula (paylater_config) is a sensible default the
-// cashier can tweak later when the real number lands. Other payment
-// methods (transfer/card/paylater) get the exact number from the
-// platform dashboard immediately — no estimate needed.
-function NetReceivedAutoButton({ cart, config, onApply }) {
-  const disabled = !cart || cart.length === 0;
+// "ใส่ทีหลัง" — defer entering "เงินที่ร้านได้รับ" until the platform pays out.
+// Shown for every payment method on e-commerce channels. When toggled on the
+// sale still completes (stock decremented, status active) but net_received stays
+// empty and the bill is flagged net_received_pending — the notification bell then
+// lets the shop fill in the real amount later.
+function DeferNetButton({ active, onToggle }) {
   return (
     <button
       type="button"
-      disabled={disabled}
-      onClick={() => onApply(estimateNetReceivedTotal(cart, config))}
-      title="คำนวณยอดสุทธิหลังหัก fee โดยประมาณ จากราคาป้าย (สูตรแก้ได้ในการตั้งค่า)"
+      onClick={onToggle}
+      aria-pressed={active}
+      title="บันทึกตอนนี้โดยยังไม่ใส่ยอดที่ร้านได้รับ แล้วมากรอกทีหลังผ่านปุ่มกระดิ่ง"
       className={"inline-flex items-center gap-1 h-10 px-3 rounded-xl text-xs font-semibold border whitespace-nowrap transition shadow-sm flex-shrink-0 " + (
-        disabled
-          ? "bg-surface-strong/40 text-muted-soft border-hairline cursor-not-allowed"
-          : "bg-primary text-on-primary border-primary hover:opacity-90 active:scale-[0.98]"
+        active
+          ? "bg-white text-error border-white"
+          : "bg-surface-strong/20 text-white border-white/30 hover:bg-surface-strong/30"
       )}
     >
-      <Icon name="zap" size={14}/>
-      <span>คำนวณอัตโนมัติ</span>
+      <Icon name={active ? "check" : "calendar"} size={14}/>
+      <span>ใส่ทีหลัง</span>
     </button>
   );
 }
@@ -3660,6 +3657,11 @@ function POSView() {
   // Money the shop actually receives from the platform (e-commerce only).
   // Empty string = not entered yet; gets fallback to grand_total in P&L.
   const [netReceived, setNetReceived] = useState("");
+  // "ใส่ทีหลัง" — defer net_received. When on, the e-commerce sale is saved with
+  // net_received_pending = true and net_received left empty (filled later via the
+  // notification bell). Auto-cleared when the channel is no longer e-commerce.
+  const [deferNet, setDeferNet] = useState(false);
+  useEffect(() => { if (!ECOMMERCE_CHANNELS.has(channel)) setDeferNet(false); }, [channel]);
   const [submitting, setSubmitting] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const { render: cartSheetRender, closing: cartSheetClosing } = useMountedToggle(cartOpen, 220);
@@ -3858,13 +3860,15 @@ function POSView() {
     ? profitRevenueBase / subtotal
     : null;
   const lineProfit = useCallback((l) => {
+    if (deferNet) return 0;       // "ใส่ทีหลัง" → no profit recorded yet
     if (profitRatio == null) return null;
     const cost = Number(l.cost_price) || 0;
     if (cost <= 0) return null; // unknown cost → don't fake a number
     const rev = lineNet(l) * profitRatio;
     return rev - cost * (Number(l.quantity) || 0);
-  }, [profitRatio]);
+  }, [profitRatio, deferNet]);
   const totalProfit = useMemo(() => {
+    if (deferNet) return 0;       // "ใส่ทีหลัง" → no profit recorded yet
     if (profitRatio == null) return null;
     let sum = 0;
     for (const l of cart) {
@@ -3873,7 +3877,7 @@ function POSView() {
       sum += lineNet(l) * profitRatio - cost * (Number(l.quantity) || 0);
     }
     return sum;
-  }, [cart, profitRatio]);
+  }, [cart, profitRatio, deferNet]);
   const profitMarginPct = (totalProfit != null && profitRevenueBase > 0)
     ? (totalProfit / profitRevenueBase) * 100
     : null;
@@ -3905,7 +3909,8 @@ function POSView() {
   // Form validity — drives the submit button disabled state and the
   // submit() guard. Centralised so both stay in sync.
   const netPriceFilled = netPrice !== "" && Number(netPrice) > 0;
-  const netReceivedOk  = !requiresNetReceived(channel, payment)
+  const netReceivedOk  = deferNet
+    || !requiresNetReceived(channel, payment)
     || (netReceived !== "" && Number(netReceived) > 0);
   const buyerNameOk    = !taxInvoice || !!buyer.name.trim();
   const canSubmit = !submitting && cart.length > 0 && netPriceFilled && netReceivedOk && buyerNameOk;
@@ -3961,7 +3966,7 @@ function POSView() {
     if (!cart.length) { toast.push("ไม่มีสินค้าในตะกร้า", "error"); return; }
     if (!netPriceFilled) { toast.push("กรุณากรอก 'ราคาที่ลูกค้าจ่าย'", "error"); return; }
     if (taxInvoice && !buyer.name.trim()) { toast.push("กรุณากรอกชื่อผู้ซื้อสำหรับใบกำกับภาษี", 'error'); return; }
-    if (requiresNetReceived(channel, payment) && (netReceived === "" || Number(netReceived) <= 0)) {
+    if (!deferNet && requiresNetReceived(channel, payment) && (netReceived === "" || Number(netReceived) <= 0)) {
       toast.push("กรุณากรอก 'เงินที่ร้านค้าได้รับ' (ช่องทาง e-commerce + ชำระทันที)", 'error');
       return;
     }
@@ -3987,10 +3992,13 @@ function POSView() {
         buyer_address: taxInvoice ? (buyer.address.trim() || null) : null,
         notes: notes.trim() || null,
         // Only persist net_received for e-commerce sales — for store/facebook
-        // grand_total IS the revenue, so this stays null.
-        net_received: ECOMMERCE_CHANNELS.has(channel) && netReceived !== "" && Number(netReceived) > 0
+        // grand_total IS the revenue, so this stays null. When "ใส่ทีหลัง" is on
+        // we leave it null and flag the bill as pending instead.
+        net_received: !deferNet && ECOMMERCE_CHANNELS.has(channel) && netReceived !== "" && Number(netReceived) > 0
           ? roundMoney(Number(netReceived))
           : null,
+        // "ใส่ทีหลัง" — e-commerce sale awaiting the real net_received.
+        net_received_pending: ECOMMERCE_CHANNELS.has(channel) && deferNet,
       };
       const itemsPayload = cart.map(l => ({
         product_id: l.product_id, product_name: l.product_name,
@@ -4043,9 +4051,13 @@ function POSView() {
       } else {
         toast.push(`บันทึกบิล #${order.id} · ${fmtTHB(grandR)}`, 'success');
         setReceiptOrderId(order.id);  // open receipt modal for this new bill
+        // Let the notification bell pick up a freshly deferred ("ใส่ทีหลัง") bill.
+        if (headerPayload.net_received_pending) {
+          window.dispatchEvent(new Event('pending-net-changed'));
+        }
       }
 
-      setCart([]); setNetPrice(""); setNetReceived("");
+      setCart([]); setNetPrice(""); setNetReceived(""); setDeferNet(false);
       setChannel("tiktok"); setPayment("transfer"); setCartOpen(false);
       setNotes(""); setShowNotes(false);
       setTaxInvoice(false); setBuyer({ name: "", taxId: "", address: "", invoiceNo: "" });
@@ -4411,42 +4423,38 @@ function POSView() {
               <div className="flex items-center justify-between gap-2 mb-2">
                 <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface-strong/20 backdrop-blur text-white text-[10px] font-semibold uppercase tracking-wider border border-white/25">
                   <Icon name="store" size={11}/> เงินที่ร้านได้รับ
-                  {requiresNetReceived(channel, payment)
-                    ? <span className="text-white ml-0.5">*</span>
-                    : <span className="text-white/70 ml-0.5 font-normal normal-case tracking-normal">(ทีหลังได้)</span>}
+                  {deferNet
+                    ? null
+                    : requiresNetReceived(channel, payment)
+                      ? <span className="text-white ml-0.5">*</span>
+                      : <span className="text-white/70 ml-0.5 font-normal normal-case tracking-normal">(ทีหลังได้)</span>}
                 </div>
-                {netReceived !== "" && Number(netReceived) > 0 && grand > 0 && (
-                  <span className="text-[11px] text-white/85 tabular-nums whitespace-nowrap">
-                    ค่าธรรมเนียม {((grand - Number(netReceived)) / grand * 100).toFixed(1)}%
-                  </span>
-                )}
+                <DeferNetButton active={deferNet} onToggle={()=>setDeferNet(v=>!v)}/>
               </div>
-              {payment === 'cod' ? (
-                <div className="flex items-stretch gap-2">
+              {deferNet ? (
+                <div className="flex items-center gap-2 h-10 px-3 rounded-xl bg-surface-strong/15 border border-white/20 text-white/90 text-xs">
+                  <Icon name="bell" size={14}/> จะกรอกยอดจริงภายหลังผ่านปุ่มกระดิ่ง
+                </div>
+              ) : (
+                <>
+                  {netReceived !== "" && Number(netReceived) > 0 && grand > 0 && (
+                    <div className="text-[11px] text-white/85 tabular-nums text-right mb-1">
+                      ค่าธรรมเนียม {((grand - Number(netReceived)) / grand * 100).toFixed(1)}%
+                    </div>
+                  )}
                   <input
                     ref={netReceivedRef}
                     type="number"
                     inputMode="decimal"
-                    className="input !h-10 !rounded-xl !py-2 !text-sm flex-1 min-w-0"
-                    placeholder="รู้ทีหลังก็มาแก้ในหน้าขายได้"
+                    className="input !h-10 !rounded-xl !py-2 !text-sm w-full"
+                    placeholder={payment === 'cod'
+                      ? "รู้ทีหลังก็มาแก้ในหน้าขายได้"
+                      : `ยอดที่ ${CHANNEL_LABELS[channel]||channel} โอนเข้าร้าน (บาท)`}
                     value={netReceived}
                     onChange={e=>setNetReceived(e.target.value)}
                     onBlur={handleNetReceivedBlur}
                   />
-                  <NetReceivedAutoButton cart={cart} config={paylaterConfig}
-                    onApply={(v)=>{ setNetReceived(String(v)); netReceivedRef.current?.focus(); }}/>
-                </div>
-              ) : (
-                <input
-                  ref={netReceivedRef}
-                  type="number"
-                  inputMode="decimal"
-                  className="input !h-10 !rounded-xl !py-2 !text-sm w-full"
-                  placeholder={`ยอดที่ ${CHANNEL_LABELS[channel]||channel} โอนเข้าร้าน (บาท)`}
-                  value={netReceived}
-                  onChange={e=>setNetReceived(e.target.value)}
-                  onBlur={handleNetReceivedBlur}
-                />
+                </>
               )}
               <div className="text-[11px] text-white/70 mt-1.5">
                 ใช้คำนวณกำไร · ไม่แสดงในใบเสร็จลูกค้า
@@ -4580,7 +4588,7 @@ function POSView() {
           the live cart-count glow badge into the header's `right` slot
           without lifting cart state up. App skips the global header for
           'pos' view; mobile uses MobileTopBar instead. */}
-      <PageHeader title="ขายสินค้า" subtitle="POS" right={<CartGlowBadge count={totalQty}/>}/>
+      <PageHeader title="ขายสินค้า" subtitle="POS" right={<div className="flex items-center gap-3"><PendingNetBell toast={toast.push}/><CartGlowBadge count={totalQty}/></div>}/>
       {/* DESKTOP LAYOUT */}
       <div className="hidden lg:grid grid-cols-12 gap-6 px-10 py-8 h-[calc(100vh-180px)]">
         <div className="col-span-7 flex flex-col overflow-hidden">
@@ -4850,46 +4858,53 @@ function POSView() {
 
                   {ECOMMERCE_CHANNELS.has(channel) && (
                     <div className={"rounded-xl p-3 mb-3 bg-primary/5 border border-primary/15 fade-in " + (netReceivedErr ? "field-error-glow" : "")}>
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-2">
                         <label className="text-xs uppercase tracking-wider text-primary inline-flex items-center gap-1.5 font-medium">
                           <Icon name="store" size={12}/>
                           เงินที่ร้านได้รับ
-                          {requiresNetReceived(channel, payment)
-                            ? <span className="text-error ml-0.5">*</span>
-                            : <span className="text-muted-soft ml-0.5 font-normal normal-case tracking-normal">(ทีหลังได้)</span>}
+                          {deferNet
+                            ? null
+                            : requiresNetReceived(channel, payment)
+                              ? <span className="text-error ml-0.5">*</span>
+                              : <span className="text-muted-soft ml-0.5 font-normal normal-case tracking-normal">(ทีหลังได้)</span>}
                         </label>
-                        {netReceived !== "" && Number(netReceived) > 0 && grand > 0 && (
-                          <span className="text-xs text-muted-soft tabular-nums">
-                            ค่าธรรมเนียม {((grand - Number(netReceived)) / grand * 100).toFixed(1)}%
-                          </span>
-                        )}
+                        <button
+                          type="button"
+                          onClick={()=>setDeferNet(v=>!v)}
+                          aria-pressed={deferNet}
+                          className={"inline-flex items-center gap-1 h-8 px-2.5 rounded-lg text-[11px] font-semibold border transition flex-shrink-0 " + (
+                            deferNet
+                              ? "bg-primary text-on-primary border-primary"
+                              : "bg-surface-strong text-muted border-hairline hover:text-ink"
+                          )}
+                        >
+                          <Icon name={deferNet ? "check" : "calendar"} size={12}/> ใส่ทีหลัง
+                        </button>
                       </div>
-                      {payment === 'cod' ? (
-                        <div className="flex items-stretch gap-2 mt-1">
+                      {deferNet ? (
+                        <div className="flex items-center gap-2 mt-1 h-10 px-3 rounded-xl bg-primary/10 border border-primary/20 text-muted text-xs">
+                          <Icon name="bell" size={14}/> จะกรอกยอดจริงภายหลังผ่านปุ่มกระดิ่ง
+                        </div>
+                      ) : (
+                        <>
+                          {netReceived !== "" && Number(netReceived) > 0 && grand > 0 && (
+                            <div className="text-xs text-muted-soft tabular-nums text-right mt-1">
+                              ค่าธรรมเนียม {((grand - Number(netReceived)) / grand * 100).toFixed(1)}%
+                            </div>
+                          )}
                           <input
                             ref={netReceivedRef}
                             type="number"
                             inputMode="decimal"
-                            className="input !h-10 !rounded-xl !py-2 !text-sm flex-1 min-w-0"
-                            placeholder="รู้ทีหลังก็มาแก้ในหน้าขายได้"
+                            className="input !h-10 !rounded-xl !py-2 !text-sm mt-1 w-full"
+                            placeholder={payment === 'cod'
+                              ? "รู้ทีหลังก็มาแก้ในหน้าขายได้"
+                              : `ยอดที่ ${CHANNEL_LABELS[channel]||channel} โอนเข้าร้าน (บาท)`}
                             value={netReceived}
                             onChange={e=>setNetReceived(e.target.value)}
                             onBlur={handleNetReceivedBlur}
                           />
-                          <NetReceivedAutoButton cart={cart} config={paylaterConfig}
-                            onApply={(v)=>{ setNetReceived(String(v)); netReceivedRef.current?.focus(); }}/>
-                        </div>
-                      ) : (
-                        <input
-                          ref={netReceivedRef}
-                          type="number"
-                          inputMode="decimal"
-                          className="input !h-10 !rounded-xl !py-2 !text-sm mt-1 w-full"
-                          placeholder={`ยอดที่ ${CHANNEL_LABELS[channel]||channel} โอนเข้าร้าน (บาท)`}
-                          value={netReceived}
-                          onChange={e=>setNetReceived(e.target.value)}
-                          onBlur={handleNetReceivedBlur}
-                        />
+                        </>
                       )}
                       <div className="text-xs text-muted-soft mt-1">
                         ใช้คำนวณกำไร · ไม่แสดงในใบเสร็จลูกค้า
@@ -6520,7 +6535,9 @@ function SalesView({ onGoPOS }) {
             // free-text search filter. Stored lowercased once so the
             // per-keystroke filter can do cheap .includes() checks.
             allProductNames: lines.map(l => (l.product_name || '').toLowerCase()),
-            profit: o.status === 'voided' ? 0 : totalProfit,
+            // "ใส่ทีหลัง" bills have no recorded payout yet → profit is 0 until
+            // the real net_received is entered (matches the cart indicator).
+            profit: (o.status === 'voided' || o.net_received_pending) ? 0 : totalProfit,
             itemCount: lines.length,
             costApprox,
           };
@@ -6727,13 +6744,16 @@ function SalesView({ onGoPOS }) {
     }
     setSavingNet(true);
     try {
+      // Entering (or clearing) the amount also resolves any "ใส่ทีหลัง" pending
+      // flag so the bill leaves the notification queue and its faint-red tint.
       const { error } = await sb.from('sale_orders')
-        .update({ net_received: value }).eq('id', detail.order.id);
+        .update({ net_received: value, net_received_pending: false }).eq('id', detail.order.id);
       if (error) throw error;
       toast.push(value == null ? "ลบค่าเงินที่ได้รับแล้ว" : `บันทึกเงินที่ได้รับ ${fmtTHB(value)}`, 'success');
-      setDetail(d => d ? { ...d, order: { ...d.order, net_received: value } } : d);
-      setOrders(list => list.map(o => o.id === detail.order.id ? { ...o, net_received: value } : o));
+      setDetail(d => d ? { ...d, order: { ...d.order, net_received: value, net_received_pending: false } } : d);
+      setOrders(list => list.map(o => o.id === detail.order.id ? { ...o, net_received: value, net_received_pending: false } : o));
       setEditNet(false);
+      window.dispatchEvent(new Event('pending-net-changed'));
     } catch (e) {
       toast.push("บันทึกไม่ได้: " + mapError(e), 'error');
     } finally { setSavingNet(false); }
@@ -6892,6 +6912,10 @@ function SalesView({ onGoPOS }) {
 
   return (
     <div className="px-4 py-4 lg:px-10 lg:py-8">
+      {/* Pending "ใส่ทีหลัง" bell — collapses to nothing when none are pending. */}
+      <div className="flex items-center justify-end mb-2 empty:hidden">
+        <PendingNetBell toast={toast.push}/>
+      </div>
       {/* Summary cards — revenue (cream) + profit (Tiffany blue) split
           50/50 on sm+. Mobile stacks; filter button moves out of the
           revenue card to its own row above so the two summary tiles can
@@ -6988,7 +7012,7 @@ function SalesView({ onGoPOS }) {
             {g.list.map(o => {
               const sm = orderSummary[o.id];
               return (
-              <div key={o.id} className={"grid grid-cols-12 px-4 py-3 items-center gap-x-2 border-b hairline last:border-0 hover:bg-surface-strong/40 cursor-pointer transition-colors " + (o.status==='voided'?'opacity-60':'')} onClick={()=>openDetail(o)}>
+              <div key={o.id} className={"grid grid-cols-12 px-4 py-3 items-center gap-x-2 border-b hairline last:border-0 hover:bg-surface-strong/40 cursor-pointer transition-colors " + (o.status==='voided'?'opacity-60':'') + (o.net_received_pending && o.status!=='voided' ? ' bg-error/5' : '')} onClick={()=>openDetail(o)}>
                 <div className="col-span-1 font-mono text-sm flex items-center gap-1 truncate">
                   <span className="truncate">#{o.id}</span>
                   {o.status==='voided' && <span className="badge-pill !bg-error/10 !text-error !text-xs">VOID</span>}
@@ -7004,6 +7028,9 @@ function SalesView({ onGoPOS }) {
                   <div className="font-medium">{fmtMoney(o.grand_total)}</div>
                   {ECOMMERCE_CHANNELS.has(o.channel) && o.net_received != null && (
                     <div className="text-xs text-muted-soft">ได้รับ {fmtMoney(o.net_received)}</div>
+                  )}
+                  {o.net_received_pending && o.status!=='voided' && (
+                    <div className="text-xs text-error font-medium">รอใส่ราคา</div>
                   )}
                 </div>
                 <div className={"col-span-2 text-right tabular-nums font-medium " + (o.status==='voided' ? 'text-muted-soft line-through' : sm && sm.profit >= 0 ? 'text-ink' : 'text-error')}>
@@ -7049,7 +7076,7 @@ function SalesView({ onGoPOS }) {
               {g.list.map(o => {
                 const sm = orderSummary[o.id];
                 return (
-                <div key={o.id} className={"card-canvas pressable p-3.5 flex items-center gap-3 " + (o.status==='voided'?'opacity-60':'')} onClick={()=>openDetail(o)}>
+                <div key={o.id} className={"card-canvas pressable p-3.5 flex items-center gap-3 " + (o.status==='voided'?'opacity-60':'') + (o.net_received_pending && o.status!=='voided' ? ' !bg-error/5' : '')} onClick={()=>openDetail(o)}>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-xs text-muted">#{o.id}</span>
@@ -7065,6 +7092,9 @@ function SalesView({ onGoPOS }) {
                     <div className={"font-display text-lg leading-none tabular-nums " + (o.status==='voided'?'line-through':'')}>{fmtMoney(o.grand_total)}</div>
                     {ECOMMERCE_CHANNELS.has(o.channel) && o.net_received != null && (
                       <div className="text-xs text-muted-soft mt-0.5 tabular-nums">ได้รับ {fmtMoney(o.net_received)}</div>
+                    )}
+                    {o.net_received_pending && o.status!=='voided' && (
+                      <div className="text-xs text-error font-medium mt-0.5">รอใส่ราคา</div>
                     )}
                     {sm && o.status !== 'voided' && (
                       <>
@@ -7321,7 +7351,11 @@ function SalesView({ onGoPOS }) {
                     {!editNet ? (
                       <div className="flex items-center gap-2">
                         <span className="font-display text-xl tabular-nums">
-                          {detail.order.net_received != null ? fmtTHB(detail.order.net_received) : <span className="text-muted-soft text-sm font-sans">— ยังไม่ได้กรอก —</span>}
+                          {detail.order.net_received != null
+                            ? fmtTHB(detail.order.net_received)
+                            : detail.order.net_received_pending
+                              ? <span className="text-error text-sm font-sans">— รอใส่ราคา —</span>
+                              : <span className="text-muted-soft text-sm font-sans">— ยังไม่ได้กรอก —</span>}
                         </span>
                         {isAdmin && detail.order.status==='active' && (
                           <button className="btn-secondary !py-1.5 !px-2.5 !text-xs" onClick={()=>{ setNetDraft(detail.order.net_received != null ? String(detail.order.net_received) : ""); setEditNet(true); }}>
