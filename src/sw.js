@@ -54,9 +54,13 @@ cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST || []);
 
 // === 2. Icons / manifest — cache-first, change rarely =================
+// Scoped to SAME-ORIGIN images only: external product photos (casio.com,
+// albawatches.com, …) must not land here or they'd evict the handful of app
+// icons this small (maxEntries: 50) cache is meant to hold. Product images
+// still benefit from the browser's own HTTP cache.
 registerRoute(
-  ({ request }) =>
-    request.destination === 'image' ||
+  ({ request, url }) =>
+    (request.destination === 'image' && url.origin === self.location.origin) ||
     request.destination === 'manifest',
   new CacheFirst({
     cacheName: 'static-assets-v1',

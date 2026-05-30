@@ -37,6 +37,7 @@ import {
 } from './lib/money.js';
 import { downloadStructuredCsv } from './lib/csv.js';
 import Icon from './components/ui/Icon.jsx';
+import ProductThumb from './components/ui/ProductThumb.jsx';
 import { useRealtimeInvalidate } from './lib/use-realtime-invalidate.js';
 import { useNumberTween } from './lib/use-number-tween.js';
 import { useBarcodeScanner, getPreferredFacing, setPreferredFacing } from './lib/use-barcode-scanner.js';
@@ -3738,7 +3739,7 @@ function POSView() {
         if (!cancelled) { addToCart(barcodeHit[0]); setSearch(''); setSearching(false); }
         return;
       }
-      const { data, error } = await sb.from('products').select('*').ilike('name', `%${q}%`).limit(20);
+      const { data, error } = await sb.from('products').select('*, product_images(image_url,status)').ilike('name', `%${q}%`).limit(20);
       if (!error) rows = data || [];
       rows.sort((a,b) => (Number(b.current_stock)||0) - (Number(a.current_stock)||0));
       if (!cancelled) { setResults(rows); setSearching(false); }
@@ -4129,6 +4130,7 @@ function POSView() {
             style={{ '--i': Math.min(idx, 12) }}
             className={"fade-in stagger px-4 lg:px-5 py-3.5 border-b hairline last:border-0 flex items-center gap-3 transition-colors " + (oos ? "opacity-60 cursor-not-allowed" : "hover:bg-surface-strong/40 cursor-pointer")}
             onClick={oos ? undefined : ()=>addToCart(p)}>
+            <ProductThumb product={p} size="md" />
             <div className="flex-1 min-w-0">
               <div className="font-medium text-ink truncate text-base">
                 {p.name}
@@ -5146,7 +5148,21 @@ function ProductsView() {
       sb.from('products').select('*').order('id', { ascending: false }).range(from, to)
     );
     if (error) toast.push('โหลดสินค้าไม่ได้: ' + (error.message || mapError(error)), 'error');
-    const enriched = (all || []).map(enrichProduct);
+
+    // Product images: only a tiny slice of the catalog has one (status='found'),
+    // so a single targeted fetch + client-side Map merge is far cheaper than a
+    // 6,040-row nested embed. Failures are non-fatal — products just render the
+    // brand-monogram placeholder.
+    const imgMap = new Map();
+    try {
+      const { data: imgs } = await sb
+        .from('product_images')
+        .select('product_id, image_url, status')
+        .eq('status', 'found');
+      for (const r of imgs || []) if (r.image_url) imgMap.set(r.product_id, r);
+    } catch { /* placeholder fallback covers this */ }
+
+    const enriched = (all || []).map(p => enrichProduct({ ...p, _imageRow: imgMap.get(p.id) || null }));
     setAllRows(enriched);
     setLoading(false);
 
@@ -5527,9 +5543,12 @@ function ProductsView() {
               <div key={p.id}
                 className={"grid grid-cols-12 px-4 py-3.5 items-center border-b hairline last:border-0 transition-colors " + (canEdit ? "hover:bg-surface-strong/40 cursor-pointer" : "cursor-default")}
                 onClick={canEdit ? (()=>openEditor(p)) : undefined}>
-                <div className="col-span-3 font-medium truncate">
-                  {p.name}
-                  {isNewProduct(p) && <span className="new-product-badge ml-1.5 align-middle">ใหม่</span>}
+                <div className="col-span-3 font-medium truncate flex items-center gap-2.5">
+                  <ProductThumb product={p} size="sm" />
+                  <span className="truncate">
+                    {p.name}
+                    {isNewProduct(p) && <span className="new-product-badge ml-1.5 align-middle">ใหม่</span>}
+                  </span>
                 </div>
                 <div className="col-span-2 font-mono text-sm text-muted truncate">{p.barcode||'—'}</div>
                 <div className={"col-span-2 text-right tabular-nums " + (lc ? 'text-muted-soft' : 'font-medium text-ink')}>{fmtPlain(p.cost_price)}</div>
@@ -5584,6 +5603,7 @@ function ProductsView() {
               className={"card-canvas p-3.5 flex items-center gap-3 " + (canEdit ? "pressable" : "cursor-default")}
               onClick={canEdit ? (()=>openEditor(p)) : undefined}>
               <span className={"stock-dot self-start mt-1.5 " + (p.current_stock<=0 ? 'is-empty' : 'is-ok')} aria-hidden="true" />
+              <ProductThumb product={p} size="md" />
               <div className="flex-1 min-w-0">
                 <div className="font-semibold truncate text-[15px]">
                   {p.name}
@@ -6116,9 +6136,12 @@ function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand,
             </div>
           </div>
           <div className="space-y-3">
-            <div>
-              <label className={fieldLabel}>ชื่อรุ่น</label>
-              <input className="input mt-1" value={draft.name||""} onChange={e=>set('name', e.target.value)} />
+            <div className="flex items-start gap-3">
+              <ProductThumb product={draft} size="lg" className="mt-5" />
+              <div className="flex-1 min-w-0">
+                <label className={fieldLabel}>ชื่อรุ่น</label>
+                <input className="input mt-1" value={draft.name||""} onChange={e=>set('name', e.target.value)} />
+              </div>
             </div>
             <div>
               <label className={fieldLabel + " flex items-center gap-2"}>
