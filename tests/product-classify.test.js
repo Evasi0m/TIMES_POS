@@ -29,11 +29,14 @@ describe('classifyBrand', () => {
     ['LTP-1183-1A',   'casio'],
     ['GA-100-1A1',    'casio'],
     ['GBD-200-1',     'casio'],
+    ['GBM-2100A',     'casio'],   // "Casioak" steel — added GBM prefix
+    ['GBX-100',       'casio'],   // G-LIDE steel — added GBX prefix
     ['BGA-150-7B2',   'casio'],
     ['EFR-552D-1AV',  'casio'],
     ['PRG-330-2',     'casio'],
     ['F-91W',         'casio'],
     ['A158WA-1',      'casio'],
+    ['BM7100-59E',    'citizen'],  // GBM addition must NOT steal "BM..." (Citizen)
     ['SOMETHING-WEIRD', 'other'],
     ['',              'other'],
   ])('classifies %s as %s', (name, expected) => {
@@ -51,6 +54,8 @@ describe('classifySeries (Casio)', () => {
     ['GA-100-1A1',    'gshock'],
     ['GBD-200-1',     'gshock'],
     ['GW-9400-1',     'gshock'],
+    ['GBM-2100A',     'gshock'],   // Casioak → G-SHOCK series
+    ['GBX-100',       'gshock'],
     ['MTG-B2000',     'gshock'],
     ['BGA-150-7B2',   'babyg'],
     ['BGD-565-7',     'babyg'],
