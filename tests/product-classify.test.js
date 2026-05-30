@@ -36,6 +36,12 @@ describe('classifyBrand', () => {
     ['PRG-330-2',     'casio'],
     ['F-91W',         'casio'],
     ['A158WA-1',      'casio'],
+    ['EF-558D-1AV',   'casio'],   // Edifice (bare EF)
+    ['EFS-560DB-2A',  'casio'],   // Edifice Sospensione
+    ['EFK-100-1A',    'casio'],
+    ['MTS-100-1A',    'casio'],
+    ['GG-1000-1A',    'casio'],   // G-SHOCK Mudman
+    ['WS-1200H-1A',   'casio'],
     ['BM7100-59E',    'citizen'],  // GBM addition must NOT steal "BM..." (Citizen)
     ['SOMETHING-WEIRD', 'other'],
     ['',              'other'],
