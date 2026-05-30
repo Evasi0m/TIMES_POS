@@ -142,9 +142,25 @@ export function parseCasioModel(m) {
 }
 
 /**
+ * Resolve the usable product image URL from an embedded/joined `product_images`
+ * row. Only a row with status 'found' AND a non-empty image_url counts — every
+ * other state (pending / not_found / failed, or a NULL url) means "no image yet"
+ * so the UI falls back to the brand monogram placeholder.
+ *
+ * Tolerates both PostgREST embed shapes: an object (unique FK) or a 1-element
+ * array, plus a pre-merged `_imageRow` (used by ProductsView's Map merge).
+ */
+export function productImageUrl(p) {
+  const pi = p?._imageRow ?? p?.product_images;
+  const row = Array.isArray(pi) ? pi[0] : pi;
+  if (row && row.status === 'found' && row.image_url) return row.image_url;
+  return null;
+}
+
+/**
  * Add derived fields needed by filter / search. Pure: never mutates the
  * input. Returns a new object spreading `p` plus _brand/_series/_material/
- * _color/_prefix/_searchText.
+ * _color/_prefix/_searchText/_imageUrl.
  */
 export function enrichProduct(p) {
   const m = (p.name || '').trim();
@@ -155,7 +171,8 @@ export function enrichProduct(p) {
   const _color    = _brand === 'casio' ? parsed.color : '';
   const _prefix   = (m.match(/^([A-Z]+)/i)?.[1] || '').toUpperCase();
   const _searchText = m.toLowerCase().replace(/[\s\-_.]/g, '');
-  return { ...p, _brand, _series, _material, _color, _prefix, _searchText };
+  const _imageUrl = productImageUrl(p);
+  return { ...p, _brand, _series, _material, _color, _prefix, _searchText, _imageUrl };
 }
 
 /** Sub-type matcher — uses prefix list with a `prefix-` fallback (e.g. "BA-110"). */
