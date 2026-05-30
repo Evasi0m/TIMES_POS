@@ -3490,7 +3490,7 @@ function MobileTabBar({ view, setView }) {
 /* =========================================================
    PAGE HEADER (desktop)
 ========================================================= */
-function PageHeader({ title, subtitle, right }) {
+function PageHeader({ title, subtitle, right, farRight }) {
   // `subtitle` is kept in the signature for API compatibility with the
   // call-sites that still pass it (POS / Inventory / Sales History) but
   // is no longer rendered — the Thai title alone is enough, and the
@@ -3507,6 +3507,8 @@ function PageHeader({ title, subtitle, right }) {
           {right}
         </div>
       </div>
+      {/* Far right slot — for global widgets like PendingNetBell */}
+      {farRight}
     </header>
   );
 }
@@ -4589,7 +4591,7 @@ function POSView() {
           the live cart-count glow badge into the header's `right` slot
           without lifting cart state up. App skips the global header for
           'pos' view; mobile uses MobileTopBar instead. */}
-      <PageHeader title="ขายสินค้า" subtitle="POS" right={<div className="flex items-center gap-3"><PendingNetBell toast={toast.push}/><CartGlowBadge count={totalQty}/></div>}/>
+      <PageHeader title="ขายสินค้า" subtitle="POS" right={<CartGlowBadge count={totalQty}/>} farRight={<PendingNetBell toast={toast.push} size={50}/>}/>
       {/* DESKTOP LAYOUT */}
       <div className="hidden lg:grid grid-cols-12 gap-6 px-10 py-8 h-[calc(100vh-180px)]">
         <div className="col-span-7 flex flex-col overflow-hidden">
@@ -6912,10 +6914,10 @@ function SalesView({ onGoPOS }) {
   );
 
   return (
-    <div className="px-4 py-4 lg:px-10 lg:py-8">
-      {/* Pending "ใส่ทีหลัง" bell — collapses to nothing when none are pending. */}
-      <div className="flex items-center justify-end mb-2 empty:hidden">
-        <PendingNetBell toast={toast.push}/>
+    <div className="px-4 py-4 lg:px-10 lg:py-8 relative">
+      {/* PendingNetBell — positioned to align with PageHeader h1 on desktop */}
+      <div className="hidden lg:block fixed top-[30px] right-[40px] z-[50] empty:hidden">
+        <PendingNetBell toast={toast.push} size={50}/>
       </div>
       {/* Summary cards — revenue (cream) + profit (Tiffany blue) split
           50/50 on sm+. Mobile stacks; filter button moves out of the

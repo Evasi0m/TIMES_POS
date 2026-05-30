@@ -30,7 +30,7 @@ const fmtDate = (iso) => {
   } catch { return ''; }
 };
 
-export default function PendingNetBell({ toast }) {
+export default function PendingNetBell({ toast, size = 44 }) {
   const [bills, setBills]   = useState([]);
   const [open, setOpen]     = useState(false);
   const [entry, setEntry]   = useState(null); // bill currently being filled
@@ -99,6 +99,11 @@ export default function PendingNetBell({ toast }) {
   const count = bills.length;
   if (count === 0) return null;
 
+  // Everything scales off `size` so the circle stays proportional to each
+  // page's PageHeader (POS passes a larger value than Sales History).
+  const iconSize  = Math.round(size * 0.5);
+  const badgeSize = Math.max(18, Math.round(size * 0.46));
+
   const openEntry = (bill) => { setEntry(bill); setAmount(''); };
 
   const save = async () => {
@@ -123,26 +128,56 @@ export default function PendingNetBell({ toast }) {
 
   return (
     <>
-      {/* Bell + desktop iMessage bubble */}
-      <div className="relative flex items-center gap-2">
-        <div className="hidden lg:block relative">
-          <div className="px-3 py-1.5 rounded-2xl bg-error text-white text-xs font-medium shadow-md whitespace-nowrap">
+      {/* Bell + desktop iMessage-style bubble */}
+      <div className="relative flex items-center gap-2.5">
+        <div className="pending-bubble hidden lg:block relative">
+          <div className="imsg-bubble px-3.5 py-2 text-xs font-semibold whitespace-nowrap">
             มี {count} รายการยังไม่ได้ใส่ราคา
           </div>
-          {/* tail pointing right, toward the bell */}
-          <div className="absolute top-1/2 -right-1 -translate-y-1/2 w-3 h-3 bg-error rotate-45" />
+          {/* tail curling toward the bell */}
+          <span className="imsg-tail" aria-hidden="true" />
         </div>
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          aria-label={`มี ${count} รายการยังไม่ได้ใส่ราคา`}
-          className="relative inline-flex items-center justify-center w-10 h-10 rounded-full bg-error text-white shadow-md hover:opacity-90 active:scale-95 transition"
-        >
-          <Icon name="bell" size={20} />
-          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-white text-error text-[11px] font-bold inline-flex items-center justify-center tabular-nums ring-2 ring-error">
-            {count > 99 ? '99+' : count}
-          </span>
-        </button>
+        <div className="pending-bell">
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            aria-label={`มี ${count} รายการยังไม่ได้ใส่ราคา`}
+            className="relative inline-flex items-center justify-center rounded-full shadow-xl transition-transform duration-200 ease-out hover:scale-105 active:scale-95"
+            style={{
+              width: size,
+              height: size,
+              background: `
+                radial-gradient(circle at 30% 20%, rgba(254, 202, 202, 0.45), transparent 52%),
+                linear-gradient(180deg, #fb6a6a 0%, #dc2626 52%, #991b1b 100%)
+              `,
+              border: '1px solid rgba(220, 38, 38, 0.5)',
+              color: '#fef2f2',
+              boxShadow: `
+                0 1px 0 rgba(255, 255, 255, 0.45) inset,
+                0 -1px 0 rgba(127, 29, 29, 0.3) inset,
+                0 8px 24px -6px rgba(220, 38, 38, 0.5),
+                0 0 0 1px rgba(220, 38, 38, 0.1)
+              `,
+            }}
+          >
+            <span className="pending-bell-icon">
+              <Icon name="bell" size={iconSize} style={{ filter: 'drop-shadow(0 1px 2px rgba(60, 5, 5, 0.3))' }} />
+            </span>
+            <span
+              className="pending-badge absolute -top-1 -right-1 px-1 rounded-full font-bold inline-flex items-center justify-center tabular-nums ring-2 ring-white"
+              style={{
+                minWidth: badgeSize,
+                height: badgeSize,
+                fontSize: Math.max(10, Math.round(size * 0.25)),
+                background: '#fef2f2',
+                color: '#dc2626',
+                boxShadow: '0 2px 8px rgba(220, 38, 38, 0.35)',
+              }}
+            >
+              {count > 99 ? '99+' : count}
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* List popover — iOS Haptic-Touch style blurred backdrop */}
