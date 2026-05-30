@@ -533,23 +533,57 @@
   .btn-danger-modal svg { filter: drop-shadow(0 1px 0 rgba(255, 200, 200, 0.45)); }
 
   .btn-danger {
-    background: #c64545;
-    color: #ffffff;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    background:
+      linear-gradient(180deg,
+        #f48a8a 0%,
+        #d94343 35%,
+        #a91f1f 65%,
+        #6e0d0d 100%);
+    color: #fff5f5;
+    text-shadow: 0 1px 0 rgba(60, 5, 5, 0.55);
     padding: 10px 16px;
     min-height: 40px;
     border-radius: 9px;
     font-weight: 500;
     font-size: 14px;
     line-height: 1;
-    border: none;
+    border: 1px solid rgba(80, 10, 10, 0.55);
     cursor: pointer;
-    transition: background-color .18s var(--ease-out), transform .15s var(--ease-out), box-shadow .15s var(--ease-out), filter .18s;
-    box-shadow: var(--shadow-low);
+    transition: all .18s var(--ease-out);
+    box-shadow:
+      0 2px 6px rgba(150, 25, 25, 0.40),
+      0 1px 0 rgba(255, 220, 220, 0.45) inset,
+      0 -1px 0 rgba(60, 5, 5, 0.30) inset;
   }
-  .btn-danger:hover { background: #ad3838; transform: translateY(-1px); box-shadow: var(--shadow-mid); }
-  .btn-danger:active { transform: translateY(0) scale(0.98); filter: brightness(0.95); transition-duration: .08s; }
-  .btn-danger:disabled { background: rgb(var(--c-primary-disabled)); color: rgb(var(--c-muted)); cursor: not-allowed; box-shadow: none; transform: none; filter: none; }
-  :root[data-theme="dark"] .btn-danger:disabled { background: rgb(var(--c-surface-card)); color: rgb(var(--c-muted-soft)); }
+  .btn-danger:hover {
+    background:
+      linear-gradient(180deg,
+        #ff9c9c 0%,
+        #ea5252 35%,
+        #c02929 65%,
+        #821111 100%);
+    box-shadow:
+      0 5px 14px rgba(170, 30, 30, 0.55),
+      0 0 0 1px rgba(255, 180, 180, 0.35),
+      0 1px 0 rgba(255, 230, 230, 0.55) inset,
+      0 -1px 0 rgba(60, 5, 5, 0.30) inset;
+    transform: translateY(-1px);
+  }
+  .btn-danger:active {
+    transform: scale(0.98);
+    box-shadow:
+      0 1px 3px rgba(150, 25, 25, 0.40),
+      0 1px 0 rgba(255, 220, 220, 0.45) inset;
+  }
+  .btn-danger:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: 0 1px 3px rgba(150, 25, 25, 0.20), 0 1px 0 rgba(255, 220, 220, 0.30) inset;
+  }
+  :root[data-theme="dark"] .btn-danger:disabled { opacity: 0.35; }
+  .btn-danger svg { filter: drop-shadow(0 1px 0 rgba(255, 200, 200, 0.45)); }
 
   .btn-ghost {
     background: transparent;
@@ -1178,6 +1212,102 @@
       0 1px 0 rgba(255, 245, 215, 0.45) inset;
   }
   .btn-settings-sidebar svg { filter: drop-shadow(0 1px 0 rgba(255, 240, 200, 0.5)); }
+
+  /* Gold premium button matching the "ราคาที่ลูกค้าจ่าย" card —
+     uses same 4-stop gold gradient: #f5dc8a → #e2bc55 → #c89a2a → #9a7414
+     with subtle gold shimmer glow on hover */
+  .btn-tiffany-premium {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    height: 40px;
+    padding: 0 12px;
+    background:
+      linear-gradient(180deg,
+        #f5dc8a 0%,
+        #e2bc55 35%,
+        #c89a2a 65%,
+        #9a7414 100%);
+    color: #3a2607;
+    text-shadow: 0 1px 0 rgba(255, 240, 200, 0.55);
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.2px;
+    border: 1px solid rgba(120, 85, 15, 0.55);
+    box-shadow:
+      0 2px 8px rgba(160, 110, 10, 0.40),
+      0 1px 0 rgba(255, 245, 215, 0.55) inset,
+      0 -1px 0 rgba(80, 55, 5, 0.25) inset;
+    cursor: pointer;
+    transition: all .18s var(--ease-out);
+    flex-shrink: 0;
+    white-space: nowrap;
+    position: relative;
+    overflow: hidden;
+  }
+  /* Subtle gold shimmer glow overlay */
+  .btn-tiffany-premium::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 30% 20%, rgba(255, 250, 220, 0.35) 0%, transparent 50%);
+    opacity: 0.6;
+    pointer-events: none;
+  }
+  .btn-tiffany-premium:hover {
+    background:
+      linear-gradient(180deg,
+        #fce8a0 0%,
+        #ecc865 35%,
+        #d6a634 65%,
+        #a98018 100%);
+    box-shadow:
+      0 4px 12px rgba(160, 110, 10, 0.35),
+      0 1px 0 rgba(255, 250, 220, 0.8) inset,
+      0 -1px 0 rgba(80, 55, 5, 0.25) inset;
+    transform: translateY(-1px);
+  }
+  .btn-tiffany-premium:hover::before {
+    opacity: 1;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.4) 0%, transparent 40%);
+  }
+  .btn-tiffany-premium:active {
+    transform: scale(0.97);
+    box-shadow:
+      0 1px 4px rgba(160, 110, 10, 0.40),
+      0 1px 0 rgba(255, 245, 215, 0.45) inset;
+  }
+  .btn-tiffany-premium.active {
+    background:
+      linear-gradient(180deg,
+        #fff8f8 0%,
+        #ffd4d4 35%,
+        #ffb0b0 65%,
+        #e08080 100%);
+    color: #5a1a1a;
+    border-color: rgba(180, 80, 80, 0.55);
+    box-shadow:
+      0 2px 8px rgba(180, 80, 80, 0.40),
+      0 1px 0 rgba(255, 255, 255, 0.55) inset,
+      0 -1px 0 rgba(100, 40, 40, 0.25) inset;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+  }
+  .btn-tiffany-premium.active::before {
+    background: radial-gradient(ellipse at 30% 20%, rgba(255, 230, 230, 0.3) 0%, transparent 50%);
+  }
+  .btn-tiffany-premium.active:hover {
+    background:
+      linear-gradient(180deg,
+        #fff0f0 0%,
+        #ffc0c0 35%,
+        #ffa0a0 65%,
+        #f07070 100%);
+    box-shadow:
+      0 6px 16px rgba(180, 80, 80, 0.55),
+      0 0 0 1px rgba(255, 180, 180, 0.35),
+      0 1px 0 rgba(255, 255, 255, 0.65) inset,
+      0 -1px 0 rgba(100, 40, 40, 0.25) inset;
+  }
+  .btn-tiffany-premium svg { filter: drop-shadow(0 1px 0 rgba(255, 240, 200, 0.5)); }
 
   /* Premium emerald variant of the gold sidebar button — same metallic
      4-stop gradient feel + inset rim, just shifted into deep emerald

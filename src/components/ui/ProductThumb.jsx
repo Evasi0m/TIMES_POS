@@ -18,13 +18,13 @@ import { productImageUrl, classifyBrand } from '../../lib/product-classify.js';
 
 const SIZES = { sm: 40, md: 56, lg: 96, xl: 160 };
 
-// Brand → monogram letter + tile/ink colours. Casio and Citizen both start
-// with "C", so they are kept visually distinct by colour.
+// Brand → monogram letter + gradient/ink colours.
+// Gradients give a liquid-glass depth while keeping brand recognition.
 const BRAND_MONO = {
-  casio:   { letter: 'C', bg: '#0f2c54', ink: '#dbe7fb' }, // navy
-  seiko:   { letter: 'S', bg: '#1c1917', ink: '#e7c873' }, // black / gold
-  alba:    { letter: 'A', bg: '#0e4d8b', ink: '#cfe6ff' }, // blue
-  citizen: { letter: 'C', bg: '#7f1d1d', ink: '#fbd5d5' }, // deep red
+  casio:   { letter: 'C', gradient: 'linear-gradient(180deg, #1a4470 0%, #0f2c54 50%, #0a1f3d 100%)', ink: '#dbe7fb' }, // navy
+  seiko:   { letter: 'S', gradient: 'linear-gradient(180deg, #2d2a28 0%, #1c1917 50%, #141210 100%)', ink: '#e7c873' }, // black / gold
+  alba:    { letter: 'A', gradient: 'linear-gradient(180deg, #1e6bb5 0%, #0e4d8b 50%, #0a3a6b 100%)', ink: '#cfe6ff' }, // blue
+  citizen: { letter: 'C', gradient: 'linear-gradient(180deg, #a03030 0%, #7f1d1d 50%, #5f1515 100%)', ink: '#fbd5d5' }, // deep red
 };
 
 export default function ProductThumb({ product, size = 'md', className = '' }) {
@@ -45,13 +45,21 @@ export default function ProductThumb({ product, size = 'md', className = '' }) {
     return url + (url.includes('?') ? '&' : '?') + 'cb=' + Date.now();
   }, [url]);
 
-  const tile =
+  // Liquid glass container base classes
+  const tileBase =
     'flex-shrink-0 inline-flex items-center justify-center overflow-hidden ' +
-    'rounded-[10px] ring-1 ring-hairline ' + className;
+    'rounded-[10px] relative ' + className;
+
+  // Glass border overlay for placeholder tiles
+  const glassOverlay =
+    'absolute inset-0 rounded-[10px] pointer-events-none ' +
+    'border border-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.25),inset_0_-1px_0_rgba(0,0,0,0.15)] ' +
+    "before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-1/2 " +
+    'before:bg-gradient-to-b before:from-white/20 before:to-transparent before:rounded-t-[10px]';
 
   if (url && !broken) {
     return (
-      <div className={tile + ' bg-surface-soft relative'} style={{ width: px, height: px }}>
+      <div className={tileBase + ' bg-surface-soft ring-1 ring-hairline'} style={{ width: px, height: px }}>
         {/* Loading skeleton — only for products that actually have an image URL.
             Stays until onLoad fires; products without a URL never reach here. */}
         {!loaded && <span className="skeleton absolute inset-0 !rounded-none" aria-hidden="true" />}
@@ -76,27 +84,32 @@ export default function ProductThumb({ product, size = 'md', className = '' }) {
   if (mono) {
     return (
       <div
-        className={tile + ' font-display font-semibold select-none'}
+        className={tileBase + ' font-display font-semibold select-none group ' + glassOverlay}
         style={{
           width: px, height: px,
-          background: mono.bg, color: mono.ink,
+          background: mono.gradient, color: mono.ink,
           fontSize: Math.round(px * 0.42), lineHeight: 1,
+          textShadow: '0 1px 2px rgba(0,0,0,0.3)',
         }}
         aria-hidden="true"
       >
-        {mono.letter}
+        <span className="relative inline-block transition-all duration-300 group-hover:scale-110 group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.8)] group-hover:[text-shadow:0_0_12px_rgba(255,255,255,0.6),0_0_24px_rgba(255,255,255,0.4)]">
+          {mono.letter}
+        </span>
       </div>
     );
   }
 
-  // Unknown brand → neutral watch glyph on a soft tile.
+  // Unknown brand → neutral watch glyph on a soft tile with liquid glass effect.
   return (
     <div
-      className={tile + ' bg-surface-soft text-muted-soft'}
+      className={tileBase + ' bg-surface-soft text-muted-soft group ' + glassOverlay}
       style={{ width: px, height: px }}
       aria-hidden="true"
     >
-      <Icon name="watch" size={Math.round(px * 0.5)} />
+      <span className="transition-all duration-300 group-hover:scale-110 group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]">
+        <Icon name="watch" size={Math.round(px * 0.5)} />
+      </span>
     </div>
   );
 }

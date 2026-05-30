@@ -3609,11 +3609,7 @@ function DeferNetButton({ active, onToggle }) {
       onClick={onToggle}
       aria-pressed={active}
       title="บันทึกตอนนี้โดยยังไม่ใส่ยอดที่ร้านได้รับ แล้วมากรอกทีหลังผ่านปุ่มกระดิ่ง"
-      className={"inline-flex items-center gap-1 h-10 px-3 rounded-xl text-xs font-semibold border whitespace-nowrap transition shadow-sm flex-shrink-0 " + (
-        active
-          ? "bg-white text-error border-white"
-          : "bg-surface-strong/20 text-white border-white/30 hover:bg-surface-strong/30"
-      )}
+      className={"btn-tiffany-premium" + (active ? " active" : "")}
     >
       <Icon name={active ? "check" : "calendar"} size={14}/>
       <span>ใส่ทีหลัง</span>
@@ -4429,32 +4425,37 @@ function POSView() {
                       ? <span className="text-white ml-0.5">*</span>
                       : <span className="text-white/70 ml-0.5 font-normal normal-case tracking-normal">(ทีหลังได้)</span>}
                 </div>
-                <DeferNetButton active={deferNet} onToggle={()=>setDeferNet(v=>!v)}/>
               </div>
               {deferNet ? (
-                <div className="flex items-center gap-2 h-10 px-3 rounded-xl bg-surface-strong/15 border border-white/20 text-white/90 text-xs">
-                  <Icon name="bell" size={14}/> จะกรอกยอดจริงภายหลังผ่านปุ่มกระดิ่ง
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 h-10 px-3 rounded-xl bg-surface-strong/15 border border-white/20 text-white/90 text-xs flex-1">
+                    <Icon name="bell" size={14}/> จะกรอกยอดจริงภายหลังผ่านปุ่มกระดิ่ง
+                  </div>
+                  <DeferNetButton active={deferNet} onToggle={()=>setDeferNet(v=>!v)}/>
                 </div>
               ) : (
-                <>
-                  {netReceived !== "" && Number(netReceived) > 0 && grand > 0 && (
-                    <div className="text-[11px] text-white/85 tabular-nums text-right mb-1">
-                      ค่าธรรมเนียม {((grand - Number(netReceived)) / grand * 100).toFixed(1)}%
-                    </div>
-                  )}
-                  <input
-                    ref={netReceivedRef}
-                    type="number"
-                    inputMode="decimal"
-                    className="input !h-10 !rounded-xl !py-2 !text-sm w-full"
-                    placeholder={payment === 'cod'
-                      ? "รู้ทีหลังก็มาแก้ในหน้าขายได้"
-                      : `ยอดที่ ${CHANNEL_LABELS[channel]||channel} โอนเข้าร้าน (บาท)`}
-                    value={netReceived}
-                    onChange={e=>setNetReceived(e.target.value)}
-                    onBlur={handleNetReceivedBlur}
-                  />
-                </>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    {netReceived !== "" && Number(netReceived) > 0 && grand > 0 && (
+                      <div className="text-[11px] text-white/85 tabular-nums text-right mb-1">
+                        ค่าธรรมเนียม {((grand - Number(netReceived)) / grand * 100).toFixed(1)}%
+                      </div>
+                    )}
+                    <input
+                      ref={netReceivedRef}
+                      type="number"
+                      inputMode="decimal"
+                      className="input !h-10 !rounded-xl !py-2 !text-sm w-full"
+                      placeholder={payment === 'cod'
+                        ? "รู้ทีหลังก็มาแก้ในหน้าขายได้"
+                        : `ยอดที่ ${CHANNEL_LABELS[channel]||channel} โอนเข้าร้าน (บาท)`}
+                      value={netReceived}
+                      onChange={e=>setNetReceived(e.target.value)}
+                      onBlur={handleNetReceivedBlur}
+                    />
+                  </div>
+                  <DeferNetButton active={deferNet} onToggle={()=>setDeferNet(v=>!v)}/>
+                </div>
               )}
               <div className="text-[11px] text-white/70 mt-1.5">
                 ใช้คำนวณกำไร · ไม่แสดงในใบเสร็จลูกค้า
