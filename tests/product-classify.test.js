@@ -42,7 +42,41 @@ describe('classifyBrand', () => {
     ['MTS-100-1A',    'casio'],
     ['GG-1000-1A',    'casio'],   // G-SHOCK Mudman
     ['WS-1200H-1A',   'casio'],
+    // ── data-scan backfill: prefixes that were falling through to 'other' ──
+    ['G-100-7ADR',    'casio'],   // old G-SHOCK "G-" series
+    ['GLX-5600F-4DR', 'casio'],   // G-LIDE
+    ['GLS-100-7DR',   'casio'],
+    ['GX-56BB-1DR',   'casio'],   // big-size G-SHOCK
+    ['GN-1000-1ADR',  'casio'],   // Gulfman
+    ['GSG-100-1ADR',  'casio'],   // Mudmaster
+    ['GSW-H1000-1ADR','casio'],   // G-SHOCK smartwatch
+    ['GPR-H1000-1DR', 'casio'],   // Rangeman GPS
+    ['GPW-1000-1ADR', 'casio'],   // Gravitymaster GPS
+    ['BG-169G-7BDR',  'casio'],   // Baby-G "BG-" series
+    ['BLX-560-1DR',   'casio'],   // Baby-G G-LIDE
+    ['BSA-B100-1ADR', 'casio'],   // Baby-G G-SQUAD
+    ['LX-500H-1EVDF', 'casio'],
+    ['LF-10WH-1DF',   'casio'],
+    ['LDF-10-2DR',    'casio'],
+    ['LW-204-1ADF',   'casio'],
+    ['LOV-18A-7ADR',  'casio'],   // Lover's Collection
+    ['MTF-118B-1AVDF','casio'],
+    ['MRP-701D-7A',   'casio'],
+    ['HS-3V-1RDT',    'casio'],
+    ['BEL-100D-7A2VDF','casio'],
+    ['BMD-S6900F-4DR','casio'],   // BM-prefix but NOT a digit after → not Citizen
+    ['STL-S100H-1AVDF','casio'],  // S-prefix but T∉Seiko set → not Seiko
+    ['DBC-32-1ADF',   'casio'],   // Databank
+    ['ERA-110D-1AVDF','casio'],   // Edifice
+    ['EQW-A1110DB-1ADR','casio'],
+    ['AWR-M100SAR-1ADR','casio'],
+    ['AQ-S810W-1A2VDF','casio'],  // AQ-S solar (AQ-?\d alone missed the "S")
+    ['PQ-30-7DF',     'casio'],   // Casio travel clock
     ['BM7100-59E',    'citizen'],  // GBM addition must NOT steal "BM..." (Citizen)
+    ['BJ7128-87E',    'citizen'],  // BMD addition must NOT steal "BJ/BM..." (Citizen)
+    ['AG8345X1',      'other'],    // Orient — must NOT become Casio
+    ['AL4105X1',      'other'],    // Orient
+    ['QXA001GT',      'other'],    // Seiko clock — stays out of Casio
     ['SOMETHING-WEIRD', 'other'],
     ['',              'other'],
   ])('classifies %s as %s', (name, expected) => {

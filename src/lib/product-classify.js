@@ -34,7 +34,7 @@ export const BRAND_RULES = [
   // CASIO: catches all known CASIO product-family prefixes seen in the data.
   // Includes G-SHOCK (GA/GW/GM/GST/...), Baby-G (BGA/BGD/BA/MSG/SHE), Edifice
   // (EFR/EFV/EQS/ECB), PRO TREK (PRG/PRW/WSD), and standard (MTP/LTP/MQ/AE/...)
-  { id: 'casio',   label: 'Casio',   test: m => /^(MTP|LTP|GA|BGA|DW|BA|GMA|EFR|GM|EFV|BGD|SHE|GST|MRW|MQ|AE|MTD|GBA|LQ|MSG|MDV|MW|LRW|AMW|BEM|GMD|GW|GBD|GBM|GBX|GCW|GR|GD|GG|ECB|EQS|EQB|EF|EFK|EFS|EFB|MTG|MRG|GWM|PRG|PRW|PRS|PRT|PRJ|WSD|WS|MTL|MTW|MTS|HDA|HDC|AEQ|LTF|LWA|MCW|F-?\d|W-?\d|A-?\d|AW-?\d|LA-?\d|CA-?\d|DB-?\d|AQ-?\d)/i.test(m) },
+  { id: 'casio',   label: 'Casio',   test: m => /^(MTP|LTP|GA|BGA|DW|BA|GMA|EFR|GM|EFV|BGD|SHE|GST|MRW|MQ|AE|MTD|GBA|LQ|MSG|MDV|MW|LRW|AMW|BEM|GMD|GW|GBD|GBM|GBX|GCW|GR|GD|GG|GX|GN|GLX|GLS|GSG|GSW|GPR|GPW|BG|BLX|BSA|ECB|EQS|EQB|EQW|EF|EFK|EFS|EFB|ERA|EDB|MTG|MRG|GWM|PRG|PRW|PRS|PRT|PRJ|WSD|WS|MTL|MTW|MTS|MTF|MRP|HDA|HDC|AEQ|LTF|LWA|LW|LX|LF|LDF|LCF|LAW|LTD|LOV|MCW|HS|BEL|BMD|STL|DBC|AWR|AWM|PQ|TQ|F-?\d|W-?\d|A-?\d|AW-?\d|LA-?\d|CA-?\d|DB-?\d|AQ-?\d|AQ|BE-?\d|G-?\d)/i.test(m) },
   // Anything else (3PP, products with non-letter starts, etc.)
   { id: 'other',   label: 'อื่น ๆ', test: () => true },
 ];
