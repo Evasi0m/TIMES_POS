@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Icon from './Icon.jsx';
 import { productImageUrl, classifyBrand } from '../../lib/product-classify.js';
 
@@ -31,10 +31,19 @@ export default function ProductThumb({ product, size = 'md', className = '' }) {
   const px = SIZES[size] || SIZES.md;
   const url = product?._imageUrl ?? productImageUrl(product);
   const [broken, setBroken] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   // A fresh url (e.g. search results re-rendering the same slot) should clear a
-  // previous load failure so the new image gets a chance to render.
-  useEffect(() => { setBroken(false); }, [url]);
+  // previous load failure / loaded flag so the new image re-shows its skeleton.
+  useEffect(() => { setBroken(false); setLoaded(false); }, [url]);
+
+  // Cache-buster: the shop wants product photos fetched fresh, never served from
+  // the browser's HTTP cache. A per-mount token (stable across re-renders, new on
+  // each mount or url change) appends a unique query so the URL is always "new".
+  const cacheBustedUrl = useMemo(() => {
+    if (!url) return null;
+    return url + (url.includes('?') ? '&' : '?') + 'cb=' + Date.now();
+  }, [url]);
 
   const tile =
     'flex-shrink-0 inline-flex items-center justify-center overflow-hidden ' +
@@ -42,15 +51,19 @@ export default function ProductThumb({ product, size = 'md', className = '' }) {
 
   if (url && !broken) {
     return (
-      <div className={tile + ' bg-surface-soft'} style={{ width: px, height: px }}>
+      <div className={tile + ' bg-surface-soft relative'} style={{ width: px, height: px }}>
+        {/* Loading skeleton — only for products that actually have an image URL.
+            Stays until onLoad fires; products without a URL never reach here. */}
+        {!loaded && <span className="skeleton absolute inset-0 !rounded-none" aria-hidden="true" />}
         <img
-          src={url}
+          src={cacheBustedUrl}
           alt={product?.name || ''}
           loading="lazy"
           decoding="async"
           referrerPolicy="no-referrer"
+          onLoad={() => setLoaded(true)}
           onError={() => setBroken(true)}
-          className="w-full h-full object-contain"
+          className={'w-full h-full object-contain transition-opacity duration-200 ' + (loaded ? 'opacity-100' : 'opacity-0')}
         />
       </div>
     );
