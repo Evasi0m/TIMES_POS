@@ -6915,10 +6915,10 @@ function SalesView({ onGoPOS }) {
 
   return (
     <div className="px-4 py-4 lg:px-10 lg:py-8 relative">
-      {/* PendingNetBell — positioned to align with PageHeader h1 on desktop */}
-      <div className="hidden lg:block fixed top-[30px] right-[40px] z-[50] empty:hidden">
-        <PendingNetBell toast={toast.push} size={50}/>
-      </div>
+      {/* PendingNetBell — `floating` portals it to <body> so the page's
+          .view-fade transform can't capture its fixed position (which made
+          it jump from mid-screen to the corner on entry). */}
+      <PendingNetBell toast={toast.push} size={50} floating floatClassName="top-[30px] right-[40px]"/>
       {/* Summary cards — revenue (cream) + profit (Tiffany blue) split
           50/50 on sm+. Mobile stacks; filter button moves out of the
           revenue card to its own row above so the two summary tiles can

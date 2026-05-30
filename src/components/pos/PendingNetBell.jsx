@@ -30,12 +30,23 @@ const fmtDate = (iso) => {
   } catch { return ''; }
 };
 
-export default function PendingNetBell({ toast, size = 44 }) {
-  const [bills, setBills]   = useState([]);
-  const [open, setOpen]     = useState(false);
-  const [entry, setEntry]   = useState(null); // bill currently being filled
-  const [amount, setAmount] = useState('');
-  const [saving, setSaving] = useState(false);
+export default function PendingNetBell({ toast, size = 44, floating = false, floatClassName = 'top-[30px] right-[40px]' }) {
+  const [bills, setBills]     = useState([]);
+  const [open, setOpen]       = useState(false);
+  const [entry, setEntry]     = useState(null); // bill currently being filled
+  const [amount, setAmount]   = useState('');
+  const [saving, setSaving]   = useState(false);
+  const [closing, setClosing] = useState(false); // drives the exit animation
+
+  // Animate the modal out, then unmount + reset. Guarded so a double-call
+  // (Esc + backdrop) can't stack timers into a flicker.
+  function closeAll() {
+    if (saving) return;
+    setClosing(true);
+    setTimeout(() => {
+      setOpen(false); setEntry(null); setAmount(''); setClosing(false);
+    }, 240);
+  }
 
   const load = useCallback(async () => {
     const { data: orders, error } = await sb.from('sale_orders')
@@ -88,13 +99,13 @@ export default function PendingNetBell({ toast, size = 44 }) {
   }, [load]);
 
   useEffect(() => {
-    if (!open && !entry) return;
+    if (!open) return;
     const onKey = (e) => {
-      if (e.key === 'Escape') { if (entry) setEntry(null); else setOpen(false); }
+      if (e.key === 'Escape') { if (entry) { setEntry(null); setAmount(''); } else closeAll(); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, entry]);
+  }, [open, entry]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const count = bills.length;
   if (count === 0) return null;
@@ -116,7 +127,7 @@ export default function PendingNetBell({ toast, size = 44 }) {
         .eq('id', entry.id);
       if (error) throw error;
       toast?.(`บันทึกยอดบิล #${entry.id} แล้ว`, 'success');
-      setEntry(null);
+      setEntry(null); setAmount('');
       window.dispatchEvent(new Event('pending-net-changed'));
       await load();
     } catch (e) {
@@ -126,9 +137,10 @@ export default function PendingNetBell({ toast, size = 44 }) {
     }
   };
 
-  return (
-    <>
-      {/* Bell + desktop bubble */}
+  // Bell + desktop bubble. In `floating` mode it's portalled to <body> so a
+  // transformed ancestor (the page's .view-fade) can't capture its `fixed`
+  // positioning and make it jump on mount.
+  const bellRow = (
       <div className="relative flex items-center gap-2.5">
         <div className="pending-bubble hidden lg:block relative">
           <div className="imsg-bubble px-3.5 py-2 text-xs font-semibold whitespace-nowrap">
@@ -177,82 +189,122 @@ export default function PendingNetBell({ toast, size = 44 }) {
           </button>
         </div>
       </div>
+  );
 
-      {/* List popover — iOS Haptic-Touch style blurred backdrop */}
+  return (
+    <>
+      {floating
+        ? createPortal(
+            <div className={`pending-float hidden lg:block fixed z-[60] ${floatClassName}`}>{bellRow}</div>,
+            document.body
+          )
+        : bellRow}
+
+      {/* One liquid-glass modal that morphs between the bill LIST and the
+          amount ENTRY for a chosen bill — never two stacked popovers. */}
       {open && createPortal(
-        <div className="fixed inset-0 z-[130] flex items-start justify-center pt-[12vh] px-4"
-             onClick={() => setOpen(false)}>
-          <div className="absolute inset-0 modal-overlay holo-backdrop-in" />
-          <div className="relative w-full max-w-md glass-strong holo-card-in rounded-2xl shadow-2xl border hairline overflow-hidden"
-               onClick={e => e.stopPropagation()}>
-            <div className="px-4 py-3 border-b hairline flex items-center gap-2">
-              <Icon name="bell" size={16} className="text-error" />
-              <div className="font-semibold text-sm">รอใส่ราคาที่ร้านได้รับ ({count})</div>
-              <button className="ml-auto p-1.5 rounded-lg hover:bg-surface-strong/50 transition"
-                      onClick={() => setOpen(false)} aria-label="ปิด">
+        <div className="fixed inset-0 z-[130] flex items-start justify-center pt-[11vh] px-4"
+             onClick={closeAll}>
+          <div className={`absolute inset-0 modal-overlay ${closing ? 'holo-backdrop-out' : 'holo-backdrop-in'}`} />
+          <div
+            className={`pnb-card relative w-full max-w-md glass-strong rounded-3xl border hairline overflow-hidden ${closing ? 'holo-card-out' : 'holo-card-in'}`}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* ── header ── */}
+            <div className="relative flex items-center gap-2.5 px-4 py-3.5 border-b hairline">
+              {entry ? (
+                <button
+                  className="pnb-iconbtn -ml-1" onClick={() => { setEntry(null); setAmount(''); }}
+                  aria-label="ย้อนกลับ" disabled={saving}
+                >
+                  <Icon name="chevron-l" size={20} />
+                </button>
+              ) : (
+                <span className="pnb-bell-chip"><Icon name="bell" size={15} /></span>
+              )}
+              <div className="min-w-0">
+                <div className="font-semibold text-[15px] leading-tight truncate">
+                  {entry ? `เงินที่ร้านได้รับ` : 'รอใส่ราคาที่ร้านได้รับ'}
+                </div>
+                <div className="text-[11px] text-muted-soft mt-0.5 tabular-nums truncate">
+                  {entry ? `บิล #${entry.id} · ${fmtDate(entry.sale_date)}` : `${count} บิลที่ยังไม่ได้ใส่ราคา`}
+                </div>
+              </div>
+              <button className="pnb-iconbtn ml-auto" onClick={closeAll} aria-label="ปิด" disabled={saving}>
                 <Icon name="x" size={18} />
               </button>
             </div>
-            <div className="max-h-[60vh] overflow-y-auto divide-y hairline">
-              {bills.map(b => {
-                const first = b.items[0];
-                const more = b.items.length - 1;
-                const names = b.items.map(i => i.name).filter(Boolean).join(', ');
-                return (
-                  <button key={b.id} type="button" onClick={() => openEntry(b)}
-                    className="w-full flex items-center gap-3 p-3 text-left hover:bg-surface-strong/40 transition">
-                    <div className="relative flex-shrink-0">
-                      <ProductThumb product={{ name: first?.name || '', _imageUrl: first?._imageUrl }} size="md" />
-                      {more > 0 && (
-                        <span className="absolute -bottom-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-surface-dark text-on-dark text-[10px] font-semibold inline-flex items-center justify-center ring-2 ring-white">
-                          +{more}
-                        </span>
-                      )}
-                    </div>
+
+            {/* ── body: morphs between LIST and ENTRY ── */}
+            <div key={entry ? `e${entry.id}` : 'list'} className="pnb-step">
+              {!entry ? (
+                <div className="max-h-[58vh] overflow-y-auto p-2 space-y-1">
+                  {bills.map(b => {
+                    const first = b.items[0];
+                    const more = b.items.length - 1;
+                    const names = b.items.map(i => i.name).filter(Boolean).join(', ');
+                    return (
+                      <button key={b.id} type="button" onClick={() => openEntry(b)}
+                        className="pnb-row w-full flex items-center gap-3 p-2.5 text-left rounded-2xl">
+                        <div className="relative flex-shrink-0">
+                          <ProductThumb product={{ name: first?.name || '', _imageUrl: first?._imageUrl }} size="md" />
+                          {more > 0 && (
+                            <span className="absolute -bottom-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-surface-dark text-on-dark text-[10px] font-semibold inline-flex items-center justify-center ring-2 ring-white">
+                              +{more}
+                            </span>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium truncate">{names || '—'}</div>
+                          <div className="text-xs text-muted-soft mt-0.5 tabular-nums">
+                            {fmtDate(b.sale_date)} · บิล #{b.id}
+                          </div>
+                        </div>
+                        <span className="pnb-chev"><Icon name="chevron-r" size={16} /></span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-4">
+                  {/* product summary */}
+                  <div className="flex items-center gap-3 p-2.5 mb-4 rounded-2xl lg-tile">
+                    <ProductThumb product={{ name: entry.items[0]?.name || '', _imageUrl: entry.items[0]?._imageUrl }} size="md" />
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium truncate">{names || '—'}</div>
-                      <div className="text-xs text-muted-soft mt-0.5 tabular-nums">
-                        {fmtDate(b.sale_date)} · บิล #{b.id}
+                      <div className="text-sm font-medium leading-snug line-clamp-2">
+                        {entry.items.map(i => i.name).filter(Boolean).join(', ') || '—'}
                       </div>
                     </div>
-                    <Icon name="chevron-r" size={16} className="text-muted-soft flex-shrink-0" />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+                  </div>
 
-      {/* Amount-entry popup */}
-      {entry && createPortal(
-        <div className="fixed inset-0 z-[140] flex items-center justify-center px-4"
-             onClick={() => !saving && setEntry(null)}>
-          <div className="absolute inset-0 modal-overlay" />
-          <div className="relative w-full max-w-xs card-canvas rounded-2xl shadow-2xl p-4 holo-card-in"
-               onClick={e => e.stopPropagation()}>
-            <div className="font-semibold text-sm mb-1">เงินที่ร้านได้รับ · บิล #{entry.id}</div>
-            <div className="text-xs text-muted-soft mb-3 truncate">
-              {entry.items.map(i => i.name).filter(Boolean).join(', ') || '—'}
-            </div>
-            <input
-              autoFocus
-              type="number"
-              inputMode="decimal"
-              className="input w-full !h-11 !text-base"
-              placeholder="ยอดเงินที่ได้รับ (บาท)"
-              value={amount}
-              onChange={e => setAmount(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') save(); }}
-            />
-            <div className="flex gap-2 mt-4">
-              <button className="btn-secondary flex-1" onClick={() => setEntry(null)} disabled={saving}>
-                ยกเลิก
-              </button>
-              <button className="btn-primary flex-1" onClick={save} disabled={saving}>
-                {saving ? <span className="spinner" /> : <Icon name="check" size={16} />} บันทึก
-              </button>
+                  {/* big ฿ amount field */}
+                  <label className="block text-xs font-medium text-muted-soft mb-1.5 pl-1">
+                    ยอดเงินที่ร้านได้รับจริง
+                  </label>
+                  <div className="pnb-amount">
+                    <span className="pnb-baht">฿</span>
+                    <input
+                      autoFocus
+                      type="number"
+                      inputMode="decimal"
+                      className="pnb-amount-input tabular-nums"
+                      placeholder="0"
+                      value={amount}
+                      onChange={e => setAmount(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') save(); }}
+                    />
+                  </div>
+
+                  <div className="flex gap-2.5 mt-5">
+                    <button className="btn-secondary flex-1" onClick={() => { setEntry(null); setAmount(''); }} disabled={saving}>
+                      ย้อนกลับ
+                    </button>
+                    <button className="btn-primary flex-1 inline-flex items-center justify-center gap-1.5" onClick={save} disabled={saving}>
+                      {saving ? <span className="spinner" /> : <Icon name="check" size={16} />} บันทึก
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>,
