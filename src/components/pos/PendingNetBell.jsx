@@ -134,8 +134,13 @@ export default function PendingNetBell({ toast, size = 44 }) {
           <div className="imsg-bubble px-3.5 py-2 text-xs font-semibold whitespace-nowrap">
             มี {count} รายการยังไม่ได้ใส่ราคา
           </div>
-          {/* tail curling toward the bell */}
-          <span className="imsg-tail" aria-hidden="true" />
+          {/* iMessage tail — hooks off the bubble's bottom-right corner */}
+          <svg className="imsg-tail" viewBox="0 0 17 19" aria-hidden="true">
+            <path
+              d="M1 0 C1 11 4 17 16 18.5 C9.5 15 7 9 7 0 Z"
+              fill="#cf2020"
+            />
+          </svg>
         </div>
         <div className="pending-bell">
           <button

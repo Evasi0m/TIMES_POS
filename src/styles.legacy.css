@@ -2416,7 +2416,8 @@
   /* iMessage iOS-26 "liquid glass" bubble surface. */
   .imsg-bubble {
     position: relative;
-    border-radius: 19px;
+    /* bottom-right corner is tighter so the tail attaches cleanly there */
+    border-radius: 19px 19px 7px 19px;
     color: #fff;
     text-shadow: 0 1px 2px rgba(90, 8, 8, 0.35);
     background:
@@ -2444,20 +2445,16 @@
   }
   .imsg-bubble > * { position: relative; z-index: 2; }
 
-  /* iMessage-style tail — additive (no bg cutout, so it survives any
-     header background), curling out toward the bell on the right. */
+  /* iMessage-style tail — an SVG hook that attaches flush to the bubble's
+     bottom-right corner (additive fill, so it survives any header bg). */
   .imsg-tail {
     position: absolute;
-    right: -5px;
-    bottom: 4px;
-    width: 15px;
-    height: 16px;
-    background: linear-gradient(150deg, #ea3636 25%, #cf2020 100%);
-    border-radius: 4px 12px 4px 16px / 4px 10px 6px 14px;
-    border-top: 1px solid rgba(255, 190, 190, 0.35);
-    transform: rotate(8deg);
+    right: -7px;
+    bottom: -1px;
+    width: 17px;
+    height: 19px;
     pointer-events: none;
-    z-index: 0;
+    overflow: visible;
   }
 
   @media (prefers-reduced-motion: reduce) {
