@@ -91,6 +91,46 @@ export function useRecentReceivesMap() {
   return { map, refresh: load };
 }
 
+// ─── Invoice-number duplicate guard ──────────────────────────────────
+// Stronger than the per-product badge: looks up whether a *specific*
+// supplier_invoice_no has ALREADY been received from CMG (the exact "I
+// scanned this same paper bill twice" case). Returns a Map keyed by the
+// invoice string so the caller can flag each bill in a batch in one query.
+//
+//   findExistingCmgInvoices(['1234567890', '...']) →
+//     Map<invoiceNo, { id, date }>   (only invoices that already exist)
+//
+// Non-voided receive_orders only. Empty/blank invoice numbers are skipped
+// (an auto-generated fallback can't be a "duplicate" of anything).
+export async function findExistingCmgInvoices(invoiceNos, supplier = 'CMG') {
+  const wanted = [...new Set(
+    (invoiceNos || []).map((s) => String(s || '').trim()).filter(Boolean)
+  )];
+  const found = new Map();
+  if (!wanted.length) return found;
+  try {
+    const { data, error } = await sb
+      .from('receive_orders')
+      .select('id, receive_date, supplier_invoice_no, supplier_name, voided_at')
+      .eq('supplier_name', supplier)
+      .is('voided_at', null)
+      .in('supplier_invoice_no', wanted);
+    if (error) { console.warn('[recent-receives] invoice lookup failed:', error); return found; }
+    for (const r of (data || [])) {
+      const inv = String(r.supplier_invoice_no || '').trim();
+      if (!inv) continue;
+      const prev = found.get(inv);
+      // keep the most recent existing order for that invoice
+      if (!prev || new Date(r.receive_date).getTime() > new Date(prev.date).getTime()) {
+        found.set(inv, { id: r.id, date: r.receive_date });
+      }
+    }
+  } catch (e) {
+    console.warn('[recent-receives] invoice lookup threw:', e);
+  }
+  return found;
+}
+
 // ─── Helper used by the badge component ──────────────────────────────
 // Returns whole-day diff between `now` and `dateStr`. Same-day → 0,
 // yesterday → 1, etc. We use floor() rather than round() because "1

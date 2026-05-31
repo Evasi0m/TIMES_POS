@@ -34,6 +34,26 @@ export function vatBreakdown(grandTotal, vatRate = VAT_RATE_DEFAULT) {
 }
 
 /**
+ * Add VAT to a net (pre-VAT) amount → gross (VAT-inclusive).
+ * `addVat(1000)` → 1070. Single source of truth for the AI bill scanner's
+ * net↔gross conversions (previously scattered `* 1.07` literals).
+ */
+export function addVat(net, vatRate = VAT_RATE_DEFAULT) {
+  const r = (Number(vatRate) || 0) / 100;
+  return roundMoney((Number(net) || 0) * (1 + r));
+}
+
+/**
+ * Strip VAT from a gross (VAT-inclusive) amount → net (pre-VAT).
+ * `stripVat(1070)` → 1000. Inverse of `addVat` (modulo satang rounding).
+ */
+export function stripVat(gross, vatRate = VAT_RATE_DEFAULT) {
+  const r = (Number(vatRate) || 0) / 100;
+  if (r <= 0) return roundMoney(gross);
+  return roundMoney((Number(gross) || 0) / (1 + r));
+}
+
+/**
  * Compute a line total after up to two cascading discounts (each can be
  * 'percent' or 'baht'). Negative totals are clamped to 0. Every step rounds
  * to satang so cascading drift can't accumulate.

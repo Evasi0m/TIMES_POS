@@ -27,13 +27,16 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { sb } from '../../lib/supabase-client.js';
 import { fetchAllFromTable } from '../../lib/sb-paginate.js';
 import { mapError } from '../../lib/error-map.js';
-import { roundMoney, VAT_RATE_DEFAULT, vatBreakdown, fmtTHB } from '../../lib/money.js';
+import { VAT_RATE_DEFAULT, fmtTHB } from '../../lib/money.js';
+import { buildReceiveItems, receiveTotals, grossUnitCost } from '../../lib/ai-receive.js';
 import { startOfDayBangkok } from '../../lib/date.js';
 import Icon from '../ui/Icon.jsx';
 import BillReviewPanel, { buildRowFromAi, makeRowUid } from './BillReviewPanel.jsx';
 import BulkBillUploadModal from './BulkBillUploadModal.jsx';
+import BillImageLightbox from './BillImageLightbox.jsx';
 import AIErrorCard, { parseAIError } from './AIErrorCard.jsx';
-import { useRecentReceivesMap } from '../../lib/recent-receives.js';
+import { useRecentReceivesMap, findExistingCmgInvoices } from '../../lib/recent-receives.js';
+import { saveDraft, loadDraft, clearDraft, base64ToBlob } from '../../lib/ai-draft.js';
 
 // ─── Auto invoice number generator ────────────────────────────────────
 // Mirror StockMovementForm's autoInvoiceNo so users get the same shape
@@ -108,6 +111,29 @@ export default function BulkReceiveView() {
   const [usage, setUsage] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitSummary, setSubmitSummary] = useState(null); // {savedIds:[], failed:[]}
+  const [lightboxSrc, setLightboxSrc] = useState(null);     // A1: bill image zoom
+  const [savingProgress, setSavingProgress] = useState(null); // A4: {done,total}
+  const [undo, setUndo] = useState(null);                   // A3: {label, restore}
+  const [dupInvoices, setDupInvoices] = useState(() => new Map()); // B2: invoiceNo→{id,date}
+  const [draftAvailable, setDraftAvailable] = useState(null); // C1: a saved draft to restore
+  const undoTimer = useRef(null);
+  const draftTimer = useRef(null);
+
+  // A3: stash a just-deleted thing with a 6s "เลิกทำ" snackbar instead of
+  // removing it irreversibly. `restore` re-applies the captured state;
+  // `onExpire` runs cleanup (e.g. revoke an ObjectURL) if NOT undone.
+  const offerUndo = useCallback((label, restore, onExpire) => {
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    setUndo((prev) => { prev?.onExpire?.(); return { label, restore, onExpire }; });
+    undoTimer.current = setTimeout(() => {
+      setUndo((u) => { u?.onExpire?.(); return null; });
+    }, 6000);
+  }, []);
+  const doUndo = useCallback(() => {
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    setUndo((u) => { u?.restore?.(); return null; });
+  }, []);
+  useEffect(() => () => { if (undoTimer.current) clearTimeout(undoTimer.current); }, []);
 
   // M1+M2 fix: a ref tracking the latest bills array. We use it for
   // (a) unmount cleanup — the previous code captured the initial
@@ -125,6 +151,70 @@ export default function BulkReceiveView() {
       });
     };
   }, []);
+
+  // ─── C1: offer to restore a saved draft on first mount ─────────────
+  useEffect(() => {
+    let alive = true;
+    loadDraft().then((d) => {
+      if (alive && d && Array.isArray(d.bills) && d.bills.length > 0) setDraftAvailable(d);
+    });
+    return () => { alive = false; };
+  }, []);
+
+  // ─── C1: debounced autosave of the in-progress review batch ────────
+  useEffect(() => {
+    if (phase !== 'review' || bills.length === 0) return;
+    if (draftTimer.current) clearTimeout(draftTimer.current);
+    draftTimer.current = setTimeout(() => {
+      // Strip the ObjectURL (regenerated from base64 on restore).
+      const slim = bills.map(({ previewUrl, ...rest }) => rest); // eslint-disable-line no-unused-vars
+      saveDraft({ bills: slim, currentIdx, usage });
+    }, 800);
+    return () => { if (draftTimer.current) clearTimeout(draftTimer.current); };
+  }, [bills, currentIdx, usage, phase]);
+
+  // ─── C2: warn before unloading the tab with unsaved bills ──────────
+  useEffect(() => {
+    const dirty = phase === 'review' && bills.some(
+      (b) => b.is_cmg_bill && b.rows.length > 0 && b.saveState !== 'saved'
+    );
+    if (!dirty) return;
+    const onBeforeUnload = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [phase, bills]);
+
+  // ─── C1: restore a saved draft → rebuild previewUrls, refetch catalog ─
+  const restoreDraft = useCallback(async (draft) => {
+    setDraftAvailable(null);
+    try {
+      const restoredBills = (draft.bills || []).map((b) => {
+        let previewUrl = '';
+        try { previewUrl = URL.createObjectURL(base64ToBlob(b.base64, b.mime)); } catch { /* noop */ }
+        return { ...b, previewUrl };
+      });
+      setBills(restoredBills);
+      setCurrentIdx(Math.min(draft.currentIdx || 0, Math.max(0, restoredBills.length - 1)));
+      setUsage(draft.usage || null);
+      setPhase('review');
+      // Catalog isn't persisted (too large) — refetch so the search /
+      // resolve UI works. Matches/candidates from the draft still render
+      // immediately; this just rehydrates `products` for new searches.
+      fetchAllFromTable(sb, 'products', {
+        select: 'id, name, barcode, retail_price, cost_price, current_stock',
+        orderColumn: 'id',
+      }).then((res) => setProducts(res?.data || [])).catch(() => {});
+      // Refresh the duplicate-invoice guard for the restored bills.
+      const invoiceNos = restoredBills
+        .map((b) => String(b.supplier_invoice_no || '').trim())
+        .filter(Boolean);
+      findExistingCmgInvoices(invoiceNos).then(setDupInvoices).catch(() => {});
+    } catch (e) {
+      console.warn('[BulkReceiveView] restore failed:', e);
+      clearDraft();
+    }
+  }, []);
+  const discardDraft = useCallback(() => { setDraftAvailable(null); clearDraft(); }, []);
 
   // ─── Start a fresh batch: open the upload modal ────────────────────
   // H1 fix: this used to be wired to BOTH EmptyLanding's "start" CTA
@@ -231,6 +321,12 @@ export default function BulkReceiveView() {
           };
         })
       );
+      // B2: flag bills whose invoice number was already received from CMG
+      // (the "I scanned the same paper bill twice" case). Non-blocking.
+      const invoiceNos = data.bills
+        .map((pb) => String(pb?.supplier_invoice_no || '').trim())
+        .filter(Boolean);
+      findExistingCmgInvoices(invoiceNos).then(setDupInvoices).catch(() => {});
       setPhase('review');
     } catch (e) {
       // Convert raw error → structured AIError object that the
@@ -277,6 +373,7 @@ export default function BulkReceiveView() {
       setCurrentIdx(0);
     }
     setPhase('empty');
+    clearDraft();
   };
 
   // ─── Row mutators (scoped to currentIdx) ───────────────────────────
@@ -288,8 +385,26 @@ export default function BulkReceiveView() {
       ...b,
       rows: b.rows.map((r) => (r.uid === uid ? { ...r, ...patch } : r)),
     }));
-  const removeRow = (uid) =>
-    patchCurrent((b) => ({ ...b, rows: b.rows.filter((r) => r.uid !== uid) }));
+  const removeRow = (uid) => {
+    const billIdx = currentIdx;
+    let removed = null, pos = -1;
+    setBills((prev) => prev.map((b, i) => {
+      if (i !== billIdx) return b;
+      pos = b.rows.findIndex((r) => r.uid === uid);
+      removed = b.rows[pos];
+      return { ...b, rows: b.rows.filter((r) => r.uid !== uid) };
+    }));
+    if (removed) {
+      offerUndo('ลบรายการแล้ว', () => {
+        setBills((prev) => prev.map((b, i) => {
+          if (i !== billIdx) return b;
+          const rows = [...b.rows];
+          rows.splice(Math.max(0, pos), 0, removed);
+          return { ...b, rows };
+        }));
+      });
+    }
+  };
   const pickCandidate = (uid, product) =>
     updateRow(uid, { status: 'auto', product, newProduct: null });
   const setNewProduct = (uid, np) =>
@@ -298,21 +413,35 @@ export default function BulkReceiveView() {
     patchCurrent((b) => ({ ...b, supplier_invoice_no: val }));
   const updateHasVat = (val) =>
     patchCurrent((b) => ({ ...b, has_vat: val }));
+  // A2: one-tap VAT toggle for the whole batch.
+  const setAllVat = (val) =>
+    setBills((prev) => prev.map((b) => ({ ...b, has_vat: val })));
   const removeCurrentBill = () => {
+    const idx = currentIdx;
+    let removed = null;
     setBills((prev) => {
-      const target = prev[currentIdx];
-      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
-      const next = prev.filter((_, i) => i !== currentIdx);
-      if (next.length === 0) {
-        // empty out — go back to landing
-        setPhase('empty');
-        setCurrentIdx(0);
-        return [];
-      }
-      // Step backward if we removed the last bill
+      removed = prev[idx];
+      const next = prev.filter((_, i) => i !== idx);
+      if (next.length === 0) { setPhase('empty'); setCurrentIdx(0); return []; }
       setCurrentIdx((c) => Math.min(c, next.length - 1));
       return next;
     });
+    if (removed) {
+      // Keep the ObjectURL alive until the undo window closes so the
+      // thumbnail survives a restore; revoke only if the user lets it go.
+      offerUndo('ลบบิลแล้ว',
+        () => {
+          setBills((prev) => {
+            const next = [...prev];
+            next.splice(Math.min(idx, next.length), 0, removed);
+            return next;
+          });
+          setPhase('review');
+          setCurrentIdx(Math.min(idx, bills.length)); // bills is pre-removal length
+        },
+        () => { if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl); },
+      );
+    }
   };
 
   // ─── Submit summary derived from bills state ───────────────────────
@@ -379,6 +508,7 @@ export default function BulkReceiveView() {
       if (targets.length === 0) {
         return;
       }
+      setSavingProgress({ done: 0, total: targets.length });
 
       // M6 fix: pre-validate barcodes against the in-memory catalog. If
       // a user typed a barcode that already belongs to another product,
@@ -463,7 +593,7 @@ export default function BulkReceiveView() {
         // one insert fails. (Bug M2 in CmgBillScanModal lore.)
         const lineVatApplies = bill.has_vat !== false;
         const insertResults = await Promise.allSettled(newRows.map((r) => {
-          const grossCost = lineVatApplies ? roundMoney(r.unit_cost * 1.07) : roundMoney(r.unit_cost);
+          const grossCost = grossUnitCost(r.unit_cost, lineVatApplies);
           return sb.from('products').insert({
             name: r.newProduct.name.trim(),
             barcode: r.newProduct.barcode?.trim() || null,
@@ -503,47 +633,22 @@ export default function BulkReceiveView() {
           if (prod) newProductByUid.set(dupUid, prod);
         }
 
-        // Phase B — assemble items for the RPC.
-        const items = bill.rows.map((r) => {
-          const product = r.status === 'new'
-            ? newProductByUid.get(r.uid)
-            : r.product;
-          if (!product) return null;
-          // H3 guard: refuse 0-cost or 0-qty rows. billStatus already
-          // surfaces 'incomplete' and the submit button is disabled,
-          // but assert defensively in case a row slipped through.
-          //
-          // R1 fix: previously used `Math.max(1, qty)` which SILENTLY
-          // coerced AI's 0-sentinel up to 1, making the guard below
-          // dead code and inventing inventory. We now floor at 0 so
-          // the guard fires and the row is rejected loudly.
-          const qty  = Math.max(0, Number(r.quantity)  || 0);
-          const cost = Math.max(0, Number(r.unit_cost) || 0);
-          if (cost <= 0 || qty <= 0) {
-            throw new Error(
-              `รายการ "${product.name}" มี ทุน/จำนวน เป็น 0 — กรอกให้ครบก่อนบันทึก`
-            );
-          }
-          const grossCost = lineVatApplies ? roundMoney(cost * 1.07) : roundMoney(cost);
-          return {
-            product_id: product.id,
-            product_name: product.name,
-            quantity: qty,
-            unit: 'เรือน',
-            unit_price: grossCost,
-            discount1_value: 0, discount1_type: null,
-            discount2_value: 0, discount2_type: null,
-          };
-        }).filter(Boolean);
+        // Phase B — resolve each row to its product, then assemble the RPC
+        // items via the pure helper. VAT (net→gross) and the defensive
+        // 0-cost/0-qty guard now live in src/lib/ai-receive.js (unit-tested);
+        // R1/H3 behaviour (floor at 0 so the guard fires, never coerce to 1)
+        // is preserved there.
+        const resolvedRows = bill.rows.map((r) => ({
+          ...r,
+          product: r.status === 'new' ? newProductByUid.get(r.uid) : r.product,
+        }));
+        const items = buildReceiveItems(resolvedRows, lineVatApplies);
 
         if (items.length === 0) {
           throw new Error('ไม่มีรายการที่บันทึกได้ในบิลนี้');
         }
 
-        const total = roundMoney(
-          items.reduce((s, l) => s + l.unit_price * l.quantity, 0)
-        );
-        const { vat } = vatBreakdown(total, lineVatApplies ? VAT_RATE_DEFAULT : 0);
+        const { total, vat } = receiveTotals(items, lineVatApplies);
 
         // Phase C — call the RPC. Same atomic header+items+adjust_stock
         // path as the regular receive form. Date is today; supplier =
@@ -606,6 +711,7 @@ export default function BulkReceiveView() {
         ));
         failed.push({ index: i, message: msg });
       }
+        setSavingProgress({ done: loopIdx + 1, total: targets.length });
       }
     } finally {
       // R7 fix: build the summary from the FINAL bills state, not
@@ -632,7 +738,9 @@ export default function BulkReceiveView() {
         skipped: allSkipped,
       });
       setSubmitting(false);
+      setSavingProgress(null);
       setPhase('done');
+      clearDraft(); // batch flow is over; in-session retry doesn't need it
       // H4: invalidate the recent-receives map so a subsequent batch
       // in the same session sees the bills we just saved as "พึ่งรับ
       // X วันก่อน" candidates. Fire-and-forget. We check
@@ -654,6 +762,7 @@ export default function BulkReceiveView() {
     setError(null);
     setCurrentIdx(0);
     setPhase('empty');
+    clearDraft();
   };
 
   // ═══ RENDER ═══════════════════════════════════════════════════════
@@ -693,7 +802,12 @@ export default function BulkReceiveView() {
 
       {/* PHASE: EMPTY — landing screen with the big upload button */}
       {phase === 'empty' && (
-        <EmptyLanding onStart={startUpload} />
+        <EmptyLanding
+          onStart={startUpload}
+          draft={draftAvailable}
+          onRestore={() => restoreDraft(draftAvailable)}
+          onDiscard={discardDraft}
+        />
       )}
 
       {/* PHASE: PARSING — full-bleed spinner with thumbnail strip */}
@@ -721,6 +835,10 @@ export default function BulkReceiveView() {
           onRemoveBill={removeCurrentBill}
           onSubmitAll={submitAll}
           onCancel={resetBatch}
+          dupInvoices={dupInvoices}
+          onZoom={setLightboxSrc}
+          onSetAllVat={setAllVat}
+          savingProgress={savingProgress}
         />
       )}
 
@@ -742,13 +860,46 @@ export default function BulkReceiveView() {
         onClose={() => setUploadOpen(false)}
         onConfirm={handleUploadConfirm}
       />
+
+      {/* A1: full-screen zoomable bill image */}
+      {lightboxSrc && (
+        <BillImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
+      )}
+
+      {/* A3: undo snackbar for deleted row/bill */}
+      {undo && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[150] pnb-undo">
+          <Icon name="trash" size={15} className="text-muted-soft"/>
+          <span className="text-sm">{undo.label}</span>
+          <button type="button" className="pnb-undo-btn" onClick={doUndo}>
+            เลิกทำ
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── Sub: landing screen ──────────────────────────────────────────────
-function EmptyLanding({ onStart }) {
+function EmptyLanding({ onStart, draft, onRestore, onDiscard }) {
   return (
+   <div className="space-y-3">
+    {/* C1: restore an unsaved batch from a previous session */}
+    {draft && Array.isArray(draft.bills) && draft.bills.length > 0 && (
+      <div className="card-canvas p-3.5 flex items-center gap-3 border-l-4 border-l-primary">
+        <div className="w-9 h-9 rounded-xl bg-primary/15 flex items-center justify-center flex-shrink-0">
+          <Icon name="file" size={18} className="text-primary"/>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold">มีงานที่ค้างอยู่ {draft.bills.length} บิล</div>
+          <div className="text-[11px] text-muted-soft">
+            {draft.savedAt ? `บันทึกล่าสุด ${new Date(draft.savedAt).toLocaleString('th-TH', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}` : 'ยังไม่ได้บันทึกลงระบบ'}
+          </div>
+        </div>
+        <button type="button" className="btn-ghost !text-xs" onClick={onDiscard}>ทิ้ง</button>
+        <button type="button" className="btn-primary !py-1.5 !px-3 !text-xs" onClick={onRestore}>กู้คืนงาน</button>
+      </div>
+    )}
     <div className="card-canvas overflow-hidden">
       <div className="p-8 lg:p-12 flex flex-col items-center text-center gap-4">
         <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/20 to-accent/20 border hairline flex items-center justify-center">
@@ -778,6 +929,7 @@ function EmptyLanding({ onStart }) {
         </div>
       </div>
     </div>
+   </div>
   );
 }
 
@@ -819,10 +971,14 @@ function ReviewWizard({
   bills, currentIdx, setCurrentIdx, products, recentReceivesMap, usage, summary, submitting,
   onUpdateRow, onRemoveRow, onPickCandidate, onSetNewProduct,
   onInvoiceNoChange, onHasVatChange, onRemoveBill, onSubmitAll, onCancel,
+  dupInvoices, onZoom, onSetAllVat, savingProgress,
 }) {
   const current = bills[currentIdx];
   const canPrev = currentIdx > 0;
   const canNext = currentIdx < bills.length - 1;
+  const currentDup = current?.supplier_invoice_no
+    ? dupInvoices?.get(current.supplier_invoice_no.trim())
+    : null;
 
   return (
     <div className="space-y-4">
@@ -875,6 +1031,8 @@ function ReviewWizard({
           totalBills={bills.length}
           products={products}
           recentReceivesMap={recentReceivesMap}
+          dup={currentDup}
+          onZoom={onZoom}
           onUpdateRow={onUpdateRow}
           onRemoveRow={onRemoveRow}
           onPickCandidate={onPickCandidate}
@@ -910,7 +1068,14 @@ function ReviewWizard({
       </div>
 
       {/* Submit bar */}
-      <SubmitBar summary={summary} submitting={submitting} onSubmit={onSubmitAll}/>
+      <SubmitBar
+        summary={summary}
+        submitting={submitting}
+        savingProgress={savingProgress}
+        bills={bills}
+        onSetAllVat={onSetAllVat}
+        onSubmit={onSubmitAll}
+      />
     </div>
   );
 }
@@ -952,7 +1117,7 @@ function Stepper({ bills, currentIdx, onJump }) {
 
 // ─── Sub: current bill card (thumbnail + invoice + review panel) ──────
 function BillCard({
-  bill, billNumber, totalBills, products, recentReceivesMap,
+  bill, billNumber, totalBills, products, recentReceivesMap, dup, onZoom,
   onUpdateRow, onRemoveRow, onPickCandidate, onSetNewProduct,
   onInvoiceNoChange, onHasVatChange, onRemoveBill, disabled,
 }) {
@@ -971,16 +1136,25 @@ function BillCard({
     <div className="card-canvas overflow-hidden">
       {/* Bill header — thumbnail + meta + delete */}
       <div className="p-4 border-b hairline flex items-start gap-3">
-        <div className="flex-shrink-0 w-16 h-20 lg:w-20 lg:h-24 rounded-md overflow-hidden border hairline bg-surface-soft relative">
+        <button
+          type="button"
+          onClick={() => bill.previewUrl && onZoom?.(bill.previewUrl)}
+          className="group flex-shrink-0 w-16 h-20 lg:w-20 lg:h-24 rounded-md overflow-hidden border hairline bg-surface-soft relative cursor-zoom-in"
+          aria-label="ดูรูปบิลแบบขยาย"
+        >
           <img
             src={bill.previewUrl}
             alt={`bill ${billNumber}`}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover transition-transform group-hover:scale-105"
           />
           <div className="absolute top-0.5 left-0.5 ai-row-badge !w-6 !h-6 !text-[11px]">
             {billNumber}
           </div>
-        </div>
+          <div className="absolute inset-0 flex items-end justify-center pb-1 opacity-0 group-hover:opacity-100 transition-opacity"
+               style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.45), transparent 55%)' }}>
+            <Icon name="search" size={14} className="text-white"/>
+          </div>
+        </button>
         <div className="min-w-0 flex-1 space-y-1.5">
           <div className="flex items-center justify-between gap-2">
             <div className="font-display text-lg">บิลที่ {billNumber} / {totalBills}</div>
@@ -1020,6 +1194,15 @@ function BillCard({
               <span className="text-muted-soft font-medium">สแกนราคาก่อน VAT (บวก VAT 7% อัตโนมัติ)</span>
             </label>
           </div>
+          {/* B2: invoice already received from CMG — strong warning */}
+          {dup && (
+            <div className="text-xs text-error bg-error/10 border border-error/40 rounded-md px-2 py-1 inline-flex items-center gap-1.5">
+              <Icon name="alert" size={12}/>
+              เลขบิลนี้เคยรับเข้าแล้ว (#{dup.id}
+              {dup.date ? ` · ${new Date(dup.date).toLocaleDateString('th-TH', { day: '2-digit', month: 'short' })}` : ''})
+              — ตรวจก่อนบันทึกซ้ำ
+            </div>
+          )}
           {/* Per-bill status banner */}
           {isNonCmg && (
             <div className="text-xs text-error bg-error/10 border border-error/30 rounded-md px-2 py-1 inline-flex items-center gap-1.5">
@@ -1091,10 +1274,28 @@ function BillCard({
 }
 
 // ─── Sub: submit bar ──────────────────────────────────────────────────
-function SubmitBar({ summary, submitting, onSubmit }) {
+function SubmitBar({ summary, submitting, savingProgress, bills, onSetAllVat, onSubmit }) {
   const ready = summary.readyToSubmit && !submitting;
+  // A2: are all bills currently set to "add VAT"? Drives the one-tap toggle.
+  const allVat = (bills || []).length > 0 && bills.every((b) => b.has_vat !== false);
+  const pct = savingProgress && savingProgress.total
+    ? Math.round((savingProgress.done / savingProgress.total) * 100)
+    : 0;
   return (
-    <div className="card-canvas p-3 lg:p-4 flex items-center justify-between gap-3 flex-wrap">
+    <div className="card-canvas p-3 lg:p-4 space-y-3">
+      {/* A4: live save progress bar */}
+      {savingProgress && (
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-[11px] text-muted-soft tabular-nums">
+            <span>กำลังบันทึก {savingProgress.done}/{savingProgress.total} บิล</span>
+            <span>{pct}%</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-surface-strong/60 overflow-hidden">
+            <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${pct}%` }}/>
+          </div>
+        </div>
+      )}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
       <div className="flex items-center gap-1.5 text-xs flex-wrap">
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-soft border hairline">
           <span className="font-semibold text-ink tabular-nums">{summary.total}</span>
@@ -1123,17 +1324,33 @@ function SubmitBar({ summary, submitting, onSubmit }) {
           </span>
         )}
       </div>
-      <button
-        type="button"
-        className="btn-primary"
-        disabled={!ready}
-        onClick={onSubmit}
-        title={!ready ? `เหลือ ${summary.blocked} บิลที่ต้อง resolve` : undefined}
-      >
-        {submitting
-          ? <><span className="spinner"/> กำลังบันทึก…</>
-          : <><Icon name="check" size={16}/> บันทึกทั้งหมด ({summary.actionable - summary.blocked} บิล)</>}
-      </button>
+      <div className="flex items-center gap-2">
+        {/* A2: toggle VAT for every bill at once */}
+        {bills && bills.length > 1 && (
+          <button
+            type="button"
+            className="btn-ghost !text-xs"
+            onClick={() => onSetAllVat?.(!allVat)}
+            disabled={submitting}
+            title="ตั้งค่า VAT ให้ทุกบิลพร้อมกัน"
+          >
+            <Icon name={allVat ? 'check' : 'x'} size={13}/>
+            VAT ทั้งชุด {allVat ? 'เปิด' : 'ปิด'}
+          </button>
+        )}
+        <button
+          type="button"
+          className="btn-primary"
+          disabled={!ready}
+          onClick={onSubmit}
+          title={!ready ? `เหลือ ${summary.blocked} บิลที่ต้อง resolve` : undefined}
+        >
+          {submitting
+            ? <><span className="spinner"/> กำลังบันทึก…</>
+            : <><Icon name="check" size={16}/> บันทึกทั้งหมด ({summary.actionable - summary.blocked} บิล)</>}
+        </button>
+      </div>
+      </div>
     </div>
   );
 }

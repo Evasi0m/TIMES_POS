@@ -2480,6 +2480,41 @@
   /* step cross-fade — replays on key change (list ↔ entry) */
   @keyframes pnbStepIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
   .pnb-step { animation: pnbStepIn .26s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+  /* ── AI bill scan: undo snackbar + lightbox controls ─────────────────── */
+  @keyframes pnbUndoIn { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+  .pnb-undo {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 10px 12px 10px 14px;
+    border-radius: 14px;
+    background: rgb(var(--c-surface-strong) / 0.96);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 16px 40px -12px rgb(var(--shadow-rgb) / 0.4), inset 0 1px 0 var(--rim-top-strong);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    animation: pnbUndoIn .24s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .pnb-undo-btn {
+    font-size: 13px; font-weight: 700;
+    color: rgb(var(--c-primary));
+    padding: 5px 10px; border-radius: 9999px;
+    background: rgb(var(--c-primary) / 0.1);
+    transition: background .15s ease, transform .12s ease;
+  }
+  .pnb-undo-btn:hover { background: rgb(var(--c-primary) / 0.18); }
+  .pnb-undo-btn:active { transform: scale(0.95); }
+  .lightbox-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 36px; height: 36px; padding: 0 8px;
+    border-radius: 9999px;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+    transition: background .15s ease, transform .12s ease;
+  }
+  .lightbox-btn:hover { background: rgba(255, 255, 255, 0.26); }
+  .lightbox-btn:active { transform: scale(0.92); }
+
   /* list rows */
   .pnb-row { transition: background .16s ease; }
   .pnb-row:hover { background: rgb(var(--c-surface-strong) / 0.6); }

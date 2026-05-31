@@ -4,8 +4,30 @@ import {
   fmtTHB,
   vatBreakdown,
   applyDiscounts,
+  addVat,
+  stripVat,
   VAT_RATE_DEFAULT,
 } from '../src/lib/money.js';
+
+describe('addVat / stripVat', () => {
+  it('addVat adds 7% by default and rounds to satang', () => {
+    expect(addVat(1000)).toBe(1070);
+    expect(addVat(1138.32)).toBe(1218); // 1138.32 * 1.07 = 1218.0024
+  });
+  it('stripVat is the inverse of addVat (modulo satang)', () => {
+    expect(stripVat(1070)).toBe(1000);
+    expect(roundMoney(stripVat(addVat(2499)))).toBe(2499);
+  });
+  it('rate 0 is a no-op (just rounds)', () => {
+    expect(addVat(1234.5, 0)).toBe(1234.5);
+    expect(stripVat(1234.5, 0)).toBe(1234.5);
+  });
+  it('coerces junk input to 0', () => {
+    expect(addVat(null)).toBe(0);
+    expect(stripVat(undefined)).toBe(0);
+    expect(addVat('abc')).toBe(0);
+  });
+});
 
 describe('roundMoney', () => {
   it('handles classic float drift cases', () => {
