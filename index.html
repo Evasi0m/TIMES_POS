@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<meta name="theme-color" content="#faf9f5" />
+<meta name="theme-color" content="#f8f4ec" />
 <title>TIMES POS</title>
 
 <!-- Theme boot — runs synchronously before <body> paints so dark-mode
@@ -16,7 +16,7 @@
       if (t !== 'dark') t = 'light';
       document.documentElement.dataset.theme = t;
       var meta = document.querySelector('meta[name="theme-color"]');
-      if (meta) meta.setAttribute('content', t === 'dark' ? '#1a1815' : '#faf9f5');
+      if (meta) meta.setAttribute('content', t === 'dark' ? '#090807' : '#f8f4ec');
     } catch (e) { /* localStorage blocked — default light is fine */ }
   })();
 </script>

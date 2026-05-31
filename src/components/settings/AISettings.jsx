@@ -552,9 +552,9 @@ function KeyCard({
             )}
           </span>
         </div>
-        <div className="h-1.5 bg-surface-soft rounded-full overflow-hidden mt-1">
+        <div className="h-1.5 glass-tube rounded-full overflow-hidden mt-1">
           <div
-            className={'h-full transition-all ' + barColor}
+            className={'h-full rounded-full glass-tube-fill transition-all ' + barColor}
             style={{ width: `${pct}%` }}
           />
         </div>

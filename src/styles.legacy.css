@@ -2,26 +2,26 @@
      Brand colours live as `--c-NAME` triplets (space-separated rgb so
      Tailwind can interpolate alpha via `rgb(var(--c-NAME) / X)`).
      Surface/shadow/rim tokens are paired with each theme so liquid-glass
-     primitives below auto-adapt. Light theme matches the original palette
-     1:1; dark theme is "warm charcoal" — a brown-tinted slate that
-     extends the cream/coral DNA rather than fighting it.            */
+     primitives below auto-adapt. Light theme is "Champagne Luxe" —
+     porcelain ivory surfaces, graphite text, and softened jewel accents.
+     Dark theme is "Obsidian Luxe" with its own premium graphite mood. */
   :root {
     /* ── Semantic colour tokens (rgb triplets) ── */
-    --c-primary:              204 120 92;
-    --c-primary-active:       169  88 62;
-    --c-primary-disabled:     230 223 216;
-    --c-ink:                   20  20 19;
-    --c-body:                  61  61 58;
-    --c-body-strong:           37  37 35;
-    --c-muted:                108 106 100;
-    --c-muted-soft:           142 139 130;
-    --c-hairline:             230 223 216;
-    --c-hairline-soft:        235 230 223;
-    --c-canvas:               250 249 245;
-    --c-surface-soft:         245 240 232;
-    --c-surface-card:         239 233 222;
-    --c-surface-cream-strong: 232 224 210;
-    --c-surface-strong:       255 255 255;   /* "pure white" surface — flips to elevated dark */
+    --c-primary:              204 111  84;
+    --c-primary-active:       164  76  55;
+    --c-primary-disabled:     226 216 204;
+    --c-ink:                   30  28  25;
+    --c-body:                  65  59  51;
+    --c-body-strong:           42  38  33;
+    --c-muted:                112 101  87;
+    --c-muted-soft:           150 137 119;
+    --c-hairline:             221 210 194;
+    --c-hairline-soft:        233 225 213;
+    --c-canvas:               248 244 236;
+    --c-surface-soft:         244 238 228;
+    --c-surface-card:         238 229 216;
+    --c-surface-cream-strong: 229 217 199;
+    --c-surface-strong:       255 253 248;   /* porcelain surface — flips to elevated dark */
     --c-surface-dark:          24  23 21;
     --c-surface-dark-elevated: 37  35 32;
     --c-surface-dark-soft:     31  30 27;
@@ -29,20 +29,20 @@
     --c-on-primary:           255 255 255;
     --c-on-dark:              250 249 245;
     --c-on-dark-soft:         160 157 150;
-    --c-accent-teal:           93 184 166;
-    --c-accent-amber:         232 165  90;
-    --c-success:               93 184 114;
-    --c-warning:              212 160  23;
-    --c-error:                198  69  69;
-    /* ── Glass surfaces (cream-white frosted) ── */
-    --glass-bg:        rgba(255, 254, 252, 0.74);
-    --glass-bg-strong: rgba(255, 255, 255, 0.92);
-    --glass-bg-soft:   rgba(255, 253, 250, 0.55);
-    --glass-cream:     rgba(232, 224, 210, 0.78);
+    --c-accent-teal:           82 168 153;
+    --c-accent-amber:         213 154  70;
+    --c-success:               76 153 119;
+    --c-warning:              196 133  41;
+    --c-error:                199  70  70;
+    /* ── Glass surfaces (frosted porcelain) ── */
+    --glass-bg:        rgba(255, 253, 248, 0.78);
+    --glass-bg-strong: rgba(255, 253, 248, 0.94);
+    --glass-bg-soft:   rgba(249, 245, 238, 0.62);
+    --glass-cream:     rgba(238, 229, 216, 0.82);
     --glass-dark:      rgba(24, 23, 21, 0.85);
     /* Borders: visibly darker than the canvas so edges read clearly */
-    --glass-border:        rgba(180, 168, 148, 0.35);
-    --glass-border-cream:  rgba(180, 168, 148, 0.35);
+    --glass-border:        rgba(174, 155, 128, 0.32);
+    --glass-border-cream:  rgba(174, 155, 128, 0.34);
     --glass-border-dark:   rgba(255, 255, 255, 0.10);
     /* Inset rim highlights + shadow base — light uses warm white,
        dark uses a much dimmer warm-rim + heavier shadow. Recipes
@@ -50,69 +50,81 @@
     --rim-top:    rgba(255, 255, 255, 0.85);
     --rim-top-strong: rgba(255, 255, 255, 0.92);
     --rim-top-bright: rgba(255, 255, 255, 0.98);
-    --rim-bot:    rgba(180, 170, 155, 0.10);
-    --rim-bot-mid:    rgba(180, 170, 155, 0.12);
-    --rim-bot-strong: rgba(180, 170, 155, 0.16);
-    --shadow-rgb: 20 20 19;
-    --shadow-low:  0 1px 0 var(--rim-top) inset, 0 -1px 0 var(--rim-bot) inset, 0 4px 14px -4px rgb(var(--shadow-rgb) / 0.08);
-    --shadow-mid:  0 1px 0 var(--rim-top-strong) inset, 0 -1px 0 var(--rim-bot-mid) inset, 0 10px 28px -6px rgb(var(--shadow-rgb) / 0.14);
-    --shadow-high: 0 1px 0 var(--rim-top-bright) inset, 0 -1px 0 var(--rim-bot-strong) inset, 0 18px 44px -10px rgb(var(--shadow-rgb) / 0.20);
+    --rim-bot:    rgba(174, 155, 128, 0.11);
+    --rim-bot-mid:    rgba(174, 155, 128, 0.14);
+    --rim-bot-strong: rgba(174, 155, 128, 0.18);
+    --shadow-rgb: 38 32 26;
+    --shadow-low:  0 1px 0 var(--rim-top) inset, 0 -1px 0 var(--rim-bot) inset, 0 5px 16px -6px rgb(var(--shadow-rgb) / 0.10);
+    --shadow-mid:  0 1px 0 var(--rim-top-strong) inset, 0 -1px 0 var(--rim-bot-mid) inset, 0 12px 30px -10px rgb(var(--shadow-rgb) / 0.16);
+    --shadow-high: 0 1px 0 var(--rim-top-bright) inset, 0 -1px 0 var(--rim-bot-strong) inset, 0 20px 48px -16px rgb(var(--shadow-rgb) / 0.22);
     /* Body mesh — 3 radial accents over the canvas. Same recipe in
        both themes so the colour story is preserved; alpha values just
        work harder on a darker base.                                  */
     --body-mesh:
-      radial-gradient(ellipse 60% 55% at 100% 0%, rgba(204, 120, 92, 0.10), transparent 65%),
-      radial-gradient(ellipse 60% 55% at 0% 100%, rgba(232, 165, 90, 0.07), transparent 65%),
-      radial-gradient(ellipse 50% 45% at 50% 50%, rgba(204, 120, 92, 0.025), transparent 70%);
+      radial-gradient(ellipse 60% 55% at 100% 0%, rgba(204, 111, 84, 0.075), transparent 66%),
+      radial-gradient(ellipse 60% 55% at 0% 100%, rgba(213, 154, 70, 0.055), transparent 66%),
+      radial-gradient(ellipse 46% 42% at 52% 46%, rgba(82, 168, 153, 0.026), transparent 72%);
     --ease-out: cubic-bezier(.2,.7,.2,1);
   }
 
-  /* ── Dark theme: warm charcoal ──
-     Brown-tinted slate (#1a1815 base) so the cream/coral palette still
-     reads as a sibling family rather than a separate brand. Mesh
-     gradient alphas are bumped ~1.5× because rgba(coral, 0.10) on a
-     dark base is nearly invisible; same accents at 0.15–0.18 produce
-     the same perceived warmth.                                      */
+  /* ── Dark theme: Obsidian Luxe ──
+     Premium near-black graphite, warm ivory text, coral action, antique
+     amber warning, teal success, and ruby error. It intentionally has
+     its own personality instead of mirroring the light theme.          */
   :root[data-theme="dark"] {
-    --c-ink:                  250 249 245;
-    --c-body:                 205 198 183;
-    --c-body-strong:          230 224 210;
-    --c-muted:                160 154 142;
-    --c-muted-soft:           128 122 110;
-    --c-hairline:              60  54  46;
-    --c-hairline-soft:         52  47  40;
-    --c-canvas:                26  24  21;     /* #1a1815 — warm charcoal */
-    --c-surface-soft:          37  35  30;
-    --c-surface-card:          48  43  37;
-    --c-surface-cream-strong:  56  50  42;
-    --c-surface-strong:        38  35  30;     /* "white card" → dark elevated */
+    --c-primary:              215 119  92;     /* #d7775c */
+    --c-primary-active:       185  91  67;     /* #b95b43 */
+    --c-primary-disabled:      45  39  33;
+    --c-ink:                  247 241 231;     /* #f7f1e7 */
+    --c-body:                 216 205 188;     /* #d8cdbc */
+    --c-body-strong:          235 226 213;
+    --c-muted:                168 155 136;     /* #a89b88 */
+    --c-muted-soft:           117 107  95;     /* #756b5f */
+    --c-hairline:              70  60  50;
+    --c-hairline-soft:         48  41  35;
+    --c-canvas:                 9   8   7;     /* #090807 */
+    --c-surface-soft:          20  17  15;     /* #14110f */
+    --c-surface-card:          29  25  21;     /* #1d1915 */
+    --c-surface-cream-strong:  41  35  29;     /* #29231d */
+    --c-surface-strong:        22  19  16;     /* elevated graphite */
+    --c-surface-dark:           9   8   7;
+    --c-surface-dark-elevated:  20  17  15;
+    --c-surface-dark-soft:     14  12  10;
+    --c-nightshade:             9   8   7;
     --c-on-primary:           255 255 255;     /* coral btn still gets white text */
+    --c-on-dark:              247 241 231;
+    --c-on-dark-soft:         168 155 136;
+    --c-accent-teal:           85 183 165;     /* #55b7a5 */
+    --c-accent-amber:         217 162  79;     /* #d9a24f */
+    --c-success:               85 183 165;
+    --c-warning:              217 162  79;
+    --c-error:                217  91  91;     /* #d95b5b */
     /* Glass surfaces — dark frosted with warm undertones */
-    --glass-bg:        rgba(38, 34, 28, 0.62);
-    --glass-bg-strong: rgba(44, 40, 33, 0.88);
-    --glass-bg-soft:   rgba(34, 30, 25, 0.50);
-    --glass-cream:     rgba(56, 50, 42, 0.70);
-    --glass-dark:      rgba(12, 11, 10, 0.92);
-    --glass-border:        rgba(255, 244, 220, 0.10);
-    --glass-border-cream:  rgba(255, 244, 220, 0.10);
-    --glass-border-dark:   rgba(255, 244, 220, 0.08);
+    --glass-bg:        rgba(20, 17, 15, 0.68);
+    --glass-bg-strong: rgba(29, 25, 21, 0.91);
+    --glass-bg-soft:   rgba(14, 12, 10, 0.56);
+    --glass-cream:     rgba(41, 35, 29, 0.74);
+    --glass-dark:      rgba(7, 6, 5, 0.94);
+    --glass-border:        rgba(247, 224, 190, 0.12);
+    --glass-border-cream:  rgba(217, 162, 79, 0.16);
+    --glass-border-dark:   rgba(247, 224, 190, 0.10);
     /* Rim highlights — much dimmer + warm; shadows go full black so
        cards lift visibly off the charcoal canvas. */
-    --rim-top:        rgba(255, 244, 220, 0.08);
-    --rim-top-strong: rgba(255, 244, 220, 0.10);
-    --rim-top-bright: rgba(255, 244, 220, 0.14);
-    --rim-bot:        rgba(0, 0, 0, 0.18);
-    --rim-bot-mid:    rgba(0, 0, 0, 0.22);
-    --rim-bot-strong: rgba(0, 0, 0, 0.28);
+    --rim-top:        rgba(247, 224, 190, 0.075);
+    --rim-top-strong: rgba(247, 224, 190, 0.115);
+    --rim-top-bright: rgba(247, 224, 190, 0.18);
+    --rim-bot:        rgba(0, 0, 0, 0.26);
+    --rim-bot-mid:    rgba(0, 0, 0, 0.34);
+    --rim-bot-strong: rgba(0, 0, 0, 0.42);
     --shadow-rgb: 0 0 0;
-    --shadow-low:  0 1px 0 var(--rim-top) inset, 0 -1px 0 var(--rim-bot) inset, 0 4px 14px -4px rgb(var(--shadow-rgb) / 0.32);
-    --shadow-mid:  0 1px 0 var(--rim-top-strong) inset, 0 -1px 0 var(--rim-bot-mid) inset, 0 10px 28px -6px rgb(var(--shadow-rgb) / 0.46);
-    --shadow-high: 0 1px 0 var(--rim-top-bright) inset, 0 -1px 0 var(--rim-bot-strong) inset, 0 18px 44px -10px rgb(var(--shadow-rgb) / 0.60);
-    /* Mesh alphas bumped so warm glow still reads on dark base */
+    --shadow-low:  0 1px 0 var(--rim-top) inset, 0 -1px 0 var(--rim-bot) inset, 0 8px 24px -12px rgb(var(--shadow-rgb) / 0.68);
+    --shadow-mid:  0 1px 0 var(--rim-top-strong) inset, 0 -1px 0 var(--rim-bot-mid) inset, 0 18px 44px -18px rgb(var(--shadow-rgb) / 0.82);
+    --shadow-high: 0 1px 0 var(--rim-top-bright) inset, 0 -1px 0 var(--rim-bot-strong) inset, 0 28px 72px -24px rgb(var(--shadow-rgb) / 0.92);
+    /* Restrained warm glints: visible, but no gaming-style glow. */
     --body-mesh:
-      radial-gradient(ellipse 60% 55% at 100% 0%, rgba(204, 120, 92, 0.18), transparent 65%),
-      radial-gradient(ellipse 60% 55% at 0% 100%, rgba(232, 165, 90, 0.12), transparent 65%),
-      radial-gradient(ellipse 50% 45% at 50% 50%, rgba(204, 120, 92, 0.06), transparent 70%);
+      radial-gradient(ellipse 58% 48% at 100% 0%, rgba(215, 119, 92, 0.13), transparent 68%),
+      radial-gradient(ellipse 58% 48% at 0% 100%, rgba(217, 162, 79, 0.08), transparent 70%),
+      radial-gradient(ellipse 42% 38% at 52% 46%, rgba(85, 183, 165, 0.035), transparent 72%);
   }
 
   html, body, #root { height: 100%; }
@@ -414,6 +426,141 @@
       inset 0 1px 0 rgb(var(--c-on-dark) / 0.10),
       inset 0 -1px 0 rgba(0, 0, 0, 0.22),
       0 2px 6px -2px rgb(var(--shadow-rgb) / 0.30);
+  }
+
+  /* ===========================================================
+     Channel-mix liquid-glass chart (Insights dashboard)
+     Proportion bar + interactive glass channel chips. Hovering a
+     chip spotlights its segment/area and dims the rest.
+     =========================================================== */
+  .lg-channelmix { display: flex; flex-direction: column; gap: 0.85rem; }
+
+  /* — Liquid proportion bar — */
+  .lg-propbar {
+    display: flex;
+    width: 100%;
+    height: 16px;
+    border-radius: 999px;
+    overflow: hidden;
+    gap: 2px;
+    padding: 2px;
+    background: rgb(var(--c-surface-strong) / 0.45);
+    backdrop-filter: blur(10px) saturate(140%);
+    -webkit-backdrop-filter: blur(10px) saturate(140%);
+    border: 1px solid rgb(var(--c-surface-strong) / 0.70);
+    box-shadow:
+      inset 0 1px 0 var(--rim-top-strong),
+      inset 0 -1px 0 var(--rim-bot-strong),
+      0 2px 8px -3px rgb(var(--shadow-rgb) / 0.12);
+  }
+  .lg-propbar-seg {
+    position: relative;
+    flex: 0 0 auto;
+    width: var(--seg-w, 0%);
+    border-radius: 999px;
+    cursor: pointer;
+    background:
+      linear-gradient(180deg, rgb(var(--c-surface-strong) / 0.45), transparent 60%),
+      var(--seg-c);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    transform-origin: center;
+    transition:
+      width .6s var(--ease-out),
+      filter .25s var(--ease-out),
+      opacity .25s var(--ease-out),
+      transform .25s var(--ease-out);
+    animation: propbar-grow .7s var(--ease-out) both;
+  }
+  /* Glassy shimmer that sweeps across on hover */
+  .lg-propbar-seg::after {
+    content: "";
+    position: absolute; inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.55) 50%, transparent 70%);
+    transform: translateX(-120%);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .lg-propbar-seg.is-active {
+    filter: brightness(1.08) saturate(1.08);
+    transform: scaleY(1.18);
+    z-index: 1;
+  }
+  .lg-propbar-seg.is-active::after {
+    opacity: 1;
+    animation: propbar-shimmer .7s var(--ease-out);
+  }
+  .lg-propbar-seg.is-dim { opacity: 0.4; filter: saturate(0.7); }
+
+  @keyframes propbar-grow { from { width: 0; } }
+  @keyframes propbar-shimmer {
+    from { transform: translateX(-120%); }
+    to   { transform: translateX(120%); }
+  }
+
+  /* — Interactive glass channel chips — */
+  .lg-chanchips {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    gap: 0.5rem;
+  }
+  .lg-chanchip {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.5rem 0.7rem;
+    border-radius: 0.75rem;
+    text-align: left;
+    cursor: pointer;
+    transition:
+      transform .22s var(--ease-out),
+      box-shadow .22s var(--ease-out),
+      opacity .22s var(--ease-out),
+      border-color .22s var(--ease-out);
+  }
+  .lg-chanchip:hover, .lg-chanchip.is-active {
+    transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--chip-c) 55%, transparent) !important;
+    box-shadow:
+      inset 0 1px 0 var(--rim-top-strong),
+      0 10px 22px -14px var(--chip-c),
+      0 0 0 1px color-mix(in srgb, var(--chip-c) 28%, transparent);
+  }
+  .lg-chanchip:active { transform: translateY(-2px) scale(0.98); transition-duration: .08s; }
+  .lg-chanchip.is-dim { opacity: 0.45; }
+  .lg-chanchip-dot {
+    flex: 0 0 auto;
+    width: 11px; height: 11px;
+    border-radius: 50%;
+    background: var(--chip-c);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.45),
+      0 0 0 3px color-mix(in srgb, var(--chip-c) 18%, transparent);
+    transition: box-shadow .22s var(--ease-out), transform .22s var(--ease-out);
+  }
+  .lg-chanchip:hover .lg-chanchip-dot, .lg-chanchip.is-active .lg-chanchip-dot {
+    transform: scale(1.15);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.55),
+      0 0 0 5px color-mix(in srgb, var(--chip-c) 26%, transparent);
+  }
+  .lg-chanchip-body { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+  .lg-chanchip-name {
+    font-size: 0.8rem; font-weight: 600;
+    color: rgb(var(--c-ink));
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .lg-chanchip-total { font-size: 0.72rem; color: rgb(var(--c-muted)); }
+  .lg-chanchip-pct {
+    margin-left: auto;
+    font-size: 0.85rem; font-weight: 700;
+    color: var(--chip-c);
+    filter: saturate(1.1) brightness(0.92);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lg-propbar-seg { animation: none; }
+    .lg-propbar-seg.is-active::after { animation: none; }
   }
 
   /* Specular highlight overlay for glass surfaces — top-half white
@@ -1634,12 +1781,23 @@
     /* Square icon-only variant — keeps the same visual but swaps the
        horizontal padding for a fixed 32×32 footprint so it slots into
        icon-button rows (e.g. trash on a user-list row) cleanly. */
+    display: inline-grid;
+    place-items: center;
     padding: 0;
     width: 32px;
     height: 32px;
+    min-width: 32px;
     min-height: 32px;
+    line-height: 0;
     border-radius: 8px;
     gap: 0;
+  }
+  .btn-ruby-premium-icon svg {
+    display: block;
+    width: 14px;
+    height: 14px;
+    flex: 0 0 auto;
+    margin: 0;
   }
 
   /* Premium "tile" variants — non-interactive counterparts of the
@@ -2540,35 +2698,49 @@
      controlled by the React component (rendered = has items). The halo
      expands+fades via box-shadow ring (0 → 10px) while the chip gently
      scales 1 → 1.05 to give it life without being twitchy. */
+  /* The pulse keeps the static liquid-glass shading (inset rim highlight +
+     bottom shade + red drop) constant and only animates the expanding halo
+     ring, so the "glass" character never flickers mid-pulse. The per-theme
+     rules in styles.css set the matching resting shadow for reduced-motion. */
   @keyframes cartGlowPulse {
     0%, 100% {
-      box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.55),
-                  0 2px 6px rgba(0, 0, 0, 0.18);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.60),
+        inset 0 -2px 4px rgba(120, 10, 10, 0.30),
+        0 5px 12px -4px rgba(220, 38, 38, 0.55),
+        0 0 0 0 rgba(220, 38, 38, 0.50);
       transform: scale(1);
     }
     50% {
-      box-shadow: 0 0 0 10px rgba(220, 38, 38, 0),
-                  0 2px 6px rgba(0, 0, 0, 0.18);
-      transform: scale(1.05);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.60),
+        inset 0 -2px 4px rgba(120, 10, 10, 0.30),
+        0 5px 12px -4px rgba(220, 38, 38, 0.42),
+        0 0 0 8px rgba(220, 38, 38, 0);
+      transform: scale(1.045);
     }
   }
+  /* iOS-26 liquid-glass notification badge — frosted translucent red with a
+     baked-in specular sheen (radial highlight in the bg, set per-theme in
+     styles.css) and a soft halo pulse. */
   .cart-glow-badge {
+    position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     min-width: 36px;
     height: 36px;
-    padding: 0 8px;
+    padding: 0 9px;
     border-radius: 9999px;
-    background: linear-gradient(180deg, #ef4444 0%, #dc2626 55%, #b91c1c 100%);
     color: #fff;
     font-weight: 700;
-    font-size: 16px;
+    font-size: 15px;
     line-height: 1;
-    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.55),
-                0 2px 6px rgba(0, 0, 0, 0.18);
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    animation: cartGlowPulse 1.8s ease-in-out infinite;
+    letter-spacing: 0.2px;
+    text-shadow: 0 1px 1.5px rgba(110, 8, 8, 0.50);
+    backdrop-filter: blur(8px) saturate(160%);
+    -webkit-backdrop-filter: blur(8px) saturate(160%);
+    animation: cartGlowPulse 2.2s ease-in-out infinite;
     user-select: none;
   }
 
@@ -4278,6 +4450,73 @@
   @keyframes bar-grow-x {
     to { transform: scaleX(1); }
   }
+
+  /* ===========================================================
+     Liquid-glass progress tube (iOS-26 style)
+     Pair .glass-tube on the TRACK (the overflow-hidden container)
+     with .glass-tube-fill on the colored FILL inside it. The track
+     reads as a hollow groove of frosted glass; the fill reads as
+     liquid sitting inside it (glossy top sheen + soft inner shade).
+     Works on top of any inline background / .bar-grow-x animation.
+     =========================================================== */
+  .glass-tube {
+    position: relative;
+    background:
+      linear-gradient(180deg, rgb(var(--c-surface-soft) / 0.55), rgb(var(--c-surface-strong) / 0.32)) !important;
+    backdrop-filter: blur(6px) saturate(130%);
+    -webkit-backdrop-filter: blur(6px) saturate(130%);
+    box-shadow:
+      inset 0 1.5px 2.5px rgb(var(--shadow-rgb) / 0.16),   /* groove depth */
+      inset 0 -1px 0 var(--rim-top-strong),                /* bottom inner light line */
+      0 0.5px 0 var(--rim-top-strong);                     /* top outer rim */
+  }
+  :root[data-theme="dark"] .glass-tube {
+    background:
+      linear-gradient(180deg, rgb(var(--c-surface-card) / 0.55), rgb(var(--c-surface-card) / 0.30)) !important;
+    box-shadow:
+      inset 0 1.5px 2.5px rgba(0, 0, 0, 0.45),
+      inset 0 -1px 0 rgb(var(--c-on-dark) / 0.07),
+      0 0.5px 0 rgb(var(--c-on-dark) / 0.06);
+  }
+
+  .glass-tube-fill {
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.45),
+      inset 0 -2px 3px rgb(var(--shadow-rgb) / 0.16);
+  }
+  /* Glossy meniscus — bright sheen across the top of the liquid. */
+  .glass-tube-fill::before {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; top: 0;
+    height: 55%;
+    border-radius: inherit;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.60) 0%, rgba(255, 255, 255, 0.06) 100%);
+    pointer-events: none;
+  }
+  /* Liquid-glass shimmer that drifts across once on first paint. */
+  .glass-tube-fill::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.45) 50%, transparent 65%);
+    transform: translateX(-130%);
+    animation: glass-tube-sheen 1.5s var(--ease-out) 0.35s both;
+  }
+  :root[data-theme="dark"] .glass-tube-fill::before {
+    background: linear-gradient(180deg, rgba(255, 252, 245, 0.34) 0%, rgba(255, 252, 245, 0.03) 100%);
+  }
+  @keyframes glass-tube-sheen {
+    to { transform: translateX(130%); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .glass-tube-fill::after { animation: none; opacity: 0; }
+  }
+
   /* Subtle pop on the just-finished number — runs once. */
   .number-pop {
     animation: number-pop 0.45s cubic-bezier(.34,1.56,.64,1);
@@ -4287,21 +4526,255 @@
     40%  { transform: scale(1.04); }
     100% { transform: scale(1); }
   }
-  /* Donut segment hover — others dim, hovered scales.
-     `overflow: visible` on the host SVG is required because the segment
-     scales up on hover; without it, the outer edge of the hovered slice
-     (which already sits right at the svg's bounding box) gets clipped
-     at the top/bottom/sides — visible as a flat "cut" on big slices. */
-  .donut-chart { overflow: visible; }
-  .donut-segment {
-    transition: transform .25s var(--ease-out), opacity .25s var(--ease-out);
+  /* Channel mix graph — premium arc chart with soft draw-in animation. */
+  .channel-mix-card {
+    position: relative;
+    overflow: hidden;
+    backdrop-filter: blur(22px) saturate(135%);
+    -webkit-backdrop-filter: blur(22px) saturate(135%);
+  }
+  .channel-mix-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    background:
+      linear-gradient(135deg, rgb(var(--c-on-dark) / 0.16), transparent 28%),
+      linear-gradient(315deg, rgb(var(--c-accent-teal) / 0.10), transparent 42%);
+    mask: linear-gradient(#000, transparent 58%);
+    opacity: 0.72;
+  }
+  .channel-mix-card::after {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    pointer-events: none;
+    border-radius: inherit;
+    background:
+      radial-gradient(circle at 50% 42%, rgb(var(--c-primary) / 0.10), transparent 30%),
+      radial-gradient(circle at 86% 12%, rgb(var(--c-accent-amber) / 0.08), transparent 28%);
+    opacity: 0.85;
+  }
+  .channel-mix-card > * {
+    position: relative;
+    z-index: 1;
+  }
+  .channel-mix-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    justify-items: center;
+  }
+  .donut-chart {
+    overflow: visible;
+    color: rgb(var(--c-primary));
+    animation: donut-float-in .55s var(--ease-out) both;
+    transition: filter 0.4s var(--ease-out);
+  }
+  .donut-track {
+    stroke: rgba(255, 255, 255, 0.04);
+  }
+  .donut-core {
+    fill: rgba(255, 255, 255, 0.015);
+    stroke: rgba(255, 255, 255, 0.12);
+    stroke-width: 1.5;
+    backdrop-filter: blur(22px) saturate(190%);
+    -webkit-backdrop-filter: blur(22px) saturate(190%);
+    box-shadow: 
+      inset 0 1px 0 rgba(255, 255, 255, 0.15),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.40),
+      0 12px 32px rgba(0, 0, 0, 0.35);
+    transition: all 0.4s cubic-bezier(0.25, 1, 0.2, 1);
+  }
+  .donut-glass-sheen {
+    pointer-events: none;
+    mix-blend-mode: overlay;
+    transition: all 0.4s cubic-bezier(0.25, 1, 0.2, 1);
+  }
+  .donut-segment-glow {
+    opacity: 0.15;
+    stroke-linecap: round;
     transform-origin: center;
+    transition: stroke-width 0.5s cubic-bezier(0.25, 1, 0.2, 1),
+                opacity 0.5s cubic-bezier(0.25, 1, 0.2, 1),
+                transform 0.5s cubic-bezier(0.25, 1, 0.2, 1);
   }
-  .donut-chart:hover .donut-segment:not(:hover) {
-    opacity: 0.35;
+  .donut-segment-glow.active {
+    opacity: 0.38;
+    stroke-width: 34;
+    transform: scale(1.035);
   }
-  .donut-chart .donut-segment:hover {
-    transform: scale(1.04);
+  .donut-chart.has-hover .donut-segment-glow:not(.active) {
+    opacity: 0.03;
+  }
+  .donut-segment {
+    opacity: 0;
+    stroke-dasharray: 100;
+    stroke-dashoffset: 100;
+    transform-origin: center;
+    animation: channel-arc-draw .9s cubic-bezier(0.25, 1, 0.2, 1) forwards;
+    animation-delay: var(--arc-delay, 0ms);
+    transition: stroke-width 0.45s cubic-bezier(0.25, 1, 0.2, 1),
+                opacity 0.45s cubic-bezier(0.25, 1, 0.2, 1),
+                transform 0.45s cubic-bezier(0.25, 1, 0.2, 1);
+  }
+  .donut-segment.active {
+    stroke-width: 30;
+    transform: scale(1.035);
+    opacity: 1 !important;
+  }
+  .donut-chart.has-hover .donut-segment:not(.active) {
+    opacity: 0.20;
+  }
+  .donut-segment-gloss {
+    stroke: rgba(255, 255, 255, 0.38);
+    stroke-linecap: round;
+    pointer-events: none;
+    transform-origin: center;
+    transition: stroke-width 0.45s cubic-bezier(0.25, 1, 0.2, 1),
+                opacity 0.45s cubic-bezier(0.25, 1, 0.2, 1),
+                transform 0.45s cubic-bezier(0.25, 1, 0.2, 1);
+  }
+  .donut-segment-gloss.active {
+    stroke: rgba(255, 255, 255, 0.95);
+    stroke-width: 3.5;
+    transform: scale(1.035);
+    opacity: 1 !important;
+  }
+  .donut-chart.has-hover .donut-segment-gloss:not(.active) {
+    opacity: 0.08;
+  }
+  .donut-core-pulse {
+    transform-origin: center;
+    animation: core-pulse 4.5s ease-in-out infinite alternate;
+    pointer-events: none;
+    transition: fill 0.5s ease;
+  }
+  @keyframes core-pulse {
+    0% { transform: scale(0.93); opacity: 0.4; }
+    100% { transform: scale(1.07); opacity: 0.8; }
+  }
+  .donut-center-group {
+    transition: opacity 0.35s cubic-bezier(0.25, 1, 0.2, 1), transform 0.35s cubic-bezier(0.25, 1, 0.2, 1);
+    transform-origin: center;
+    pointer-events: none;
+  }
+  .donut-center-group.switching {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.96);
+  }
+  .donut-center-label {
+    fill: rgba(255, 255, 255, 0.55);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    transition: fill 0.3s;
+  }
+  .donut-center-value {
+    fill: #ffffff;
+    font-weight: 700;
+    transition: fill 0.3s;
+  }
+  .channel-legend {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    min-width: 0;
+    width: 100%;
+    transition: opacity 0.3s;
+  }
+  .channel-legend-row {
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.07) !important;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.015) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      0 4px 18px rgba(0, 0, 0, 0.25) !important;
+    backdrop-filter: blur(25px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(25px) saturate(180%) !important;
+    transition: border-color 0.45s cubic-bezier(0.25, 1, 0.2, 1),
+                box-shadow 0.45s cubic-bezier(0.25, 1, 0.2, 1),
+                transform 0.45s cubic-bezier(0.25, 1, 0.2, 1),
+                opacity 0.45s cubic-bezier(0.25, 1, 0.2, 1),
+                background-color 0.45s cubic-bezier(0.25, 1, 0.2, 1);
+  }
+  .channel-legend-row.active,
+  .channel-legend-row:hover {
+    transform: translateY(-3px);
+    border-color: var(--channel-color) !important;
+    background-color: rgba(255, 255, 255, 0.045) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.18),
+      0 12px 30px -4px var(--channel-glow) !important;
+  }
+  .channel-legend.has-hover .channel-legend-row:not(.active) {
+    opacity: 0.30;
+  }
+  .channel-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    background: var(--channel);
+    box-shadow: 0 0 12px 2px var(--channel);
+    flex: 0 0 auto;
+    transition: transform 0.3s;
+  }
+  .channel-legend-row:hover .channel-dot,
+  .channel-legend-row.active .channel-dot {
+    transform: scale(1.3);
+  }
+  .channel-name {
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .channel-share {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .channel-total {
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    min-width: 74px;
+    text-align: right;
+  }
+  .channel-bar {
+    position: relative;
+    height: 5px;
+    flex: 1;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+  }
+  .channel-bar > span {
+    display: block;
+    height: 100%;
+    width: var(--share);
+    border-radius: inherit;
+    background:
+      linear-gradient(90deg, color-mix(in srgb, var(--channel) 60%, #ffffff), var(--channel));
+    transform-origin: left;
+    animation: channel-bar-grow .75s var(--ease-out) both;
+  }
+  @keyframes channel-arc-draw {
+    from { opacity: 0; stroke-dashoffset: 100; }
+    to   { opacity: 1; stroke-dashoffset: 0; }
+  }
+  @keyframes channel-bar-grow {
+    from { transform: scaleX(0); opacity: 0.35; }
+    to   { transform: scaleX(1); opacity: 1; }
+  }
+  @keyframes donut-float-in {
+    from { opacity: 0; transform: translateY(6px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @media (max-width: 520px) {
+    .channel-legend {
+      grid-template-columns: 1fr;
+    }
   }
 
   /* Range preset chip — tap punches a quick scale + color flash. */

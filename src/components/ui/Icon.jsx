@@ -39,7 +39,7 @@ const Icon = ({ name, size = 20, className = '', strokeWidth = 1.75, color }) =>
     case 'plus':         return <svg {...p}><path d="M12 5v14M5 12h14"/></svg>;
     case 'minus':        return <svg {...p}><path d="M5 12h14"/></svg>;
     case 'x':            return <svg {...p}><path d="M18 6 6 18M6 6l12 12"/></svg>;
-    case 'trash':        return <svg {...p}><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>;
+    case 'trash':        return <svg {...p}><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>;
     case 'logout':       return <svg {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>;
     case 'calendar':     return <svg {...p}><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M16 3v4M8 3v4M4 11h16"/></svg>;
     case 'tag':          return <svg {...p}><path d="M4 4h8l8 8-8 8-8-8V4z"/><circle cx="8" cy="8" r="1.5"/></svg>;

@@ -32,7 +32,22 @@ import { deadStockReport } from '../lib/analytics/dead-stock.js';
 
 const ECOMMERCE_CHANNELS = new Set(['tiktok', 'shopee', 'lazada']);
 const CHANNEL_LABEL = { store: 'หน้าร้าน', tiktok: 'TikTok', shopee: 'Shopee', lazada: 'Lazada', facebook: 'Facebook' };
-const CHANNEL_COLOR = { store: '#111827', tiktok: '#EC4899', shopee: '#F97316', lazada: '#2563EB', facebook: '#4338CA' };
+const CHANNEL_COLOR = {
+  store: 'rgb(var(--c-body-strong))',
+  tiktok: 'rgb(var(--c-primary))',
+  shopee: 'rgb(var(--c-accent-amber))',
+  lazada: 'rgb(var(--c-accent-teal))',
+  facebook: 'rgb(var(--c-muted))',
+};
+const CHART_GRID = 'rgb(var(--c-hairline) / 0.55)';
+const CHART_TICK = 'rgb(var(--c-muted))';
+const CHART_TOOLTIP = {
+  background: 'rgb(var(--c-surface-card) / 0.96)',
+  border: '1px solid rgb(var(--c-hairline) / 0.70)',
+  borderRadius: 10,
+  color: 'rgb(var(--c-ink))',
+  boxShadow: 'var(--shadow-mid)',
+};
 const MS_PER_DAY = 86400000;
 const BKK_OFFSET_MIN = 7 * 60;
 
@@ -126,16 +141,19 @@ function TrendChart({ buckets }) {
   return (
     <ResponsiveContainer width="100%" height={220}>
       <LineChart data={buckets} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-        <CartesianGrid stroke="#00000010" vertical={false} />
-        <XAxis dataKey="weekStart" tick={{ fontSize: 10, fill: '#6B7280' }}
+        <CartesianGrid stroke={CHART_GRID} vertical={false} />
+        <XAxis dataKey="weekStart" tick={{ fontSize: 10, fill: CHART_TICK }}
           tickFormatter={(d) => d.slice(5)} /* MM-DD */ />
-        <YAxis tick={{ fontSize: 10, fill: '#6B7280' }} tickFormatter={(v) => (v / 1000).toFixed(0) + 'k'} />
+        <YAxis tick={{ fontSize: 10, fill: CHART_TICK }} tickFormatter={(v) => (v / 1000).toFixed(0) + 'k'} />
         <Tooltip
+          contentStyle={CHART_TOOLTIP}
+          labelStyle={{ color: 'rgb(var(--c-ink))' }}
+          itemStyle={{ color: 'rgb(var(--c-body))' }}
           formatter={(v, k) => (k === 'count' ? fmtNum(v) : fmtTHB(v))}
           labelFormatter={(d) => 'สัปดาห์เริ่ม ' + d} />
-        <Legend wrapperStyle={{ fontSize: 12 }} />
-        <Line type="monotone" dataKey="revenue" name="ยอดขาย" stroke="#E25C4D" strokeWidth={2} dot={false} />
-        <Line type="monotone" dataKey="profit"  name="กำไรเบื้องต้น" stroke="#0EA5A1" strokeWidth={2} dot={false} />
+        <Legend wrapperStyle={{ fontSize: 12, color: CHART_TICK }} />
+        <Line type="monotone" dataKey="revenue" name="ยอดขาย" stroke="rgb(var(--c-primary))" strokeWidth={2} dot={false} />
+        <Line type="monotone" dataKey="profit"  name="กำไรเบื้องต้น" stroke="rgb(var(--c-success))" strokeWidth={2} dot={false} />
       </LineChart>
     </ResponsiveContainer>
   );
@@ -148,13 +166,9 @@ function Heatmap({ result }) {
   if (!result) return <div className="skeleton h-64 rounded" />;
   const { matrix, maxCell } = result;
   const cellColor = (v) => {
-    if (maxCell === 0 || v === 0) return '#F3F4F6';
+    if (maxCell === 0 || v === 0) return 'rgb(var(--c-surface-soft) / 0.72)';
     const t = v / maxCell;
-    // Light → deep coral
-    const r = Math.round(253 - 30 * t);
-    const g = Math.round(237 - 160 * t);
-    const b = Math.round(233 - 153 * t);
-    return `rgb(${r},${g},${b})`;
+    return `color-mix(in srgb, rgb(var(--c-surface-card)) ${Math.round(78 - 38 * t)}%, rgb(var(--c-primary)))`;
   };
   const peak = peakCell(result);
   return (
@@ -179,7 +193,7 @@ function Heatmap({ result }) {
                   <td key={h}
                     title={`${WEEKDAY_LABELS_TH[d]} ${h}:00 · ${fmtTHB(v)}`}
                     style={{ background: cellColor(v) }}
-                    className="w-6 h-6 border border-white"
+                    className="w-6 h-6 border border-hairline"
                   />
                 ))}
               </tr>
@@ -200,27 +214,114 @@ function Heatmap({ result }) {
 }
 
 /* =========================================================
-   Channel mix (12 months)
+   Channel mix (12 months) — liquid-glass redesign
+   - Smooth gradient-filled stacked area (frosted "liquid" fills)
+   - Interactive glass channel chips: hover one to spotlight its
+     area + segment, dim the rest. Each chip shows 12-mo total + share.
+   - Full-width liquid proportion bar that animates on mount and
+     reacts to chip hover.
 ========================================================= */
 function ChannelMix({ data }) {
+  const [active, setActive] = useState(null);
   if (!data?.length) return <div className="skeleton h-40 rounded" />;
+
   const channels = Object.keys(data[0]).filter((k) => k !== 'month');
+
+  // 12-month totals + share per channel, sorted big → small.
+  const totals = channels
+    .map((c) => ({ key: c, total: data.reduce((s, d) => s + (d[c] || 0), 0) }))
+    .sort((a, b) => b.total - a.total);
+  const grand = totals.reduce((s, t) => s + t.total, 0) || 1;
+
+  const colorOf = (c) => CHANNEL_COLOR[c] || CHART_TICK;
+  const isDim = (c) => active != null && active !== c;
+
   return (
-    <ResponsiveContainer width="100%" height={240}>
-      <AreaChart data={data} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-        <CartesianGrid stroke="#00000010" vertical={false} />
-        <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#6B7280' }} />
-        <YAxis tick={{ fontSize: 10, fill: '#6B7280' }} tickFormatter={(v) => (v / 1000).toFixed(0) + 'k'} />
-        <Tooltip formatter={(v) => fmtTHB(v)} />
-        <Legend wrapperStyle={{ fontSize: 12 }} />
-        {channels.map((c) => (
-          <Area key={c} type="monotone" dataKey={c}
-            stackId="1" name={CHANNEL_LABEL[c] || c}
-            stroke={CHANNEL_COLOR[c] || '#6B7280'}
-            fill={CHANNEL_COLOR[c] || '#6B7280'} fillOpacity={0.6} />
-        ))}
-      </AreaChart>
-    </ResponsiveContainer>
+    <div className="lg-channelmix">
+      {/* Liquid proportion bar */}
+      <div className="lg-propbar" role="img" aria-label="สัดส่วนช่องทางการขายรวม 12 เดือน">
+        {totals.map(({ key, total }) => {
+          const pct = (total / grand) * 100;
+          if (pct <= 0) return null;
+          return (
+            <span
+              key={key}
+              className={'lg-propbar-seg' + (isDim(key) ? ' is-dim' : '') + (active === key ? ' is-active' : '')}
+              style={{ '--seg-w': pct + '%', '--seg-c': colorOf(key) }}
+              onMouseEnter={() => setActive(key)}
+              onMouseLeave={() => setActive(null)}
+              title={`${CHANNEL_LABEL[key] || key} · ${fmtPct(pct / 100)}`}
+            />
+          );
+        })}
+      </div>
+
+      {/* Gradient-filled liquid area chart */}
+      <ResponsiveContainer width="100%" height={236}>
+        <AreaChart data={data} margin={{ top: 12, right: 10, left: -10, bottom: 0 }}>
+          <defs>
+            {channels.map((c) => (
+              <linearGradient key={c} id={`cm-grad-${c}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={colorOf(c)} stopOpacity={0.55} />
+                <stop offset="55%" stopColor={colorOf(c)} stopOpacity={0.28} />
+                <stop offset="100%" stopColor={colorOf(c)} stopOpacity={0.05} />
+              </linearGradient>
+            ))}
+          </defs>
+          <CartesianGrid stroke={CHART_GRID} vertical={false} />
+          <XAxis dataKey="month" tick={{ fontSize: 10, fill: CHART_TICK }} tickLine={false} axisLine={false} />
+          <YAxis tick={{ fontSize: 10, fill: CHART_TICK }} tickLine={false} axisLine={false}
+            tickFormatter={(v) => (v / 1000).toFixed(0) + 'k'} />
+          <Tooltip
+            contentStyle={CHART_TOOLTIP}
+            labelStyle={{ color: 'rgb(var(--c-ink))', fontWeight: 600, marginBottom: 4 }}
+            itemStyle={{ color: 'rgb(var(--c-body))' }}
+            formatter={(v) => fmtTHB(v)}
+            cursor={{ stroke: 'rgb(var(--c-primary) / 0.45)', strokeWidth: 1, strokeDasharray: '3 3' }}
+          />
+          {channels.map((c) => (
+            <Area key={c} type="monotone" dataKey={c}
+              stackId="1" name={CHANNEL_LABEL[c] || c}
+              stroke={colorOf(c)}
+              strokeWidth={active === c ? 2.4 : 1.6}
+              fill={`url(#cm-grad-${c})`}
+              fillOpacity={isDim(c) ? 0.12 : 1}
+              strokeOpacity={isDim(c) ? 0.3 : 1}
+              activeDot={{ r: 4, strokeWidth: 0 }}
+              isAnimationActive
+              animationDuration={650}
+              animationEasing="ease-out"
+              style={{ transition: 'fill-opacity .3s ease, stroke-opacity .3s ease' }} />
+          ))}
+        </AreaChart>
+      </ResponsiveContainer>
+
+      {/* Interactive glass channel chips */}
+      <div className="lg-chanchips">
+        {totals.map(({ key, total }) => {
+          const pct = total / grand;
+          return (
+            <button
+              key={key}
+              type="button"
+              className={'lg-chanchip lg-tile' + (isDim(key) ? ' is-dim' : '') + (active === key ? ' is-active' : '')}
+              style={{ '--chip-c': colorOf(key) }}
+              onMouseEnter={() => setActive(key)}
+              onMouseLeave={() => setActive(null)}
+              onFocus={() => setActive(key)}
+              onBlur={() => setActive(null)}
+            >
+              <span className="lg-chanchip-dot" />
+              <span className="lg-chanchip-body">
+                <span className="lg-chanchip-name">{CHANNEL_LABEL[key] || key}</span>
+                <span className="lg-chanchip-total tabular-nums">{fmtTHB(total)}</span>
+              </span>
+              <span className="lg-chanchip-pct tabular-nums">{fmtPct(pct)}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

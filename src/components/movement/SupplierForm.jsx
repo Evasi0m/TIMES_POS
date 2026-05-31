@@ -43,13 +43,8 @@ export default function SupplierForm({
               onClick={() => setSupplierName(s)}
               className={"py-2.5 px-3 rounded-lg text-sm font-medium border transition-all text-center inline-flex items-center justify-center gap-1.5 " +
                 (supplierName === s
-                  ? "text-white"
+                  ? "btn-segment-active text-white"
                   : "glass-soft text-ink hover:bg-white/60 hover-lift")}
-              style={supplierName === s ? {
-                background: 'linear-gradient(180deg, rgba(204,120,92,0.85) 0%, rgba(184,100,72,0.92) 100%)',
-                borderColor: 'rgba(255,255,255,0.18)',
-                boxShadow: '0 2px 8px rgba(184,100,72,0.35), 0 1px 0 rgba(255,255,255,0.18) inset',
-              } : {}}
             >
               {supplierName === s && <Icon name="check" size={14} strokeWidth={2.5} />}
               {s}

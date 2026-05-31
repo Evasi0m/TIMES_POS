@@ -155,6 +155,13 @@ const todayISO = () => dateISOBangkok();
 // timestamptz comparisons line up with how Thai users experience "วันนี้".
 const startOfDayBangkok = (yyyymmdd) => `${yyyymmdd}T00:00:00+07:00`;
 const endOfDayBangkok   = (yyyymmdd) => `${yyyymmdd}T23:59:59.999+07:00`;
+// Bangkok-local hour-of-day (0–23) for a timestamp — used to bucket a
+// single-day sparkline into an intraday curve instead of one lone dot.
+const hourBangkok = (ts) => {
+  if (!ts) return null;
+  const h = parseInt(new Date(ts).toLocaleString("en-GB", { timeZone: "Asia/Bangkok", hour: "2-digit", hour12: false }), 10);
+  return Number.isFinite(h) ? h % 24 : null;
+};
 
 const CHANNELS = [
   { v: "store",    label: "หน้าร้าน" },
@@ -267,7 +274,7 @@ function applyOrderDiscount(subtotal, value, type) {
      address bar / PWA status bar matches the active theme.
 ========================================================= */
 const THEME_KEY = 'ux.theme';
-const THEME_COLOURS = { light: '#faf9f5', dark: '#1a1815' };
+const THEME_COLOURS = { light: '#f8f4ec', dark: '#090807' };
 const getTheme = () => {
   try {
     const v = localStorage.getItem(THEME_KEY);
@@ -8496,7 +8503,7 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
                 (!goodsReturned ? "border-[#8a6500]/40 bg-warning/10" : "border-hairline hover:border-primary/30")}>
                 <span className={"relative flex items-center justify-center w-5 h-5 rounded border flex-shrink-0 mt-0.5 transition-colors " +
                   (!goodsReturned ? "border-[#8a6500]" : "bg-surface-strong border-hairline")}
-                  style={!goodsReturned ? { background: '#8a6500' } : undefined}>
+                  style={!goodsReturned ? { background: 'rgb(var(--c-warning))' } : undefined}>
                   <input type="checkbox" className="sr-only"
                     checked={!goodsReturned}
                     onChange={e => setGoodsReturned(!e.target.checked)} />
@@ -8760,9 +8767,31 @@ function DeltaBadge({ current, prev, label = 'vs ช่วงก่อน' }) {
  * by setting `--len` to the path length so `.draw-line` knows how far
  * to offset the dasharray.
  */
+// Pretty-prints a sparkline point's `label` for the hover tooltip.
+// Labels are either "YYYY-MM-DD" (per-day buckets) or "YYYY-MM-DD HH:00"
+// (intraday hourly buckets used for a single-day range).
+function fmtSparkLabel(label) {
+  if (!label) return '';
+  const [datePart, timePart] = String(label).split(' ');
+  if (timePart) {
+    // Hourly bucket → show the hour range, e.g. "14:00–15:00 น."
+    const h = parseInt(timePart, 10);
+    const next = (h + 1) % 24;
+    return `${String(h).padStart(2, '0')}:00–${String(next).padStart(2, '0')}:00 น.`;
+  }
+  // Daily bucket → Thai weekday + day + month (+ Buddhist year).
+  const d = new Date(datePart + 'T00:00:00+07:00');
+  if (isNaN(d)) return datePart;
+  return d.toLocaleDateString('th-TH', {
+    timeZone: 'Asia/Bangkok', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
+  });
+}
+
 function Sparkline({ data = [], width = 480, height = 110, stroke = 'var(--primary, #cc785c)', fill = 'rgba(204, 120, 92, 0.18)' }) {
   const pathRef = useRef(null);
+  const wrapRef = useRef(null);
   const [pathLen, setPathLen] = useState(600);
+  const [hoverIdx, setHoverIdx] = useState(null);
   // Stable key from data identity so the path animation re-runs on data
   // change. We bump a remount-key when the data signature changes.
   const dataKey = data.map(d => d.value).join('|');
@@ -8771,6 +8800,8 @@ function Sparkline({ data = [], width = 480, height = 110, stroke = 'var(--prima
       try { setPathLen(Math.ceil(pathRef.current.getTotalLength())); } catch {}
     }
   }, [dataKey]);
+  // Reset the hovered point whenever the underlying series changes (range switch).
+  useEffect(() => { setHoverIdx(null); }, [dataKey]);
   if (!data.length) {
     return (
       <div className="w-full h-full flex items-center justify-center text-xs text-muted-soft">
@@ -8797,32 +8828,100 @@ function Sparkline({ data = [], width = 480, height = 110, stroke = 'var(--prima
     return acc + ` Q ${px},${py} ${cx},${(py + y) / 2} T ${x},${y}`;
   }, '');
   const areaPath = `${linePath} L ${pts[pts.length-1][0]},${height - padY} L ${pts[0][0]},${height - padY} Z`;
+
+  // Map a pointer position to the nearest data point. viewBox maps linearly
+  // to the rendered box (preserveAspectRatio=none), so x_vb/width === ratio
+  // along the container — percentage positioning of the HTML overlay is exact.
+  const handleMove = (e) => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    setHoverIdx(data.length === 1 ? 0 : Math.round(ratio * (data.length - 1)));
+  };
+
+  const active = hoverIdx != null && pts[hoverIdx];
+  const hx = active ? (pts[hoverIdx][0] / width) * 100 : 0;
+  const hy = active ? (pts[hoverIdx][1] / height) * 100 : 0;
+  // Flip the tooltip horizontally near the edges and vertically when the
+  // point sits high up, so the card's bounds never clip it.
+  const tipX = hx < 18 ? '0' : hx > 82 ? '-100%' : '-50%';
+  const tipY = hy < 42 ? 'calc(0% + 14px)' : 'calc(-100% - 14px)';
+
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="w-full h-full" key={dataKey}>
-      <defs>
-        <linearGradient id="spark-area" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%"  stopColor={fill} stopOpacity="0.55"/>
-          <stop offset="100%" stopColor={fill} stopOpacity="0"/>
-        </linearGradient>
-      </defs>
-      <path d={areaPath} fill="url(#spark-area)" opacity="0.9"/>
-      <path
-        ref={pathRef}
-        d={linePath}
-        fill="none"
-        stroke={stroke}
-        strokeWidth="2.25"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="draw-line"
-        style={{ '--len': pathLen }}
-      />
-      {pts.map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r={i === pts.length - 1 ? 3.5 : 0} fill={stroke}>
-          <title>{data[i].label || ''}: {data[i].value}</title>
-        </circle>
-      ))}
-    </svg>
+    <div
+      ref={wrapRef}
+      className="relative w-full h-full"
+      onMouseMove={handleMove}
+      onMouseLeave={() => setHoverIdx(null)}
+      onTouchStart={(e) => handleMove(e.touches[0])}
+      onTouchMove={(e) => handleMove(e.touches[0])}
+      onTouchEnd={() => setHoverIdx(null)}
+    >
+      <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="w-full h-full" key={dataKey}>
+        <defs>
+          <linearGradient id="spark-area" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"  stopColor={fill} stopOpacity="0.55"/>
+            <stop offset="100%" stopColor={fill} stopOpacity="0"/>
+          </linearGradient>
+        </defs>
+        <path d={areaPath} fill="url(#spark-area)" opacity="0.9"/>
+        <path
+          ref={pathRef}
+          d={linePath}
+          fill="none"
+          stroke={stroke}
+          strokeWidth="2.25"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="draw-line"
+          style={{ '--len': pathLen }}
+        />
+        {/* Crosshair at the hovered point — 1px regardless of stretch. */}
+        {active && (
+          <line
+            x1={pts[hoverIdx][0]} y1={padY - 4} x2={pts[hoverIdx][0]} y2={height - padY}
+            stroke={stroke} strokeWidth="1" strokeDasharray="3 3" opacity="0.45"
+            vectorEffect="non-scaling-stroke"
+          />
+        )}
+        {/* End-of-series marker (kept from the original). */}
+        <circle cx={pts[pts.length-1][0]} cy={pts[pts.length-1][1]} r={3.5} fill={stroke}/>
+      </svg>
+
+      {/* Perfectly-round hover dot (HTML — immune to the non-uniform SVG stretch). */}
+      {active && (
+        <span
+          className="pointer-events-none absolute z-10 w-2.5 h-2.5 rounded-full"
+          style={{
+            left: `${hx}%`, top: `${hy}%`, transform: 'translate(-50%, -50%)',
+            background: stroke,
+            boxShadow: '0 0 0 3px rgb(var(--c-surface-card) / 0.9), 0 0 0 4.5px rgb(var(--c-primary) / 0.35)',
+          }}
+        />
+      )}
+
+      {/* Styled glass tooltip. */}
+      {active && (
+        <div
+          className="pointer-events-none absolute z-20"
+          style={{
+            left: `${hx}%`,
+            top: `${hy}%`,
+            transform: `translate(${tipX}, ${tipY})`,
+          }}
+        >
+          <div className="lg-tile rounded-lg px-2.5 py-1.5 whitespace-nowrap shadow-mid">
+            <div className="text-[10px] uppercase tracking-wide text-muted leading-tight">
+              {fmtSparkLabel(data[hoverIdx].label)}
+            </div>
+            <div className="text-sm font-display tabular-nums text-ink leading-tight mt-0.5">
+              ฿{fmtTHB(data[hoverIdx].value)}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -8834,11 +8933,62 @@ function Sparkline({ data = [], width = 480, height = 110, stroke = 'var(--prima
  * `centerLabel` / `centerValue` are rendered in the donut hole.
  * `onSliceClick(key)` fires when user taps a segment — used to filter.
  */
-function DonutChart({ slices = [], size = 200, thickness = 26, centerLabel, centerValue, onSliceClick }) {
+function DonutChart({ 
+  slices = [], 
+  size = 200, 
+  thickness = 26, 
+  centerLabel, 
+  centerValue, 
+  onSliceClick,
+  hoveredChannel,
+  setHoveredChannel
+}) {
   const total = slices.reduce((s, sl) => s + Math.max(0, sl.value), 0);
   const r = (size - thickness) / 2;
   const cx = size / 2, cy = size / 2;
-  const circumference = 2 * Math.PI * r;
+
+  const [internalHover, setInternalHover] = useState(null);
+  const activeHover = hoveredChannel !== undefined ? hoveredChannel : internalHover;
+  const setActiveHover = setHoveredChannel !== undefined ? setHoveredChannel : setInternalHover;
+
+  const hoveredSlice = useMemo(() => slices.find(s => s.key === activeHover), [slices, activeHover]);
+  const activeGlowColor = hoveredSlice ? hoveredSlice.color : 'rgba(255,255,255,0.7)';
+
+  // Smooth cross-fading for center labels
+  const [displayLabel, setDisplayLabel] = useState(centerLabel);
+  const [displayValue, setDisplayValue] = useState(centerValue);
+  const [displaySub, setDisplaySub] = useState("");
+  const [switching, setSwitching] = useState(false);
+  const prevHoverRef = useRef(activeHover);
+
+  useEffect(() => {
+    if (prevHoverRef.current !== activeHover) {
+      setSwitching(true);
+      const timer = setTimeout(() => {
+        if (hoveredSlice) {
+          setDisplayLabel(hoveredSlice.label);
+          setDisplayValue(fmtMoney(hoveredSlice.value));
+          setDisplaySub(`${((hoveredSlice.value / total) * 100).toFixed(1)}%`);
+        } else {
+          setDisplayLabel(centerLabel);
+          setDisplayValue(centerValue);
+          setDisplaySub("");
+        }
+        setSwitching(false);
+      }, 120);
+      prevHoverRef.current = activeHover;
+      return () => clearTimeout(timer);
+    }
+  }, [activeHover, centerLabel, centerValue, hoveredSlice, total]);
+
+  // Keep display values synced with live props when not hovering
+  useEffect(() => {
+    if (!activeHover) {
+      setDisplayLabel(centerLabel);
+      setDisplayValue(centerValue);
+    }
+  }, [centerLabel, centerValue, activeHover]);
+
   if (total <= 0 || !slices.length) {
     return (
       <div className="flex items-center justify-center" style={{ width: size, height: size }}>
@@ -8848,46 +8998,153 @@ function DonutChart({ slices = [], size = 200, thickness = 26, centerLabel, cent
       </div>
     );
   }
-  let offset = 0;
+
+  const polar = (angleDeg) => {
+    const angleRad = (angleDeg - 90) * Math.PI / 180;
+    return {
+      x: cx + r * Math.cos(angleRad),
+      y: cy + r * Math.sin(angleRad),
+    };
+  };
+
+  const arcPath = (startAngle, endAngle) => {
+    const start = polar(startAngle);
+    const end = polar(endAngle);
+    const largeArc = endAngle - startAngle <= 180 ? 0 : 1;
+    return `M ${start.x.toFixed(3)} ${start.y.toFixed(3)} A ${r} ${r} 0 ${largeArc} 1 ${end.x.toFixed(3)} ${end.y.toFixed(3)}`;
+  };
+
+  const GRAD_IDS = {
+    tiktok: 'url(#grad-tiktok)',
+    shopee: 'url(#grad-shopee)',
+    lazada: 'url(#grad-lazada)',
+    facebook: 'url(#grad-facebook)',
+    store: 'url(#grad-store)',
+  };
+
+  const gap = slices.length > 1 ? 3.5 : 0;
+  let angleCursor = 0;
+
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="donut-chart" style={{ transform: 'rotate(-90deg)' }}>
-      {/* track */}
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(180,168,148,0.15)" strokeWidth={thickness}/>
-      {slices.map((sl) => {
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className={"donut-chart" + (activeHover ? " has-hover" : "")} aria-label="สัดส่วนช่องทางขาย">
+      <defs>
+        <linearGradient id="grad-tiktok" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#ff9a76" />
+          <stop offset="100%" stopColor="#dc7355" />
+        </linearGradient>
+        <linearGradient id="grad-shopee" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#ffd085" />
+          <stop offset="100%" stopColor="#d9a24f" />
+        </linearGradient>
+        <linearGradient id="grad-lazada" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#b8afff" />
+          <stop offset="100%" stopColor="#8d83cf" />
+        </linearGradient>
+        <linearGradient id="grad-facebook" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#a1cbf6" />
+          <stop offset="100%" stopColor="#79a7cf" />
+        </linearGradient>
+        <linearGradient id="grad-store" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#8ce7d5" />
+          <stop offset="100%" stopColor="#55b7a5" />
+        </linearGradient>
+        
+        <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor={activeGlowColor} stopOpacity="0.14" />
+          <stop offset="60%" stopColor={activeGlowColor} stopOpacity="0.03" />
+          <stop offset="100%" stopColor="transparent" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+
+      {/* Donut track background */}
+      <circle cx={cx} cy={cy} r={r} fill="none" className="donut-track" strokeWidth={thickness}/>
+      
+      {/* Donut glass core */}
+      <circle cx={cx} cy={cy} r={Math.max(1, r - thickness / 2 - 12)} className="donut-core" />
+      
+      {/* Liquid core ambient glow */}
+      <circle cx={cx} cy={cy} r={Math.max(1, r - thickness / 2 - 2)} className="donut-core-pulse" fill="url(#coreGlow)" />
+
+      {/* Slices rendering */}
+      {slices.map((sl, i) => {
         const frac = Math.max(0, sl.value) / total;
-        const len = frac * circumference;
-        const dash = `${len} ${circumference - len}`;
-        const dashOffset = -offset;
-        offset += len;
+        const sweep = frac * 360;
+        const start = angleCursor + gap / 2;
+        const end = angleCursor + Math.max(gap, sweep - gap / 2);
+        angleCursor += sweep;
+
+        const pathD = arcPath(start, end);
+        const strokeColor = GRAD_IDS[sl.key] || sl.color;
+        const isActive = activeHover === sl.key;
+
         return (
-          <circle key={sl.key}
-            cx={cx} cy={cy} r={r} fill="none"
-            stroke={sl.color}
-            strokeWidth={thickness}
-            strokeDasharray={dash}
-            strokeDashoffset={dashOffset}
-            className={"donut-segment " + (onSliceClick ? "cursor-pointer" : "")}
-            onClick={onSliceClick ? () => onSliceClick(sl.key) : undefined}
-            style={{
-              animation: `draw-line 0.9s cubic-bezier(.2,.7,.2,1) forwards`,
-              strokeDashoffset: dashOffset,
-            }}
-          >
-            <title>{sl.label}: {((frac)*100).toFixed(1)}%</title>
-          </circle>
+          <g key={sl.key}>
+            {/* Layer 1: Ambient Glow Base */}
+            <path
+              d={pathD}
+              fill="none"
+              stroke={sl.color}
+              strokeWidth={thickness + 6}
+              strokeLinecap="round"
+              pathLength="100"
+              className={"donut-segment-glow " + (isActive ? "active" : "")}
+              style={{
+                '--arc-delay': `${i * 90}ms`,
+                filter: 'blur(3px)',
+                pointerEvents: 'none'
+              }}
+            />
+            {/* Layer 2: Main Liquid Body */}
+            <path
+              d={pathD}
+              fill="none"
+              stroke={strokeColor}
+              strokeWidth={thickness}
+              strokeLinecap="round"
+              pathLength="100"
+              className={"donut-segment " + (isActive ? "active" : "") + (onSliceClick ? " cursor-pointer" : "")}
+              onClick={onSliceClick ? () => onSliceClick(sl.key) : undefined}
+              onMouseEnter={() => setActiveHover(sl.key)}
+              onMouseLeave={() => setActiveHover(null)}
+              style={{
+                '--arc-delay': `${i * 90}ms`,
+              }}
+            >
+              <title>{sl.label}: {((frac)*100).toFixed(1)}%</title>
+            </path>
+            {/* Layer 3: Glass Specular Highlight Sheen */}
+            <path
+              d={pathD}
+              fill="none"
+              stroke="rgba(255, 255, 255, 0.38)"
+              strokeWidth={Math.max(2, thickness * 0.12)}
+              strokeLinecap="round"
+              pathLength="100"
+              className={"donut-segment-gloss " + (isActive ? "active" : "")}
+              style={{
+                '--arc-delay': `${i * 90}ms`,
+                pointerEvents: 'none',
+              }}
+            />
+          </g>
         );
       })}
-      {/* Counter-rotate the inner labels so they're upright */}
-      {(centerLabel || centerValue != null) && (
-        <g transform={`rotate(90 ${cx} ${cy})`}>
-          {centerLabel && (
-            <text x={cx} y={cy - 8} textAnchor="middle" className="text-xs fill-current text-muted" style={{ fontSize: 10 }}>
-              {centerLabel}
+
+      {(displayLabel || displayValue != null) && (
+        <g className={"donut-center-group " + (switching ? "switching" : "")}>
+          {displayLabel && (
+            <text x={cx} y={displaySub ? cy - 12 : cy - 8} textAnchor="middle" className="donut-center-label" style={{ fontSize: 10 }}>
+              {displayLabel}
             </text>
           )}
-          {centerValue != null && (
-            <text x={cx} y={cy + 12} textAnchor="middle" className="font-display fill-current" style={{ fontSize: 22, letterSpacing: '-0.02em' }}>
-              {centerValue}
+          {displayValue != null && (
+            <text x={cx} y={displaySub ? cy + 10 : cy + 11} textAnchor="middle" className="donut-center-value font-display" style={{ fontSize: 20, letterSpacing: '-0.01em' }}>
+              {displayValue}
+            </text>
+          )}
+          {displaySub && (
+            <text x={cx} y={cy + 25} textAnchor="middle" className="donut-center-label font-sans opacity-70" style={{ fontSize: 10, fontWeight: 700 }}>
+              {displaySub}
             </text>
           )}
         </g>
@@ -8909,9 +9166,9 @@ function RadialGauge({ percent = 0, size = 180, thickness = 14, label = 'Margin'
   const cx = size / 2, cy = size / 2;
   const arcLen = (sweep / 360) * 2 * Math.PI * r;
   const fillLen = (safe / 100) * arcLen;
-  const color = percent < 10 ? '#dc2626'
-              : percent < 30 ? '#b45309'
-              : '#1f3d27';
+  const color = percent < 10 ? 'rgb(var(--c-error))'
+              : percent < 30 ? 'rgb(var(--c-warning))'
+              : 'rgb(var(--c-success))';
   // Start at 135deg (bottom-left), sweep clockwise to 405° (bottom-right).
   // Since SVG circle starts at 3 o'clock by default and we rotate -90 at root,
   // we orient the SVG so the gauge's gap is at bottom.
@@ -8919,7 +9176,7 @@ function RadialGauge({ percent = 0, size = 180, thickness = 14, label = 'Margin'
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(135deg)' }}>
       {/* Track */}
       <circle cx={cx} cy={cy} r={r} fill="none"
-        stroke="rgba(180,168,148,0.20)" strokeWidth={thickness}
+        stroke="rgb(var(--c-hairline) / 0.45)" strokeWidth={thickness}
         strokeDasharray={`${arcLen} ${2 * Math.PI * r}`}
         strokeLinecap="round"/>
       {/* Fill */}
@@ -8981,16 +9238,16 @@ function WaterfallChart({ bars = [], height = 240 }) {
   return (
     <svg viewBox={`0 0 ${totalWidth} ${height}`} preserveAspectRatio="xMidYMid meet" className="w-full h-full">
       {/* baseline */}
-      <line x1="0" x2={totalWidth} y1={yZero} y2={yZero} stroke="rgba(180,168,148,0.45)" strokeDasharray="3 4"/>
+      <line x1="0" x2={totalWidth} y1={yZero} y2={yZero} stroke="rgb(var(--c-hairline) / 0.70)" strokeDasharray="3 4"/>
       {segs.map((s, i) => {
         const x = i * (barWidth + gap);
         const yTop = yOf(s.top + s.val);
         const yBot = yOf(s.top);
         const barH = Math.max(2, yBot - yTop);
         const fill = s.type === 'total'
-          ? (s.value >= 0 ? '#1f3d27' : '#dc2626')
-          : s.type === 'negative' ? '#cc785c'
-          : '#3a6a52';
+          ? (s.value >= 0 ? 'rgb(var(--c-success))' : 'rgb(var(--c-error))')
+          : s.type === 'negative' ? 'rgb(var(--c-primary))'
+          : 'rgb(var(--c-accent-teal))';
         const labelY = yTop - 6;
         return (
           <g key={s.key} style={{ '--grow-delay': `${i * 120}ms` }}>
@@ -9003,7 +9260,7 @@ function WaterfallChart({ bars = [], height = 240 }) {
               <line
                 x1={x + barWidth} x2={x + barWidth + gap}
                 y1={yOf(s.running)} y2={yOf(s.running)}
-                stroke="rgba(180,168,148,0.55)" strokeDasharray="3 3"/>
+                stroke="rgb(var(--c-hairline) / 0.76)" strokeDasharray="3 3"/>
             )}
             {/* value label above */}
             <text x={x + barWidth / 2} y={labelY} textAnchor="middle"
@@ -9079,6 +9336,7 @@ function DashboardView({ embedded = false, dateRange: dateRangeProp, onDateRange
   const [topProducts, setTopProducts] = useState([]);
   const [lowStock, setLowStock] = useState([]);
   const [byChannel, setByChannel] = useState([]);
+  const [hoveredChannel, setHoveredChannel] = useState(null);
   // Daily revenue points used by the hero Sparkline. One point per day in
   // the selected range; days with zero revenue still rendered so the line
   // shape reflects calendar pacing, not just non-zero days.
@@ -9138,19 +9396,40 @@ function DashboardView({ embedded = false, dateRange: dateRangeProp, onDateRange
     const prevRows = prevQ.data || [];
     setPrevTotal(prevRows.reduce((s,r)=>s+revenueOf(r),0));
 
-    // Daily series — group by Bangkok date. Seed every day in the range
-    // with 0 first so days with no sales still render as data points (gives
-    // the sparkline a calendar-accurate shape).
-    const dayMap = new Map();
-    for (let i = 0; i < lengthDays; i++) {
-      const d = new Date(fromD.getTime() + i * dayMs);
-      dayMap.set(dateISOBangkok(d), 0);
+    if (lengthDays === 1) {
+      // Single-day range → bucket by Bangkok hour so the sparkline shows an
+      // intraday curve instead of one lone dot. Seed 00:00 up to the last
+      // relevant hour (now, if it's today; otherwise the last hour with a
+      // sale) so there's no misleading flat-zero tail into the future.
+      const isToday = to === todayISO();
+      const saleHours = rangeRows.map(r => hourBangkok(r.sale_date)).filter(h => h != null);
+      const lastSaleHour = saleHours.length ? Math.max(...saleHours) : 0;
+      const nowHour = isToday ? (hourBangkok(new Date()) ?? 23) : 23;
+      const maxHour = isToday ? Math.max(nowHour, lastSaleHour) : Math.max(lastSaleHour, 8);
+      const hourMap = new Map();
+      for (let h = 0; h <= maxHour; h++) hourMap.set(h, 0);
+      rangeRows.forEach(r => {
+        const h = hourBangkok(r.sale_date);
+        if (h != null && hourMap.has(h)) hourMap.set(h, hourMap.get(h) + revenueOf(r));
+      });
+      setDailySeries(Array.from(hourMap.entries()).map(([h, value]) => ({
+        label: `${from} ${String(h).padStart(2, '0')}:00`, value,
+      })));
+    } else {
+      // Daily series — group by Bangkok date. Seed every day in the range
+      // with 0 first so days with no sales still render as data points (gives
+      // the sparkline a calendar-accurate shape).
+      const dayMap = new Map();
+      for (let i = 0; i < lengthDays; i++) {
+        const d = new Date(fromD.getTime() + i * dayMs);
+        dayMap.set(dateISOBangkok(d), 0);
+      }
+      rangeRows.forEach(r => {
+        const key = (r.sale_date || '').slice(0, 10);
+        if (dayMap.has(key)) dayMap.set(key, dayMap.get(key) + revenueOf(r));
+      });
+      setDailySeries(Array.from(dayMap.entries()).map(([day, value]) => ({ label: day, value })));
     }
-    rangeRows.forEach(r => {
-      const key = (r.sale_date || '').slice(0, 10);
-      if (dayMap.has(key)) dayMap.set(key, dayMap.get(key) + revenueOf(r));
-    });
-    setDailySeries(Array.from(dayMap.entries()).map(([day, value]) => ({ label: day, value })));
 
     const chMap = {};
     rangeRows.forEach(r=>{ const k = r.channel||'store'; chMap[k]=(chMap[k]||0)+revenueOf(r); });
@@ -9191,20 +9470,19 @@ function DashboardView({ embedded = false, dateRange: dateRangeProp, onDateRange
   });
   const channelSorted = channelRows.filter(c=>c.total>0).sort((a,b)=>b.total-a.total);
 
-  // Donut palette — punchy enough to read on the dark hero card. Aligns
-  // with the platform brand colors where possible (TikTok ink, Shopee
-  // orange, Lazada purple, Facebook blue) so legend recognition is fast.
+  // Channel palette — distinct enough for chart reading, still softened for
+  // the Champagne/Obsidian luxe themes instead of raw platform primaries.
   const CH_COLORS = {
-    store:    '#d97706',
-    tiktok:   '#f0f0f2',
-    shopee:   '#ea580c',
-    lazada:   '#a78bfa',
-    facebook: '#60a5fa',
+    store:    '#55b7a5',
+    tiktok:   '#dc7355',
+    shopee:   '#d9a24f',
+    lazada:   '#8d83cf',
+    facebook: '#79a7cf',
   };
   const donutSlices = channelSorted.map(c => ({
     key: c.v,
     value: c.total,
-    color: CH_COLORS[c.v] || '#94a3b8',
+    color: CH_COLORS[c.v] || 'rgb(var(--c-muted))',
     label: c.label,
   }));
 
@@ -9318,27 +9596,56 @@ function DashboardView({ embedded = false, dateRange: dateRangeProp, onDateRange
         {stats && (
           <div style={{ '--i': 3 }} className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 fade-in stagger">
             {/* Donut */}
-            <div className="card-dark p-5 lg:p-6 lg:col-span-5">
+            <div className="card-dark channel-mix-card p-5 lg:p-6 lg:col-span-5">
               <div className="flex items-center justify-between mb-3">
                 <div className="font-display text-lg lg:text-xl flex items-center gap-2">
                   <Icon name="store" size={18}/> ช่องทางขาย
                 </div>
                 <span className="text-xs text-on-dark-soft">{channelSorted.length} ช่อง</span>
               </div>
-              <div className="flex flex-col items-center gap-4 text-on-dark">
-                <DonutChart slices={donutSlices} size={200} thickness={28}
+              <div className="channel-mix-layout text-on-dark">
+                <DonutChart 
+                  slices={donutSlices} 
+                  size={210} 
+                  thickness={24}
                   centerLabel="รวม"
-                  centerValue={fmtMoney(stats.rangeTotal)}/>
-                <div className="w-full grid grid-cols-1 gap-1.5">
-                  {channelSorted.map(c => (
-                    <div key={c.v} className="flex items-center gap-2.5 text-xs">
-                      <span className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
-                            style={{background: CH_COLORS[c.v] || '#94a3b8'}}/>
-                      <span className="flex-1 truncate text-on-dark">{c.label}</span>
-                      <span className="tabular-nums text-on-dark-soft">{c.share.toFixed(1)}%</span>
-                      <span className="tabular-nums text-on-dark font-medium w-24 text-right">{fmtMoney(c.total)}</span>
-                    </div>
-                  ))}
+                  centerValue={fmtMoney(stats.rangeTotal)}
+                  hoveredChannel={hoveredChannel}
+                  setHoveredChannel={setHoveredChannel}
+                />
+                <div className={"channel-legend" + (hoveredChannel ? " has-hover" : "")}>
+                  {channelSorted.map(c => {
+                    const cColor = CH_COLORS[c.v] || 'rgb(var(--c-muted))';
+                    const cGlow = c.v === 'store' ? 'rgba(85, 183, 165, 0.35)' :
+                                  c.v === 'tiktok' ? 'rgba(220, 115, 85, 0.35)' :
+                                  c.v === 'shopee' ? 'rgba(217, 162, 79, 0.35)' :
+                                  c.v === 'lazada' ? 'rgba(141, 131, 207, 0.35)' :
+                                  c.v === 'facebook' ? 'rgba(121, 167, 207, 0.35)' : 'rgba(255,255,255,0.15)';
+                    return (
+                      <div 
+                        key={c.v} 
+                        className={"channel-legend-row" + (hoveredChannel === c.v ? " active" : "")}
+                        onMouseEnter={() => setHoveredChannel(c.v)}
+                        onMouseLeave={() => setHoveredChannel(null)}
+                        style={{ 
+                          '--channel': cColor, 
+                          '--share': `${Math.max(2, c.share)}%`,
+                          '--channel-color': cColor,
+                          '--channel-glow': cGlow
+                        }}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="channel-dot"/>
+                          <span className="flex-1 truncate channel-name">{c.label}</span>
+                          <span className="tabular-nums channel-share">{c.share.toFixed(1)}%</span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <span className="channel-bar"><span /></span>
+                          <span className="tabular-nums channel-total">{fmtMoney(c.total)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
                   {!channelSorted.length && (
                     <div className="text-on-dark-soft text-sm py-4 text-center">ยังไม่มียอดขาย</div>
                   )}
@@ -9369,8 +9676,8 @@ function DashboardView({ embedded = false, dateRange: dateRangeProp, onDateRange
                           </div>
                           <span className="text-xs text-muted tabular-nums flex-shrink-0">{p.q} ชิ้น</span>
                         </div>
-                        <div className="h-2 rounded-full bg-hairline/40 overflow-hidden">
-                          <div className="h-full rounded-full bar-grow-x"
+                        <div className="h-2 rounded-full glass-tube overflow-hidden">
+                          <div className="h-full rounded-full bar-grow-x glass-tube-fill"
                                style={{
                                  width: `${Math.max(2, pct)}%`,
                                  background: 'linear-gradient(90deg, rgba(204,120,92,0.85), rgba(232,165,90,0.85))',
@@ -10388,7 +10695,7 @@ function ProfitLossView({ embedded = false }) {
                    style={{ background: 'rgba(255,255,255,0.10)' }}>
                 {/* tick markers at 15% (mid) and 30% (cap) of the bar */}
                 <span className="absolute top-0 bottom-0 w-px bg-surface-strong/15" style={{ left: '50%' }}/>
-                <div className="h-full bar-grow-x rounded-full"
+                <div className="h-full bar-grow-x rounded-full glass-tube-fill"
                   style={{
                     width: Math.min(100, Math.max(2, (agg.margin / 30) * 100)) + '%',
                     background: netRealProfit >= 0
@@ -10613,8 +10920,8 @@ function ProfitLossView({ embedded = false }) {
                 <span className="inline-block w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: swatch }}/>
                 <div className="flex-1 min-w-0">
                   <div className={"text-sm " + (accent ? 'font-medium text-ink' : 'text-body')}>{label}</div>
-                  <div className="mt-1 h-1.5 rounded-full bg-surface-card overflow-hidden">
-                    <div className="h-full bar-grow-x rounded-full"
+                  <div className="mt-1 h-1.5 rounded-full glass-tube overflow-hidden">
+                    <div className="h-full bar-grow-x rounded-full glass-tube-fill"
                       style={{ width: Math.min(100, Math.max(0, share)) + '%', background: swatch }}/>
                   </div>
                 </div>
@@ -10635,20 +10942,20 @@ function ProfitLossView({ embedded = false }) {
                   <span>ยอดขาย <span className="text-ink font-medium tabular-nums">{fmtTHB(rev)}</span></span>
                   <span className="tabular-nums">100%</span>
                 </div>
-                <div className="h-3 rounded-full bg-[#f1ebe2] overflow-hidden flex shadow-inner">
-                  <div className="h-full bar-grow-x" title={`ทุนขาย ${fmtTHB(agg.cost)}`}
-                    style={{ width: costPct + '%', background: '#cc785c', '--grow-delay': '0ms' }}/>
+                <div className="h-3 rounded-full glass-tube overflow-hidden flex">
+                  <div className="h-full bar-grow-x glass-tube-fill" title={`ทุนขาย ${fmtTHB(agg.cost)}`}
+                    style={{ width: costPct + '%', background: 'rgb(var(--c-primary))', '--grow-delay': '0ms' }}/>
                   {shopExp.hasData && (
-                    <div className="h-full bar-grow-x" title={`ค่าใช้จ่ายร้านค้า ${fmtTHB(shopExp.total)}`}
-                      style={{ width: expPct + '%', background: '#b45309', '--grow-delay': '90ms' }}/>
+                    <div className="h-full bar-grow-x glass-tube-fill" title={`ค่าใช้จ่ายร้านค้า ${fmtTHB(shopExp.total)}`}
+                      style={{ width: expPct + '%', background: 'rgb(var(--c-warning))', '--grow-delay': '90ms' }}/>
                   )}
                   {lostGoods.total > 0 && (
-                    <div className="h-full bar-grow-x" title={`ของหาย ${fmtTHB(lostGoods.total)}`}
-                      style={{ width: lostPct + '%', background: '#a16207', '--grow-delay': '135ms' }}/>
+                    <div className="h-full bar-grow-x glass-tube-fill" title={`ของหาย ${fmtTHB(lostGoods.total)}`}
+                      style={{ width: lostPct + '%', background: 'color-mix(in srgb, rgb(var(--c-warning)) 82%, rgb(var(--c-error)))', '--grow-delay': '135ms' }}/>
                   )}
                   {!isLoss && (
-                    <div className="h-full bar-grow-x" title={`กำไรสุทธิ ${fmtTHB(netRealProfit)}`}
-                      style={{ width: profitPct + '%', background: '#1f3d27', '--grow-delay': '180ms' }}/>
+                    <div className="h-full bar-grow-x glass-tube-fill" title={`กำไรสุทธิ ${fmtTHB(netRealProfit)}`}
+                      style={{ width: profitPct + '%', background: 'rgb(var(--c-success))', '--grow-delay': '180ms' }}/>
                   )}
                 </div>
                 <div className="mt-1.5 flex items-center justify-between text-[11px]">
@@ -10668,20 +10975,20 @@ function ProfitLossView({ embedded = false }) {
                 {/* Detail list — same colours as the stacked bar so the eye
                     maps each segment to its number without a legend. */}
                 <div className="mt-5 space-y-2.5">
-                  <Row swatch="#7a8a82" label="ยอดขายรวม" value={rev} share={100}/>
-                  <Row swatch="#cc785c" label="ทุนขาย" value={agg.cost}
+                  <Row swatch="rgb(var(--c-muted))" label="ยอดขายรวม" value={rev} share={100}/>
+                  <Row swatch="rgb(var(--c-primary))" label="ทุนขาย" value={agg.cost}
                     share={costPct} negative/>
                   {shopExp.hasData && (
-                    <Row swatch="#b45309" label="ค่าใช้จ่ายร้านค้า" value={shopExp.total}
+                    <Row swatch="rgb(var(--c-warning))" label="ค่าใช้จ่ายร้านค้า" value={shopExp.total}
                       share={expPct} negative/>
                   )}
                   {lostGoods.total > 0 && (
-                    <Row swatch="#a16207"
+                    <Row swatch="color-mix(in srgb, rgb(var(--c-warning)) 82%, rgb(var(--c-error)))"
                       label={`ของหาย / Loss · ${lostGoods.count} ใบ`}
                       value={lostGoods.total} share={lostPct} negative/>
                   )}
                   <Row
-                    swatch={isLoss ? '#c2410c' : '#1f3d27'}
+                    swatch={isLoss ? 'rgb(var(--c-error))' : 'rgb(var(--c-success))'}
                     label={(shopExp.hasData || lostGoods.total > 0) ? 'กำไรสุทธิจริง' : 'กำไรขั้นต้น'}
                     value={netRealProfit}
                     share={Math.abs(margin)}
@@ -10809,8 +11116,8 @@ function ProfitLossView({ embedded = false }) {
                         {pos?'+':''}{fmtTHB(p.profit)}
                       </span>
                     </div>
-                    <div className="h-2 rounded-full bg-hairline/40 overflow-hidden">
-                      <div className="h-full rounded-full bar-grow-x"
+                    <div className="h-2 rounded-full glass-tube overflow-hidden">
+                      <div className="h-full rounded-full bar-grow-x glass-tube-fill"
                         style={{
                           width: `${Math.max(2, pct)}%`,
                           background: pos
@@ -12247,4 +12554,3 @@ function App() {
 const _container = document.getElementById("root");
 if (!_container._reactRoot) _container._reactRoot = ReactDOM.createRoot(_container);
 _container._reactRoot.render(<App />);
-

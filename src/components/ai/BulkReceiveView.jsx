@@ -1305,8 +1305,8 @@ function SubmitBar({ summary, submitting, savingProgress, bills, onSetAllVat, on
             <span>กำลังบันทึก {savingProgress.done}/{savingProgress.total} บิล</span>
             <span>{pct}%</span>
           </div>
-          <div className="h-1.5 rounded-full bg-surface-strong/60 overflow-hidden">
-            <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${pct}%` }}/>
+          <div className="h-1.5 rounded-full glass-tube overflow-hidden">
+            <div className="h-full rounded-full glass-tube-fill bg-primary transition-all duration-300" style={{ width: `${pct}%` }}/>
           </div>
         </div>
       )}
