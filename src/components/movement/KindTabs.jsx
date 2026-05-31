@@ -43,7 +43,7 @@ export default function KindTabs({ tabs, current, onChange, Icon }) {
             <button
               type="button"
               className={
-                'px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-all ' +
+                'px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-all whitespace-nowrap ' +
                 cls
               }
               onClick={() => onChange(t.k)}

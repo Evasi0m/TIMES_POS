@@ -3121,7 +3121,7 @@ function LoginScreen() {
     <div className="min-h-screen flex items-center justify-center bg-canvas px-5">
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center gap-3 mb-8 lg:mb-10">
-          <AnimatedLogo size={56} mode="cycle" />
+          <AnimatedLogo size={68} mode="cycle" />
           <div style={{fontFamily:"'Jost', sans-serif", fontWeight:600}} className="text-3xl lg:text-4xl leading-none">TIMES</div>
         </div>
         <div className="card-canvas p-6 lg:p-8">
@@ -3259,7 +3259,7 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
         </defs>
       </svg>
       <div className="sidebar-header px-6 py-6 flex items-center gap-3 border-b">
-        <AnimatedLogo size={41} mode="interactive" />
+        <AnimatedLogo size={49} mode="interactive" />
         <div style={{fontFamily:"'Jost', sans-serif", fontWeight:600}} className="text-2xl leading-none self-center">TIMES</div>
       </div>
       <nav className="p-3 flex-1 overflow-y-auto" aria-label="เมนูหลัก">
@@ -3348,7 +3348,7 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
     <header className="lg:hidden sticky top-0 z-40 mobile-topbar pt-safe">
       <div className="flex items-center justify-between px-4 h-14">
         <div className="flex items-center gap-2">
-          <AnimatedLogo size={32} mode="interactive" />
+          <AnimatedLogo size={38} mode="interactive" />
           <div style={{fontFamily:"'Jost', sans-serif", fontWeight:600}} className="text-xl leading-none self-center">TIMES</div>
           <div className="text-muted-soft mx-1">·</div>
           <div className="text-sm text-muted">{title}</div>
@@ -4428,6 +4428,11 @@ function POSView() {
                       ? <span className="text-white ml-0.5">*</span>
                       : <span className="text-white/70 ml-0.5 font-normal normal-case tracking-normal">(ทีหลังได้)</span>}
                 </div>
+                {!deferNet && netReceived !== "" && Number(netReceived) > 0 && grand > 0 && (
+                  <div className="text-[11px] text-white/90 tabular-nums font-semibold">
+                    ค่าธรรมเนียม {((grand - Number(netReceived)) / grand * 100).toFixed(1)}%
+                  </div>
+                )}
               </div>
               {deferNet ? (
                 <div className="flex items-center justify-between gap-2">
@@ -4439,11 +4444,6 @@ function POSView() {
               ) : (
                 <div className="flex items-center gap-2">
                   <div className="flex-1">
-                    {netReceived !== "" && Number(netReceived) > 0 && grand > 0 && (
-                      <div className="text-[11px] text-white/85 tabular-nums text-right mb-1">
-                        ค่าธรรมเนียม {((grand - Number(netReceived)) / grand * 100).toFixed(1)}%
-                      </div>
-                    )}
                     <input
                       ref={netReceivedRef}
                       type="number"
@@ -7150,7 +7150,7 @@ function SalesView({ onGoPOS }) {
               </button>
             </>)}
             {detail && (
-              <button className="btn-secondary" style={{ background: 'linear-gradient(180deg, rgba(204,120,92,0.85) 0%, rgba(184,100,72,0.92) 100%)', color: '#fff', borderColor: 'rgba(255,255,255,0.18)', boxShadow: '0 2px 8px rgba(184,100,72,0.35), 0 1px 0 rgba(255,255,255,0.18) inset' }} onClick={()=>setReprintId(detail.order.id)}>
+              <button className="btn-print-receipt" onClick={()=>setReprintId(detail.order.id)}>
                 <Icon name="receipt" size={16}/> พิมพ์ใบเสร็จ
               </button>
             )}
@@ -7564,7 +7564,7 @@ function ReceiveView() {
           to 22px so it fills the larger tap area and reads clearly
           without a text label. Desktop reverts to icon + text. */}
       <button
-        className="btn-add-product !py-2 !text-sm icon-btn-44 !w-12 !h-12 lg:!w-auto lg:!h-10"
+        className="btn-add-product !py-2 !text-sm icon-btn-44 !w-12 !h-12 lg:!w-auto lg:!h-10 whitespace-nowrap flex-shrink-0"
         onClick={()=>setAddProductOpen(true)}
         aria-label="เพิ่มรุ่นสินค้า"
       >
@@ -7572,7 +7572,7 @@ function ReceiveView() {
         <span className="hidden lg:inline lg:ml-1">เพิ่มรุ่นสินค้า</span>
       </button>
       <button
-        className="btn-secondary !py-2 !text-sm icon-btn-44 !w-12 !h-12 lg:!w-auto lg:!h-10"
+        className="btn-secondary !py-2 !text-sm icon-btn-44 !w-12 !h-12 lg:!w-auto lg:!h-10 whitespace-nowrap flex-shrink-0"
         onClick={()=>setHistoryOpen(true)}
         aria-label="ดูประวัติ"
       >
@@ -7633,7 +7633,7 @@ function ReturnView()  {
     // (`!py-3 !text-base` ≈ 48px tall) and the camera-scan button next
     // to it. Icon bumped to 22px to fill the larger button visually.
     <button
-      className="btn-secondary !py-2 !text-sm icon-btn-44 !w-12 !h-12 lg:!w-auto lg:!h-auto"
+      className="btn-secondary !py-2 !text-sm icon-btn-44 !w-12 !h-12 lg:!w-auto lg:!h-auto whitespace-nowrap flex-shrink-0"
       onClick={()=>setHistoryOpen(true)}
       aria-label="ดูประวัติรับคืน"
     >

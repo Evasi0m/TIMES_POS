@@ -5,9 +5,9 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
  *
  * Modes:
  *   "cycle"       → Login screen: rotates through all 5 moods every few seconds
- *                   with a crossfade + gentle floating animation.
+ *                   with a stable double-buffered spring crossfade and bobbing float.
  *   "interactive" → Sidebar / Mobile TopBar: shows default mood, wiggles on hover,
- *                   breathing glow at rest, click → random mood for 2s.
+ *                   breathing glow at rest, click → random mood for 2s (with smooth morph back).
  *   "static"      → Just renders one mood with no animation.
  *
  * All 5 SVGs live in /logo/ (public folder) so they're served as-is by Vite.
@@ -57,45 +57,56 @@ function StaticLogo({ size, className, mood }) {
   );
 }
 
-/* ── Cycle: rotates moods with crossfade — used on Login ── */
+/* ── Cycle: rotates moods with stable-rendered spring crossfade ── */
 function CycleLogo({ size, className }) {
   const [idx, setIdx] = useState(0);
-  const [fading, setFading] = useState(false);
+  const [prevIdx, setPrevIdx] = useState(null);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setFading(true);
-      // After fade-out completes, switch mood and fade back in
-      setTimeout(() => {
-        setIdx(prev => (prev + 1) % MOODS.length);
-        setFading(false);
-      }, 280); // matches CSS transition duration
+      setPrevIdx(idx);
+      setIdx(prev => (prev + 1) % MOODS.length);
     }, 3000);
     return () => clearInterval(interval);
-  }, []);
+  }, [idx]);
 
-  const mood = MOODS[idx];
+  const currentMood = MOODS[idx];
+  const previousMood = prevIdx !== null ? MOODS[prevIdx] : null;
 
   return (
     <div
-      className={`animated-logo animated-logo--float ${className}`}
-      style={{ width: size, height: size, position: 'relative' }}
+      className={`animated-logo animated-logo-container animated-logo--float ${className}`}
+      style={{ width: size, height: size }}
     >
-      <img
-        key={mood}
-        src={MOOD_SRCS[mood]}
-        alt={`TIMES logo — ${mood}`}
-        className={`animated-logo__img ${fading ? 'animated-logo__img--out' : 'animated-logo__img--in'}`}
-        style={{ width: size, height: size, objectFit: 'contain' }}
-        draggable={false}
-      />
+      {MOODS.map(m => {
+        const isCurrent = m === currentMood;
+        const isPrevious = m === previousMood;
+        
+        let layerClass = "animated-logo-layer animated-logo-layer--hidden";
+        if (isCurrent) {
+          layerClass = "animated-logo-layer animated-logo-layer--incoming";
+        } else if (isPrevious) {
+          layerClass = "animated-logo-layer animated-logo-layer--outgoing";
+        }
+
+        return (
+          <img
+            key={m}
+            src={MOOD_SRCS[m]}
+            alt={`TIMES logo — ${m}`}
+            className={layerClass}
+            draggable={false}
+          />
+        );
+      })}
     </div>
   );
 }
 
-/* ── Interactive: hover wiggle, breathing glow, click → random mood ── */
+/* ── Interactive: hover wiggle, breathing glow, click → random mood with smooth morph ── */
 function InteractiveLogo({ size, className, defaultMood }) {
   const [mood, setMood] = useState(defaultMood);
+  const [prevMood, setPrevMood] = useState(null);
   const [bouncing, setBouncing] = useState(false);
   const timerRef = useRef(null);
 
@@ -103,14 +114,17 @@ function InteractiveLogo({ size, className, defaultMood }) {
     // Pick a random mood different from current
     const others = MOODS.filter(m => m !== mood);
     const pick = others[Math.floor(Math.random() * others.length)];
+    
+    setPrevMood(mood);
     setMood(pick);
     setBouncing(true);
 
     // Clear any existing timer
     if (timerRef.current) clearTimeout(timerRef.current);
 
-    // Revert to default after 2s
+    // Revert to default after 2s with smooth morph
     timerRef.current = setTimeout(() => {
+      setPrevMood(pick);
       setMood(defaultMood);
       setBouncing(false);
     }, 2000);
@@ -122,18 +136,37 @@ function InteractiveLogo({ size, className, defaultMood }) {
   }, []);
 
   return (
-    <img
-      src={MOOD_SRCS[mood]}
-      alt={`TIMES logo — ${mood}`}
+    <div
       className={
-        `animated-logo animated-logo--glow animated-logo--interactive` +
+        `animated-logo animated-logo-container animated-logo--glow animated-logo--interactive` +
         (bouncing ? ' animated-logo--bounce' : '') +
         (className ? ` ${className}` : '')
       }
-      style={{ width: size, height: size, objectFit: 'contain', cursor: 'pointer' }}
+      style={{ width: size, height: size, cursor: 'pointer' }}
       onClick={handleClick}
-      draggable={false}
       title="TICK — คลิกเปลี่ยน mood!"
-    />
+    >
+      {MOODS.map(m => {
+        const isCurrent = m === mood;
+        const isPrevious = m === prevMood;
+        
+        let layerClass = "animated-logo-layer animated-logo-layer--hidden";
+        if (isCurrent) {
+          layerClass = "animated-logo-layer animated-logo-layer--incoming";
+        } else if (isPrevious) {
+          layerClass = "animated-logo-layer animated-logo-layer--outgoing";
+        }
+
+        return (
+          <img
+            key={m}
+            src={MOOD_SRCS[m]}
+            alt={`TIMES logo — ${m}`}
+            className={layerClass}
+            draggable={false}
+          />
+        );
+      })}
+    </div>
   );
 }

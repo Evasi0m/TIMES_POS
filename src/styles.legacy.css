@@ -234,18 +234,43 @@
     animation: logo-bounce 0.45s ease-in-out !important;
   }
 
-  /* ── Crossfade for mood cycling ── */
-  .animated-logo__img {
-    display: block;
-    transition: opacity 0.28s ease-out, transform 0.28s ease-out;
+  /* ── Crossfade for mood morphing (double-layer spring crossfade) ── */
+  .animated-logo-container {
+    position: relative;
+    display: inline-block;
+    flex-shrink: 0;
+    user-select: none;
+    -webkit-user-drag: none;
   }
-  .animated-logo__img--in {
+  
+  .animated-logo-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transition: opacity 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: none;
+  }
+
+  .animated-logo-layer--incoming {
     opacity: 1;
-    transform: scale(1);
+    transform: scale(1) rotate(0deg);
+    z-index: 2;
   }
-  .animated-logo__img--out {
+
+  .animated-logo-layer--outgoing {
     opacity: 0;
-    transform: scale(0.88);
+    transform: scale(0.8) rotate(-12deg);
+    z-index: 1;
+  }
+
+  .animated-logo-layer--hidden {
+    opacity: 0;
+    transform: scale(0.8) rotate(-12deg);
+    z-index: 0;
+    pointer-events: none;
   }
 
   /* Reduced motion — respect user preference */
@@ -480,6 +505,8 @@
     cursor: pointer;
     transition: all .18s var(--ease-out);
     text-decoration: none;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   .btn-add-product:hover {
     background: linear-gradient(180deg, rgba(218,134,106,0.95) 0%, rgba(198,114,86,1) 100%);
@@ -515,10 +542,21 @@
   .btn-primary:hover {
     filter: brightness(1.05);
     transform: translateY(-1px);
-    box-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.5) inset,
-      0 -1px 0 rgba(0, 0, 0, 0.10) inset,
-      0 12px 28px -6px rgba(204, 120, 92, 0.55);
+    animation: btn-primary-glow 2.5s ease-in-out infinite;
+  }
+  @keyframes btn-primary-glow {
+    0%, 100% {
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.5) inset,
+        0 -1px 0 rgba(0, 0, 0, 0.10) inset,
+        0 12px 28px -6px rgba(204, 120, 92, 0.55);
+    }
+    50% {
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.5) inset,
+        0 -1px 0 rgba(0, 0, 0, 0.10) inset,
+        0 12px 36px 0px rgba(204, 120, 92, 0.85);
+    }
   }
   .btn-primary:active { transform: translateY(0) scale(0.98); filter: brightness(0.95); transition-duration: .08s; }
   .btn-primary:disabled { background: rgb(var(--c-primary-disabled)); color: rgb(var(--c-muted)); cursor: not-allowed; box-shadow: none; transform: none; filter: none; }
@@ -596,6 +634,30 @@
   .btn-secondary:hover { background: rgb(var(--c-canvas) / 0.96); transform: translateY(-1px); box-shadow: var(--shadow-mid); }
   .btn-secondary:active { transform: translateY(0) scale(0.98); transition-duration: .08s; }
   :root[data-theme="dark"] .btn-secondary:hover { background: rgb(var(--c-surface-cream-strong) / 0.94); }
+
+  .btn-print-receipt {
+    background: linear-gradient(180deg, rgba(204,120,92,0.85) 0%, rgba(184,100,72,0.92) 100%);
+    color: #fff !important;
+    border: 1px solid rgba(255,255,255,0.18);
+    box-shadow: 0 2px 8px rgba(184,100,72,0.35), 0 1px 0 rgba(255,255,255,0.18) inset;
+    transition: transform .15s var(--ease-out), box-shadow .2s var(--ease-out), filter .15s;
+    cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 12px 22px;
+    min-height: 44px;
+    border-radius: 11px;
+    font-weight: 500;
+    font-size: 15px;
+  }
+  .btn-print-receipt:hover {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+    box-shadow: 0 5px 14px rgba(184,100,72,0.50), 0 1px 0 rgba(255,255,255,0.28) inset;
+  }
+  .btn-print-receipt:active {
+    transform: translateY(0) scale(0.98);
+    transition-duration: .08s;
+  }
 
   .btn-danger-modal {
     background:
@@ -1503,7 +1565,13 @@
       0 0 0 1px rgba(255, 180, 180, 0.35),
       0 1px 0 rgba(255, 230, 230, 0.55) inset,
       0 -1px 0 rgba(60, 5, 5, 0.30) inset;
-    transform: translateY(-1px);
+    animation: ruby-rumble 0.14s linear infinite;
+  }
+  @keyframes ruby-rumble {
+    0%, 100% { transform: translateY(-1px) rotate(0deg); }
+    25%      { transform: translateY(-1px) translate(-0.5px, 0.5px) rotate(-0.5deg); }
+    50%      { transform: translateY(-1px) translate(0.5px, -0.5px) rotate(0.5deg); }
+    75%      { transform: translateY(-1px) translate(-0.5px, -0.5px) rotate(-0.5deg); }
   }
   .btn-ruby-premium:active {
     transform: scale(0.96);
@@ -2054,6 +2122,17 @@
   button:hover  > svg[data-icon="search"],
   label:hover   > svg[data-icon="search"] {
     transform: scale(1.12) rotate(-10deg) translateX(-1px);
+  }
+
+  /* RECEIPT — paper rolls up and down like it's printing */
+  button:hover  > svg[data-icon="receipt"],
+  a:hover       > svg[data-icon="receipt"],
+  .pressable:hover > svg[data-icon="receipt"] {
+    animation: icon-receipt-roll 0.6s ease-in-out infinite;
+  }
+  @keyframes icon-receipt-roll {
+    0%, 100% { transform: translateY(0) scale(1.08); }
+    50%      { transform: translateY(-2.5px) scale(1.08); }
   }
 
   /* CHEVRONS — slide in their pointing direction */
