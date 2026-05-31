@@ -1,4 +1,4 @@
-// CMG bill parser v6 — multi-key pool + model cascade.
+// CMG bill parser v7 — multi-key pool + model cascade + per-item needs_review.
 //
 // Accepts one OR many base64-encoded photos of Central Trading (CMG)
 // supplier invoices, sends them to Gemini in ONE request with a strict
@@ -98,9 +98,10 @@ Rules:
    - quantity:   integer in the จำนวน column (the printed number, ignore handwritten checkmarks).
    - unit_cost:  the ราคา/หน่วย column. Numbers use comma thousands separator — parse "1,138.32" as 1138.32. This is the PRE-VAT cost per single piece.
 4. IGNORE any handwritten pen/pencil marks overlaying the printed numbers — only read printed values.
-5. NEVER calculate or infer numbers. If a value is unreadable, use 0 (do not guess).
-6. The number of rows per bill MUST equal the number of printed item rows on that bill.
-7. The output array MUST have exactly one entry per input image, in the SAME ORDER as the images were provided. Do NOT reorder, merge, or drop bills.
+5. NEVER calculate or infer numbers. Always return your best reading of the printed value. Use 0 ONLY when there is truly no printed number to read at all.
+6. For EACH item set needs_review=true when you are NOT confident about model_code, quantity, or unit_cost — e.g. the print is blurry/cut off, a handwritten mark overlaps the digits, glare obscures it, or you had to guess between similar characters (0/O, 1/7, 8/B). Otherwise set needs_review=false. Still return your best reading either way; needs_review just flags it for a human to double-check.
+7. The number of rows per bill MUST equal the number of printed item rows on that bill.
+8. The output array MUST have exactly one entry per input image, in the SAME ORDER as the images were provided. Do NOT reorder, merge, or drop bills.
 
 Return JSON matching the schema. No prose.`;
 
@@ -119,11 +120,12 @@ const RESPONSE_SCHEMA = {
             items: {
               type: 'OBJECT',
               properties: {
-                model_code: { type: 'STRING' },
-                quantity:   { type: 'INTEGER' },
-                unit_cost:  { type: 'NUMBER' },
+                model_code:   { type: 'STRING' },
+                quantity:     { type: 'INTEGER' },
+                unit_cost:    { type: 'NUMBER' },
+                needs_review: { type: 'BOOLEAN' },
               },
-              required: ['model_code', 'quantity', 'unit_cost'],
+              required: ['model_code', 'quantity', 'unit_cost', 'needs_review'],
             },
           },
         },
@@ -399,9 +401,10 @@ Deno.serve(async (req: Request) => {
       const bills = images.map((_, idx) => {
         const b = billsRaw[idx] || {};
         const items = Array.isArray(b.items) ? b.items.map((x: any) => ({
-          model_code: String(x?.model_code ?? '').trim(),
-          quantity:   Math.max(0, Math.round(Number(x?.quantity) || 0)),
-          unit_cost:  Math.max(0, Number(x?.unit_cost) || 0),
+          model_code:   String(x?.model_code ?? '').trim(),
+          quantity:     Math.max(0, Math.round(Number(x?.quantity) || 0)),
+          unit_cost:    Math.max(0, Number(x?.unit_cost) || 0),
+          needs_review: Boolean(x?.needs_review),
         })).filter((x: any) => x.model_code) : [];
         return {
           is_cmg_bill:         Boolean(b.is_cmg_bill),

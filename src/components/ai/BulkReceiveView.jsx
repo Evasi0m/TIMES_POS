@@ -1131,6 +1131,11 @@ function BillCard({
   const incompleteRows = (!isNonCmg && !isEmpty && unresolved === 0)
     ? bill.rows.filter((r) => !(Number(r.unit_cost) > 0) || !(Number(r.quantity) > 0)).length
     : 0;
+  // B1: rows the AI itself flagged as uncertain — informational (doesn't
+  // block submit), nudges the user to eyeball them against the image.
+  const reviewRows = (!isNonCmg && !isEmpty)
+    ? bill.rows.filter((r) => r.needsReview).length
+    : 0;
 
   return (
     <div className="card-canvas overflow-hidden">
@@ -1230,6 +1235,16 @@ function BillCard({
               <Icon name="alert" size={12}/>
               เหลือ {incompleteRows} รายการที่ AI อ่าน ทุน/จำนวน ไม่ออก — กรอกให้ครบก่อนบันทึก
             </div>
+          )}
+          {reviewRows > 0 && (
+            <button
+              type="button"
+              onClick={() => bill.previewUrl && onZoom?.(bill.previewUrl)}
+              className="text-xs text-warning bg-warning/10 border border-warning/30 rounded-md px-2 py-1 inline-flex items-center gap-1.5 hover:bg-warning/15 transition"
+            >
+              <Icon name="alert" size={12}/>
+              AI ไม่มั่นใจ {reviewRows} รายการ — แตะดูรูปเทียบให้ชัวร์
+            </button>
           )}
           {bill.saveState === 'failed' && bill.saveError && (
             <AIErrorCard

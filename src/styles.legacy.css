@@ -2515,6 +2515,31 @@
   .lightbox-btn:hover { background: rgba(255, 255, 255, 0.26); }
   .lightbox-btn:active { transform: scale(0.92); }
 
+  /* B1: 'ตรวจ' chip on an AI-uncertain row */
+  .ai-review-chip {
+    flex-shrink: 0;
+    display: inline-flex; align-items: center; gap: 2px;
+    padding: 1px 6px;
+    border-radius: 9999px;
+    font-size: 10px; font-weight: 700; line-height: 1.4;
+    color: rgb(var(--c-warning));
+    background: rgb(var(--c-warning) / 0.14);
+    border: 1px solid rgb(var(--c-warning) / 0.35);
+  }
+  /* A2: ×N markup quick-fill chips in the new-product form */
+  .ai-markup-chip {
+    padding: 2px 7px;
+    border-radius: 9999px;
+    font-size: 11px; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: rgb(var(--c-primary));
+    background: rgb(var(--c-primary) / 0.1);
+    border: 1px solid rgb(var(--c-primary) / 0.22);
+    transition: background .14s ease, transform .12s ease;
+  }
+  .ai-markup-chip:hover { background: rgb(var(--c-primary) / 0.18); }
+  .ai-markup-chip:active { transform: scale(0.94); }
+
   /* list rows */
   .pnb-row { transition: background .16s ease; }
   .pnb-row:hover { background: rgb(var(--c-surface-strong) / 0.6); }

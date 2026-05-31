@@ -30,6 +30,8 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 're
 import Icon from '../ui/Icon.jsx';
 import { classifyMatch, findCandidates } from '../../lib/fuzzy-match.js';
 import RecentReceiveBadge from '../movement/RecentReceiveBadge.jsx';
+import { addVat, stripVat, fmtTHB } from '../../lib/money.js';
+import { suggestedRetail } from '../../lib/ai-receive.js';
 
 // ─── Status descriptor lookup ────────────────────────────────────────
 // Two-bucket palette: resolved rows (auto / user-added new) get a green
@@ -90,6 +92,10 @@ export function buildRowFromAi(it, catalog) {
     // surviving into UI state.
     quantity:   Math.max(0, Math.round(Number(it.quantity) || 0)),
     unit_cost:  Math.max(0, Number(it.unit_cost) || 0),
+    // B1: AI flagged this row as uncertain (blur/glare/handwriting). The
+    // value is still its best reading — we just highlight it for a human
+    // double-check. Missing field (old edge fn) → false (back-compat).
+    needsReview: Boolean(it.needs_review),
     status:     match.status,        // auto | suggestions | none
     product:    match.product || null,
     candidates: match.candidates || [],
@@ -279,7 +285,7 @@ export function RowCard({ index, row, products, recentReceivesMap, hasVat, onUpd
   })();
 
   return (
-    <div className={`rounded-xl border-2 p-3 ${meta.card}`}>
+    <div className={`rounded-xl border-2 p-3 ${meta.card} ${row.needsReview ? 'ring-2 ring-warning/40' : ''}`}>
       {/* Top row: #N badge + model + trash */}
       <div className="flex items-start gap-3">
         <div className="ai-row-badge" aria-label={`รายการที่ ${index + 1}`}>
@@ -290,6 +296,12 @@ export function RowCard({ index, row, products, recentReceivesMap, hasVat, onUpd
             <span className="truncate">{row.model_code}</span>
             {hasVat && (
               <span className="vat-chip">VAT</span>
+            )}
+            {/* B1: AI flagged this row as uncertain — nudge a human to check */}
+            {row.needsReview && (
+              <span className="ai-review-chip" title="AI ไม่มั่นใจ — ตรวจสอบตัวเลข/รุ่นให้ดี">
+                <Icon name="alert" size={10}/> ตรวจ
+              </span>
             )}
           </div>
           <div
@@ -314,15 +326,15 @@ export function RowCard({ index, row, products, recentReceivesMap, hasVat, onUpd
         </div>
         <button
           type="button"
-          className="btn-ghost !p-1.5 !min-h-0 -mr-1 -mt-1 text-muted-soft hover:text-error"
+          className="btn-ghost !p-2 !min-h-0 -mr-1 -mt-1 text-muted-soft hover:text-error"
           onClick={onRemove}
           aria-label="ลบรายการ"
         >
-          <Icon name="trash" size={15}/>
+          <Icon name="trash" size={16}/>
         </button>
       </div>
 
-      {/* qty + cost — editable for every row */}
+      {/* qty + cost — editable for every row (44px touch targets) */}
       <div className="grid grid-cols-2 gap-2 mt-3">
         <label className="block">
           <span className={'text-[11px] mb-1 block flex items-center gap-1 ' + (qtyIncomplete ? 'text-warning font-medium' : 'text-muted-soft')}>
@@ -333,7 +345,7 @@ export function RowCard({ index, row, products, recentReceivesMap, hasVat, onUpd
             type="number"
             inputMode="numeric"
             min="1"
-            className={'input !py-2 !text-sm w-full tabular-nums ' + (qtyIncomplete ? '!border-warning ring-2 ring-warning/30' : '')}
+            className={'input !py-2.5 !min-h-[44px] !text-base w-full tabular-nums ' + (qtyIncomplete ? '!border-warning ring-2 ring-warning/30' : '')}
             value={row.quantity}
             // H3: preserve 0 in state (was coerced to 1) so the warning
             // ring stays visible until the user actually types a real
@@ -357,21 +369,28 @@ export function RowCard({ index, row, products, recentReceivesMap, hasVat, onUpd
             type="number"
             inputMode="decimal"
             step="0.01"
-            className={'input !py-2 !text-sm w-full text-right font-mono tabular-nums ' + (costIncomplete ? '!border-warning ring-2 ring-warning/30' : '')}
+            className={'input !py-2.5 !min-h-[44px] !text-base w-full text-right font-mono tabular-nums ' + (costIncomplete ? '!border-warning ring-2 ring-warning/30' : '')}
             value={
               row.unit_cost === 0
                 ? ""
                 : hasVat
-                ? Number((row.unit_cost * 1.07).toFixed(2))
+                ? addVat(row.unit_cost)
                 : row.unit_cost
             }
             onChange={(e) => {
               const inputVal = e.target.value === '' ? 0 : Number(e.target.value);
               const val = Math.max(0, inputVal || 0);
-              const netVal = hasVat ? val / 1.07 : val;
+              // The field shows the GROSS (VAT-in) cost; store the NET.
+              const netVal = hasVat ? stripVat(val) : val;
               onUpdate({ unit_cost: netVal });
             }}
           />
+          {/* B3: make net↔gross explicit so there's no ambiguity */}
+          {hasVat && !costIncomplete && (
+            <span className="text-[10px] text-muted-soft mt-1 block text-right tabular-nums">
+              ก่อน VAT {fmtTHB(row.unit_cost)} · รวม VAT {fmtTHB(addVat(row.unit_cost))}
+            </span>
+          )}
         </label>
       </div>
 
@@ -548,24 +567,36 @@ export function ResolveBlock({ row, products, hasVat = false, onPick, onCreateNe
             />
           </label>
           <label className="block">
-            <span className="text-[11px] text-muted-soft mb-1 block">
-              ราคาป้าย / ราคาขาย <span className="text-error">*</span>
+            <span className="text-[11px] text-muted-soft mb-1 flex items-center justify-between">
+              <span>ราคาป้าย / ราคาขาย <span className="text-error">*</span></span>
+              {/* A2: one-tap markup suggestions from the bill cost */}
+              <span className="flex items-center gap-1">
+                {[1.5, 2, 2.5].map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    className="ai-markup-chip"
+                    onClick={() => setNpRetail(String(suggestedRetail(row.unit_cost, hasVat, f)))}
+                    title={`ทุน×${f}`}
+                  >×{f}</button>
+                ))}
+              </span>
             </span>
             <input
               type="number"
               inputMode="decimal"
               step="0.01"
               min="0"
-              className="input !py-2 !text-sm w-full text-right font-mono tabular-nums"
+              className="input !py-2.5 !min-h-[44px] !text-base w-full text-right font-mono tabular-nums"
               value={npRetail}
               onChange={(e) => setNpRetail(e.target.value)}
               placeholder="0.00"
             />
           </label>
           <div className="text-[11px] text-muted-soft bg-surface-soft rounded-md px-2.5 py-1.5 border hairline">
-            ทุน <span className="font-mono tabular-nums text-ink">฿{row.unit_cost.toFixed(2)}</span>
+            ทุน <span className="font-mono tabular-nums text-ink">{fmtTHB(row.unit_cost)}</span>
             {hasVat && (
-              <span className="text-success font-medium"> (รวม VAT 7%: ฿{(row.unit_cost * 1.07).toFixed(2)})</span>
+              <span className="text-success font-medium"> (รวม VAT 7%: {fmtTHB(addVat(row.unit_cost))})</span>
             )} / เรือน
             <span className="text-muted-soft"> (อ่านจากบิล) · ราคาป้ายต้องใส่เอง</span>
           </div>
