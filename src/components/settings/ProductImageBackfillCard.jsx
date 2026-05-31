@@ -40,13 +40,13 @@ export default function ProductImageBackfillCard({ toast }) {
       const { data, error } = await sb.functions.invoke('product-image-backfill', { body });
       if (error) throw error;
       setResult(data);
-      toast?.({
-        variant: 'success',
-        text: `${label}: พบ ${data?.found ?? 0} · ลบพื้นหลัง ${data?.bg_removed ?? 0} · ไม่พบ ${data?.not_found ?? 0} · ข้าม ${data?.skipped ?? 0}`,
-      });
+      toast?.push?.(
+        `${label}: พบ ${data?.found ?? 0} · ลบพื้นหลัง ${data?.bg_removed ?? 0} · ไม่พบ ${data?.not_found ?? 0} · ข้าม ${data?.skipped ?? 0}`,
+        'success'
+      );
       await loadCounts();
     } catch (e) {
-      toast?.({ variant: 'error', text: 'รันไม่สำเร็จ: ' + (mapError(e) || e?.message || 'unknown') });
+      toast?.push?.('รันไม่สำเร็จ: ' + (mapError(e) || e?.message || 'unknown'), 'error');
     } finally {
       setBusy(false);
     }

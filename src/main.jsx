@@ -377,17 +377,17 @@ function ToastProvider({ children }) {
     // Stage 1: mark closing → triggers .toast-out keyframe.
     setTimeout(() => setList(l => l.map(t => t.id === id ? { ...t, closing: true } : t)), visibleMs);
     // Stage 2: unmount once exit animation has played out.
-    setTimeout(() => setList(l => l.filter(t => t.id !== id)), visibleMs + 200);
+    setTimeout(() => setList(l => l.filter(t => t.id !== id)), visibleMs + 350);
   }, []);
   return (
     <ToastCtx.Provider value={{ push }}>
       {children}
-      <div className="fixed bottom-20 lg:bottom-6 right-4 lg:right-6 z-[120] space-y-2 max-w-[calc(100vw-32px)]">
+      <div className="fixed bottom-20 lg:bottom-6 right-4 lg:right-6 z-[120] space-y-3 max-w-[calc(100vw-32px)] pointer-events-none">
         {list.map(t => (
-          <div key={t.id} className={"px-4 py-3 rounded-lg shadow-2xl text-base flex items-center gap-2.5 " +
+          <div key={t.id} className={"lg-toast " +
               (t.closing ? "toast-out " : "toast-in ") +
-              (t.type==='error'?'bg-error text-white':t.type==='success'?'bg-[#1f3d27] text-white':'bg-surface-dark text-on-dark')}>
-            <Icon name={t.type==='error'?'alert':t.type==='success'?'check':'alert'} size={20} strokeWidth={2.2}/>
+              (t.type==='error'?'lg-toast-error':t.type==='success'?'lg-toast-success':'lg-toast-info')}>
+            <Icon name={t.type==='error'?'alert':t.type==='success'?'check':'bell'} size={18} strokeWidth={2.2}/>
             <span>{t.msg}</span>
           </div>
         ))}
@@ -1104,9 +1104,9 @@ function FontPickerInline() {
             key={f.id}
             type="button"
             onClick={() => setFontId(f.id)}
-            className={"rounded-lg border p-2.5 text-left transition-colors " + (active
-              ? "bg-primary/10 border-primary"
-              : "bg-surface-strong border-hairline hover:border-primary/30")}
+            className={"rounded-lg border p-2.5 text-left transition-all duration-300 " + (active
+              ? "lg-card-active"
+              : "lg-card-inactive hover:border-primary/30")}
           >
             <div style={{ fontFamily: f.css.family, fontWeight: f.css.display }}
               className={"text-base leading-tight " + (active ? "text-primary" : "text-ink")}>
@@ -1743,10 +1743,6 @@ function AppSettingsModal({ open, onClose }) {
     </Modal>
   );
 }
-// Theme picker — light/dark toggle. Lives next to FontSize and Font in
-// the AppSettingsModal "display" tab so all visual prefs are clustered.
-// Two equal-width buttons; the inactive one uses `lg-tile` so it matches
-// FontSizePickerInline's visual rhythm exactly.
 function ThemePickerInline() {
   const [theme, setTheme] = useTheme();
   const opts = [
@@ -1765,7 +1761,7 @@ function ThemePickerInline() {
             aria-pressed={active}
             className={"flex-1 py-2.5 rounded-lg font-medium transition text-sm inline-flex items-center justify-center gap-2 " + (
               active
-                ? "bg-primary text-on-primary border border-primary shadow-sm"
+                ? "lg-tile-primary"
                 : "lg-tile text-muted hover:text-ink"
             )}
           >
@@ -1790,7 +1786,7 @@ function FontSizePickerInline() {
           aria-pressed={size === s.id}
           className={"flex-1 py-2.5 rounded-lg font-medium transition text-sm " + (
             size === s.id
-              ? "bg-primary text-on-primary border border-primary shadow-sm"
+              ? "lg-tile-primary"
               : "lg-tile text-muted hover:text-ink"
           )}
           style={{ fontSize: s.px === 16 ? '13px' : s.px === 18 ? '15px' : '17px' }}

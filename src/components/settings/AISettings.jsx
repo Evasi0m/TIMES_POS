@@ -166,13 +166,13 @@ export default function AISettings({ toast }) {
         .update({ ai_bill_scan_enabled: next })
         .eq('id', 1);
       if (e) throw e;
-      toast?.({
-        variant: next ? 'success' : 'info',
-        text: next ? 'เปิดใช้งาน AI scan แล้ว' : 'ปิดการใช้งาน AI scan แล้ว',
-      });
+      toast?.push?.(
+        next ? 'เปิดใช้งาน AI scan แล้ว' : 'ปิดการใช้งาน AI scan แล้ว',
+        next ? 'success' : 'info'
+      );
     } catch (e) {
       setMasterOn(!next); // revert
-      toast?.({ variant: 'error', text: 'บันทึกไม่สำเร็จ: ' + (mapError(e) || e?.message || 'unknown') });
+      toast?.push?.('บันทึกไม่สำเร็จ: ' + (mapError(e) || e?.message || 'unknown'), 'error');
     } finally {
       setBusy(false);
     }
@@ -210,10 +210,10 @@ export default function AISettings({ toast }) {
     try {
       const { error: e } = await sb.from('ai_api_keys').delete().eq('id', id);
       if (e) throw e;
-      toast?.({ variant: 'success', text: 'ลบ API key แล้ว' });
+      toast?.push?.('ลบ API key แล้ว', 'success');
       await loadAll();
     } catch (e) {
-      toast?.({ variant: 'error', text: 'ลบไม่สำเร็จ: ' + (mapError(e) || e?.message || 'unknown') });
+      toast?.push?.('ลบไม่สำเร็จ: ' + (mapError(e) || e?.message || 'unknown'), 'error');
     } finally {
       setBusy(false);
     }
@@ -228,7 +228,7 @@ export default function AISettings({ toast }) {
       if (e) throw e;
       await loadAll();
     } catch (e) {
-      toast?.({ variant: 'error', text: (mapError(e) || e?.message || 'unknown') });
+      toast?.push?.(mapError(e) || e?.message || 'unknown', 'error');
     } finally {
       setBusy(false);
     }
@@ -243,7 +243,7 @@ export default function AISettings({ toast }) {
       if (e) throw e;
       await loadAll();
     } catch (e) {
-      toast?.({ variant: 'error', text: (mapError(e) || e?.message || 'unknown') });
+      toast?.push?.(mapError(e) || e?.message || 'unknown', 'error');
     } finally {
       setBusy(false);
     }
@@ -259,7 +259,7 @@ export default function AISettings({ toast }) {
       if (e) throw e;
       await loadAll();
     } catch (e) {
-      toast?.({ variant: 'error', text: (mapError(e) || e?.message || 'unknown') });
+      toast?.push?.(mapError(e) || e?.message || 'unknown', 'error');
     } finally {
       setBusy(false);
     }
@@ -288,7 +288,7 @@ export default function AISettings({ toast }) {
       await sb.from('ai_api_keys').update({ priority: b.priority }).eq('id', a.id);
       await loadAll();
     } catch (e) {
-      toast?.({ variant: 'error', text: (mapError(e) || e?.message || 'unknown') });
+      toast?.push?.(mapError(e) || e?.message || 'unknown', 'error');
     } finally {
       setBusy(false);
     }
@@ -599,19 +599,19 @@ function AddKeyForm({ onSubmit, onToast, busy }) {
 
   const submit = async () => {
     if (!key.trim()) {
-      onToast?.({ variant: 'error', text: 'ต้องกรอก API key' });
+      onToast?.push?.('ต้องกรอก API key', 'error');
       return;
     }
     setSaving(true);
     try {
       await onSubmit({ label, apiKey: key });
-      onToast?.({ variant: 'success', text: 'เพิ่ม API key แล้ว' });
+      onToast?.push?.('เพิ่ม API key แล้ว', 'success');
       setLabel('');
       setKey('');
       setOpen(false);
     } catch (e) {
       if (e?.message !== 'ยกเลิก') {
-        onToast?.({ variant: 'error', text: 'เพิ่มไม่สำเร็จ: ' + (mapError(e) || e?.message || 'unknown') });
+        onToast?.push?.('เพิ่มไม่สำเร็จ: ' + (mapError(e) || e?.message || 'unknown'), 'error');
       }
     } finally {
       setSaving(false);
