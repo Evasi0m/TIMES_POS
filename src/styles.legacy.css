@@ -2486,39 +2486,229 @@
   .pnb-row:active { background: rgb(var(--c-surface-strong) / 0.85); }
   .pnb-chev { color: rgb(var(--c-ink) / 0.35); flex-shrink: 0; transition: transform .16s ease, color .16s ease; }
   .pnb-row:hover .pnb-chev { color: rgb(var(--c-ink) / 0.6); transform: translateX(2px); }
-  /* big ฿ amount field */
+  /* ── Compact product strip (header of entry view) ──────────────────── */
+  .pnb-product-strip {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px;
+    margin-bottom: 18px;
+    border-radius: 14px;
+    background: rgb(var(--c-surface-strong) / 0.55);
+    border: 1px solid rgb(var(--c-surface-strong) / 0.75);
+    box-shadow: inset 0 1px 0 var(--rim-top-strong);
+  }
+
+  /* ── Cash-App-style centered amount stage ──────────────────────────────
+     The ฿ and digits stay tightly grouped in the middle of the stage so
+     the eye reads them as one unit. The input shrink-to-fits via `size=1`
+     + `field-sizing: content` (with a min-width fallback) so the ฿ sits
+     right next to the leftmost digit instead of floating in dead space. */
+  .pnb-stage {
+    text-align: center;
+    padding: 20px 12px 18px;
+    margin-bottom: 14px;
+    border-radius: 22px;
+    background:
+      radial-gradient(120% 90% at 50% 0%, rgba(254, 226, 226, 0.55), transparent 70%),
+      linear-gradient(180deg, rgba(255, 252, 248, 0.95), rgba(252, 247, 240, 0.85));
+    border: 1.5px solid rgba(220, 38, 38, 0.16);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      inset 0 -1px 0 rgba(40, 12, 12, 0.04),
+      0 1px 2px rgba(40, 12, 12, 0.04);
+    transition: border-color .22s ease, box-shadow .22s ease;
+  }
+  :root[data-theme="dark"] .pnb-stage {
+    background:
+      radial-gradient(120% 90% at 50% 0%, rgba(127, 29, 29, 0.35), transparent 70%),
+      linear-gradient(180deg, rgba(56, 50, 42, 0.7), rgba(44, 40, 33, 0.85));
+    border-color: rgba(220, 38, 38, 0.3);
+    box-shadow: inset 0 1px 0 rgba(255, 244, 220, 0.06), 0 1px 2px rgba(0, 0, 0, 0.2);
+  }
+  .pnb-stage:focus-within {
+    border-color: rgba(220, 38, 38, 0.55);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      0 0 0 4px rgba(220, 38, 38, 0.14),
+      0 8px 24px -10px rgba(220, 38, 38, 0.35);
+  }
+  .pnb-stage-label {
+    font-size: 10.5px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: rgba(220, 38, 38, 0.7);
+    margin-bottom: 6px;
+  }
+  .pnb-amount2 {
+    display: inline-flex; align-items: baseline;
+    gap: 4px;
+    cursor: text;
+    max-width: 100%;
+  }
+  .pnb-baht2 {
+    font-size: 28px; font-weight: 700;
+    color: rgba(220, 38, 38, 0.45);
+    line-height: 1;
+    transition: color .22s ease;
+    user-select: none;
+  }
+  .pnb-amount2.is-filled .pnb-baht2,
+  .pnb-stage:focus-within .pnb-baht2 { color: rgb(220, 38, 38); }
+  .pnb-amount2-input {
+    /* Auto-fit width so the ฿ stays glued to the first digit */
+    field-sizing: content; /* Chrome 123+ */
+    min-width: 1.6ch;
+    max-width: 100%;
+    background: transparent !important;
+    border: 0 !important; outline: 0 !important; box-shadow: none !important;
+    padding: 0;
+    font-size: 44px; font-weight: 800;
+    color: rgb(var(--c-ink));
+    letter-spacing: -0.025em;
+    line-height: 1.05;
+    text-align: left;
+    -moz-appearance: textfield;
+  }
+  .pnb-amount2-input:focus { outline: 0 !important; box-shadow: none !important; }
+  .pnb-amount2-input::-webkit-outer-spin-button,
+  .pnb-amount2-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .pnb-amount2-input::placeholder { color: rgb(var(--c-ink) / 0.2); font-weight: 800; }
+  .pnb-stage-hint {
+    margin-top: 4px;
+    font-size: 11.5px; font-weight: 600;
+    color: rgb(var(--c-ink) / 0.4);
+    letter-spacing: 0.04em;
+  }
+
+  /* ── LEGACY: kept so the old .pnb-amount in this file's CSS reset block
+     doesn't leak; the entry now uses .pnb-stage / .pnb-amount2. */
   .pnb-amount {
     position: relative;
     display: flex; align-items: center;
-    border-radius: 16px;
-    background: rgb(var(--c-surface-strong) / 0.55);
-    border: 1px solid rgb(var(--c-surface-strong) / 0.8);
+    border-radius: 18px;
+    /* soft warm-cream fill on light, elevated dark on dark — readable on
+       both themes without competing with the bell red */
+    background:
+      linear-gradient(180deg, rgba(255, 252, 248, 0.95), rgba(252, 247, 240, 0.85));
+    border: 1.5px solid rgba(220, 38, 38, 0.12);
     box-shadow:
-      inset 0 1px 0 var(--rim-top-strong),
-      inset 0 2px 8px -4px rgb(var(--shadow-rgb) / 0.12);
-    transition: border-color .18s ease, box-shadow .18s ease;
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      inset 0 -1px 0 rgba(40, 12, 12, 0.04),
+      0 1px 2px rgba(40, 12, 12, 0.04);
+    transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
   }
+  :root[data-theme="dark"] .pnb-amount {
+    background: linear-gradient(180deg, rgba(56, 50, 42, 0.7), rgba(44, 40, 33, 0.85));
+    border-color: rgba(220, 38, 38, 0.25);
+    box-shadow: inset 0 1px 0 rgba(255, 244, 220, 0.06), 0 1px 2px rgba(0, 0, 0, 0.2);
+  }
+  .pnb-amount.is-filled { border-color: rgba(220, 38, 38, 0.35); }
   .pnb-amount:focus-within {
-    border-color: rgb(var(--c-primary) / 0.6);
+    border-color: rgba(220, 38, 38, 0.65);
     box-shadow:
-      inset 0 1px 0 var(--rim-top-strong),
-      0 0 0 3px rgb(var(--c-primary) / 0.16);
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      0 0 0 4px rgba(220, 38, 38, 0.14),
+      0 4px 16px -8px rgba(220, 38, 38, 0.35);
   }
   .pnb-baht {
-    padding-left: 16px; padding-right: 4px;
-    font-size: 26px; font-weight: 600; line-height: 1;
-    color: rgb(var(--c-ink) / 0.45);
+    padding-left: 18px; padding-right: 6px;
+    font-size: 22px; font-weight: 600; line-height: 1;
+    color: rgba(220, 38, 38, 0.55);
+    transition: color .2s ease;
+    user-select: none;
   }
+  .pnb-amount:focus-within .pnb-baht,
+  .pnb-amount.is-filled .pnb-baht { color: rgba(220, 38, 38, 0.9); }
   .pnb-amount-input {
     flex: 1; min-width: 0;
-    height: 60px; padding: 0 16px 0 4px;
-    background: transparent; border: 0; outline: none;
-    font-size: 30px; font-weight: 700; color: rgb(var(--c-ink));
+    height: 64px; padding: 0 8px 0 2px;
+    background: transparent !important;
+    border: 0 !important; outline: 0 !important; box-shadow: none !important;
+    font-size: 32px; font-weight: 700;
+    color: rgb(var(--c-ink));
+    letter-spacing: -0.02em;
     -moz-appearance: textfield;
   }
+  .pnb-amount-input:focus { outline: 0 !important; box-shadow: none !important; }
   .pnb-amount-input::-webkit-outer-spin-button,
   .pnb-amount-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-  .pnb-amount-input::placeholder { color: rgb(var(--c-ink) / 0.25); font-weight: 600; }
+  .pnb-amount-input::placeholder { color: rgb(var(--c-ink) / 0.22); font-weight: 700; }
+  /* circular clear (×) button inside the field, right side */
+  .pnb-clear {
+    flex-shrink: 0;
+    width: 24px; height: 24px; margin-right: 14px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 9999px;
+    background: rgba(40, 12, 12, 0.08);
+    color: rgba(40, 12, 12, 0.55);
+    transition: background .15s ease, color .15s ease, transform .15s ease;
+  }
+  .pnb-clear:hover { background: rgba(220, 38, 38, 0.15); color: rgb(220, 38, 38); }
+  .pnb-clear:active { transform: scale(0.9); }
+
+  /* quick-fill chips — +100 / +500 / +1,000 and a Clear */
+  .pnb-chip {
+    padding: 6px 12px;
+    font-size: 12px; font-weight: 600;
+    color: rgba(220, 38, 38, 0.85);
+    background: rgba(220, 38, 38, 0.07);
+    border: 1px solid rgba(220, 38, 38, 0.18);
+    border-radius: 9999px;
+    transition: background .15s ease, transform .12s ease, border-color .15s ease;
+    tabular-nums: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .pnb-chip:hover { background: rgba(220, 38, 38, 0.14); border-color: rgba(220, 38, 38, 0.32); }
+  .pnb-chip:active { transform: scale(0.95); }
+  .pnb-chip:disabled { opacity: .35; pointer-events: none; }
+  .pnb-chip-ghost {
+    color: rgb(var(--c-ink) / 0.55);
+    background: rgb(var(--c-surface-strong) / 0.55);
+    border-color: rgb(var(--c-surface-strong) / 0.85);
+  }
+  .pnb-chip-ghost:hover { background: rgb(var(--c-surface-strong) / 0.9); color: rgb(var(--c-ink)); }
+
+  /* action buttons — back is neutral glass, save is bell-red so the whole
+     entry view shares one consistent accent color */
+  .pnb-btn-back, .pnb-btn-save {
+    height: 46px; border-radius: 14px;
+    font-weight: 700; font-size: 14px;
+    transition: transform .12s ease, box-shadow .18s ease, background .18s ease, border-color .18s ease;
+  }
+  .pnb-btn-back {
+    color: rgb(var(--c-ink) / 0.75);
+    background: rgb(var(--c-surface-strong) / 0.6);
+    border: 1px solid rgb(var(--c-surface-strong) / 0.85);
+    box-shadow: inset 0 1px 0 var(--rim-top-strong);
+  }
+  .pnb-btn-back:hover { background: rgb(var(--c-surface-strong) / 0.95); color: rgb(var(--c-ink)); }
+  .pnb-btn-back:active { transform: scale(0.97); }
+  .pnb-btn-back:disabled { opacity: .5; pointer-events: none; }
+  .pnb-btn-save {
+    color: #fff;
+    background:
+      radial-gradient(circle at 30% 20%, rgba(254, 202, 202, 0.35), transparent 55%),
+      linear-gradient(180deg, #fb6a6a 0%, #dc2626 55%, #991b1b 100%);
+    border: 1px solid rgba(220, 38, 38, 0.5);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.4) inset,
+      0 -1px 0 rgba(127, 29, 29, 0.3) inset,
+      0 8px 22px -6px rgba(220, 38, 38, 0.5);
+    text-shadow: 0 1px 2px rgba(90, 8, 8, 0.3);
+  }
+  .pnb-btn-save:hover:not(:disabled) {
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.45) inset,
+      0 -1px 0 rgba(127, 29, 29, 0.3) inset,
+      0 12px 28px -6px rgba(220, 38, 38, 0.6);
+  }
+  .pnb-btn-save:active:not(:disabled) { transform: scale(0.97); }
+  .pnb-btn-save:disabled {
+    background: rgb(var(--c-surface-strong) / 0.55);
+    border-color: rgb(var(--c-surface-strong) / 0.8);
+    color: rgb(var(--c-ink) / 0.35);
+    box-shadow: none;
+    text-shadow: none;
+    cursor: not-allowed;
+  }
 
   @media (prefers-reduced-motion: reduce) {
     .pnb-step { animation-duration: .12s; }

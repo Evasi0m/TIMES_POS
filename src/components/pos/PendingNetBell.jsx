@@ -266,40 +266,66 @@ export default function PendingNetBell({ toast, size = 44, floating = false, flo
                   })}
                 </div>
               ) : (
-                <div className="p-4">
-                  {/* product summary */}
-                  <div className="flex items-center gap-3 p-2.5 mb-4 rounded-2xl lg-tile">
-                    <ProductThumb product={{ name: entry.items[0]?.name || '', _imageUrl: entry.items[0]?._imageUrl }} size="md" />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium leading-snug line-clamp-2">
-                        {entry.items.map(i => i.name).filter(Boolean).join(', ') || '—'}
-                      </div>
+                <div className="px-5 pt-5 pb-5">
+                  {/* compact product strip — slimmer, less visual weight */}
+                  <div className="pnb-product-strip">
+                    <ProductThumb product={{ name: entry.items[0]?.name || '', _imageUrl: entry.items[0]?._imageUrl }} size="sm" />
+                    <div className="min-w-0 flex-1 text-[13px] font-medium leading-snug line-clamp-1">
+                      {entry.items.map(i => i.name).filter(Boolean).join(', ') || '—'}
                     </div>
                   </div>
 
-                  {/* big ฿ amount field */}
-                  <label className="block text-xs font-medium text-muted-soft mb-1.5 pl-1">
-                    ยอดเงินที่ร้านได้รับจริง
-                  </label>
-                  <div className="pnb-amount">
-                    <span className="pnb-baht">฿</span>
-                    <input
-                      autoFocus
-                      type="number"
-                      inputMode="decimal"
-                      className="pnb-amount-input tabular-nums"
-                      placeholder="0"
-                      value={amount}
-                      onChange={e => setAmount(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') save(); }}
-                    />
+                  {/* Cash-App-style centered amount stage */}
+                  <div className="pnb-stage">
+                    <div className="pnb-stage-label">ยอดเงินที่ร้านได้รับจริง</div>
+                    <label className={`pnb-amount2 ${amount ? 'is-filled' : ''}`}>
+                      <span className="pnb-baht2">฿</span>
+                      <input
+                        autoFocus
+                        type="text"
+                        inputMode="decimal"
+                        className="pnb-amount2-input tabular-nums"
+                        placeholder="0"
+                        size={1}
+                        value={amount ? Number(amount).toLocaleString('en-US') : ''}
+                        onChange={e => {
+                          const raw = e.target.value.replace(/[^\d.]/g, '');
+                          setAmount(raw);
+                        }}
+                        onKeyDown={e => { if (e.key === 'Enter') save(); }}
+                      />
+                    </label>
+                    <div className="pnb-stage-hint">บาท</div>
+                  </div>
+
+                  {/* quick-fill chips — common rounding shortcuts */}
+                  <div className="grid grid-cols-4 gap-1.5 mt-1">
+                    {[100, 500, 1000].map(step => (
+                      <button
+                        key={step}
+                        type="button"
+                        className="pnb-chip"
+                        onClick={() => setAmount(String((Number(amount) || 0) + step))}
+                        disabled={saving}
+                      >
+                        +{step.toLocaleString('en-US')}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      className="pnb-chip pnb-chip-ghost"
+                      onClick={() => setAmount('')}
+                      disabled={saving || !amount}
+                    >
+                      ล้าง
+                    </button>
                   </div>
 
                   <div className="flex gap-2.5 mt-5">
-                    <button className="btn-secondary flex-1" onClick={() => { setEntry(null); setAmount(''); }} disabled={saving}>
+                    <button className="pnb-btn-back flex-1" onClick={() => { setEntry(null); setAmount(''); }} disabled={saving}>
                       ย้อนกลับ
                     </button>
-                    <button className="btn-primary flex-1 inline-flex items-center justify-center gap-1.5" onClick={save} disabled={saving}>
+                    <button className="pnb-btn-save flex-[1.4] inline-flex items-center justify-center gap-1.5" onClick={save} disabled={saving || !amount}>
                       {saving ? <span className="spinner" /> : <Icon name="check" size={16} />} บันทึก
                     </button>
                   </div>
