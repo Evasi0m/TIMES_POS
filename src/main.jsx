@@ -51,6 +51,7 @@ import InsightsView from './views/InsightsView.jsx';
 import AISettings from './components/settings/AISettings.jsx';
 import BulkReceiveView from './components/ai/BulkReceiveView.jsx';
 import PendingNetBell from './components/pos/PendingNetBell.jsx';
+import AnimatedLogo from './components/ui/AnimatedLogo.jsx';
 import './styles.css';
 
 // `supabase.createClient(...)` from the CDN UMD bundle becomes a one-method
@@ -3120,7 +3121,7 @@ function LoginScreen() {
     <div className="min-h-screen flex items-center justify-center bg-canvas px-5">
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center gap-3 mb-8 lg:mb-10">
-          <img src="icons/logo_web3_512.png" alt="TIMES logo" style={{width:49,height:49,objectFit:'contain'}} />
+          <AnimatedLogo size={56} mode="cycle" />
           <div style={{fontFamily:"'Jost', sans-serif", fontWeight:600}} className="text-3xl lg:text-4xl leading-none">TIMES</div>
         </div>
         <div className="card-canvas p-6 lg:p-8">
@@ -3258,7 +3259,7 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
         </defs>
       </svg>
       <div className="sidebar-header px-6 py-6 flex items-center gap-3 border-b">
-        <img src="icons/logo_web3_512.png" alt="TIMES logo" style={{width:41,height:41,objectFit:'contain'}} />
+        <AnimatedLogo size={41} mode="interactive" />
         <div style={{fontFamily:"'Jost', sans-serif", fontWeight:600}} className="text-2xl leading-none self-center">TIMES</div>
       </div>
       <nav className="p-3 flex-1 overflow-y-auto" aria-label="เมนูหลัก">
@@ -3347,7 +3348,7 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
     <header className="lg:hidden sticky top-0 z-40 mobile-topbar pt-safe">
       <div className="flex items-center justify-between px-4 h-14">
         <div className="flex items-center gap-2">
-          <img src="icons/logo_web3_512.png" alt="TIMES logo" style={{width:32,height:32,objectFit:'contain'}} />
+          <AnimatedLogo size={32} mode="interactive" />
           <div style={{fontFamily:"'Jost', sans-serif", fontWeight:600}} className="text-xl leading-none self-center">TIMES</div>
           <div className="text-muted-soft mx-1">·</div>
           <div className="text-sm text-muted">{title}</div>

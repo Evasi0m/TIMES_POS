@@ -165,6 +165,102 @@
   :root[data-theme="dark"] .spike.dark::before,
   :root[data-theme="dark"] .spike.dark::after { background: rgb(var(--c-on-dark)); }
 
+  /* ==========  ANIMATED LOGO (TICK mascot)  ==========
+     Keyframes and utility classes for the AnimatedLogo component.
+     Three animation families:
+       1. Float   — gentle vertical bob on the Login screen
+       2. Wiggle  — playful rotation on hover (Sidebar / Mobile)
+       3. Bounce  — squash-stretch on click (mood change)
+       4. Glow    — breathing coral drop-shadow at rest
+       5. Fade    — crossfade between moods during cycle mode     */
+
+  /* ── Gentle floating — Login screen ── */
+  @keyframes logo-float {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-6px); }
+  }
+
+  /* ── Wiggle on hover — Sidebar / Mobile ── */
+  @keyframes logo-wiggle {
+    0%, 100% { transform: rotate(0deg); }
+    15%      { transform: rotate(-10deg); }
+    30%      { transform: rotate(8deg); }
+    45%      { transform: rotate(-6deg); }
+    60%      { transform: rotate(4deg); }
+    75%      { transform: rotate(-2deg); }
+  }
+
+  /* ── Bounce on click ── */
+  @keyframes logo-bounce {
+    0%       { transform: scale(1); }
+    30%      { transform: scale(0.82); }
+    55%      { transform: scale(1.12); }
+    75%      { transform: scale(0.96); }
+    100%     { transform: scale(1); }
+  }
+
+  /* ── Breathing glow — subtle idle shimmer ── */
+  @keyframes logo-glow {
+    0%, 100% { filter: drop-shadow(0 0 3px rgba(204, 120, 92, 0.12)); }
+    50%      { filter: drop-shadow(0 0 12px rgba(204, 120, 92, 0.40)); }
+  }
+
+  /* Base class */
+  .animated-logo {
+    flex-shrink: 0;
+    user-select: none;
+    -webkit-user-drag: none;
+    transition: filter 0.3s var(--ease-out), transform 0.3s var(--ease-out);
+  }
+
+  /* Float (Login) */
+  .animated-logo--float {
+    animation: logo-float 3.2s ease-in-out infinite;
+  }
+
+  /* Breathing glow (Sidebar / Mobile idle) */
+  .animated-logo--glow {
+    animation: logo-glow 4s ease-in-out infinite;
+  }
+
+  /* Interactive hover wiggle */
+  .animated-logo--interactive:hover {
+    animation: logo-wiggle 0.65s ease-in-out;
+    cursor: pointer;
+  }
+
+  /* Bounce on click (mood change) */
+  .animated-logo--bounce {
+    animation: logo-bounce 0.45s ease-in-out !important;
+  }
+
+  /* ── Crossfade for mood cycling ── */
+  .animated-logo__img {
+    display: block;
+    transition: opacity 0.28s ease-out, transform 0.28s ease-out;
+  }
+  .animated-logo__img--in {
+    opacity: 1;
+    transform: scale(1);
+  }
+  .animated-logo__img--out {
+    opacity: 0;
+    transform: scale(0.88);
+  }
+
+  /* Reduced motion — respect user preference */
+  @media (prefers-reduced-motion: reduce) {
+    .animated-logo--float,
+    .animated-logo--glow,
+    .animated-logo--interactive:hover,
+    .animated-logo--bounce {
+      animation: none !important;
+    }
+    .animated-logo__img {
+      transition: none !important;
+    }
+  }
+
   /* ==========  SCROLLBAR  ========== */
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
