@@ -493,6 +493,13 @@ function Modal({ open, onClose, title, children, footer, wide }) {
   const { render, closing } = useMountedToggle(open, 220);
   const dialogRef = useRef(null);
   const previousFocusRef = useRef(null);
+  // Keep the latest onClose in a ref so the focus-trap effect below does NOT
+  // depend on it. Callers almost always pass an inline `onClose={()=>...}`
+  // whose identity changes every render; if the effect depended on it, every
+  // parent re-render (e.g. a keystroke updating sibling state) would re-run
+  // the trap and yank focus out of the input mid-typing. See git history.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   // Capture focus on open, restore it on close. Trap Tab inside the dialog.
   useEffect(() => {
@@ -514,7 +521,7 @@ function Modal({ open, onClose, title, children, footer, wide }) {
     }, 0);
 
     const onKey = (e) => {
-      if (e.key === 'Escape') { e.stopPropagation(); onClose?.(); return; }
+      if (e.key === 'Escape') { e.stopPropagation(); onCloseRef.current?.(); return; }
       if (e.key !== 'Tab') return;
       const root = dialogRef.current;
       if (!root) return;
@@ -540,7 +547,7 @@ function Modal({ open, onClose, title, children, footer, wide }) {
         try { prev.focus({ preventScroll: true }); } catch {}
       }
     };
-  }, [render, closing, onClose]);
+  }, [render, closing]);
 
   if (!render) return null;
   return (
@@ -2457,25 +2464,32 @@ function Receipt({ order, items, shop, variant = 'receipt' }) {
     );
   }, 0);
   const displayedDiscount = Math.max(0, displayedSubtotal - Number(order.grand_total||0));
+  const totalQty = items.reduce((s, it) => s + Number(it.quantity || 0), 0);
+  // มูลค่าที่ยกเว้น/ไม่มีภาษี — this POS sells only VAT-able goods, so it's
+  // always 0.00; shown explicitly to match the standard Thai tax-invoice form.
+  const exemptAmount = 0;
   return (
     <div className="receipt-100mm receipt-print r-theme-minimal">
       <div className="r-header">
         <div className="r-shop">{shop?.shop_name || 'TIMES'}</div>
+        {/* Seller tax id + branch print on EVERY variant — the shop is
+            VAT-registered, so its tax id belongs on every document it
+            hands a customer (receipt or tax invoice alike). */}
+        {shop?.shop_branch && <div className="r-addr">({shop.shop_branch})</div>}
         {shop?.shop_address && <div className="r-addr">{shop.shop_address}</div>}
-        {shop?.shop_phone   && <div className="r-addr">โทร {shop.shop_phone} (คุณตุ๋ม)</div>}
-        {isInvoice && shop?.shop_tax_id && <div className="r-addr">เลขผู้เสียภาษี {shop.shop_tax_id}</div>}
-        {isInvoice && shop?.shop_branch && <div className="r-addr">({shop.shop_branch})</div>}
+        {shop?.shop_tax_id && <div className="r-addr">เลขผู้เสียภาษี {shop.shop_tax_id}</div>}
+        {shop?.shop_phone   && <div className="r-addr">โทร. {shop.shop_phone}</div>}
       </div>
 
       <hr className="r-double"/>
-      <div className="r-title">{isAbbr ? 'ใบกำกับภาษีอย่างย่อ' : isInvoice ? 'ใบกำกับภาษี / ใบเสร็จรับเงิน' : 'ใบเสร็จรับเงิน'}</div>
+      <div className="r-title">{isAbbr ? 'ใบกำกับภาษีอย่างย่อ / ใบเสร็จรับเงิน' : isInvoice ? 'ใบกำกับภาษี / ใบเสร็จรับเงิน' : 'ใบเสร็จรับเงิน'}</div>
+      {order.tax_invoice_no && <div className="r-row" style={{justifyContent:'center',fontWeight:700,letterSpacing:'0.04em'}}>{order.tax_invoice_no}</div>}
       <hr className="r-hr"/>
 
       <div className="r-meta">
         <div className="r-row"><span>เลขที่บิล</span><span>#{order.id}</span></div>
-        {order.tax_invoice_no && <div className="r-row"><span>ใบกำกับ</span><span>{order.tax_invoice_no}</span></div>}
-        <div className="r-row"><span>วันที่</span><span>{fmtDateTime(order.sale_date)}</span></div>
         <div className="r-row"><span>ช่องทาง</span><span>{CHANNEL_LABELS[order.channel]||'—'}</span></div>
+        <div className="r-row"><span>วันที่</span><span>{fmtDateTime(order.sale_date)}</span></div>
         <div className="r-row"><span>ชำระโดย</span><span>{PAYMENT_LABELS[order.payment_method]||'—'}</span></div>
       </div>
 
@@ -2491,7 +2505,7 @@ function Receipt({ order, items, shop, variant = 'receipt' }) {
       <hr className="r-hr"/>
 
       <div className="r-items">
-        {items.map(it => {
+        {items.map((it, idx) => {
           const hasOverride = it.display_unit_price != null;
           // Override semantics (per shop spec, see migration 009):
           //   - shown unit price = display_unit_price
@@ -2505,7 +2519,7 @@ function Receipt({ order, items, shop, variant = 'receipt' }) {
             : applyDiscounts(it.unit_price, it.quantity, it.discount1_value, it.discount1_type, it.discount2_value, it.discount2_type);
           return (
             <div key={it.id} className="r-item">
-              <div className="r-name">{it.product_name}</div>
+              <div className="r-name"><span className="r-idx">{idx+1}.</span> {it.product_name}</div>
               <div className="r-line">
                 <span>{it.quantity} × {fmtTHB(shownUnit)}
                   {!hasOverride && it.discount1_value ? ` −${it.discount1_value}${it.discount1_type==='percent'?'%':'฿'}` : ''}
@@ -2521,14 +2535,24 @@ function Receipt({ order, items, shop, variant = 'receipt' }) {
       <hr className="r-hr"/>
 
       <div className="r-totals">
-        <div className="r-row"><span>รวมก่อนลด</span><span>{fmtTHB(displayedSubtotal)}</span></div>
+        <div className="r-row"><span>จำนวนรวม</span><span>{totalQty}</span></div>
+        <div className="r-row"><span>รวมเป็นเงิน</span><span>{fmtTHB(displayedSubtotal)}</span></div>
         {displayedDiscount > 0 && (
-          <div className="r-row"><span>ส่วนลดบิล</span><span>−{fmtTHB(displayedDiscount)}</span></div>
+          <div className="r-row"><span>ส่วนลด</span><span>−{fmtTHB(displayedDiscount)}</span></div>
         )}
-        {Number(order.vat_amount)>0 && (<>
+        {displayedDiscount > 0 && (
+          <div className="r-row"><span>จำนวนเงินหลังหักส่วนลด</span><span>{fmtTHB(order.grand_total)}</span></div>
+        )}
+        {isInvoice ? (<>
+          {/* Full Thai tax-invoice breakdown: exempt base, VAT-able base,
+              and VAT amount shown separately (matches the standard form). */}
+          <div className="r-row"><span>มูลค่าที่ไม่มี/ยกเว้นภาษี</span><span>{fmtTHB(exemptAmount)}</span></div>
+          <div className="r-row"><span>มูลค่าที่คำนวณภาษี</span><span>{fmtTHB(exVat)}</span></div>
+          <div className="r-row"><span>ภาษีมูลค่าเพิ่ม {order.vat_rate}%</span><span>{fmtTHB(order.vat_amount)}</span></div>
+        </>) : (Number(order.vat_amount)>0 && (<>
           <div className="r-row"><span>ก่อนหัก VAT {order.vat_rate}%</span><span>{fmtTHB(exVat)}</span></div>
           <div className="r-row"><span>VAT {order.vat_rate}%</span><span>{fmtTHB(order.vat_amount)}</span></div>
-        </>)}
+        </>))}
         <hr className="r-double"/>
         <div className="r-row r-grand"><span>รวมทั้งสิ้น</span><span>{fmtTHB(order.grand_total)}</span></div>
         {isInvoice && <div className="r-sm" style={{textAlign:'center',marginTop:'2px'}}>ราคานี้รวมภาษีมูลค่าเพิ่มแล้ว</div>}
@@ -7373,16 +7397,16 @@ function SalesView({ onGoPOS }) {
       </div>
 
       <Modal open={!!detail} onClose={editMode ? undefined : ()=>setDetail(null)} wide
-        title={detail?`บิล #${detail.order.id}${detail.order.status==='voided'?' · ยกเลิกแล้ว':''}${editMode?' · กำลังแก้ไข':''}`:""}
+        title={detail ? (
+          <span>
+            บิล #{detail.order.id}{detail.order.status==='voided'?' · ยกเลิกแล้ว':''}{editMode?' · กำลังแก้ไข':''}
+            <span className="block text-xs font-normal text-muted-soft tracking-wider mt-0.5 truncate"
+              title={detail.order.created_by_email || ''}>
+              บันทึกโดย {detail.order.created_by_email || '— ไม่พบข้อมูลผู้บันทึก (บิลเก่า)'}
+            </span>
+          </span>
+        ) : ""}
         footer={<>
-          {detail && (
-            <div className="lg:mr-auto text-left text-xs text-muted-soft leading-relaxed min-w-0">
-              <div className="uppercase tracking-wider">บันทึกโดย</div>
-              <div className="truncate max-w-[260px]" title={detail.order.created_by_email || ''}>
-                {detail.order.created_by_email || '— ไม่พบข้อมูลผู้บันทึก (บิลเก่า)'}
-              </div>
-            </div>
-          )}
           {/* When the admin is mid-edit, swap the whole footer for the
               save / cancel pair so they can't accidentally hit
               "ยกเลิกบิล" or "พิมพ์ใบเสร็จ" with pending unsaved changes. */}
@@ -7393,26 +7417,26 @@ function SalesView({ onGoPOS }) {
             </button>
           </>) : (<>
             {detail?.order.status==='active' && isAdmin && (<>
-              <button className="btn-secondary btn-danger-modal" onClick={voidSale} disabled={voiding}>
+              <button className="btn-secondary btn-danger-modal whitespace-nowrap flex-shrink-0" onClick={voidSale} disabled={voiding}>
                 <Icon name="trash" size={16}/>{voiding?'กำลังยกเลิก...':'ยกเลิกบิล'}
               </button>
-              <button className="btn-secondary" onClick={startEditBill}
+              <button className="btn-print-blue whitespace-nowrap flex-shrink-0" onClick={startEditBill}
                 title="แก้ไขจำนวน / ช่องทาง / วิธีชำระ — ทุกการแก้ไขถูกบันทึกใน audit log">
                 <Icon name="edit" size={16}/> แก้ไขบิล
               </button>
             </>)}
             {detail && (
-              <button className="btn-print-receipt" onClick={()=>{ setReprintVariant(undefined); setReprintId(detail.order.id); }}>
+              <button className="btn-print-receipt whitespace-nowrap flex-shrink-0" onClick={()=>{ setReprintVariant(undefined); setReprintId(detail.order.id); }}>
                 <Icon name="receipt" size={16}/> พิมพ์ใบเสร็จ
               </button>
             )}
             {detail && isAdmin && detail.order.status!=='voided' && (
-              <button className="btn-secondary" onClick={openIssueInvoice}
+              <button className="btn-print-gold whitespace-nowrap flex-shrink-0" onClick={openIssueInvoice}
                 title="ออก/อัปเดตข้อมูลผู้ซื้อ แล้วพิมพ์ใบกำกับภาษีแบบเต็มรูป (A4)">
-                <Icon name="edit" size={16}/> ใบกำกับเต็มรูป
+                <Icon name="receipt" size={16}/> ใบกำกับเต็มรูป
               </button>
             )}
-            <button className="btn-secondary" onClick={()=>setDetail(null)}>ปิด</button>
+            <button className="btn-secondary whitespace-nowrap flex-shrink-0" onClick={()=>setDetail(null)}>ปิด</button>
           </>)}
         </>}>
         {detail && (

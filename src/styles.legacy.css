@@ -851,6 +851,41 @@
     transition-duration: .08s;
   }
 
+  /* Gold + blue siblings of .btn-print-receipt — same geometry, different
+     accent. Used in the sales-bill modal footer (ใบกำกับเต็มรูป = gold,
+     แก้ไขบิล = blue) so the three filled actions read as a clear set. */
+  .btn-print-gold {
+    background: linear-gradient(180deg, #f5dc8a 0%, #e2bc55 35%, #c89a2a 65%, #9a7414 100%);
+    color: #3a2607 !important;
+    border: 1px solid rgba(120,85,15,0.55);
+    box-shadow: 0 2px 8px rgba(160,110,10,0.40), 0 1px 0 rgba(255,245,215,0.55) inset, 0 -1px 0 rgba(80,55,5,0.25) inset;
+    transition: transform .15s var(--ease-out), box-shadow .2s var(--ease-out), filter .15s;
+    cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 12px 22px; min-height: 44px; border-radius: 11px; font-weight: 600; font-size: 15px;
+  }
+  .btn-print-gold:hover {
+    filter: brightness(1.05); transform: translateY(-1px);
+    box-shadow: 0 5px 14px rgba(160,110,10,0.50), 0 1px 0 rgba(255,245,215,0.65) inset;
+  }
+  .btn-print-gold:active { transform: translateY(0) scale(0.98); transition-duration: .08s; }
+
+  .btn-print-blue {
+    background: linear-gradient(180deg, #6aa9f5 0%, #2f78d6 35%, #1a4fa8 65%, #0c2d6e 100%);
+    color: #f4f9ff !important;
+    border: 1px solid rgba(10,35,90,0.55);
+    box-shadow: 0 2px 8px rgba(20,60,140,0.40), 0 1px 0 rgba(220,235,255,0.45) inset, 0 -1px 0 rgba(5,20,55,0.30) inset;
+    transition: transform .15s var(--ease-out), box-shadow .2s var(--ease-out), filter .15s;
+    cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 12px 22px; min-height: 44px; border-radius: 11px; font-weight: 500; font-size: 15px;
+  }
+  .btn-print-blue:hover {
+    filter: brightness(1.08); transform: translateY(-1px);
+    box-shadow: 0 5px 14px rgba(20,60,140,0.55), 0 1px 0 rgba(220,235,255,0.55) inset;
+  }
+  .btn-print-blue:active { transform: translateY(0) scale(0.98); transition-duration: .08s; }
+
   .btn-danger-modal {
     background:
       linear-gradient(180deg,
@@ -3502,6 +3537,7 @@
   .receipt-100mm .r-item  { margin-bottom: 6px; }
   .receipt-100mm .r-item:last-child { margin-bottom: 0; }
   .receipt-100mm .r-name  { font-weight: 700; font-size: 14px; word-break: break-word; line-height: 1.35; margin-bottom: 1px; }
+  .receipt-100mm .r-idx   { font-weight: 700; opacity: 0.7; }
   .receipt-100mm .r-line  { display: flex; justify-content: space-between; gap: 6px; font-size: 13px; font-weight: 500; }
   .receipt-100mm .r-totals{ margin: 4px 0; }
   .receipt-100mm .r-grand { font-size: 18px; font-weight: 800; }

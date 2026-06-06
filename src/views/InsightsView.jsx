@@ -250,7 +250,7 @@ function ChannelMix({ data }) {
               style={{ '--seg-w': pct + '%', '--seg-c': colorOf(key) }}
               onMouseEnter={() => setActive(key)}
               onMouseLeave={() => setActive(null)}
-              title={`${CHANNEL_LABEL[key] || key} · ${fmtPct(pct / 100)}`}
+              title={`${CHANNEL_LABEL[key] || key} · ${fmtPct(pct)}`}
             />
           );
         })}
@@ -299,7 +299,7 @@ function ChannelMix({ data }) {
       {/* Interactive glass channel chips */}
       <div className="lg-chanchips">
         {totals.map(({ key, total }) => {
-          const pct = total / grand;
+          const pct = (total / grand) * 100;
           return (
             <button
               key={key}
