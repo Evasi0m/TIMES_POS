@@ -3562,6 +3562,89 @@
   :root[data-theme="dark"] .receipt-100mm,
   :root[data-theme="dark"] .receipt-print-portal { color-scheme: light; }
 
+  /* ==========  FULL TAX INVOICE (A4 — ใบกำกับภาษีแบบเต็มรูป)  ==========
+     Document layout used by FullTaxInvoiceA4. Rendered both in the
+     on-screen preview and (via .fulltax-print-portal) on paper. Pure
+     black-on-white; locked to light colours so dark mode still prints
+     correctly. */
+  .fulltax-print-portal { display: none; }
+  :root[data-theme="dark"] .fulltax-a4,
+  :root[data-theme="dark"] .fulltax-print-portal { color-scheme: light; }
+  .fulltax-a4 {
+    position: relative;
+    width: 190mm;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 10mm 9mm;
+    background: #fff;
+    color: #000;
+    font-family: 'Sarabun', sans-serif;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .fulltax-a4 .ft-copy-mark {
+    display: inline-block; margin-top: 4px;
+    font-size: 11px; font-weight: 700; color: #555;
+    border: 1px solid #999; border-radius: 4px; padding: 1px 8px;
+  }
+  .fulltax-a4 .ft-head {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 12px; border-bottom: 2px solid #000; padding-bottom: 6px;
+  }
+  .fulltax-a4 .ft-shop { font-size: 18px; font-weight: 800; margin-bottom: 2px; }
+  .fulltax-a4 .ft-line { font-size: 11.5px; color: #222; }
+  .fulltax-a4 .ft-title { text-align: right; flex-shrink: 0; }
+  .fulltax-a4 .ft-title-main { font-size: 20px; font-weight: 800; letter-spacing: 0.02em; }
+  .fulltax-a4 .ft-title-sub  { font-size: 11px; letter-spacing: 0.22em; color: #555; }
+  .fulltax-a4 .ft-meta {
+    display: flex; justify-content: space-between; gap: 16px;
+    margin: 8px 0; padding: 8px 0; border-bottom: 1px solid #bbb;
+  }
+  .fulltax-a4 .ft-buyer { flex: 1; }
+  .fulltax-a4 .ft-meta-label { font-size: 10.5px; color: #777; margin-bottom: 2px; }
+  .fulltax-a4 .ft-buyer-name { font-size: 13px; font-weight: 700; }
+  .fulltax-a4 .ft-docinfo { width: 64mm; flex-shrink: 0; }
+  .fulltax-a4 .ft-docinfo .ft-row {
+    display: flex; justify-content: space-between; gap: 8px; line-height: 1.7;
+  }
+  .fulltax-a4 .ft-docinfo .ft-row > span:first-child { color: #777; }
+  .fulltax-a4 .ft-table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  .fulltax-a4 .ft-table th {
+    background: #f0f0f0; border: 1px solid #999; padding: 5px 6px;
+    font-size: 11px; font-weight: 700; text-align: center;
+  }
+  .fulltax-a4 .ft-table td {
+    border: 1px solid #ccc; padding: 5px 6px; font-size: 11.5px; vertical-align: top;
+  }
+  .fulltax-a4 .ft-c-no   { width: 12mm; text-align: center; }
+  .fulltax-a4 .ft-c-desc { text-align: left; }
+  .fulltax-a4 .ft-c-qty  { width: 18mm; text-align: center; }
+  .fulltax-a4 .ft-c-price,
+  .fulltax-a4 .ft-c-amt  { width: 28mm; text-align: right; }
+  .fulltax-a4 .ft-bottom {
+    display: flex; justify-content: space-between; gap: 16px; margin-top: 8px;
+  }
+  .fulltax-a4 .ft-words { flex: 1; align-self: flex-end; }
+  .fulltax-a4 .ft-words-val {
+    font-weight: 700; border: 1px solid #999; border-radius: 4px;
+    padding: 6px 8px; background: #fafafa;
+  }
+  .fulltax-a4 .ft-note { font-size: 11px; color: #444; margin-top: 6px; }
+  .fulltax-a4 .ft-summary { width: 70mm; flex-shrink: 0; }
+  .fulltax-a4 .ft-summary .ft-row {
+    display: flex; justify-content: space-between; gap: 10px; line-height: 1.9;
+    padding: 0 4px;
+  }
+  .fulltax-a4 .ft-summary .ft-grand {
+    border-top: 2px solid #000; margin-top: 3px; padding-top: 3px;
+    font-size: 15px; font-weight: 800;
+  }
+  .fulltax-a4 .ft-signs {
+    display: flex; justify-content: space-around; gap: 24px; margin-top: 18mm;
+  }
+  .fulltax-a4 .ft-sign { text-align: center; font-size: 11px; color: #444; flex: 1; }
+  .fulltax-a4 .ft-sign-line { border-top: 1px dotted #000; margin: 0 6mm 4px; }
+
   @media print {
     /* Reset every theme token to its light value during print so even
        a dark-mode app prints black-on-white. */
@@ -3577,6 +3660,13 @@
        safety margin on each side so the print head's physical edge
        limits don't slice text. */
     @page { size: 80mm auto; margin: 0; }
+    /* Named page for the full A4 tax invoice. Only elements with
+       `page: fulltax` (the .fulltax-a4 document) use A4; the 100mm
+       receipt keeps the default 80mm page above. When printing the A4
+       form the receipt portal isn't rendered at all, so the two never
+       collide. */
+    @page fulltax { size: A4; margin: 12mm 10mm; }
+    .fulltax-a4 { page: fulltax; }
     html, body {
       background: #fff !important;
       margin: 0 !important;
@@ -3588,7 +3678,7 @@
     /* Hide every body subtree EXCEPT the print portal. The original POS
        app (modal, sidebar, sales history table, etc) all live under
        #root, which we hide entirely. */
-    body > *:not(.receipt-print-portal) { display: none !important; }
+    body > *:not(.receipt-print-portal):not(.fulltax-print-portal) { display: none !important; }
     /* Centre the receipt horizontally on the page. Without this the
        receipt sits flush-left because the user's printable paper width
        (often slightly larger than 100mm — e.g. 100mm sticker on a
@@ -3614,6 +3704,28 @@
       border: 0 !important;
       background: #fff !important;
       margin: 0 auto !important;
+    }
+    /* Full A4 tax invoice portal — full page width, no centering box.
+       Each .fulltax-a4 inside is one A4 page (page-break between copies). */
+    .fulltax-print-portal {
+      display: block !important;
+      position: static !important;
+      width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    .fulltax-print-portal .fulltax-a4 {
+      width: 100% !important;
+      padding: 0 !important;
+      box-shadow: none !important;
+      border: 0 !important;
+      background: #fff !important;
+      break-after: page;
+      page-break-after: always;
+    }
+    .fulltax-print-portal .fulltax-a4:last-child {
+      break-after: auto;
+      page-break-after: auto;
     }
   }
 

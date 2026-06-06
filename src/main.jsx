@@ -137,6 +137,41 @@ const fmtMoney = (n) => roundMoney(n).toLocaleString("th-TH", { minimumFractionD
 const fmtDate = (s) => s ? new Date(s).toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" }) : "-";
 const fmtDateTime = (s) => s ? new Date(s).toLocaleString("th-TH", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "-";
 
+// แปลงจำนวนเงินบาทเป็นข้อความภาษาไทย (เช่น 1070 → "หนึ่งพันเจ็ดสิบบาทถ้วน").
+// ใช้บนใบกำกับภาษีเต็มรูป (จำนวนเงินเป็นตัวอักษร) ตามธรรมเนียมเอกสารไทย.
+const bahtText = (amount) => {
+  const num = roundMoney(Math.abs(Number(amount) || 0));
+  const TH_DIGITS = ['ศูนย์','หนึ่ง','สอง','สาม','สี่','ห้า','หก','เจ็ด','แปด','เก้า'];
+  const TH_PLACES = ['','สิบ','ร้อย','พัน','หมื่น','แสน','ล้าน'];
+  const readInt = (s) => {
+    // อ่านเลขจำนวนเต็มเป็นข้อความ — รองรับหลักล้านแบบวนซ้ำ
+    s = String(s).replace(/^0+/, '') || '0';
+    if (s === '0') return TH_DIGITS[0];
+    if (s.length > 7) {
+      const head = s.slice(0, s.length - 6);
+      const tail = s.slice(s.length - 6);
+      return readInt(head) + 'ล้าน' + (Number(tail) ? readInt(tail) : '');
+    }
+    let out = '';
+    const len = s.length;
+    for (let i = 0; i < len; i++) {
+      const d = Number(s[i]);
+      const place = len - i - 1;
+      if (d === 0) continue;
+      if (place === 1 && d === 1) out += 'สิบ';
+      else if (place === 1 && d === 2) out += 'ยี่สิบ';
+      else if (place === 0 && d === 1 && len > 1) out += 'เอ็ด';
+      else out += TH_DIGITS[d] + TH_PLACES[place];
+    }
+    return out;
+  };
+  const baht = Math.floor(num);
+  const satang = Math.round((num - baht) * 100);
+  let txt = readInt(baht) + 'บาท';
+  txt += satang ? (readInt(satang) + 'สตางค์') : 'ถ้วน';
+  return txt;
+};
+
 // True when the viewport is at or below Tailwind's `lg` breakpoint
 // (1024px) — used to suppress page-entry auto-focus on phones/tablets
 // so the iOS keyboard doesn't pop up uninvited when the user lands on
@@ -1569,6 +1604,7 @@ function AppSettingsModal({ open, onClose }) {
       shop_address:   draft.shop_address?.trim()  || null,
       shop_phone:     draft.shop_phone?.trim()    || null,
       shop_tax_id:    draft.shop_tax_id?.trim()   || null,
+      shop_branch:    draft.shop_branch?.trim()   || null,
       receipt_footer: draft.receipt_footer?.trim()|| null,
       // updated_at stamped server-side (see tg_set_updated_at trigger).
     }).eq('id', 1);
@@ -1703,6 +1739,12 @@ function AppSettingsModal({ open, onClose }) {
                   <label className="text-xs font-semibold text-muted-soft block mb-1">เลขประจำตัวผู้เสียภาษี</label>
                   <input className="input font-mono" value={draft.shop_tax_id||""} onChange={e=>set('shop_tax_id', e.target.value)} placeholder="เลขประจำตัว 13 หลัก" />
                 </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-soft block mb-1">สำนักงานใหญ่ / สาขา</label>
+                  <input className="input" value={draft.shop_branch||""} onChange={e=>set('shop_branch', e.target.value)} placeholder="สำนักงานใหญ่" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-muted-soft block mb-1">ข้อความท้ายใบเสร็จ</label>
                   <input className="input" value={draft.receipt_footer||""} onChange={e=>set('receipt_footer', e.target.value)} placeholder="เช่น ขอบคุณที่ใช้บริการ" />
@@ -2416,6 +2458,7 @@ function Receipt({ order, items, shop, variant = 'receipt' }) {
         {shop?.shop_address && <div className="r-addr">{shop.shop_address}</div>}
         {shop?.shop_phone   && <div className="r-addr">โทร {shop.shop_phone} (คุณตุ๋ม)</div>}
         {isInvoice && shop?.shop_tax_id && <div className="r-addr">เลขผู้เสียภาษี {shop.shop_tax_id}</div>}
+        {isInvoice && shop?.shop_branch && <div className="r-addr">({shop.shop_branch})</div>}
       </div>
 
       <hr className="r-double"/>
@@ -2435,6 +2478,7 @@ function Receipt({ order, items, shop, variant = 'receipt' }) {
         <div className="r-bold">ผู้ซื้อ</div>
         {order.buyer_name && <div>{order.buyer_name}</div>}
         {order.buyer_tax_id && <div className="r-sm">เลขผู้เสียภาษี {order.buyer_tax_id}</div>}
+        {order.buyer_branch && <div className="r-sm">({order.buyer_branch})</div>}
         {order.buyer_address && <div className="r-sm">{order.buyer_address}</div>}
       </>)}
 
@@ -2502,6 +2546,113 @@ function Receipt({ order, items, shop, variant = 'receipt' }) {
 }
 
 /* =========================================================
+   FULL TAX INVOICE — A4/A5 form (ใบกำกับภาษีแบบเต็มรูป)
+   Renders one A4 page meeting ป.รัษฎากร ม.86/4 requirements:
+   seller name/address/tax-id/branch · "ใบกำกับภาษี" heading ·
+   original/copy mark · running invoice no. · date · buyer block ·
+   itemised table · VAT shown separately · amount-in-Thai-words ·
+   signature lines. copyLabel = 'ต้นฉบับ' | 'สำเนา'.
+========================================================= */
+function FullTaxInvoiceA4({ order, items, shop, copyLabel = 'ต้นฉบับ' }) {
+  const exVat = Number(order.grand_total||0) - Number(order.vat_amount||0);
+  // Per-line shown values mirror the 100mm Receipt rules: display override
+  // wins; otherwise apply the cascading line discounts.
+  const rows = items.map(it => {
+    const hasOverride = it.display_unit_price != null;
+    const shownUnit  = hasOverride ? Number(it.display_unit_price) : Number(it.unit_price);
+    const shownTotal = hasOverride
+      ? shownUnit * Number(it.quantity || 0)
+      : applyDiscounts(it.unit_price, it.quantity, it.discount1_value, it.discount1_type, it.discount2_value, it.discount2_type);
+    return { ...it, shownUnit, shownTotal };
+  });
+  const displayedSubtotal = rows.reduce((s, r) => s + r.shownTotal, 0);
+  const displayedDiscount = Math.max(0, displayedSubtotal - Number(order.grand_total||0));
+  return (
+    <div className="fulltax-a4">
+      <div className="ft-head">
+        <div className="ft-seller">
+          <div className="ft-shop">{shop?.shop_name || 'TIMES'}</div>
+          {shop?.shop_address && <div className="ft-line">{shop.shop_address}</div>}
+          {shop?.shop_phone && <div className="ft-line">โทร {shop.shop_phone}</div>}
+          <div className="ft-line">
+            เลขประจำตัวผู้เสียภาษี {shop?.shop_tax_id || '-'}
+            {shop?.shop_branch ? `  (${shop.shop_branch})` : ''}
+          </div>
+        </div>
+        <div className="ft-title">
+          <div className="ft-title-main">ใบกำกับภาษี</div>
+          <div className="ft-title-sub">TAX INVOICE</div>
+          <div className="ft-copy-mark">({copyLabel})</div>
+        </div>
+      </div>
+
+      <div className="ft-meta">
+        <div className="ft-buyer">
+          <div className="ft-meta-label">ลูกค้า / ผู้ซื้อ</div>
+          <div className="ft-buyer-name">{order.buyer_name || '—'}</div>
+          {order.buyer_address && <div className="ft-line">{order.buyer_address}</div>}
+          <div className="ft-line">
+            {order.buyer_tax_id ? `เลขประจำตัวผู้เสียภาษี ${order.buyer_tax_id}` : ''}
+            {order.buyer_branch ? `  (${order.buyer_branch})` : ''}
+          </div>
+        </div>
+        <div className="ft-docinfo">
+          <div className="ft-row"><span>เลขที่</span><b>{order.tax_invoice_no || '-'}</b></div>
+          <div className="ft-row"><span>วันที่</span><span>{fmtDate(order.tax_invoice_issued_at || order.sale_date)}</span></div>
+          <div className="ft-row"><span>อ้างอิงบิล</span><span>#{order.id}</span></div>
+          <div className="ft-row"><span>ชำระโดย</span><span>{PAYMENT_LABELS[order.payment_method]||'—'}</span></div>
+        </div>
+      </div>
+
+      <table className="ft-table">
+        <thead>
+          <tr>
+            <th className="ft-c-no">ลำดับ</th>
+            <th className="ft-c-desc">รายการ</th>
+            <th className="ft-c-qty">จำนวน</th>
+            <th className="ft-c-price">ราคา/หน่วย</th>
+            <th className="ft-c-amt">จำนวนเงิน</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={r.id}>
+              <td className="ft-c-no">{i+1}</td>
+              <td className="ft-c-desc">{r.product_name}</td>
+              <td className="ft-c-qty">{r.quantity}</td>
+              <td className="ft-c-price">{fmtTHB(r.shownUnit)}</td>
+              <td className="ft-c-amt">{fmtTHB(r.shownTotal)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div className="ft-bottom">
+        <div className="ft-words">
+          <div className="ft-meta-label">จำนวนเงิน (ตัวอักษร)</div>
+          <div className="ft-words-val">{bahtText(order.grand_total)}</div>
+          {order.notes && <div className="ft-note">หมายเหตุ: {order.notes}</div>}
+        </div>
+        <div className="ft-summary">
+          <div className="ft-row"><span>รวมเป็นเงิน</span><span>{fmtTHB(displayedSubtotal)}</span></div>
+          {displayedDiscount > 0 && (
+            <div className="ft-row"><span>ส่วนลด</span><span>−{fmtTHB(displayedDiscount)}</span></div>
+          )}
+          <div className="ft-row"><span>มูลค่าก่อนภาษี</span><span>{fmtTHB(exVat)}</span></div>
+          <div className="ft-row"><span>ภาษีมูลค่าเพิ่ม {order.vat_rate||7}%</span><span>{fmtTHB(order.vat_amount)}</span></div>
+          <div className="ft-row ft-grand"><span>จำนวนเงินรวมทั้งสิ้น</span><span>{fmtTHB(order.grand_total)}</span></div>
+        </div>
+      </div>
+
+      <div className="ft-signs">
+        <div className="ft-sign"><div className="ft-sign-line"/>ผู้รับสินค้า / ผู้ซื้อ</div>
+        <div className="ft-sign"><div className="ft-sign-line"/>ผู้รับเงิน / ผู้มีอำนาจ</div>
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
    RECEIPT MODAL — preview + print
 ========================================================= */
 // Receipt visual style is locked to 'minimal' (clean thin lines, mono
@@ -2510,11 +2661,15 @@ function Receipt({ order, items, shop, variant = 'receipt' }) {
 // removed once these defaults were finalised; see git history if you
 // need them back. The static `@page` rule lives in styles.legacy.css.
 
-function ReceiptModal({ open, onClose, orderId }) {
+function ReceiptModal({ open, onClose, orderId, initialVariant }) {
   const { shop } = useShop();
   const [order, setOrder] = useState(null);
   const [items, setItems] = useState([]);
+  // 'receipt' | 'tax_invoice' (both 100mm thermal) | 'a4' (full A4 form)
   const [variant, setVariant] = useState('receipt');
+  // For the A4 full tax invoice: which copies to print.
+  // 'both' = ต้นฉบับ + สำเนา (2 pages) · 'original' · 'copy'
+  const [copies, setCopies] = useState('both');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -2529,17 +2684,28 @@ function ReceiptModal({ open, onClose, orderId }) {
       if (!cancelled) {
         setOrder(oRes.data);
         setItems(iRes.data || []);
-        setVariant(oRes.data?.tax_invoice_no ? 'tax_invoice' : 'receipt');
+        setVariant(initialVariant || (oRes.data?.tax_invoice_no ? 'tax_invoice' : 'receipt'));
+        setCopies('both');
         setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [open, orderId]);
+  }, [open, orderId, initialVariant]);
 
   const canTaxInvoice = !!(order?.tax_invoice_no || order?.buyer_name);
+  const isA4 = variant === 'a4';
+  // A4 copies to render in the print portal.
+  const a4Copies = copies === 'both' ? ['ต้นฉบับ', 'สำเนา'] : copies === 'copy' ? ['สำเนา'] : ['ต้นฉบับ'];
+
+  const TabBtn = ({ id, label }) => (
+    <button type="button" onClick={()=>setVariant(id)}
+      className={"flex-1 py-2 px-3 rounded-md text-sm font-medium border transition " + (variant===id ? "bg-primary text-on-primary border-primary" : "bg-surface-strong text-muted border-hairline hover:text-ink")}>
+      {label}
+    </button>
+  );
 
   return (
-    <Modal open={open} onClose={onClose} title="พิมพ์ใบเสร็จ"
+    <Modal open={open} onClose={onClose} title="พิมพ์ใบเสร็จ / ใบกำกับภาษี"
       footer={<>
         <button className="btn-secondary" onClick={onClose}>ปิด</button>
         <button className="btn-primary" onClick={()=>window.print()} disabled={!order}>
@@ -2549,40 +2715,57 @@ function ReceiptModal({ open, onClose, orderId }) {
       {loading && <div className="p-6 text-muted text-sm flex items-center gap-2"><span className="spinner"/>กำลังโหลด...</div>}
       {!loading && order && (
         <div>
-          {canTaxInvoice && (
-            <div className="flex gap-2 mb-3 no-print">
-              <button type="button" onClick={()=>setVariant('receipt')}
-                className={"flex-1 py-2 px-3 rounded-md text-sm font-medium border transition " + (variant==='receipt' ? "bg-primary text-on-primary border-primary" : "bg-surface-strong text-muted border-hairline hover:text-ink")}>
-                ใบเสร็จรับเงิน
-              </button>
-              <button type="button" onClick={()=>setVariant('tax_invoice')}
-                className={"flex-1 py-2 px-3 rounded-md text-sm font-medium border transition " + (variant==='tax_invoice' ? "bg-primary text-on-primary border-primary" : "bg-surface-strong text-muted border-hairline hover:text-ink")}>
-                ใบกำกับภาษี
-              </button>
+          <div className="flex gap-2 mb-3 no-print">
+            <TabBtn id="receipt" label="ใบเสร็จ 100mm" />
+            {canTaxInvoice && <TabBtn id="tax_invoice" label="ใบกำกับ 100mm" />}
+            {canTaxInvoice && <TabBtn id="a4" label="ใบกำกับเต็มรูป A4" />}
+          </div>
+
+          {isA4 && (
+            <div className="flex gap-2 mb-3 no-print text-xs">
+              {[['both','ต้นฉบับ + สำเนา'],['original','ต้นฉบับ'],['copy','สำเนา']].map(([id,label])=>(
+                <button key={id} type="button" onClick={()=>setCopies(id)}
+                  className={"flex-1 py-1.5 px-2 rounded-md font-medium border transition " + (copies===id ? "bg-primary/10 text-primary border-primary/30" : "bg-surface-strong text-muted border-hairline hover:text-ink")}>
+                  {label}
+                </button>
+              ))}
             </div>
           )}
 
           {/* On-screen preview. Wrapped in `no-print` so the modal copy
-              of the receipt doesn't compete with the portaled print
-              copy below — every browser then prints exactly one page. */}
+              doesn't compete with the portaled print copy below. */}
           <div className="bg-surface-soft p-3 rounded-lg overflow-auto no-print">
-            <div className="mx-auto" style={{width:'76mm'}}>
-              <Receipt order={order} items={items} shop={shop} variant={variant}/>
-            </div>
+            {isA4 ? (
+              <div className="mx-auto bg-white shadow-sm" style={{width:'190mm', maxWidth:'100%'}}>
+                <FullTaxInvoiceA4 order={order} items={items} shop={shop} copyLabel={a4Copies[0]}/>
+              </div>
+            ) : (
+              <div className="mx-auto" style={{width:'76mm'}}>
+                <Receipt order={order} items={items} shop={shop} variant={variant}/>
+              </div>
+            )}
           </div>
-          <div className="text-xs text-muted-soft mt-2 text-center no-print">ตัวอย่าง — กด "พิมพ์" เพื่อส่งไปเครื่องพิมพ์สติ๊กเกอร์ความร้อน 80มม.</div>
+          <div className="text-xs text-muted-soft mt-2 text-center no-print">
+            {isA4 ? 'ตัวอย่าง — กด "พิมพ์" เพื่อพิมพ์ลงกระดาษ A4' : 'ตัวอย่าง — กด "พิมพ์" เพื่อส่งไปเครื่องพิมพ์สติ๊กเกอร์ความร้อน'}
+          </div>
         </div>
       )}
 
-      {/* Print portal: a single Receipt rendered as a direct child of
-          <body>. Print CSS hides every other body child via simple
-          `body > *:not(.receipt-print-portal)` (no `:has()` needed —
-          works in every browser back to 2018). On screen it's hidden
-          via `display: none`. */}
+      {/* Print portal: rendered as a direct child of <body>. Print CSS
+          hides every other body child. The portal class differs by mode
+          so the matching @page size (100mm vs A4) is applied. */}
       {!loading && order && createPortal(
-        <div className="receipt-print-portal">
-          <Receipt order={order} items={items} shop={shop} variant={variant}/>
-        </div>,
+        isA4 ? (
+          <div className="fulltax-print-portal">
+            {a4Copies.map((label) => (
+              <FullTaxInvoiceA4 key={label} order={order} items={items} shop={shop} copyLabel={label}/>
+            ))}
+          </div>
+        ) : (
+          <div className="receipt-print-portal">
+            <Receipt order={order} items={items} shop={shop} variant={variant}/>
+          </div>
+        ),
         document.body
       )}
     </Modal>
@@ -3679,7 +3862,7 @@ function POSView() {
   const [notes, setNotes] = useState("");
   const [showNotes, setShowNotes] = useState(false);
   const [taxInvoice, setTaxInvoice] = useState(false);
-  const [buyer, setBuyer] = useState({ name: "", taxId: "", address: "", invoiceNo: "" });
+  const [buyer, setBuyer] = useState({ name: "", taxId: "", address: "", branch: "สำนักงานใหญ่" });
   const [receiptOrderId, setReceiptOrderId] = useState(null); // shows ReceiptModal after sale
   const searchRef = useRef(null);
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -3988,10 +4171,13 @@ function POSView() {
         discount_value: discountR, discount_type: discountR > 0 ? 'net' : null,
         subtotal: subtotalR, total_after_discount: grandR, grand_total: grandR,
         vat_rate: VAT_RATE_DEFAULT, vat_amount: vat, price_includes_vat: true,
-        tax_invoice_no: taxInvoice ? (buyer.invoiceNo.trim() || null) : null,
+        // tax_invoice_no is intentionally omitted — the server RPC
+        // (create_sale_order_with_items v4) auto-assigns the running
+        // tax-invoice number to EVERY bill (gap-free, per BE year).
         buyer_name:    taxInvoice ? (buyer.name.trim()    || null) : null,
         buyer_tax_id:  taxInvoice ? (buyer.taxId.trim()   || null) : null,
         buyer_address: taxInvoice ? (buyer.address.trim() || null) : null,
+        buyer_branch:  taxInvoice ? (buyer.branch.trim()  || null) : null,
         notes: notes.trim() || null,
         // Only persist net_received for e-commerce sales — for store/facebook
         // grand_total IS the revenue, so this stays null. When "ใส่ทีหลัง" is on
@@ -4062,7 +4248,7 @@ function POSView() {
       setCart([]); setNetPrice(""); setNetReceived(""); setDeferNet(false);
       setChannel("tiktok"); setPayment("transfer"); setCartOpen(false);
       setNotes(""); setShowNotes(false);
-      setTaxInvoice(false); setBuyer({ name: "", taxId: "", address: "", invoiceNo: "" });
+      setTaxInvoice(false); setBuyer({ name: "", taxId: "", address: "", branch: "สำนักงานใหญ่" });
     } catch (err) {
       toast.push("บันทึกไม่สำเร็จ: " + mapError(err, { context: 'save_bill' }), 'error');
     } finally { setSubmitting(false); submitLockRef.current = false; }
@@ -5009,7 +5195,7 @@ function POSView() {
           {taxInvoice && (
             <button className="btn-secondary !text-error hover:!bg-error/10" onClick={()=>{
               setTaxInvoice(false);
-              setBuyer({ name: "", taxId: "", address: "", invoiceNo: "" });
+              setBuyer({ name: "", taxId: "", address: "", branch: "สำนักงานใหญ่" });
               setTaxInvoiceModalOpen(false);
             }}>
               <Icon name="trash" size={14}/> ลบใบกำกับ
@@ -5022,6 +5208,9 @@ function POSView() {
           }}>บันทึก</button>
         </>}>
         <div className="space-y-3">
+          <div className="text-[11px] text-muted-soft bg-surface-soft rounded-lg px-3 py-2 border hairline">
+            เลขที่ใบกำกับภาษีจะออกให้อัตโนมัติเมื่อบันทึกบิล (รันต่อเนื่องรายปี ห้ามซ้ำ)
+          </div>
           <div>
             <label className="text-xs uppercase tracking-wider text-muted">ชื่อผู้ซื้อ / บริษัท <span className="text-error">*</span></label>
             <input className="input mt-1" autoFocus placeholder="เช่น บริษัท ABC จำกัด" value={buyer.name} onChange={e=>setBuyer(b=>({...b,name:e.target.value}))}/>
@@ -5032,8 +5221,8 @@ function POSView() {
               <input className="input mt-1 font-mono" inputMode="numeric" placeholder="13 หลัก" value={buyer.taxId} onChange={e=>setBuyer(b=>({...b,taxId:e.target.value}))}/>
             </div>
             <div>
-              <label className="text-xs uppercase tracking-wider text-muted">เลขใบกำกับ</label>
-              <input className="input mt-1" placeholder="INV-XXXX" value={buyer.invoiceNo} onChange={e=>setBuyer(b=>({...b,invoiceNo:e.target.value}))}/>
+              <label className="text-xs uppercase tracking-wider text-muted">สำนักงานใหญ่ / สาขา</label>
+              <input className="input mt-1" placeholder="สำนักงานใหญ่" value={buyer.branch} onChange={e=>setBuyer(b=>({...b,branch:e.target.value}))}/>
             </div>
           </div>
           <div>
@@ -6385,6 +6574,12 @@ function SalesView({ onGoPOS }) {
   const [range, setRange] = useState({ from: todayISO(), to: todayISO() });
   const from = range.from, to = range.to;
   const [reprintId, setReprintId] = useState(null);
+  // When set to 'a4', the reprint modal opens straight on the full A4 tax invoice.
+  const [reprintVariant, setReprintVariant] = useState(undefined);
+  // Retroactive full-tax-invoice issuing (admin) — buyer-details form state.
+  const [issueOpen, setIssueOpen] = useState(false);
+  const [issueBuyer, setIssueBuyer] = useState({ name: "", taxId: "", address: "", branch: "สำนักงานใหญ่" });
+  const [issuing, setIssuing] = useState(false);
   const [channel, setChannel] = useState("");
   const [excludeVoided, setExcludeVoided] = useState(true);
   // Free-text search across bill IDs + product names within the
@@ -6791,6 +6986,50 @@ function SalesView({ onGoPOS }) {
     } finally { setVoiding(false); voidLockRef.current = false; }
   };
 
+  // Open the retroactive issue form, prefilling any buyer details the bill
+  // already has (so re-issuing/correcting keeps the existing values).
+  const openIssueInvoice = () => {
+    if (!detail) return;
+    const o = detail.order;
+    setIssueBuyer({
+      name: o.buyer_name || "",
+      taxId: o.buyer_tax_id || "",
+      address: o.buyer_address || "",
+      branch: o.buyer_branch || "สำนักงานใหญ่",
+    });
+    setIssueOpen(true);
+  };
+
+  // Issue (or update) a full tax invoice for an existing bill, then jump
+  // straight into the A4 print view. Server assigns the running number if
+  // the bill doesn't have one yet (issue_tax_invoice_for_order RPC).
+  const submitIssueInvoice = async () => {
+    if (!detail || issuing) return;
+    if (!issueBuyer.name.trim()) { toast.push("กรุณากรอกชื่อผู้ซื้อ", 'error'); return; }
+    setIssuing(true);
+    try {
+      const { data, error } = await sb.rpc('issue_tax_invoice_for_order', {
+        p_order_id: detail.order.id,
+        p_buyer: {
+          buyer_name: issueBuyer.name.trim(),
+          buyer_tax_id: issueBuyer.taxId.trim() || null,
+          buyer_address: issueBuyer.address.trim() || null,
+          buyer_branch: issueBuyer.branch.trim() || null,
+        },
+      });
+      if (error) throw error;
+      // Reflect the updated row in the open detail panel + the list.
+      setDetail(d => d ? { ...d, order: { ...d.order, ...data } } : d);
+      setOrders(list => list.map(o => o.id === data.id ? { ...o, ...data } : o));
+      toast.push(`ออกใบกำกับภาษีเลขที่ ${data.tax_invoice_no}`, 'success');
+      setIssueOpen(false);
+      setReprintVariant('a4');
+      setReprintId(data.id);  // open print modal straight on the A4 form
+    } catch (e) {
+      toast.push("ออกใบกำกับไม่ได้: " + mapError(e), 'error');
+    } finally { setIssuing(false); }
+  };
+
   const total = useMemo(()=> filteredOrders.reduce((s,o)=> s + Number(o.grand_total||0), 0), [filteredOrders]);
   // Sum of per-order computed profit (revenue − cost, voided bills = 0).
   // Depends on `orderSummary` being populated by load(); shows ฿0 briefly
@@ -7153,8 +7392,14 @@ function SalesView({ onGoPOS }) {
               </button>
             </>)}
             {detail && (
-              <button className="btn-print-receipt" onClick={()=>setReprintId(detail.order.id)}>
+              <button className="btn-print-receipt" onClick={()=>{ setReprintVariant(undefined); setReprintId(detail.order.id); }}>
                 <Icon name="receipt" size={16}/> พิมพ์ใบเสร็จ
+              </button>
+            )}
+            {detail && isAdmin && detail.order.status!=='voided' && (
+              <button className="btn-secondary" onClick={openIssueInvoice}
+                title="ออก/อัปเดตข้อมูลผู้ซื้อ แล้วพิมพ์ใบกำกับภาษีแบบเต็มรูป (A4)">
+                <Icon name="edit" size={16}/> ใบกำกับเต็มรูป
               </button>
             )}
             <button className="btn-secondary" onClick={()=>setDetail(null)}>ปิด</button>
@@ -7455,7 +7700,46 @@ function SalesView({ onGoPOS }) {
         )}
       </Modal>
 
-      <ReceiptModal open={!!reprintId} onClose={()=>setReprintId(null)} orderId={reprintId}/>
+      <ReceiptModal open={!!reprintId} onClose={()=>{ setReprintId(null); setReprintVariant(undefined); }} orderId={reprintId} initialVariant={reprintVariant}/>
+
+      {/* Retroactive full-tax-invoice issuing — admin enters buyer details
+          for an existing bill; the server assigns the running invoice
+          number (if missing) and we jump to the A4 print view. */}
+      <Modal open={issueOpen} onClose={()=>setIssueOpen(false)}
+        title="ออกใบกำกับภาษีแบบเต็มรูป"
+        footer={<>
+          <button className="btn-secondary" onClick={()=>setIssueOpen(false)}>ยกเลิก</button>
+          <button className="btn-primary" disabled={issuing || !issueBuyer.name.trim()} onClick={submitIssueInvoice}>
+            {issuing ? <span className="spinner"/> : <Icon name="check" size={16}/>}
+            ออก + พิมพ์ A4
+          </button>
+        </>}>
+        <div className="space-y-3">
+          <div className="text-[11px] text-muted-soft bg-surface-soft rounded-lg px-3 py-2 border hairline">
+            {detail?.order?.tax_invoice_no
+              ? `บิลนี้มีเลขใบกำกับ ${detail.order.tax_invoice_no} แล้ว — แก้ข้อมูลผู้ซื้อแล้วพิมพ์ซ้ำได้`
+              : 'ระบบจะออกเลขที่ใบกำกับภาษีให้อัตโนมัติเมื่อกดออก (รันต่อเนื่องรายปี)'}
+          </div>
+          <div>
+            <label className="text-xs uppercase tracking-wider text-muted">ชื่อผู้ซื้อ / บริษัท <span className="text-error">*</span></label>
+            <input className="input mt-1" autoFocus placeholder="เช่น บริษัท ABC จำกัด" value={issueBuyer.name} onChange={e=>setIssueBuyer(b=>({...b,name:e.target.value}))}/>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted">เลขผู้เสียภาษี</label>
+              <input className="input mt-1 font-mono" inputMode="numeric" placeholder="13 หลัก" value={issueBuyer.taxId} onChange={e=>setIssueBuyer(b=>({...b,taxId:e.target.value}))}/>
+            </div>
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted">สำนักงานใหญ่ / สาขา</label>
+              <input className="input mt-1" placeholder="สำนักงานใหญ่" value={issueBuyer.branch} onChange={e=>setIssueBuyer(b=>({...b,branch:e.target.value}))}/>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs uppercase tracking-wider text-muted">ที่อยู่</label>
+            <textarea className="input mt-1" rows="3" placeholder="ที่อยู่ผู้ซื้อ (พิมพ์ในใบกำกับภาษี)" value={issueBuyer.address} onChange={e=>setIssueBuyer(b=>({...b,address:e.target.value}))}/>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -9070,7 +9354,9 @@ function DonutChart({
         const frac = Math.max(0, sl.value) / total;
         const sweep = frac * 360;
         const start = angleCursor + gap / 2;
-        const end = angleCursor + Math.max(gap, sweep - gap / 2);
+        // Cap below a full 360° so a single 100%-slice doesn't collapse to a
+        // zero-length arc (start point === end point → browser draws nothing).
+        const end = angleCursor + Math.min(359.99, Math.max(gap, sweep - gap / 2));
         angleCursor += sweep;
 
         const pathD = arcPath(start, end);
