@@ -27,31 +27,66 @@ export default function SupplierForm({
   hasVat, setHasVat,
   returnReason, setReturnReason,
   errCls,
+  // Receive only — supplier registry picker (props supplied by StockMovementForm).
+  selectedSupplier, onOpenPicker, onClearSupplier,
 }) {
   const supplierLabel = kind === 'receive' ? 'ผู้ขาย / Supplier' : 'บริษัทที่ส่งคืน';
   const invoiceLabel  = kind === 'receive' ? 'เลขบิล' : 'เลขเอกสารส่งคืน / Tracking';
 
   return (
     <>
-      <div className={"rounded-xl" + errCls('supplier')}>
-        <label className="text-xs uppercase tracking-wider text-muted">{supplierLabel} <span className="text-error">*</span></label>
-        <div className="grid grid-cols-2 gap-2 mt-1.5">
-          {SUPPLIERS.map(s => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setSupplierName(s)}
-              className={"py-2.5 px-3 rounded-lg text-sm font-medium border transition-all text-center inline-flex items-center justify-center gap-1.5 " +
-                (supplierName === s
-                  ? "btn-segment-active text-white"
-                  : "glass-soft text-ink hover:bg-white/60 hover-lift")}
-            >
-              {supplierName === s && <Icon name="check" size={14} strokeWidth={2.5} />}
-              {s}
-            </button>
-          ))}
+      {kind === 'receive' ? (
+        // Receive: pick from the saved supplier registry (full details for the
+        // purchase document / ภ.พ.30) or type a name for petty/informal receives.
+        <div className={"rounded-xl" + errCls('supplier')}>
+          <label className="text-xs uppercase tracking-wider text-muted">{supplierLabel} <span className="text-error">*</span></label>
+          {selectedSupplier ? (
+            <div className="mt-1.5 flex items-center gap-2 p-3 rounded-lg border hairline bg-surface-soft">
+              <div className="flex-1 min-w-0">
+                <div className="font-medium truncate">{selectedSupplier.business_name}</div>
+                <div className="text-xs text-muted-soft font-mono">
+                  {selectedSupplier.tax_id || '—'} · {selectedSupplier.branch_type === 'branch' ? `สาขา ${selectedSupplier.branch_code || ''}` : 'สำนักงานใหญ่'}
+                </div>
+              </div>
+              <button type="button" className="btn-secondary !py-1.5 !px-3 text-xs" onClick={onOpenPicker}>เปลี่ยน</button>
+              <button type="button" className="btn-ghost !p-2" title="ล้าง" onClick={onClearSupplier}><Icon name="x" size={16}/></button>
+            </div>
+          ) : (
+            <div className="mt-1.5 space-y-2">
+              <button type="button" onClick={onOpenPicker}
+                className="w-full py-2.5 px-3 rounded-lg text-sm font-medium border border-primary/40 text-primary bg-primary/5 hover:bg-primary/10 transition inline-flex items-center justify-center gap-1.5">
+                <Icon name="search" size={15}/> เลือกผู้จำหน่ายจากทะเบียน
+              </button>
+              <input
+                className="input !h-10"
+                placeholder="หรือพิมพ์ชื่อผู้ขายเอง (รับเข้าเล็กๆ เช่น ถ่าน, สาย)"
+                value={supplierName}
+                onChange={e => setSupplierName(e.target.value)}
+              />
+            </div>
+          )}
         </div>
-      </div>
+      ) : (
+        <div className={"rounded-xl" + errCls('supplier')}>
+          <label className="text-xs uppercase tracking-wider text-muted">{supplierLabel} <span className="text-error">*</span></label>
+          <div className="grid grid-cols-2 gap-2 mt-1.5">
+            {SUPPLIERS.map(s => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setSupplierName(s)}
+                className={"py-2.5 px-3 rounded-lg text-sm font-medium border transition-all text-center inline-flex items-center justify-center gap-1.5 " +
+                  (supplierName === s
+                    ? "btn-segment-active text-white"
+                    : "glass-soft text-ink hover:bg-white/60 hover-lift")}
+              >
+                {supplierName === s && <Icon name="check" size={14} strokeWidth={2.5} />}
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {kind === 'claim' && (
         <div className={"rounded-xl" + errCls('claimReason')}>
@@ -81,7 +116,7 @@ export default function SupplierForm({
 
       {/* Supplier tax ID — Thai 13-digit. Required for ภ.พ.30 รายงานภาษีซื้อ
           CSV export but optional in DB so legacy/petty receipts still save. */}
-      {kind === 'receive' && setSupplierTaxId && (
+      {kind === 'receive' && setSupplierTaxId && !selectedSupplier && (
         <div>
           <label className="text-xs uppercase tracking-wider text-muted">
             เลขประจำตัวผู้เสียภาษีของผู้ขาย <span className="text-muted-soft normal-case tracking-normal">(ไม่บังคับ · 13 หลัก · ใช้ออกรายงาน ภ.พ.30)</span>

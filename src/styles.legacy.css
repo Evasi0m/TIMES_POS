@@ -755,6 +755,27 @@
   .btn-primary:disabled::before { display: none; }
   :root[data-theme="dark"] .btn-primary:disabled { background: rgb(var(--c-surface-card)); color: rgb(var(--c-muted-soft)); }
 
+  /* Selected state for segmented radio pills (supplier form etc.) — mirrors
+     the .btn-primary gradient + gloss so a chosen option reads like the
+     primary "บันทึก" button instead of a flat fill. Geometry (padding /
+     radius) stays on the button element; this only paints the surface. */
+  .pill-active {
+    background: linear-gradient(180deg, #d18467 0%, #cc785c 50%, #c06c50 100%);
+    color: #fff !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.38) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.10) inset,
+      0 6px 16px -4px rgba(204, 120, 92, 0.5);
+    position: relative;
+    overflow: hidden;
+  }
+  .pill-active::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.22), transparent);
+    pointer-events: none; border-radius: inherit;
+  }
+
   /* Gemini-style rainbow button used for AI features (currently "AI อ่านบิล").
      Mirrors .btn-primary's geometry/states so all surrounding utility
      classes (icon-btn-44, mobile sizing rules) still apply identically.

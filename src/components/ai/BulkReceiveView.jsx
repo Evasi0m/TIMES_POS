@@ -116,8 +116,27 @@ export default function BulkReceiveView() {
   const [undo, setUndo] = useState(null);                   // A3: {label, restore}
   const [dupInvoices, setDupInvoices] = useState(() => new Map()); // B2: invoiceNo→{id,date}
   const [draftAvailable, setDraftAvailable] = useState(null); // C1: a saved draft to restore
+  // This page only ever scans bills from บริษัท เซ็นทรัลเทรดดิ้ง จำกัด (the
+  // Casio/Seiko distributor — "CMG" bills). We attach that registered
+  // supplier to every saved receive so the purchase document (เอกสารซื้อ) has
+  // the full supplier details for ภ.พ.30. Loaded once on mount.
+  const [supplier, setSupplier] = useState(null);
   const undoTimer = useRef(null);
   const draftTimer = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data } = await sb.from('suppliers')
+        .select('*')
+        .ilike('business_name', '%เซ็นทรัลเทรดดิ้ง%')
+        .eq('is_active', true)
+        .order('id')
+        .limit(1);
+      if (!cancelled) setSupplier(data?.[0] || null);
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // A3: stash a just-deleted thing with a 6s "เลิกทำ" snackbar instead of
   // removing it irreversibly. `restore` re-applies the captured state;
@@ -659,7 +678,13 @@ export default function BulkReceiveView() {
           total_value: total,
           vat_rate: lineVatApplies ? VAT_RATE_DEFAULT : 0,
           vat_amount: vat,
-          supplier_name: 'CMG',
+          // Link the registered supplier so the purchase document carries full
+          // details; RPC denormalizes name/tax id. Falls back to "CMG" if the
+          // supplier record isn't found.
+          supplier_id: supplier?.id,
+          supplier_name: supplier?.business_name || 'CMG',
+          supplier_tax_id: supplier?.tax_id || null,
+          created_via: 'ai_cmg',
           // M3: per-bill suffix so two same-second fallbacks differ.
           // `loopIdx + 1` mirrors the user-visible bill number well
           // enough; we don't expose the suffix in UI anywhere.
@@ -839,6 +864,7 @@ export default function BulkReceiveView() {
           onZoom={setLightboxSrc}
           onSetAllVat={setAllVat}
           savingProgress={savingProgress}
+          supplierName={supplier?.business_name || 'CMG'}
         />
       )}
 
@@ -971,7 +997,7 @@ function ReviewWizard({
   bills, currentIdx, setCurrentIdx, products, recentReceivesMap, usage, summary, submitting,
   onUpdateRow, onRemoveRow, onPickCandidate, onSetNewProduct,
   onInvoiceNoChange, onHasVatChange, onRemoveBill, onSubmitAll, onCancel,
-  dupInvoices, onZoom, onSetAllVat, savingProgress,
+  dupInvoices, onZoom, onSetAllVat, savingProgress, supplierName,
 }) {
   const current = bills[currentIdx];
   const canPrev = currentIdx > 0;
@@ -1041,6 +1067,7 @@ function ReviewWizard({
           onHasVatChange={onHasVatChange}
           onRemoveBill={onRemoveBill}
           disabled={current.saveState === 'saved' || submitting}
+          supplierName={supplierName}
         />
       )}
 
@@ -1119,7 +1146,7 @@ function Stepper({ bills, currentIdx, onJump }) {
 function BillCard({
   bill, billNumber, totalBills, products, recentReceivesMap, dup, onZoom,
   onUpdateRow, onRemoveRow, onPickCandidate, onSetNewProduct,
-  onInvoiceNoChange, onHasVatChange, onRemoveBill, disabled,
+  onInvoiceNoChange, onHasVatChange, onRemoveBill, disabled, supplierName,
 }) {
   const itemCount = bill.rows.length;
   const unresolved = bill.rows.filter((r) => r.status === 'suggestions' || r.status === 'none').length;
@@ -1186,7 +1213,7 @@ function BillCard({
                 disabled={disabled}
               />
             </label>
-            <span className="text-[11px] text-muted-soft">ผู้ขาย CMG</span>
+            <span className="text-[11px] text-muted-soft">ผู้ขาย {supplierName || 'CMG'}</span>
             <span className="text-[11px] text-muted-soft">·</span>
             <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs">
               <input
