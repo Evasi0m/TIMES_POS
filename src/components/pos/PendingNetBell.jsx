@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { sb } from '../../lib/supabase-client.js';
+import { excludePendingTikTok } from '../../lib/ecommerce-channels.js';
 import Icon from '../ui/Icon.jsx';
 import ProductThumb from '../ui/ProductThumb.jsx';
 
@@ -49,11 +50,13 @@ export default function PendingNetBell({ toast, size = 44, floating = false, flo
   }
 
   const load = useCallback(async () => {
-    const { data: orders, error } = await sb.from('sale_orders')
-      .select('id, sale_date')
-      .eq('net_received_pending', true)
-      .eq('status', 'active')
-      .order('sale_date', { ascending: false });
+    const { data: orders, error } = await excludePendingTikTok(
+      sb.from('sale_orders')
+        .select('id, sale_date')
+        .eq('net_received_pending', true)
+        .eq('status', 'active')
+        .order('sale_date', { ascending: false }),
+    );
     if (error || !orders?.length) { setBills([]); return; }
 
     const ids = orders.map(o => o.id);

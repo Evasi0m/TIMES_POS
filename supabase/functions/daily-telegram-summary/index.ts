@@ -28,6 +28,7 @@
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { applyTikTokReportFilter } from '../_shared/telegram-format.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -101,12 +102,14 @@ interface SummaryNumbers {
 }
 
 async function computeSummary(supa: any, dateBkk: string): Promise<SummaryNumbers> {
-  const { data: orders, error: ordErr } = await supa
-    .from('sale_orders')
-    .select('id, channel, grand_total, net_received')
-    .eq('status', 'active')
-    .gte('sale_date', startOfDayBkk(dateBkk))
-    .lte('sale_date', endOfDayBkk(dateBkk));
+  const { data: orders, error: ordErr } = await applyTikTokReportFilter(
+    supa
+      .from('sale_orders')
+      .select('id, channel, grand_total, net_received')
+      .eq('status', 'active')
+      .gte('sale_date', startOfDayBkk(dateBkk))
+      .lte('sale_date', endOfDayBkk(dateBkk)),
+  );
   if (ordErr) throw ordErr;
 
   const ords = (orders || []) as Array<{ id: number; channel: string|null; grand_total: number; net_received: number|null }>;
@@ -158,12 +161,14 @@ async function computeSummary(supa: any, dateBkk: string): Promise<SummaryNumber
   const [y, m] = dateBkk.split('-').map(Number);
   const nextMonth = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
   const monthEnd = `${nextMonth}T00:00:00+07:00`;
-  const { data: monthOrders } = await supa
-    .from('sale_orders')
-    .select('grand_total, channel, net_received')
-    .eq('status', 'active')
-    .gte('sale_date', monthStart)
-    .lt('sale_date', monthEnd);
+  const { data: monthOrders } = await applyTikTokReportFilter(
+    supa
+      .from('sale_orders')
+      .select('grand_total, channel, net_received')
+      .eq('status', 'active')
+      .gte('sale_date', monthStart)
+      .lt('sale_date', monthEnd),
+  );
   const monthSales = (monthOrders || []).reduce((s: number, o: any) =>
     s + (ECOMMERCE_CHANNELS.has(o.channel || '') && o.net_received != null
       ? Number(o.net_received) || 0

@@ -6,7 +6,7 @@
 // identical to how main.jsx originally created the client.
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL  = 'https://zrymhhkqdcttqsdczfcr.supabase.co';
+export const SUPABASE_URL  = 'https://zrymhhkqdcttqsdczfcr.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpyeW1oaGtxZGN0dHFzZGN6ZmNyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3MjYzNDUsImV4cCI6MjA5MzMwMjM0NX0.M414TfDx_nxJRa3hEWMiY7FAsevj5f0HIGQAp-H-8jM';
 
 const REMEMBER_KEY = 'pos.remember';

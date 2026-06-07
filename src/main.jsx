@@ -27,6 +27,16 @@ import {
 } from './lib/product-classify.js';
 import { NAV, navForRole, canNavigate, VISITOR_VIEW } from './lib/nav-config.js';
 import {
+  ECOMMERCE_DEFAULT_VIEW,
+  ECOMMERCE_PLATFORMS,
+  ECOMMERCE_VIEWS,
+  ecommercePageMeta,
+  ecommercePlatformActive,
+  isEcommerceView,
+  routableViews,
+} from './lib/ecommerce-nav.js';
+import EcommerceBrandIcon from './components/ecommerce/EcommerceBrandIcon.jsx';
+import {
   EXPENSE_CATEGORIES, EXPENSE_CAT_MAP, staffComputed, realNetProfit,
 } from './lib/expense-calc.js';
 import {
@@ -34,6 +44,18 @@ import {
   mergePaylaterConfig,
   DEFAULT_PAYLATER_CONFIG,
 } from './lib/money.js';
+import { bahtText } from './lib/baht-text.js';
+import { fullBuyerValid } from './lib/tax-buyer.js';
+import { ECOMMERCE_CHANNELS, excludePendingTikTok, isApiImportedOrder } from './lib/ecommerce-channels.js';
+import { findPendingTikTokOverlap, formatOverlapWarning } from './lib/tiktok-checkout-guard.js';
+import {
+  vatFromGross,
+  inputVatFromGross,
+  returnVatFromGross,
+  computeVatAggregates,
+  computeCompliance,
+  salesCreditNoteLabel,
+} from './lib/vat-report.js';
 import { downloadStructuredCsv } from './lib/csv.js';
 import Icon from './components/ui/Icon.jsx';
 import ProductThumb from './components/ui/ProductThumb.jsx';
@@ -49,8 +71,12 @@ import SupplierForm from './components/movement/SupplierForm.jsx';
 import SalePickerForReturn from './components/movement/SalePickerForReturn.jsx';
 import InsightsView from './views/InsightsView.jsx';
 import AISettings from './components/settings/AISettings.jsx';
+import InvoiceRequestView from './views/InvoiceRequestView.jsx';
+import ECommerceView from './views/ECommerceView.jsx';
+import FullTaxInvoiceA4 from './components/invoice/FullTaxInvoiceA4.jsx';
 import BulkReceiveView from './components/ai/BulkReceiveView.jsx';
 import PendingNetBell from './components/pos/PendingNetBell.jsx';
+import TikTokConfirmPanel from './components/pos/TikTokConfirmPanel.jsx';
 import AnimatedLogo from './components/ui/AnimatedLogo.jsx';
 import './styles.css';
 
@@ -137,45 +163,7 @@ const fmtMoney = (n) => roundMoney(n).toLocaleString("th-TH", { minimumFractionD
 const fmtDate = (s) => s ? new Date(s).toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" }) : "-";
 const fmtDateTime = (s) => s ? new Date(s).toLocaleString("th-TH", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "-";
 
-// แปลงจำนวนเงินบาทเป็นข้อความภาษาไทย (เช่น 1070 → "หนึ่งพันเจ็ดสิบบาทถ้วน").
-// ใช้บนใบกำกับภาษีเต็มรูป (จำนวนเงินเป็นตัวอักษร) ตามธรรมเนียมเอกสารไทย.
-const bahtText = (amount) => {
-  const num = roundMoney(Math.abs(Number(amount) || 0));
-  const TH_DIGITS = ['ศูนย์','หนึ่ง','สอง','สาม','สี่','ห้า','หก','เจ็ด','แปด','เก้า'];
-  const TH_PLACES = ['','สิบ','ร้อย','พัน','หมื่น','แสน','ล้าน'];
-  const readInt = (s) => {
-    // อ่านเลขจำนวนเต็มเป็นข้อความ — รองรับหลักล้านแบบวนซ้ำ
-    s = String(s).replace(/^0+/, '') || '0';
-    if (s === '0') return TH_DIGITS[0];
-    if (s.length > 7) {
-      const head = s.slice(0, s.length - 6);
-      const tail = s.slice(s.length - 6);
-      return readInt(head) + 'ล้าน' + (Number(tail) ? readInt(tail) : '');
-    }
-    let out = '';
-    const len = s.length;
-    for (let i = 0; i < len; i++) {
-      const d = Number(s[i]);
-      const place = len - i - 1;
-      if (d === 0) continue;
-      if (place === 1 && d === 1) out += 'สิบ';
-      else if (place === 1 && d === 2) out += 'ยี่สิบ';
-      else if (place === 0 && d === 1 && len > 1) out += 'เอ็ด';
-      else out += TH_DIGITS[d] + TH_PLACES[place];
-    }
-    return out;
-  };
-  const baht = Math.floor(num);
-  const satang = Math.round((num - baht) * 100);
-  let txt = readInt(baht) + 'บาท';
-  txt += satang ? (readInt(satang) + 'สตางค์') : 'ถ้วน';
-  return txt;
-};
-
-// ใบกำกับภาษีเต็มรูป (ม.86/4) บังคับ: ชื่อ + เลขผู้เสียภาษี 10-13 หลัก + ที่อยู่ผู้ซื้อ
-const fullBuyerValid = (b) =>
-  !!(b && b.name?.trim() && b.address?.trim() &&
-     /^\d{10,13}$/.test((b.taxId || '').replace(/\D/g, '')));
+// bahtText + fullBuyerValid → src/lib/baht-text.js, src/lib/tax-buyer.js
 
 // True when the viewport is at or below Tailwind's `lg` breakpoint
 // (1024px) — used to suppress page-entry auto-focus on phones/tablets
@@ -221,9 +209,7 @@ const PAYMENTS = [
 // and auto-reset if the cashier switches to one of these channels while
 // 'paylater' is already selected.
 const PAYLATER_BLOCKED_CHANNELS = new Set(["store", "facebook"]);
-// Channels whose platform fees make grand_total ≠ shop revenue.
-// For these, the cashier records net_received separately for the P&L.
-const ECOMMERCE_CHANNELS = new Set(['tiktok', 'shopee', 'lazada']);
+// ECOMMERCE_CHANNELS — see lib/ecommerce-channels.js (POS manual checkout channels)
 // Payments on e-commerce channels where the cashier is required to enter
 // the platform-deducted "net received" total before checkout. Pay-later
 // is included because the cashier can estimate it via the auto-fill
@@ -2588,113 +2574,6 @@ function Receipt({ order, items, shop, variant = 'receipt' }) {
 }
 
 /* =========================================================
-   FULL TAX INVOICE — A4/A5 form (ใบกำกับภาษีแบบเต็มรูป)
-   Renders one A4 page meeting ป.รัษฎากร ม.86/4 requirements:
-   seller name/address/tax-id/branch · "ใบกำกับภาษี" heading ·
-   original/copy mark · running invoice no. · date · buyer block ·
-   itemised table · VAT shown separately · amount-in-Thai-words ·
-   signature lines. copyLabel = 'ต้นฉบับ' | 'สำเนา'.
-========================================================= */
-function FullTaxInvoiceA4({ order, items, shop, copyLabel = 'ต้นฉบับ' }) {
-  const exVat = Number(order.grand_total||0) - Number(order.vat_amount||0);
-  // Per-line shown values mirror the 100mm Receipt rules: display override
-  // wins; otherwise apply the cascading line discounts.
-  const rows = items.map(it => {
-    const hasOverride = it.display_unit_price != null;
-    const shownUnit  = hasOverride ? Number(it.display_unit_price) : Number(it.unit_price);
-    const shownTotal = hasOverride
-      ? shownUnit * Number(it.quantity || 0)
-      : applyDiscounts(it.unit_price, it.quantity, it.discount1_value, it.discount1_type, it.discount2_value, it.discount2_type);
-    return { ...it, shownUnit, shownTotal };
-  });
-  const displayedSubtotal = rows.reduce((s, r) => s + r.shownTotal, 0);
-  const displayedDiscount = Math.max(0, displayedSubtotal - Number(order.grand_total||0));
-  return (
-    <div className="fulltax-a4">
-      <div className="ft-head">
-        <div className="ft-seller">
-          <div className="ft-shop">{shop?.shop_name || 'TIMES'}</div>
-          {shop?.shop_address && <div className="ft-line">{shop.shop_address}</div>}
-          {shop?.shop_phone && <div className="ft-line">โทร {shop.shop_phone}</div>}
-          <div className="ft-line">
-            เลขประจำตัวผู้เสียภาษี {shop?.shop_tax_id || '-'}
-            {shop?.shop_branch ? `  (${shop.shop_branch})` : ''}
-          </div>
-        </div>
-        <div className="ft-title">
-          <div className="ft-title-main">ใบกำกับภาษี</div>
-          <div className="ft-title-sub">TAX INVOICE</div>
-          <div className="ft-copy-mark">({copyLabel})</div>
-        </div>
-      </div>
-
-      <div className="ft-meta">
-        <div className="ft-buyer">
-          <div className="ft-meta-label">ลูกค้า / ผู้ซื้อ</div>
-          <div className="ft-buyer-name">{order.buyer_name || '—'}</div>
-          {order.buyer_address && <div className="ft-line">{order.buyer_address}</div>}
-          <div className="ft-line">
-            {order.buyer_tax_id ? `เลขประจำตัวผู้เสียภาษี ${order.buyer_tax_id}` : ''}
-            {order.buyer_branch ? `  (${order.buyer_branch})` : ''}
-          </div>
-        </div>
-        <div className="ft-docinfo">
-          <div className="ft-row"><span>เลขที่</span><b>{order.tax_invoice_no || '-'}</b></div>
-          <div className="ft-row"><span>วันที่</span><span>{fmtDate(order.tax_invoice_issued_at || order.sale_date)}</span></div>
-          <div className="ft-row"><span>อ้างอิงบิล</span><span>#{order.id}</span></div>
-          <div className="ft-row"><span>ชำระโดย</span><span>{PAYMENT_LABELS[order.payment_method]||'—'}</span></div>
-        </div>
-      </div>
-
-      <table className="ft-table">
-        <thead>
-          <tr>
-            <th className="ft-c-no">ลำดับ</th>
-            <th className="ft-c-desc">รายการ</th>
-            <th className="ft-c-qty">จำนวน</th>
-            <th className="ft-c-price">ราคา/หน่วย</th>
-            <th className="ft-c-amt">จำนวนเงิน</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={r.id}>
-              <td className="ft-c-no">{i+1}</td>
-              <td className="ft-c-desc">{r.product_name}</td>
-              <td className="ft-c-qty">{r.quantity}</td>
-              <td className="ft-c-price">{fmtTHB(r.shownUnit)}</td>
-              <td className="ft-c-amt">{fmtTHB(r.shownTotal)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <div className="ft-bottom">
-        <div className="ft-words">
-          <div className="ft-meta-label">จำนวนเงิน (ตัวอักษร)</div>
-          <div className="ft-words-val">{bahtText(order.grand_total)}</div>
-          {order.notes && <div className="ft-note">หมายเหตุ: {order.notes}</div>}
-        </div>
-        <div className="ft-summary">
-          <div className="ft-row"><span>รวมเป็นเงิน</span><span>{fmtTHB(displayedSubtotal)}</span></div>
-          {displayedDiscount > 0 && (
-            <div className="ft-row"><span>ส่วนลด</span><span>−{fmtTHB(displayedDiscount)}</span></div>
-          )}
-          <div className="ft-row"><span>มูลค่าก่อนภาษี</span><span>{fmtTHB(exVat)}</span></div>
-          <div className="ft-row"><span>ภาษีมูลค่าเพิ่ม {order.vat_rate||7}%</span><span>{fmtTHB(order.vat_amount)}</span></div>
-          <div className="ft-row ft-grand"><span>จำนวนเงินรวมทั้งสิ้น</span><span>{fmtTHB(order.grand_total)}</span></div>
-        </div>
-      </div>
-
-      <div className="ft-signs">
-        <div className="ft-sign"><div className="ft-sign-line"/>ผู้รับสินค้า / ผู้ซื้อ</div>
-        <div className="ft-sign"><div className="ft-sign-line"/>ผู้รับเงิน / ผู้มีอำนาจ</div>
-      </div>
-    </div>
-  );
-}
-
-/* =========================================================
    PURCHASE DOCUMENT — A4 (เอกสารซื้อ / ใบรับสินค้า)
    Built from a receive_order + items + the linked supplier. The shop is
    the BUYER (ผู้ซื้อ); the supplier is the SELLER (ผู้ขาย). Used as the
@@ -2864,7 +2743,7 @@ function CreditNoteA4({ order, items, origOrder, shop }) {
     shownTotal: applyDiscounts(it.unit_price, it.quantity, it.discount1_value, it.discount1_type, it.discount2_value, it.discount2_type),
   }));
   const grand = Number(order.total_value || 0);            // reduced amount (VAT-inclusive)
-  const vat = grand * VAT_RATE_DEFAULT / (100 + VAT_RATE_DEFAULT);
+  const vat = returnVatFromGross(grand);
   const exVat = grand - vat;
   const origGrand = Number(origOrder?.grand_total || 0);
   const correctGrand = Math.max(0, origGrand - grand);
@@ -4127,6 +4006,11 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
   const role = useRole();
   const isSuperAdmin = role === 'super_admin';
   const items = navForRole(role);
+  const [ecomExpanded, setEcomExpanded] = useState(() => isEcommerceView(view));
+
+  useEffect(() => {
+    if (isEcommerceView(view)) setEcomExpanded(true);
+  }, [view]);
 
   // ─── Today's bill count (for the "ประวัติการขาย" badge) ───
   // Counts only active sale_orders dated today (Asia/Bangkok). Refreshes
@@ -4136,12 +4020,13 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
   const [todaySalesCount, setTodaySalesCount] = useState(null);
   const loadTodaySalesCount = useCallback(async () => {
     const today = todayISO();
-    const { count, error } = await sb
-      .from('sale_orders')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'active')
-      .gte('sale_date', startOfDayBangkok(today))
-      .lte('sale_date', endOfDayBangkok(today));
+    const { count, error } = await excludePendingTikTok(
+      sb.from('sale_orders')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'active')
+        .gte('sale_date', startOfDayBangkok(today))
+        .lte('sale_date', endOfDayBangkok(today)),
+    );
     if (!error) setTodaySalesCount(count ?? 0);
   }, []);
   useEffect(() => {
@@ -4184,8 +4069,65 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
       <nav className="p-3 flex-1 overflow-y-auto" aria-label="เมนูหลัก">
         {items.map(it => {
           const allowed = canNavigate(role, it);
-          // Visitor sees every nav row, but only `products` is interactive.
-          // Disabled rows get a lock icon + reduced opacity + no click handler.
+
+          if (it.k === 'ecommerce') {
+            const ecomActive = isEcommerceView(view);
+            return (
+              <div key={it.k} className="mb-0.5">
+                <button
+                  type="button"
+                  disabled={!allowed}
+                  className={
+                    'nav-item w-full text-left bg-transparent ' +
+                    (ecomActive && allowed ? 'active ' : '') +
+                    (allowed ? '' : 'opacity-40 cursor-not-allowed')
+                  }
+                  onClick={allowed ? () => {
+                    setEcomExpanded(v => !v);
+                    if (!ecomActive) setView(ECOMMERCE_DEFAULT_VIEW);
+                  } : undefined}
+                  aria-expanded={ecomExpanded}
+                >
+                  <span className="flex items-center gap-2 flex-1 min-w-0">
+                    <Icon name={it.icon} size={18}/>
+                    <span className="truncate">{it.labelLong || it.label}</span>
+                    {allowed && (
+                      <Icon
+                        name="chevron-d"
+                        size={14}
+                        className={'ml-auto shrink-0 transition-transform ' + (ecomExpanded ? 'rotate-180' : '')}
+                      />
+                    )}
+                    {!allowed && <Icon name="lock" size={13} className="opacity-70 ml-auto"/>}
+                  </span>
+                </button>
+                {ecomExpanded && allowed && (
+                  <div className="pl-3 ml-4 border-l hairline space-y-0.5 mt-0.5 mb-1">
+                    {ECOMMERCE_PLATFORMS.map(p => {
+                      const platActive = ecommercePlatformActive(view, p.k);
+                      return (
+                        <button
+                          key={p.k}
+                          type="button"
+                          className={
+                            'nav-item nav-sub w-full text-left bg-transparent text-sm !py-2 ' +
+                            (platActive ? 'active !text-primary' : '')
+                          }
+                          onClick={() => setView(p.defaultView)}
+                        >
+                          <span className="flex items-center gap-2">
+                            <EcommerceBrandIcon brand={p.brand} size={18}/>
+                            {p.label}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          }
+
           return (
             <button
               key={it.k}
@@ -4289,11 +4231,31 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
               <div>
                 <div className="text-xs uppercase tracking-wider text-muted mb-2">รายงาน</div>
                 <button
-                  className={"btn-secondary !justify-start gap-2 w-full" + (view==='dashboard' ? " !border-primary !text-primary" : "")}
-                  onClick={()=>{ setView('dashboard'); setOpenMenu(false); }}
+                  type="button"
+                  className={
+                    'btn-secondary !justify-start !items-start gap-2 w-full min-w-0 !h-auto !py-2.5 !whitespace-normal text-left ' +
+                    (view === 'dashboard' ? '!border-primary !text-primary' : '')
+                  }
+                  onClick={() => { setView('dashboard'); setOpenMenu(false); }}
                 >
-                  <Icon name="dashboard" size={16}/> ภาพรวม (ยอดขาย · วิเคราะห์ · กำไรขาดทุน)
+                  <Icon name="dashboard" size={16} className="shrink-0 mt-0.5"/>
+                  <span className="min-w-0 leading-snug">ภาพรวม</span>
                 </button>
+                <div className="text-xs uppercase tracking-wider text-muted mb-2 mt-5 pt-1">E-Commerce</div>
+                {ECOMMERCE_PLATFORMS.map(p => (
+                  <button
+                    key={p.k}
+                    className={
+                      'btn-secondary !justify-start gap-2 w-full ' +
+                      (p.k !== 'tiktok' ? 'mt-2 ' : '') +
+                      (ecommercePlatformActive(view, p.k) ? '!border-primary !text-primary' : '')
+                    }
+                    onClick={() => { setView(p.defaultView); setOpenMenu(false); }}
+                  >
+                    <EcommerceBrandIcon brand={p.brand} size={18}/>
+                    {p.label}
+                  </button>
+                ))}
               </div>
             )}
             {/* User-management button — super_admin only, sits ABOVE the
@@ -4333,8 +4295,8 @@ function MobileTabBar({ view, setView }) {
   const all = navForRole(role);
   // Pull POS out — it becomes the FAB. Everything else fills the bar halves.
   const posItem = all.find(it => it.k === 'pos');
-  // 'dashboard' and 'pnl' moved to the MobileTopBar drawer menu.
-  const others  = all.filter(it => it.k !== 'pos' && it.k !== 'dashboard' && it.k !== 'pnl');
+  // 'dashboard', 'ecommerce' moved to the MobileTopBar drawer menu.
+  const others  = all.filter(it => it.k !== 'pos' && it.k !== 'dashboard' && it.k !== 'pnl' && it.k !== 'ecommerce');
   // Split: balance left vs right (right takes the larger half if odd).
   const leftCount = Math.floor(others.length / 2);
   const left  = others.slice(0, leftCount);
@@ -4555,7 +4517,7 @@ function POSView() {
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [cart, setCart] = useState([]);
-  const [channel, setChannel] = useState("tiktok");
+  const [channel, setChannel] = useState("store");
   const [payment, setPayment] = useState("transfer");
   // Hide paylater for channels that don't support it (store / facebook)
   // and snap an already-selected paylater back to transfer so submit
@@ -4611,6 +4573,8 @@ function POSView() {
   // Modal for tax-invoice details (replaces the previous inline form
   // that bloated the checkout panel).
   const [taxInvoiceModalOpen, setTaxInvoiceModalOpen] = useState(false);
+  // Warn when manual TikTok checkout overlaps pending API orders (double stock risk).
+  const [tiktokOverlap, setTiktokOverlap] = useState(null);
   // Refs for the swipe-down-to-close gesture on the mobile cart sheet.
   const sheetRef = useRef(null);
   const sheetDragStartY = useRef(null);
@@ -4879,7 +4843,7 @@ function POSView() {
     });
   };
 
-  const submit = async () => {
+  const submit = async ({ skipTikTokOverlapGuard = false } = {}) => {
     if (submitLockRef.current) return; // hard guard against double-submit
     if (!cart.length) { toast.push("ไม่มีสินค้าในตะกร้า", "error"); return; }
     if (!netPriceFilled) { toast.push("กรุณากรอก 'ราคาที่ลูกค้าจ่าย'", "error"); return; }
@@ -4891,6 +4855,16 @@ function POSView() {
     submitLockRef.current = true;
     setSubmitting(true);
     try {
+      if (!skipTikTokOverlapGuard && channel === 'tiktok' && cart.some(l => l.product_id)) {
+        const { data: pending, error: pendingErr } = await sb.rpc('get_pending_tiktok_orders', { p_limit: 100 });
+        if (pendingErr) throw pendingErr;
+        const overlaps = findPendingTikTokOverlap(pending || [], cart);
+        if (overlaps.length) {
+          setTiktokOverlap(overlaps);
+          return;
+        }
+      }
+
       const grandR = roundMoney(grand);
       const subtotalR = roundMoney(subtotal);
       const discountR = roundMoney(discountAmount);
@@ -4979,12 +4953,18 @@ function POSView() {
       }
 
       setCart([]); setNetPrice(""); setNetReceived(""); setDeferNet(false);
-      setChannel("tiktok"); setPayment("transfer"); setCartOpen(false);
+      setChannel("store"); setPayment("transfer"); setCartOpen(false);
       setNotes(""); setShowNotes(false);
+      setTiktokOverlap(null);
       setTaxInvoice(false); setBuyer({ name: "", taxId: "", address: "", branch: "สำนักงานใหญ่" });
     } catch (err) {
       toast.push("บันทึกไม่สำเร็จ: " + mapError(err, { context: 'save_bill' }), 'error');
     } finally { setSubmitting(false); submitLockRef.current = false; }
+  };
+
+  const confirmTikTokOverlapProceed = () => {
+    setTiktokOverlap(null);
+    submit({ skipTikTokOverlapGuard: true });
   };
 
   const SearchInput = (
@@ -5510,11 +5490,39 @@ function POSView() {
 
   return (
     <>
+      <Modal
+        open={Boolean(tiktokOverlap?.length)}
+        onClose={() => setTiktokOverlap(null)}
+        title="ออเดอร์ TikTok API รอยืนยัน"
+        footer={
+          <div className="flex gap-2 justify-end">
+            <button type="button" className="btn-ghost" onClick={() => setTiktokOverlap(null)}>
+              ยกเลิก — ไปยืนยันใน TikTok
+            </button>
+            <button type="button" className="btn-ruby-premium" onClick={confirmTikTokOverlapProceed}>
+              บันทึกต่อ (manual)
+            </button>
+          </div>
+        }
+      >
+        <p className="text-sm text-muted mb-3">
+          {formatOverlapWarning(tiktokOverlap || [])}
+        </p>
+        <p className="text-sm">
+          หากเป็นออเดอร์เดียวกับ TikTok Shop ให้กด <strong>ยกเลิก</strong> แล้วเปิด
+          &quot;Order TikTok รอยืนยัน&quot; ด้านบน — การ key-in manual ซ้ำจะตัดสต็อกและนับยอดขายสองครั้ง
+        </p>
+      </Modal>
       {/* Desktop page header — owned by POSView (not App) so we can drop
           the live cart-count glow badge into the header's `right` slot
           without lifting cart state up. App skips the global header for
           'pos' view; mobile uses MobileTopBar instead. */}
-      <PageHeader title="ขายสินค้า" subtitle="POS" right={<CartGlowBadge count={totalQty}/>} farRight={<PendingNetBell toast={toast.push} size={50}/>}/>
+      <PageHeader
+        title="ขายสินค้า"
+        subtitle="POS"
+        right={<div className="flex items-center gap-3"><CartGlowBadge count={totalQty}/><TikTokConfirmPanel toast={toast.push}/></div>}
+        farRight={<PendingNetBell toast={toast.push} size={50}/>}
+      />
       {/* DESKTOP LAYOUT */}
       <div className="hidden lg:grid grid-cols-12 gap-6 px-10 py-8 h-[calc(100vh-180px)]">
         <div className="col-span-7 flex flex-col overflow-hidden">
@@ -7403,7 +7411,7 @@ function SalesView({ onGoPOS }) {
     // truncates .limit(5000) too. fetchAll() loops in 1000-row chunks so a
     // wide date range (e.g. annual report) loads completely.
     const { data, error } = await fetchAll((fromIdx, toIdx) => {
-      let q = sb.from('sale_orders').select('*')
+      let q = excludePendingTikTok(sb.from('sale_orders').select('*'))
         .gte('sale_date', startOfDayBangkok(from))
         .lte('sale_date', endOfDayBangkok(to))
         .order('sale_date', { ascending: false })
@@ -8048,7 +8056,12 @@ function SalesView({ onGoPOS }) {
                   <div className="truncate font-semibold" title={sm?.productLabel || ''}>{sm?.productLabel ?? <span className="text-muted-soft">—</span>}</div>
                   {sm?.costApprox && <span className="badge-pill !bg-warning/15 !text-[#8a6500] !text-xs mt-0.5">ทุนประมาณ</span>}
                 </div>
-                <div className="col-span-2"><span style={channelBadgeStyle(o.channel)}>{CHANNEL_LABELS[o.channel] || o.channel || '—'}</span></div>
+                <div className="col-span-2 flex flex-wrap items-center gap-1">
+                  <span style={channelBadgeStyle(o.channel)}>{CHANNEL_LABELS[o.channel] || o.channel || '—'}</span>
+                  {isApiImportedOrder(o) && (
+                    <span className="badge-pill !text-[10px] !px-1.5" style={{ background: '#fe2c55', color: '#fff' }} title="ดึงอัตโนมัติจาก TikTok Shop API — ไม่ต้องบันทึกซ้ำ">TikTok API</span>
+                  )}
+                </div>
                 <div className="col-span-1 text-xs text-muted truncate">{PAYMENTS.find(p=>p.v===o.payment_method)?.label || '—'}</div>
                 <div className={"col-span-2 text-right tabular-nums " + (o.status==='voided'?'line-through':'')}>
                   <div className="font-medium">{fmtMoney(o.grand_total)}</div>
@@ -8107,6 +8120,9 @@ function SalesView({ onGoPOS }) {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-xs text-muted">#{o.id}</span>
                       <span style={channelBadgeStyle(o.channel)}>{CHANNEL_LABELS[o.channel] || o.channel || '—'}</span>
+                      {isApiImportedOrder(o) && (
+                        <span className="badge-pill !text-[10px] !px-1.5" style={{ background: '#fe2c55', color: '#fff' }} title="ดึงอัตโนมัติจาก TikTok Shop API — ไม่ต้องบันทึกซ้ำ">TikTok API</span>
+                      )}
                       {o.status==='voided' && <span className="badge-pill !bg-error/10 !text-error !text-xs">VOIDED</span>}
                     </div>
                     {sm && sm.itemCount > 0 && (
@@ -8982,7 +8998,10 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
     let cancel = false;
     setSaleSearching(true);
     (async()=>{
-      const { data } = await sb.from('sale_orders').select('id, sale_date, channel, grand_total').eq('status','active').order('sale_date',{ascending:false}).limit(50);
+      const { data } = await excludePendingTikTok(
+        sb.from('sale_orders').select('id, sale_date, channel, grand_total')
+          .eq('status','active').order('sale_date',{ascending:false}).limit(50),
+      );
       if (!cancel) { setRecentSales(data||[]); setSaleSearching(false); }
     })();
     return ()=>{ cancel=true; };
@@ -10455,7 +10474,7 @@ function DashboardView({ embedded = false, dateRange: dateRangeProp, onDateRange
     // silently under-reports any month with > 1000 active orders.
     const [rangeQ, prevQ, lowQ] = await Promise.all([
       fetchAll((fromIdx, toIdx) =>
-        sb.from('sale_orders').select('id, grand_total, channel, net_received, sale_date')
+        excludePendingTikTok(sb.from('sale_orders').select('id, grand_total, channel, net_received, sale_date'))
           .eq('status','active')
           .gte('sale_date', startOfDayBangkok(from))
           .lte('sale_date', endOfDayBangkok(to))
@@ -10463,7 +10482,7 @@ function DashboardView({ embedded = false, dateRange: dateRangeProp, onDateRange
           .range(fromIdx, toIdx)
       ),
       fetchAll((fromIdx, toIdx) =>
-        sb.from('sale_orders').select('grand_total, channel, net_received')
+        excludePendingTikTok(sb.from('sale_orders').select('grand_total, channel, net_received'))
           .eq('status','active')
           .gte('sale_date', startOfDayBangkok(prevFromIso))
           .lte('sale_date', endOfDayBangkok(prevToIso))
@@ -10873,11 +10892,13 @@ function ShopExpensesModal({ open, onClose, initialMonth, onChanged }) {
         const startDate = `${month}-01`;
         const endDate = new Date(y, m, 0);     // last day of month (m is 1-12, day 0 = last of m-1+1)
         const endIso = `${y}-${String(m).padStart(2,'0')}-${String(endDate.getDate()).padStart(2,'0')}`;
-        const { data: salesRows } = await sb.from('sale_orders')
-          .select('grand_total, net_received, channel')
-          .eq('status', 'active')
-          .gte('sale_date', startOfDayBangkok(startDate))
-          .lte('sale_date', endOfDayBangkok(endIso));
+        const { data: salesRows } = await excludePendingTikTok(
+          sb.from('sale_orders')
+            .select('grand_total, net_received, channel')
+            .eq('status', 'active')
+            .gte('sale_date', startOfDayBangkok(startDate))
+            .lte('sale_date', endOfDayBangkok(endIso)),
+        );
         if (cancelled) return;
         let total = 0;
         (salesRows || []).forEach(o => {
@@ -11382,8 +11403,8 @@ function ProfitLossView({ embedded = false }) {
     try {
       // 1) Sales in range (active only) — chunked to bypass 1000-row cap
       const { data: orders } = await fetchAll((fromIdx, toIdx) =>
-        sb.from('sale_orders')
-          .select('id, sale_date, channel, grand_total, subtotal, net_received')
+        excludePendingTikTok(sb.from('sale_orders')
+          .select('id, sale_date, channel, grand_total, subtotal, net_received'))
           .eq('status', 'active')
           .gte('sale_date', startOfDayBangkok(from))
           .lte('sale_date', endOfDayBangkok(to))
@@ -11526,8 +11547,8 @@ function ProfitLossView({ embedded = false }) {
         const startDay = pm > from ? pm : from;
         const endDay   = monthEnd < to ? monthEnd : to;
         const { data: oList } = await fetchAll((fromIdx, toIdx) =>
-          sb.from('sale_orders')
-            .select('grand_total, net_received, channel')
+          excludePendingTikTok(sb.from('sale_orders')
+            .select('grand_total, net_received, channel'))
             .eq('status', 'active')
             .gte('sale_date', startOfDayBangkok(startDay))
             .lte('sale_date', endOfDayBangkok(endDay))
@@ -12297,31 +12318,6 @@ function VatView({ embedded = false, dateRange: dateRangeProp, onDateRangeChange
     ];
   }, [today]);
   const activePreset = presets.find(p => p.from === dateRange.from && p.to === dateRange.to)?.k;
-  const vatFromGross = (gross, vatAmount, vatRate) => {
-    const g = Number(gross) || 0;
-    const v = Number(vatAmount);
-    if (Number.isFinite(v) && v > 0) return v;
-    const rate = Number(vatRate);
-    if (Number.isFinite(rate) && rate <= 0) return 0;
-    const r = Number.isFinite(rate) && rate > 0 ? rate : VAT_RATE_DEFAULT;
-    return g * r / (100 + r);
-  };
-  // Receive bills in this codebase ALWAYS record VAT-inclusive
-  // total_value — manual receive treats user input as gross-inclusive,
-  // and AI bulk receive multiplies by 1.07 when the "ก่อน VAT" toggle
-  // is on so the persisted total ends up gross-inclusive too. The
-  // header's `vat_rate` column doesn't always reflect that (it's 0 on
-  // any bill the user didn't tick "มี VAT" for, including legacy data),
-  // so we ignore the rate field and always extract 7/107 from gross —
-  // matching how COGS matching works. An explicit `vat_amount > 0`
-  // (set by AI scans that captured the exact tax-invoice number) wins
-  // as an override.
-  const inputVatFromGross = (gross, vatAmount) => {
-    const v = Number(vatAmount);
-    if (Number.isFinite(v) && v > 0) return v;
-    const g = Number(gross) || 0;
-    return g * VAT_RATE_DEFAULT / (100 + VAT_RATE_DEFAULT);
-  };
 
   // ── Loader ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -12333,8 +12329,8 @@ function VatView({ embedded = false, dateRange: dateRangeProp, onDateRangeChange
         // 1) Output side — sale_orders header (vat_amount may be NULL on
         //    legacy bills; we'll fall back to 7/107 in the renderer).
         const salesQ = fetchAll((fromIdx, toIdx) =>
-          sb.from('sale_orders')
-            .select('id, sale_date, channel, grand_total, vat_amount, vat_rate, tax_invoice_no, buyer_name, buyer_tax_id, buyer_address, buyer_branch')
+          excludePendingTikTok(sb.from('sale_orders')
+            .select('id, sale_date, channel, grand_total, vat_amount, vat_rate, tax_invoice_no, buyer_name, buyer_tax_id, buyer_address, buyer_branch'))
             .eq('status', 'active')
             .gte('sale_date', startOfDayBangkok(from))
             .lte('sale_date', endOfDayBangkok(to))
@@ -12345,8 +12341,8 @@ function VatView({ embedded = false, dateRange: dateRangeProp, onDateRangeChange
         //     the sales report as "ยกเลิก" (value 0) so the running invoice
         //     number sequence has no unexplained gaps for an RD audit.
         const voidedSalesQ = fetchAll((fromIdx, toIdx) =>
-          sb.from('sale_orders')
-            .select('id, sale_date, tax_invoice_no, buyer_name')
+          excludePendingTikTok(sb.from('sale_orders')
+            .select('id, sale_date, tax_invoice_no, buyer_name'))
             .eq('status', 'voided')
             .not('tax_invoice_no', 'is', null)
             .gte('sale_date', startOfDayBangkok(from))
@@ -12375,7 +12371,7 @@ function VatView({ embedded = false, dateRange: dateRangeProp, onDateRangeChange
         //     does have vat_amount/vat_rate (uses same RPC as receive).
         const returnQ = fetchAll((fromIdx, toIdx) =>
           sb.from('return_orders')
-            .select('id, return_date, channel, total_value, original_sale_order_id, return_reason, goods_returned')
+            .select('id, return_date, channel, total_value, original_sale_order_id, return_reason, goods_returned, credit_note_no')
             .is('voided_at', null)
             .gte('return_date', startOfDayBangkok(from))
             .lte('return_date', endOfDayBangkok(to))
@@ -12458,116 +12454,25 @@ function VatView({ embedded = false, dateRange: dateRangeProp, onDateRangeChange
     return () => { cancelled = true; };
   }, [dateRange.from, dateRange.to]);
 
-  // ── Aggregations ──────────────────────────────────────────────────
-  const { outputTotalGross, outputTotalVat, outputByChannel } = useMemo(() => {
-    let gross = 0, vat = 0;
-    const byCh = {};
-    salesRows.forEach(r => {
-      const g = Number(r.grand_total) || 0;
-      const vAmt = vatFromGross(g, r.vat_amount, r.vat_rate);
-      gross += g; vat += vAmt;
-      const k = r.channel || 'store';
-      if (!byCh[k]) byCh[k] = { channel: k, gross: 0, vat: 0, count: 0 };
-      byCh[k].gross += g; byCh[k].vat += vAmt; byCh[k].count += 1;
-    });
-    return {
-      outputTotalGross: gross,
-      outputTotalVat: vat,
-      outputByChannel: Object.values(byCh).sort((a,b) => b.gross - a.gross),
-    };
-  }, [salesRows]);
+  // ── Aggregations (src/lib/vat-report.js) ────────────────────────
+  const {
+    outputTotalGross, outputTotalVat, outputByChannel,
+    inputTotalGross, inputTotalVat, inputBySupplier,
+    cogsTotalGross, cogsTotalVat,
+    returnTotalGross, returnTotalVat,
+    claimTotalGross, claimTotalVat,
+    outputTotalVatNet, outputTotalGrossNet,
+    inputTotalVatNet, inputTotalGrossNet,
+    vatPayable, vatPayableCogs, grossProfit, netProfitAfterVat,
+  } = useMemo(
+    () => computeVatAggregates({ salesRows, recvRows, returnRows, claimRows, cogsRows }),
+    [salesRows, recvRows, returnRows, claimRows, cogsRows],
+  );
 
-  const { inputTotalGross, inputTotalVat, inputBySupplier } = useMemo(() => {
-    let gross = 0, vat = 0;
-    const bySup = {};
-    recvRows.forEach(r => {
-      const g = Number(r.total_value) || 0;
-      const vAmt = inputVatFromGross(g, r.vat_amount);
-      gross += g; vat += vAmt;
-      const k = r.supplier_name || '— ไม่ระบุ —';
-      if (!bySup[k]) bySup[k] = { supplier: k, gross: 0, vat: 0, count: 0 };
-      bySup[k].gross += g; bySup[k].vat += vAmt; bySup[k].count += 1;
-    });
-    return {
-      inputTotalGross: gross,
-      inputTotalVat: vat,
-      inputBySupplier: Object.values(bySup).sort((a,b) => b.gross - a.gross),
-    };
-  }, [recvRows]);
-
-  // COGS matching: cost of goods sold in the period × 7/107
-  const { cogsTotalGross, cogsTotalVat } = useMemo(() => {
-    let gross = 0;
-    cogsRows.forEach(it => {
-      const cost = Number(it.cost_price) || 0;
-      const qty = Number(it.quantity) || 0;
-      gross += cost * qty;
-    });
-    return { cogsTotalGross: gross, cogsTotalVat: gross * 7/107 };
-  }, [cogsRows]);
-
-  // Credit notes — these reduce the relevant VAT totals.
-  // return_orders has no vat columns so we always extract 7/107.
-  // supplier_claim_orders uses the same inputVatFromGross rules as receive.
-  const { returnTotalGross, returnTotalVat } = useMemo(() => {
-    let gross = 0, vat = 0;
-    returnRows.forEach(r => {
-      const g = Number(r.total_value) || 0;
-      gross += g;
-      vat += g * VAT_RATE_DEFAULT / (100 + VAT_RATE_DEFAULT);
-    });
-    return { returnTotalGross: gross, returnTotalVat: vat };
-  }, [returnRows]);
-
-  const { claimTotalGross, claimTotalVat } = useMemo(() => {
-    let gross = 0, vat = 0;
-    claimRows.forEach(r => {
-      const g = Number(r.total_value) || 0;
-      gross += g;
-      vat += inputVatFromGross(g, r.vat_amount);
-    });
-    return { claimTotalGross: gross, claimTotalVat: vat };
-  }, [claimRows]);
-
-  // Net figures (after credit notes) — what actually goes on ภ.พ.30.
-  const outputTotalVatNet = outputTotalVat - returnTotalVat;
-  const outputTotalGrossNet = outputTotalGross - returnTotalGross;
-  const inputTotalVatNet = inputTotalVat - claimTotalVat;
-  const inputTotalGrossNet = inputTotalGross - claimTotalGross;
-
-  const vatPayable = outputTotalVatNet - inputTotalVatNet;     // สรรพากร basis (after credit notes)
-  const vatPayableCogs = outputTotalVatNet - cogsTotalVat;     // accounting (COGS) basis
-  const grossProfit = outputTotalGrossNet - cogsTotalGross;
-  const netProfitAfterVat = grossProfit / 1.07;
-
-  // ── Compliance checks ─────────────────────────────────────────────
-  // Surfaces bills that can't actually be filed on ภ.พ.30 even though
-  // they're counted in the totals — so the bookkeeper knows what to
-  // fix before submitting.
-  const compliance = useMemo(() => {
-    const salesNoTaxInvoice = salesRows.filter(r => !r.tax_invoice_no);
-    const recvNoSupplierTaxId = recvRows.filter(r => !r.supplier_tax_id);
-    const recvNoInvoiceNo = recvRows.filter(r => !r.supplier_invoice_no);
-    const sumVatSale = (rs) => rs.reduce((s, r) => s + vatFromGross(Number(r.grand_total) || 0, r.vat_amount, r.vat_rate), 0);
-    const sumVatRecv = (rs) => rs.reduce((s, r) => s + inputVatFromGross(Number(r.total_value) || 0, r.vat_amount), 0);
-    return {
-      salesNoTaxInvoice: {
-        count: salesNoTaxInvoice.length,
-        gross: salesNoTaxInvoice.reduce((s, r) => s + (Number(r.grand_total) || 0), 0),
-        vat:   sumVatSale(salesNoTaxInvoice),
-      },
-      recvNoSupplierTaxId: {
-        count: recvNoSupplierTaxId.length,
-        gross: recvNoSupplierTaxId.reduce((s, r) => s + (Number(r.total_value) || 0), 0),
-        vat:   sumVatRecv(recvNoSupplierTaxId),
-      },
-      recvNoInvoiceNo: {
-        count: recvNoInvoiceNo.length,
-        gross: recvNoInvoiceNo.reduce((s, r) => s + (Number(r.total_value) || 0), 0),
-        vat:   sumVatRecv(recvNoInvoiceNo),
-      },
-    };
-  }, [salesRows, recvRows]);
+  const compliance = useMemo(
+    () => computeCompliance(salesRows, recvRows),
+    [salesRows, recvRows],
+  );
   const complianceTotalIssues =
     compliance.salesNoTaxInvoice.count +
     compliance.recvNoSupplierTaxId.count +
@@ -12637,12 +12542,12 @@ function VatView({ embedded = false, dateRange: dateRangeProp, onDateRangeChange
     // with negative VAT/value so the running total nets out correctly.
     const creditRows = returnRows.map((r, i) => {
       const g = Number(r.total_value) || 0;
-      const vAmt = g * VAT_RATE_DEFAULT / (100 + VAT_RATE_DEFAULT);
+      const vAmt = returnVatFromGross(g);
       const exVat = g - vAmt;
       return [
         salesRows.length + i + 1,
         fmtThaiDDMMYYYY(r.return_date),
-        `(ใบลดหนี้) RT#${r.id}`,
+        salesCreditNoteLabel(r),
         '— รับคืนจากลูกค้า —',
         '',
         'สำนักงานใหญ่',
@@ -13107,8 +13012,8 @@ function AnomaliesView({ embedded = false }) {
     try {
       // Chunked: a wide range can blow past the 1000-row default cap.
       const { data: ords } = await fetchAll((fromIdx, toIdx) =>
-        sb.from('sale_orders')
-          .select('id, sale_date, channel, subtotal, grand_total, net_received')
+        excludePendingTikTok(sb.from('sale_orders')
+          .select('id, sale_date, channel, subtotal, grand_total, net_received'))
           .eq('status', 'active')
           .gte('sale_date', startOfDayBangkok(from))
           .lte('sale_date', endOfDayBangkok(to))
@@ -13582,9 +13487,34 @@ function OfflineBanner() {
 /* =========================================================
    APP SHELL
 ========================================================= */
+function ECommerceViewHost({ view, setView }) {
+  const toast = useToast();
+  const role = useRole();
+  return (
+    <ECommerceView
+      view={view}
+      setView={setView}
+      toast={toast}
+      DatePicker={DatePicker}
+      todayISO={todayISO}
+      isSuperAdmin={role === 'super_admin'}
+    />
+  );
+}
+
 function App() {
+  const [publicRoute] = useState(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('view') === 'invoice-request') {
+      return { kind: 'invoice-request', token: p.get('token') || '' };
+    }
+    return null;
+  });
   const [session, setSession] = useState(undefined);
-  const [view, setView] = useState("pos");
+  const [view, setView] = useState(() => {
+    const p = new URLSearchParams(window.location.search);
+    return p.get('tiktok') === 'connected' ? ECOMMERCE_DEFAULT_VIEW : 'pos';
+  });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [userMgmtOpen, setUserMgmtOpen] = useState(false);
   // MFA gate state:
@@ -13638,11 +13568,17 @@ function App() {
   //   admin+   → pos      (sensible default landing)
   useEffect(() => {
     if (!session) return;
+    if (role === 'visitor') return;
+    if (view === 'ecommerce') setView(ECOMMERCE_DEFAULT_VIEW);
+  }, [view, session, role]);
+
+  useEffect(() => {
+    if (!session) return;
     if (role === 'visitor') {
       if (view !== VISITOR_VIEW) setView(VISITOR_VIEW);
       return;
     }
-    const allowed = navForRole(role).map(n => n.k);
+    const allowed = routableViews(role, navForRole(role));
     if (!allowed.includes(view)) setView('pos');
   }, [session, role, view]);
 
@@ -13665,6 +13601,14 @@ function App() {
     document.addEventListener('focusin', handler);
     return () => document.removeEventListener('focusin', handler);
   }, []);
+
+  if (publicRoute?.kind === 'invoice-request') {
+    return (
+      <ToastProvider>
+        <InvoiceRequestView token={publicRoute.token} />
+      </ToastProvider>
+    );
+  }
 
   if (session === undefined) return <div className="min-h-screen flex items-center justify-center gap-3 text-muted"><span className="spinner lg"/>กำลังโหลด...</div>;
   if (!session) return <ToastProvider><DialogProvider><LoginScreen /></DialogProvider></ToastProvider>;
@@ -13701,7 +13645,12 @@ function App() {
     receive:   { t: "รับสินค้าจากบริษัท",    s: "Stock In · From Supplier" },
     return:    { t: "รับคืนจากลูกค้า",       s: "Customer Return" },
     dashboard: { t: "แดชบอร์ด",              s: "Dashboard" },
+    ecommerce: { t: "E-Commerce",             s: "TikTok · Shopee · Lazada" },
   };
+
+  const mobilePageTitle = isEcommerceView(view)
+    ? ecommercePageMeta(view).title
+    : (titles[view]?.t ?? 'TIMES');
 
   return (
     <ToastProvider>
@@ -13714,12 +13663,14 @@ function App() {
             onOpenSettings={()=>setSettingsOpen(true)}
             onOpenUserManagement={()=>setUserMgmtOpen(true)} />
           <main className="flex-1 min-h-screen lg:pl-64 main-mobile-pb">
-            <MobileTopBar title={titles[view].t} userEmail={session.user?.email}
+            <MobileTopBar title={mobilePageTitle} userEmail={session.user?.email}
               onLogout={()=>sb.auth.signOut()}
               onOpenSettings={()=>setSettingsOpen(true)}
               onOpenUserManagement={()=>setUserMgmtOpen(true)}
               view={view} setView={setView}/>
-            {!['dashboard','receive','return','pos'].includes(view) && <PageHeader title={titles[view].t} subtitle={titles[view].s} />}
+            {!['dashboard', 'ecommerce', ...ECOMMERCE_VIEWS, 'receive', 'return', 'pos'].includes(view) && (
+              <PageHeader title={titles[view].t} subtitle={titles[view].s} />
+            )}
             <div key={view} className="view-fade">
               {view==='pos' && <POSView />}
               {view==='products' && <ProductsView />}
@@ -13729,6 +13680,9 @@ function App() {
               {view==='receive'   && (role==='admin' || role==='super_admin') && <ReceiveView />}
               {view==='return' && <ReturnView />}
               {view==='dashboard' && (role==='admin' || role==='super_admin') && <OverviewView />}
+              {isEcommerceView(view) && (role==='admin' || role==='super_admin') && (
+                <ECommerceViewHost view={view} setView={setView} />
+              )}
             </div>
           </main>
         </div>

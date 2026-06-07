@@ -12,6 +12,15 @@
 
 export const ECOMMERCE_CHANNELS = new Set(['tiktok', 'shopee', 'lazada']);
 
+/**
+ * Mirror src/lib/ecommerce-channels.js `excludePendingTikTok` — hide TikTok API
+ * rows that are still pending or legacy-active without cashier confirmation.
+ * Chain after `.eq('status', 'active')` on sale_orders report queries.
+ */
+export function applyTikTokReportFilter<Q extends { or: (expr: string) => Q }>(q: Q): Q {
+  return q.or('tiktok_order_id.is.null,confirmed_at.not.is.null');
+}
+
 export const CHANNEL_LABEL: Record<string, string> = {
   store: 'หน้าร้าน',
   tiktok: 'TikTok',
@@ -230,12 +239,14 @@ export async function computeDailySummary(supa: any, dateBkk: string): Promise<D
   // Today's orders — `sale_date` included so the cost helper can resolve
   // historical receive prices accurately when a product was received
   // multiple times across price changes.
-  const { data: orders, error: ordErr } = await supa
-    .from('sale_orders')
-    .select('id, channel, grand_total, net_received, sale_date')
-    .eq('status', 'active')
-    .gte('sale_date', startOfDayBkk(dateBkk))
-    .lte('sale_date', endOfDayBkk(dateBkk));
+  const { data: orders, error: ordErr } = await applyTikTokReportFilter(
+    supa
+      .from('sale_orders')
+      .select('id, channel, grand_total, net_received, sale_date')
+      .eq('status', 'active')
+      .gte('sale_date', startOfDayBkk(dateBkk))
+      .lte('sale_date', endOfDayBkk(dateBkk)),
+  );
   if (ordErr) throw ordErr;
   const ords = (orders || []) as Array<OrderLike & { id: number; sale_date: string }>;
   const revenue = ords.reduce((s, r) => s + revenueOf(r), 0);
@@ -247,12 +258,14 @@ export async function computeDailySummary(supa: any, dateBkk: string): Promise<D
     dt.setUTCDate(dt.getUTCDate() - 1);
     return dt.toISOString().slice(0, 10);
   })();
-  const { data: prevOrders } = await supa
-    .from('sale_orders')
-    .select('channel, grand_total, net_received')
-    .eq('status', 'active')
-    .gte('sale_date', startOfDayBkk(prevDate))
-    .lte('sale_date', endOfDayBkk(prevDate));
+  const { data: prevOrders } = await applyTikTokReportFilter(
+    supa
+      .from('sale_orders')
+      .select('channel, grand_total, net_received')
+      .eq('status', 'active')
+      .gte('sale_date', startOfDayBkk(prevDate))
+      .lte('sale_date', endOfDayBkk(prevDate)),
+  );
   const prevRevenue = (prevOrders || []).reduce((s: number, r: any) => s + revenueOf(r), 0);
 
   // By-channel breakdown — amount + bill count (user-facing report shows both)
@@ -303,12 +316,14 @@ async function computeAvgShopExpensePerDay(supa: any, dateBkk: string): Promise<
   const [y, m] = dateBkk.split('-').map(Number);
   const nextMonth = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
   const monthEnd = `${nextMonth}T00:00:00+07:00`;
-  const { data: monthOrders } = await supa
-    .from('sale_orders')
-    .select('grand_total, channel, net_received')
-    .eq('status', 'active')
-    .gte('sale_date', monthStart)
-    .lt('sale_date', monthEnd);
+  const { data: monthOrders } = await applyTikTokReportFilter(
+    supa
+      .from('sale_orders')
+      .select('grand_total, channel, net_received')
+      .eq('status', 'active')
+      .gte('sale_date', monthStart)
+      .lt('sale_date', monthEnd),
+  );
   const monthSales = (monthOrders || []).reduce(
     (s: number, o: any) => s + revenueOf(o), 0,
   );
@@ -382,12 +397,14 @@ export async function computeMonthlySummary(supa: any, yyyymm: string): Promise<
   const nextM = m === 12 ? 1 : m + 1;
   const monthEnd = `${nextY}-${String(nextM).padStart(2, '0')}-01T00:00:00+07:00`;
 
-  const { data: orders, error: ordErr } = await supa
-    .from('sale_orders')
-    .select('id, channel, grand_total, net_received, sale_date')
-    .eq('status', 'active')
-    .gte('sale_date', monthStart)
-    .lt('sale_date', monthEnd);
+  const { data: orders, error: ordErr } = await applyTikTokReportFilter(
+    supa
+      .from('sale_orders')
+      .select('id, channel, grand_total, net_received, sale_date')
+      .eq('status', 'active')
+      .gte('sale_date', monthStart)
+      .lt('sale_date', monthEnd),
+  );
   if (ordErr) throw ordErr;
   const ords = (orders || []) as Array<OrderLike & { id: number; sale_date: string }>;
   const revenue = ords.reduce((s, r) => s + revenueOf(r), 0);
@@ -397,12 +414,14 @@ export async function computeMonthlySummary(supa: any, yyyymm: string): Promise<
   const prevM = m === 1 ? 12 : m - 1;
   const prevYyyymm = `${prevY}-${String(prevM).padStart(2, '0')}`;
   const prevMonthStart = `${prevYyyymm}-01T00:00:00+07:00`;
-  const { data: prevOrders } = await supa
-    .from('sale_orders')
-    .select('id, channel, grand_total, net_received, sale_date')
-    .eq('status', 'active')
-    .gte('sale_date', prevMonthStart)
-    .lt('sale_date', monthStart);
+  const { data: prevOrders } = await applyTikTokReportFilter(
+    supa
+      .from('sale_orders')
+      .select('id, channel, grand_total, net_received, sale_date')
+      .eq('status', 'active')
+      .gte('sale_date', prevMonthStart)
+      .lt('sale_date', monthStart),
+  );
   const prevOrds = (prevOrders || []) as Array<OrderLike & { id: number; sale_date: string }>;
   const prevRevenue = prevOrds.reduce((s, r) => s + revenueOf(r), 0);
 
@@ -548,12 +567,14 @@ export interface RangeSummary {
 export async function computeRangeSummary(supa: any, days: number): Promise<RangeSummary> {
   const toDate = bangkokDate(0);     // today
   const fromDate = bangkokDate(-(days - 1));
-  const { data: orders } = await supa
-    .from('sale_orders')
-    .select('channel, grand_total, net_received')
-    .eq('status', 'active')
-    .gte('sale_date', startOfDayBkk(fromDate))
-    .lte('sale_date', endOfDayBkk(toDate));
+  const { data: orders } = await applyTikTokReportFilter(
+    supa
+      .from('sale_orders')
+      .select('channel, grand_total, net_received')
+      .eq('status', 'active')
+      .gte('sale_date', startOfDayBkk(fromDate))
+      .lte('sale_date', endOfDayBkk(toDate)),
+  );
   const ords = (orders || []) as OrderLike[];
   const revenue = ords.reduce((s, r) => s + revenueOf(r), 0);
 

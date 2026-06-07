@@ -21,6 +21,7 @@ import {
 
 import { sb } from '../lib/supabase-client.js';
 import { fetchAll } from '../lib/sb-paginate.js';
+import { ECOMMERCE_CHANNELS, excludePendingTikTok } from '../lib/ecommerce-channels.js';
 import { fmtTHB, fmtPct, fmtNum } from '../lib/format.js';
 import Icon from '../components/ui/Icon.jsx';
 
@@ -30,7 +31,6 @@ import { reorderSuggestion } from '../lib/analytics/forecast.js';
 import { weeklyBuckets, momCompare } from '../lib/analytics/trend.js';
 import { deadStockReport } from '../lib/analytics/dead-stock.js';
 
-const ECOMMERCE_CHANNELS = new Set(['tiktok', 'shopee', 'lazada']);
 const CHANNEL_LABEL = { store: 'หน้าร้าน', tiktok: 'TikTok', shopee: 'Shopee', lazada: 'Lazada', facebook: 'Facebook' };
 const CHANNEL_COLOR = {
   store: 'rgb(var(--c-body-strong))',
@@ -508,8 +508,8 @@ export default function InsightsView({ embedded = false } = {}) {
 
       // --- Orders (365 days) — revenue & channel & date ---
       const { data: orders } = await fetchAll((fromIdx, toIdx) =>
-        sb.from('sale_orders')
-          .select('id, sale_date, grand_total, channel, net_received')
+        excludePendingTikTok(sb.from('sale_orders')
+          .select('id, sale_date, grand_total, channel, net_received'))
           .eq('status', 'active')
           .gte('sale_date', new Date(start365).toISOString())
           .order('sale_date', { ascending: true })

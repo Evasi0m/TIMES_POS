@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Icon from './Icon.jsx';
+import ExpandableImageThumb from './ExpandableImageThumb.jsx';
 import { productImageUrl, classifyBrand } from '../../lib/product-classify.js';
 
 /**
@@ -31,11 +32,10 @@ export default function ProductThumb({ product, size = 'md', className = '' }) {
   const px = SIZES[size] || SIZES.md;
   const url = product?._imageUrl ?? productImageUrl(product);
   const [broken, setBroken] = useState(false);
-  const [loaded, setLoaded] = useState(false);
 
   // A fresh url (e.g. search results re-rendering the same slot) should clear a
-  // previous load failure / loaded flag so the new image re-shows its skeleton.
-  useEffect(() => { setBroken(false); setLoaded(false); }, [url]);
+  // previous load failure so the new image re-shows its skeleton.
+  useEffect(() => { setBroken(false); }, [url]);
 
   // Cache-buster: the shop wants product photos fetched fresh, never served from
   // the browser's HTTP cache. A per-mount token (stable across re-renders, new on
@@ -59,21 +59,19 @@ export default function ProductThumb({ product, size = 'md', className = '' }) {
 
   if (url && !broken) {
     return (
-      <div className={tileBase + ' bg-surface-soft ring-1 ring-hairline'} style={{ width: px, height: px }}>
-        {/* Loading skeleton — only for products that actually have an image URL.
-            Stays until onLoad fires; products without a URL never reach here. */}
-        {!loaded && <span className="skeleton absolute inset-0 !rounded-none" aria-hidden="true" />}
-        <img
-          src={cacheBustedUrl}
-          alt={product?.name || ''}
-          loading="lazy"
-          decoding="async"
-          referrerPolicy="no-referrer"
-          onLoad={() => setLoaded(true)}
-          onError={() => setBroken(true)}
-          className={'w-full h-full object-contain transition-opacity duration-200 ' + (loaded ? 'opacity-100' : 'opacity-0')}
-        />
-      </div>
+      <ExpandableImageThumb
+        src={cacheBustedUrl}
+        alt={product?.name || ''}
+        className={tileBase + ' bg-surface-soft ring-1 ring-hairline'}
+        style={{ width: px, height: px }}
+        imgClassName="w-full h-full object-contain"
+        onImageError={() => setBroken(true)}
+        placeholder={
+          <div className={tileBase + ' bg-surface-soft ring-1 ring-hairline'} style={{ width: px, height: px }}>
+            <span className="skeleton absolute inset-0 !rounded-none" aria-hidden="true"/>
+          </div>
+        }
+      />
     );
   }
 

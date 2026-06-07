@@ -19,3 +19,7 @@ stock_balance_2567_2568.csv
 
 # Local analysis tool output (graphify) — regenerable, large cache
 graphify-out/
+
+# Supabase CLI local state / deploy snapshots (not for repo)
+supabase/.temp/
+.deploy-poll-orders.json

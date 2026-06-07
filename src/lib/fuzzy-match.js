@@ -129,3 +129,110 @@ export function classifyMatch(query, products, opts = {}) {
   }
   return { status: 'suggestions', candidates };
 }
+
+// =====================================================================
+// SKU matching — TikTok seller_sku ↔ POS model code
+// =====================================================================
+//
+// TikTok lists the bare Casio model code (e.g. "GA-2100-1A1") while our
+// POS catalog appends a regional/warranty distributor suffix
+// ("GA-2100-1A1DR"). The TikTok SKU is therefore a strict PREFIX of the
+// POS SKU and the leftover tail is the distributor code.
+//
+// Normalized Levenshtein scores these ~0.75–0.82 (the tail divides the
+// score by length) so they never auto-match. A prefix + suffix-aware
+// comparison recognizes them with high confidence.
+
+/** Known Casio regional / warranty distributor suffixes (extend freely).
+ *  A match where the leftover tail is one of these is high-confidence
+ *  enough to auto-link. Anything else falls back to the generic
+ *  "prefix + short alpha tail" rule which only *suggests*. */
+export const KNOWN_SKU_SUFFIXES = new Set([
+  'DR', 'VDF', 'UDF', 'ER', 'EF', 'JF', 'GF', 'A', 'JR',
+  'AVDF', 'AUDF', 'VCF', 'DF', 'UD', 'SDF', 'CR', 'PR', 'VDR', 'AER',
+]);
+
+/**
+ * Tier-based SKU match between two codes (order-independent).
+ *
+ * Tiers (highest → lowest):
+ *   'exact'  → identical after normalize                       (score 1.00, auto)
+ *   'suffix' → shorter is prefix of longer, tail ∈ whitelist   (score 0.97, auto)
+ *   'prefix' → shorter is prefix of longer, tail = 1–4 letters (score 0.90, suggest)
+ *   'fuzzy'  → normalized Levenshtein ≥ 0.6                     (score = sim,  suggest)
+ *   'none'   → below the suggestion floor                       (score = sim)
+ *
+ * The all-alphabetic ≤4-char tail guard prevents collapsing different
+ * colourways: "GA-2100-1" vs "GA-2100-1A1DR" has tail "A1DR" (contains
+ * digits) → not a region suffix → no prefix/suffix match.
+ *
+ * @returns {{ tier: 'exact'|'suffix'|'prefix'|'fuzzy'|'none', score: number, auto: boolean }}
+ */
+export function skuMatchTier(a, b) {
+  const A = normalizeCode(a);
+  const B = normalizeCode(b);
+  if (!A || !B) return { tier: 'none', score: 0, auto: false };
+  if (A === B) return { tier: 'exact', score: 1, auto: true };
+
+  const [short, long] = A.length <= B.length ? [A, B] : [B, A];
+  if (long.startsWith(short)) {
+    const tail = long.slice(short.length);
+    if (KNOWN_SKU_SUFFIXES.has(tail)) {
+      return { tier: 'suffix', score: 0.97, auto: true };
+    }
+    if (/^[A-Z]{1,4}$/.test(tail)) {
+      return { tier: 'prefix', score: 0.9, auto: false };
+    }
+  }
+
+  const sim = similarityScore(A, B);
+  if (sim >= 0.6) return { tier: 'fuzzy', score: sim, auto: false };
+  return { tier: 'none', score: sim, auto: false };
+}
+
+/**
+ * Best SKU match for a query against a product list. Each product is
+ * compared against the query using both `name` and `model_code`.
+ *
+ * @param {string} query                 TikTok seller_sku
+ * @param {Array<{id, name, model_code?}>} products
+ * @param {object} [opts]
+ * @param {number} [opts.minScore=0.6]    drop matches below this score
+ * @returns {Array<{product, tier, score, auto}>} highest score first
+ */
+export function findSkuCandidates(query, products, opts = {}) {
+  const { minScore = 0.6, limit = 5 } = opts;
+  if (!query || !Array.isArray(products) || products.length === 0) return [];
+
+  const out = [];
+  for (const p of products) {
+    const byName = skuMatchTier(query, p.name);
+    const byCode = p.model_code ? skuMatchTier(query, p.model_code) : { tier: 'none', score: 0, auto: false };
+    const best = byCode.score > byName.score ? byCode : byName;
+    if (best.score >= minScore) {
+      out.push({ product: p, tier: best.tier, score: best.score, auto: best.auto });
+    }
+  }
+  out.sort((x, y) => y.score - x.score);
+  return out.slice(0, limit);
+}
+
+/**
+ * Classify a SKU query into an auto-link target or a suggestion list.
+ *
+ * Auto requires the top candidate to be an auto-tier (exact/suffix) AND
+ * clearly ahead of the runner-up, so two distributor variants of the
+ * same code don't silently pick the wrong one.
+ *
+ * @returns {{ status: 'auto'|'suggestions'|'none', product?, tier?, score?, candidates }}
+ */
+export function classifySkuMatch(query, products, opts = {}) {
+  const candidates = findSkuCandidates(query, products, opts);
+  if (candidates.length === 0) return { status: 'none', candidates: [] };
+  const top = candidates[0];
+  const runnerUp = candidates[1]?.score ?? 0;
+  if (top.auto && top.score - runnerUp >= 0.04) {
+    return { status: 'auto', product: top.product, tier: top.tier, score: top.score, candidates };
+  }
+  return { status: 'suggestions', candidates };
+}
