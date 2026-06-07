@@ -1,7 +1,7 @@
 // TikTok product matching — link unmatched line items to POS products.
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { sb } from '../../lib/supabase-client.js';
-import { fetchAll } from '../../lib/sb-paginate.js';
+import { getProductCatalog } from '../../lib/product-catalog-cache.js';
 import { mapError } from '../../lib/error-map.js';
 import { classifySkuMatch } from '../../lib/fuzzy-match.js';
 import Icon from '../ui/Icon.jsx';
@@ -81,11 +81,10 @@ export default function TikTokMatching({ toast }) {
     try {
       const [unmatched, allProducts] = await Promise.all([
         sb.rpc('get_tiktok_unmatched_items', { p_limit: 200 }),
-        fetchAll((from, to) =>
-          sb.from('products').select('id, name, model_code, barcode').range(from, to),
-        ),
+        getProductCatalog(sb),
       ]);
       if (unmatched.error) throw unmatched.error;
+      if (allProducts.error) throw allProducts.error;
       setItems(unmatched.data || []);
       setProducts(allProducts.data || []);
     } catch (e) {

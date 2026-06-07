@@ -55,6 +55,7 @@
 13. `supabase-migrations/044_tiktok_pending_golive_runtime.sql` — cutoff runtime + cleanup
 14. `supabase-migrations/045_tiktok_product_image_sync.sql` — sync รูป SKU → product_images
 15. `supabase-migrations/046_tiktok_matching_super_admin.sql` — matching เฉพาะ super_admin
+16. `supabase-migrations/047_tiktok_confirm_defer_net.sql` — ใส่ทีหลัง net ตอนยืนยัน + backfill bell queue
 
 **Go-live cutoff:** 13:00 07/06/2026 Asia/Bangkok — ออเดอร์หลัง cutoff เข้า `pending`; ก่อน cutoff → `voided`
 
@@ -105,7 +106,8 @@ flowchart LR
 ```
 
 - Import **ไม่ตัดสต็อก** — รอ kasir ยืนยัน
-- Kasir จับคู่ SKU + ใส่ `net_received` → confirm
+- Kasir จับคู่ SKU แล้ว **ใส่ `net_received` หรือกด "ใส่ทีหลัง"** → confirm
+- ถ้าเลือก "ใส่ทีหลัง" → order เข้า **PendingNetBell** (รอใส่ราคาที่ร้านได้รับ) จนกว่าจะกรอก net หรือ settlement cron อัปเดต
 - หลัง confirm เท่านั้นเข้า Sales History / Dashboard / VAT
 - Manual POS channel=tiktok **แยกจาก API** — มี guard เตือนถ้าซ้ำกับ pending API
 
@@ -151,9 +153,9 @@ flowchart LR
 - `RETURN_AND_REFUND` คืน stock; `REFUND` อย่างเดียวไม่คืน stock
 
 ### net received / ค่าธรรมเนียม
-- **Workflow ใหม่ (040+):** kasir ใส่ `net_received` ตอนยืนยันออเดอร์ที่ POS
-- Cron `tiktok-settlement-sync` (03:00 UTC) ยังมีอยู่แต่ **ไม่ match** order ใหม่ (039 + pending workflow) — อย่าพึ่ง cron สำหรับ net
-- ออเดอร์ API TikTok **ไม่** อยู่ใน PendingNetBell (039)
+- **Workflow ใหม่ (040+):** kasir ใส่ `net_received` ตอนยืนยัน หรือกด **"ใส่ทีหลัง"** แล้วกรอกทีหลังผ่านปุ่มกระดิ่ง (047)
+- Cron `tiktok-settlement-sync` (03:00 UTC) อาจเติม net อัตโนมัติเมื่อ `net_received_pending = true`
+- ออเดอร์ที่ยืนยันแล้วแต่ยังไม่มี net → แสดงใน **PendingNetBell** (รอใส่ราคาที่ร้านได้รับ)
 
 ### จับคู่สินค้า (Product Matching) — super_admin เท่านั้น (046)
 - แท็บ **จับคู่สินค้า** แสดงรายการที่ยังไม่ match (`get_tiktok_unmatched_items`)

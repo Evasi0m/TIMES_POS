@@ -12,14 +12,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { sb } from '../../lib/supabase-client.js';
-import { fetchAll } from '../../lib/sb-paginate.js';
 import { mapError } from '../../lib/error-map.js';
-import { classifySkuMatch } from '../../lib/fuzzy-match.js';
+import { classifySkuMatch, findSkuCandidates } from '../../lib/fuzzy-match.js';
+import { getProductCatalog, fetchSkuPrefilter, PRODUCT_CATALOG_SELECT } from '../../lib/product-catalog-cache.js';
 import { pollTikTokOrders, formatPollToast } from '../../lib/tiktok-poll-sync.js';
 import { useSimulatedSyncProgress } from '../../lib/use-simulated-sync-progress.js';
 import TikTokSyncOverlay from '../ui/TikTokSyncOverlay.jsx';
 import Icon from '../ui/Icon.jsx';
 import ExpandableImageThumb from '../ui/ExpandableImageThumb.jsx';
+import DeferNetButton from './DeferNetButton.jsx';
 
 const TIER_LABEL = {
   exact: 'ตรงกัน',
@@ -42,6 +43,17 @@ const fmtTime = (iso) => {
 
 const SORT_OLDEST = 'oldest';
 const SORT_NEWEST = 'newest';
+
+/** Casio-style model code embedded in TikTok titles (e.g. "รมดำ ECB-S10DB-1A"). */
+const SKU_CODE_RE = /[A-Z]{1,4}(?:-[A-Z0-9]{1,6}){1,4}/i;
+
+function extractTikTokSkuKey(item) {
+  const seller = (item?.seller_sku || '').trim();
+  if (seller) return seller.toUpperCase();
+  const text = [item?.sku_name, item?.product_name].filter(Boolean).join(' ');
+  const m = text.match(SKU_CODE_RE);
+  return m ? m[0].toUpperCase() : text.trim();
+}
 
 /** Summary stats for one pending order in the list view. */
 function orderListMeta(order) {
@@ -187,87 +199,277 @@ function SectionPill({ icon, children }) {
   );
 }
 
-function ProductPicker({ onPick, disabled }) {
+function MatchCandidateRow({ product, score, tier, onPick, disabled, highlight }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      className={'ttc-match-row w-full text-left' + (highlight ? ' ttc-match-row--auto' : '')}
+      onClick={() => onPick(product)}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="font-mono text-sm font-medium leading-snug truncate">{product.name}</div>
+        <div className="text-[11px] text-muted-soft tabular-nums mt-0.5">
+          {product.current_stock != null && <>stock {product.current_stock}</>}
+          {Number(product.retail_price) > 0 && (
+            <> · ขาย ฿{Number(product.retail_price).toLocaleString()}</>
+          )}
+          {product.barcode && (
+            <span className="font-mono ml-1 opacity-80">{product.barcode}</span>
+          )}
+        </div>
+        {highlight && tier && (
+          <span className="inline-block mt-1.5 text-[10px] px-2 py-0.5 rounded-md font-semibold bg-[#e6f7ed] text-[#0a7a43]">
+            จับคู่อัตโนมัติ · {TIER_LABEL[tier] || tier} {Math.round(score * 100)}%
+          </span>
+        )}
+      </div>
+      {score != null && (
+        <span className="ttc-picker-dropdown__score">{Math.round(score * 100)}%</span>
+      )}
+    </button>
+  );
+}
+
+/** Inline 2-mode matcher: รายการแนะนำ (default) + ค้นหาเอง (when typing). */
+function PosProductMatcher({
+  item, catalog, catalogLoading, catalogError, onRetryCatalog, onPick, disabled,
+}) {
+  const skuKey = extractTikTokSkuKey(item);
   const [q, setQ] = useState('');
-  const [results, setResults] = useState([]);
+  const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
+  const [prefilter, setPrefilter] = useState([]);
+  const [prefilterLoading, setPrefilterLoading] = useState(false);
+
+  useEffect(() => {
+    if (!skuKey) { setPrefilter([]); return; }
+    let cancelled = false;
+    (async () => {
+      setPrefilterLoading(true);
+      try {
+        const cands = await fetchSkuPrefilter(sb, skuKey);
+        if (!cancelled) setPrefilter(cands);
+      } finally {
+        if (!cancelled) setPrefilterLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [skuKey]);
+
+  const recommendations = useMemo(() => {
+    if (!skuKey) return [];
+    if (catalog.length) return findSkuCandidates(skuKey, catalog, { limit: 8, minScore: 0.5 });
+    return prefilter;
+  }, [skuKey, catalog, prefilter]);
+
+  const localMatch = useMemo(() => {
+    const pool = catalog.length
+      ? catalog
+      : prefilter.map(c => c.product);
+    if (!skuKey || !pool.length) return { status: 'none', candidates: [] };
+    return classifySkuMatch(skuKey, pool);
+  }, [skuKey, catalog, prefilter]);
+
+  const isSearching = q.trim().length >= 2;
+  const recommendLoading = catalogLoading || (prefilterLoading && !catalog.length && !catalogError);
+
+  const searchRows = useMemo(() => {
+    if (!isSearching) return [];
+    const seen = new Set();
+    const rows = [];
+    for (const p of searchResults) {
+      if (!seen.has(p.id)) {
+        seen.add(p.id);
+        rows.push({ product: p, score: null });
+      }
+    }
+    const fuzzyPool = catalog.length ? catalog : prefilter.map(c => c.product);
+    for (const c of findSkuCandidates(q.trim(), fuzzyPool, { limit: 6, minScore: 0.5 })) {
+      if (!seen.has(c.product.id)) {
+        seen.add(c.product.id);
+        rows.push({ product: c.product, score: c.score, tier: c.tier });
+      }
+    }
+    return rows;
+  }, [isSearching, searchResults, q, catalog, prefilter]);
 
   const search = async (term) => {
     setQ(term);
-    if (term.trim().length < 2) { setResults([]); return; }
+    if (term.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
     setSearching(true);
     try {
+      const t = term.trim();
       const { data: byCode } = await sb.from('products')
-        .select('id, name, barcode').eq('barcode', term.trim()).limit(5);
+        .select(PRODUCT_CATALOG_SELECT)
+        .eq('barcode', t).limit(5);
       const { data: byName } = await sb.from('products')
-        .select('id, name, barcode').ilike('name', `%${term.trim()}%`).limit(20);
+        .select(PRODUCT_CATALOG_SELECT)
+        .ilike('name', `%${t}%`).limit(20);
       const merged = [...(byCode || []), ...(byName || [])];
       const seen = new Set();
-      setResults(merged.filter(p => !seen.has(p.id) && seen.add(p.id)));
+      setSearchResults(merged.filter(p => !seen.has(p.id) && seen.add(p.id)));
     } finally {
       setSearching(false);
     }
   };
 
+  const pick = (p) => {
+    onPick(p);
+    setQ('');
+    setSearchResults([]);
+  };
+
   return (
-    <div className="relative">
-      <input
-        type="text"
-        value={q}
-        disabled={disabled}
-        onChange={e => search(e.target.value)}
-        placeholder="ค้นชื่อ / บาร์โค้ด สินค้า POS"
-        className="input !h-11 !rounded-xl !py-2.5 !text-sm w-full"
-      />
-      {searching && <span className="spinner absolute right-3 top-3"/>}
-      {results.length > 0 && (
-        <div className="absolute z-30 mt-1.5 w-full max-h-60 overflow-y-auto card-canvas rounded-xl border hairline shadow-lg">
-          {results.map(p => (
-            <button
-              key={p.id}
-              type="button"
-              className="block w-full text-left px-3.5 py-2.5 text-sm hover:bg-primary/5 border-b hairline last:border-0"
-              onClick={() => { onPick(p); setQ(''); setResults([]); }}
-            >
-              <div className="font-medium truncate">{p.name}</div>
-              {p.barcode && <div className="text-muted-soft font-mono text-xs mt-0.5">{p.barcode}</div>}
-            </button>
-          ))}
+    <div className="ttc-match space-y-3">
+      <div>
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-soft mb-1.5">
+          ค้นหาเอง
         </div>
+        <div className="relative">
+          <input
+            type="text"
+            value={q}
+            disabled={disabled}
+            onChange={e => search(e.target.value)}
+            placeholder="พิมพ์ชื่อ / บาร์โค้ด สินค้า POS"
+            className="input !h-11 !rounded-xl !py-2.5 !text-sm w-full"
+            autoComplete="off"
+          />
+          {searching && <span className="spinner absolute right-3 top-3"/>}
+        </div>
+      </div>
+
+      {isSearching ? (
+        <div className="ttc-match-panel">
+          <div className="ttc-match-panel__head">
+            ผลการค้นหา
+            {!searching && <span className="text-muted-soft font-normal normal-case"> · {searchRows.length} รายการ</span>}
+          </div>
+          <div className="ttc-match-panel__body">
+            {searching && searchRows.length === 0 && (
+              <div className="ttc-picker-dropdown__empty">กำลังค้นหา…</div>
+            )}
+            {!searching && searchRows.length === 0 && (
+              <div className="ttc-picker-dropdown__empty">ไม่พบสินค้า — ลองพิมพ์รหัสอื่น</div>
+            )}
+            {searchRows.map(row => (
+              <MatchCandidateRow
+                key={row.product.id}
+                product={row.product}
+                score={row.score}
+                tier={row.tier}
+                disabled={disabled}
+                onPick={pick}
+              />
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="ttc-match-panel">
+          <div className="ttc-match-panel__head">
+            รายการแนะนำ
+            {skuKey && (
+              <span className="text-muted-soft font-normal normal-case font-mono ml-1"> · {skuKey}</span>
+            )}
+          </div>
+          <div className="ttc-match-panel__body">
+            {recommendLoading && (
+              <div className="ttc-picker-dropdown__empty flex items-center justify-center gap-2">
+                <span className="spinner"/> กำลังโหลดรายการสินค้า…
+              </div>
+            )}
+            {!recommendLoading && catalogError && !catalog.length && recommendations.length === 0 && (
+              <div className="ttc-picker-dropdown__empty space-y-2">
+                <div className="text-error/90 text-xs leading-relaxed">{catalogError}</div>
+                {onRetryCatalog && (
+                  <button
+                    type="button"
+                    className="btn-secondary !py-1.5 !px-3 !text-xs w-full"
+                    onClick={onRetryCatalog}
+                    disabled={disabled || catalogLoading}
+                  >
+                    <Icon name="refresh" size={12}/> ลองโหลดใหม่
+                  </button>
+                )}
+              </div>
+            )}
+            {!recommendLoading && !catalogError && catalog.length > 0 && recommendations.length === 0 && (
+              <div className="ttc-picker-dropdown__empty">
+                ไม่พบรุ่นใกล้เคียงจาก SKU นี้ — ใช้ช่องค้นหาด้านบน
+              </div>
+            )}
+            {!recommendLoading && !catalog.length && !catalogError && recommendations.length === 0 && prefilter.length === 0 && (
+              <div className="ttc-picker-dropdown__empty">
+                ไม่พบรุ่นใกล้เคียง — ใช้ช่องค้นหาด้านบน
+              </div>
+            )}
+            {!recommendLoading && recommendations.map(c => (
+              <MatchCandidateRow
+                key={c.product.id}
+                product={c.product}
+                score={c.score}
+                tier={c.tier}
+                disabled={disabled}
+                highlight={localMatch?.status === 'auto' && localMatch?.product?.id === c.product.id}
+                onPick={pick}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {localMatch?.status === 'auto' && localMatch.product && !isSearching && (
+        <button
+          type="button"
+          className="btn-primary w-full !py-2.5 !text-sm inline-flex items-center justify-center gap-2"
+          disabled={disabled}
+          onClick={() => pick(localMatch.product)}
+        >
+          <Icon name="check" size={16}/>
+          ยืนยันจับคู่อัตโนมัติ · {localMatch.product.name}
+        </button>
       )}
     </div>
   );
 }
 
 /** One line item in the confirm view — card layout matching the list rows. */
-function ConfirmItemCard({ item, pick, suggestion, match, onPick, onClear, disabled }) {
+function ConfirmItemCard({
+  item, pick, onPick, onClear, disabled, catalog, catalogLoading, catalogError, onRetryCatalog,
+}) {
   const skuName = item.sku_name || item.product_name || '—';
   return (
-    <div className="rounded-2xl border hairline bg-surface-strong/60 p-4 space-y-4">
-      <div className="flex items-start gap-4">
+    <div className="ttc-confirm-item rounded-2xl border hairline bg-surface-strong/60 overflow-visible">
+      <div className="flex items-start gap-4 p-4 pb-3">
         <SkuThumb url={item.sku_image_url}/>
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex items-baseline gap-2 min-w-0 flex-wrap">
-            <span className="text-[17px] font-semibold text-ink leading-snug">{skuName}</span>
-            <span className="text-muted-soft font-medium">|</span>
-            <span className="text-[15px] font-medium text-muted tabular-nums">×{item.quantity}</span>
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <div className="text-[17px] font-semibold text-ink leading-snug break-words">{skuName}</div>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[15px] text-muted">
+            <span className="font-medium tabular-nums">×{item.quantity}</span>
           </div>
           {item.seller_sku && (
-            <div className="text-[14px] text-muted font-mono">{item.seller_sku}</div>
+            <div className="text-[13px] text-muted font-mono break-all">{item.seller_sku}</div>
           )}
-          <div className="text-[14px] tabular-nums text-muted">
+          <div className="text-[13px] tabular-nums text-muted">
             ราคาต่อชิ้น <span className="font-semibold text-ink">{fmtTHB(item.unit_price)}</span>
           </div>
         </div>
       </div>
 
-      <div className="glass-soft !bg-surface-strong/75 ring-1 ring-hairline shadow-sm rounded-xl p-3.5 space-y-3">
+      <div className="px-4 pb-4 border-t hairline pt-3 space-y-3">
         <SectionPill icon="link">จับคู่กับสินค้า POS</SectionPill>
 
         {pick ? (
           <div className="flex items-center gap-3 rounded-xl border border-[#0a7a43]/30 bg-[#e6f7ed] px-3.5 py-3">
             <Icon name="check" size={18} className="text-[#0a7a43] shrink-0"/>
-            <div className="min-w-0 flex-1 text-[15px] font-medium text-[#0a5a32] leading-snug">{pick.name}</div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[15px] font-medium text-[#0a5a32] leading-snug break-words">{pick.name}</div>
+              <div className="text-[11px] text-[#0a7a43]/80 mt-0.5">จับคู่ SKU แล้ว</div>
+            </div>
             {!disabled && (
               <button type="button" className="btn-secondary !py-1.5 !px-3 !text-xs shrink-0" onClick={onClear}>
                 เปลี่ยน
@@ -275,34 +477,15 @@ function ConfirmItemCard({ item, pick, suggestion, match, onPick, onClear, disab
             )}
           </div>
         ) : (
-          <>
-            {suggestion && (
-              <div className="flex flex-wrap items-center gap-3 rounded-xl border hairline bg-surface-soft px-3.5 py-3">
-                <div className="min-w-0 flex-1">
-                  <div className="text-[15px] font-medium leading-snug">{suggestion.product.name}</div>
-                  <div className="mt-1.5">
-                    <span className={
-                      'text-[11px] px-2 py-0.5 rounded-md font-semibold ' +
-                      (match.status === 'auto' ? 'bg-[#e6f7ed] text-[#0a7a43]' : 'bg-[#fff7e6] text-[#8a6500]')
-                    }>
-                      {match.status === 'auto' ? 'จับคู่อัตโนมัติได้' : 'ข้อเสนอ'}
-                      {' · '}{TIER_LABEL[suggestion.tier] || suggestion.tier}
-                      {' '}{Math.round(suggestion.score * 100)}%
-                    </span>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="btn-primary !py-2 !px-4 !text-sm shrink-0"
-                  disabled={disabled}
-                  onClick={() => onPick(suggestion.product)}
-                >
-                  ยืนยัน
-                </button>
-              </div>
-            )}
-            <ProductPicker onPick={onPick} disabled={disabled}/>
-          </>
+          <PosProductMatcher
+            item={item}
+            catalog={catalog}
+            catalogLoading={catalogLoading}
+            catalogError={catalogError}
+            onRetryCatalog={onRetryCatalog}
+            onPick={onPick}
+            disabled={disabled}
+          />
         )}
       </div>
     </div>
@@ -311,62 +494,61 @@ function ConfirmItemCard({ item, pick, suggestion, match, onPick, onClear, disab
 
 /** Order summary + item matching + net received footer. */
 function OrderConfirmView({
-  order, matchByItem, picks, setPicks, net, setNet, saving, allMatched, onConfirm,
+  order, picks, setPicks, net, setNet, deferNet, setDeferNet,
+  saving, allMatched, netOk, onConfirm, catalog, catalogLoading, catalogError, onRetryCatalog,
 }) {
   const items = order.items || [];
   const matchedCount = items.filter(it => picks[it.id]?.id).length;
 
   return (
-    <div className="flex flex-col max-h-[75vh]">
-      {/* Order meta */}
-      <div className="px-4 sm:px-5 py-4 border-b hairline shrink-0 space-y-3">
-        <div className="text-[14px] text-muted leading-relaxed">
+    <div className="flex flex-col max-h-[min(82vh,900px)] min-h-0">
+      {/* Order meta — grid: left stacks order+status, frame fills right column */}
+      <div className="px-4 sm:px-5 py-2.5 border-b hairline shrink-0 ttc-confirm-header">
+        <div className="ttc-confirm-header__order truncate" title={order.tiktok_order_id}>
           <span className="text-muted-soft">หมายเลขคำสั่งซื้อ: </span>
-          <span className="font-mono text-ink break-all">{order.tiktok_order_id}</span>
+          <span className="font-mono text-ink/75">{order.tiktok_order_id}</span>
         </div>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[14px] text-muted">
+        <div className="ttc-confirm-header__status">
           <span className="tabular-nums">{fmtTime(order.sale_date)}</span>
-          <span className="text-muted-soft">|</span>
+          <span className="ttc-confirm-header__sep">|</span>
           <span className={
-            'font-medium ' + (matchedCount === items.length ? 'text-[#0a7a43]' : 'text-[#8a6500]')
+            'ttc-confirm-header__match ' + (matchedCount === items.length ? 'is-done' : 'is-pending')
           }>
             {matchedCount === items.length ? 'จับคู่ครบแล้ว' : `จับคู่แล้ว ${matchedCount}/${items.length}`}
           </span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="glass-soft !bg-surface-strong/75 ring-1 ring-hairline shadow-sm rounded-xl p-3.5">
-            <SectionPill icon="receipt">ราคาที่ลูกค้าจ่าย</SectionPill>
-            <div className="mt-2 text-2xl font-display tabular-nums text-ink">{fmtTHB(order.grand_total)}</div>
+          <div className="ttc-confirm-sideframe ttc-brown-frame">
+          <div className="ttc-confirm-sideframe__layer">
+            <span className="ttc-confirm-sideframe__label">ราคา</span>
+            <span className="ttc-confirm-sideframe__value ttc-confirm-sideframe__value--price tabular-nums">
+              {fmtTHB(order.grand_total)}
+            </span>
           </div>
-          <div className="glass-soft !bg-surface-strong/75 ring-1 ring-hairline shadow-sm rounded-xl p-3.5">
-            <SectionPill icon="credit-card">วิธีชำระ (TikTok)</SectionPill>
-            <div className="mt-2 text-[16px] font-medium text-ink leading-snug">
+          <div className="ttc-confirm-sideframe__layer">
+            <span className="ttc-confirm-sideframe__label">ชำระ</span>
+            <span className="ttc-confirm-sideframe__value ttc-confirm-sideframe__value--pay">
               {order.tiktok_payment_method || order.payment_method || '—'}
-            </div>
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Line items */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-        {items.map(it => {
-          const match = matchByItem[it.id];
-          const suggestion = match?.status === 'auto'
-            ? { product: match.product, tier: match.tier, score: match.score }
-            : match?.candidates?.[0];
-          return (
+      {/* Line items — scroll; dropdown ลอย portal ไม่โดน clip */}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-5 space-y-4">
+        {items.map(it => (
             <ConfirmItemCard
               key={it.id}
               item={it}
               pick={picks[it.id]}
-              suggestion={suggestion}
-              match={match}
               disabled={saving}
+              catalog={catalog}
+              catalogLoading={catalogLoading}
+              catalogError={catalogError}
+              onRetryCatalog={onRetryCatalog}
               onPick={(p) => setPicks(prev => ({ ...prev, [it.id]: { id: p.id, name: p.name } }))}
               onClear={() => setPicks(prev => { const n = { ...prev }; delete n[it.id]; return n; })}
             />
-          );
-        })}
+          ))}
       </div>
 
       {/* Net received + confirm — same red card pattern as POS checkout */}
@@ -381,26 +563,50 @@ function OrderConfirmView({
             <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface-strong/20 backdrop-blur text-white text-[10px] font-semibold uppercase tracking-wider border border-white/25">
               <Icon name="store" size={11}/> เงินที่ร้านได้รับ
             </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                inputMode="decimal"
-                className="input !h-11 !rounded-xl !py-2.5 !text-sm flex-1 tabular-nums"
-                placeholder="ยอดที่ TikTok โอนเข้าร้าน (บาท)"
-                value={net}
-                onChange={e => setNet(e.target.value)}
-                disabled={saving}
-              />
-              <button
-                type="button"
-                className="btn-secondary !h-11 !px-3 !text-xs whitespace-nowrap shrink-0"
-                onClick={() => setNet(String(order.grand_total))}
-                disabled={saving}
-              >
-                = ยอดลูกค้า
-              </button>
-            </div>
-            <div className="text-[11px] text-white/75">ใช้คำนวณกำไร · ไม่แสดงในใบเสร็จลูกค้า</div>
+            {deferNet ? (
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 h-10 px-3 rounded-xl bg-surface-strong/15 border border-white/20 text-white/90 text-xs flex-1">
+                  <Icon name="bell" size={14}/> จะกรอกยอดจริงภายหลังผ่านปุ่มกระดิ่ง
+                </div>
+                <DeferNetButton
+                  active={deferNet}
+                  disabled={saving}
+                  onToggle={() => {
+                    setDeferNet(v => {
+                      const next = !v;
+                      if (next) setNet('');
+                      return next;
+                    });
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    className="input !h-10 !rounded-xl !py-2 !text-sm w-full tabular-nums"
+                    placeholder="ยอดที่ TikTok โอนเข้าร้าน (บาท)"
+                    value={net}
+                    onChange={e => { setNet(e.target.value); setDeferNet(false); }}
+                    disabled={saving}
+                  />
+                </div>
+                <DeferNetButton
+                  active={deferNet}
+                  disabled={saving}
+                  onToggle={() => {
+                    setDeferNet(v => {
+                      const next = !v;
+                      if (next) setNet('');
+                      return next;
+                    });
+                  }}
+                />
+              </div>
+            )}
+            <div className="text-[11px] text-white/70 mt-1.5">ใช้คำนวณกำไร · ไม่แสดงในใบเสร็จลูกค้า</div>
           </div>
         </div>
 
@@ -410,10 +616,16 @@ function OrderConfirmView({
           </div>
         )}
 
+        {allMatched && !netOk && (
+          <div className="text-sm text-[#8a6500] flex items-center gap-2 px-1">
+            <Icon name="alert" size={16}/> กรอกเงินที่ร้านได้รับ หรือกด ใส่ทีหลัง
+          </div>
+        )}
+
         <button
           className="btn-primary w-full !py-3.5 !text-base inline-flex items-center justify-center gap-2"
           onClick={onConfirm}
-          disabled={saving || !allMatched}
+          disabled={saving || !allMatched || !netOk}
         >
           {saving ? <span className="spinner"/> : <Icon name="check" size={18}/>}
           ยืนยันการขาย · ตัดสต็อก
@@ -426,10 +638,13 @@ function OrderConfirmView({
 export default function TikTokConfirmPanel({ toast, size = 50 }) {
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState(null);
   const [open, setOpen] = useState(false);
   const [activeId, setActiveId] = useState(null);  // selected order id
   const [picks, setPicks] = useState({});          // { item_id: {id, name} }
   const [net, setNet] = useState('');
+  const [deferNet, setDeferNet] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -437,19 +652,50 @@ export default function TikTokConfirmPanel({ toast, size = 50 }) {
   const [closing, setClosing] = useState(false);
   const [sortOrder, setSortOrder] = useState(SORT_OLDEST);
 
+  const loadCatalog = useCallback(async ({ force = false, quiet = false } = {}) => {
+    setCatalogLoading(true);
+    setCatalogError(null);
+    try {
+      const prods = await getProductCatalog(sb, { force });
+      if (prods.error) {
+        const msg = mapError(prods.error);
+        setCatalogError(msg);
+        if (!quiet) toast?.('โหลด catalog สินค้าไม่สำเร็จ: ' + msg, 'error');
+        return [];
+      }
+      if (prods.data?.length) {
+        setProducts(prods.data);
+        setCatalogError(null);
+      } else {
+        setCatalogError('ไม่พบสินค้าในระบบ');
+      }
+      return prods.data || [];
+    } catch (e) {
+      const msg = mapError(e);
+      setCatalogError(msg);
+      if (!quiet) toast?.('โหลด catalog สินค้าไม่สำเร็จ: ' + msg, 'error');
+      return [];
+    } finally {
+      setCatalogLoading(false);
+    }
+  }, [toast]);
+
   const load = useCallback(async ({ quiet = false } = {}) => {
     if (!quiet) setLoading(true);
     try {
       const [pending, prods] = await Promise.all([
         sb.rpc('get_pending_tiktok_orders', { p_limit: 200 }),
-        products.length
-          ? Promise.resolve({ data: products })
-          : fetchAll((from, to) => sb.from('products').select('id, name, model_code, barcode').range(from, to)),
+        getProductCatalog(sb),
       ]);
       if (pending.error) throw pending.error;
       const list = Array.isArray(pending.data) ? pending.data : [];
       setOrders(list);
-      if (!products.length && prods.data) setProducts(prods.data);
+      if (prods.error) {
+        setCatalogError(mapError(prods.error));
+      } else if (prods.data?.length) {
+        setProducts(prods.data);
+        setCatalogError(null);
+      }
       return list;
     } catch (e) {
       toast?.('โหลดออเดอร์ TikTok รอยืนยันไม่ได้: ' + mapError(e), 'error');
@@ -457,7 +703,7 @@ export default function TikTokConfirmPanel({ toast, size = 50 }) {
     } finally {
       if (!quiet) setLoading(false);
     }
-  }, [toast, products]);
+  }, [toast]);
 
   const stopProgressTimer = syncProgress.stop;
   const startProgressTimer = syncProgress.start;
@@ -517,29 +763,19 @@ export default function TikTokConfirmPanel({ toast, size = 50 }) {
     return copy;
   }, [orders, sortOrder]);
 
-  // Per-item SKU classification for the active order's unmatched lines.
-  const matchByItem = useMemo(() => {
-    if (!activeOrder || !products.length) return {};
-    const out = {};
-    for (const it of (activeOrder.items || [])) {
-      const sku = it.seller_sku || it.sku_name || '';
-      out[it.id] = sku ? classifySkuMatch(sku, products) : { status: 'none', candidates: [] };
-    }
-    return out;
-  }, [activeOrder, products]);
-
   const openOrder = (o) => {
     setActiveId(o.id);
-    // Seed picks from line items already matched at import.
     const seed = {};
     (o.items || []).forEach(it => {
       if (it.product_id) seed[it.id] = { id: it.product_id, name: it.product_name || it.sku_name || '' };
     });
     setPicks(seed);
     setNet('');
+    setDeferNet(false);
+    if (!products.length) loadCatalog({ quiet: true });
   };
 
-  const backToList = () => { setActiveId(null); setPicks({}); setNet(''); };
+  const backToList = () => { setActiveId(null); setPicks({}); setNet(''); setDeferNet(false); };
 
   // Animate out, then unmount — same timing/classes as PendingNetBell.
   const closeAll = () => {
@@ -568,10 +804,12 @@ export default function TikTokConfirmPanel({ toast, size = 50 }) {
     ? (activeOrder.items || []).every(it => picks[it.id]?.id)
     : false;
 
+  const netOk = deferNet || (net !== '' && Number(net) > 0);
+
   const confirm = async () => {
-    if (!activeOrder || !allMatched) return;
-    const value = net === '' ? null : Number(net);
-    if (net !== '' && !(value >= 0)) { toast?.('กรอกเงินที่ร้านได้รับให้ถูกต้อง', 'error'); return; }
+    if (!activeOrder || !allMatched || !netOk) return;
+    const value = deferNet ? null : Number(net);
+    if (!deferNet && !(value > 0)) { toast?.('กรอกเงินที่ร้านได้รับให้ถูกต้อง', 'error'); return; }
     setSaving(true);
     try {
       const p_items = (activeOrder.items || []).map(it => ({
@@ -623,11 +861,11 @@ export default function TikTokConfirmPanel({ toast, size = 50 }) {
         <div className="fixed inset-0 z-[130] flex items-start justify-center pt-[9vh] px-4" onClick={closeAll}>
           <div className={`absolute inset-0 modal-overlay ${closing ? 'holo-backdrop-out' : 'holo-backdrop-in'}`} />
           <div
-            className={`relative w-full max-w-3xl glass-strong rounded-3xl border hairline overflow-hidden ${closing ? 'holo-card-out' : 'holo-card-in'}`}
+            className={`ttc-modal-card relative w-full max-w-3xl glass-strong rounded-3xl border hairline overflow-hidden ${closing ? 'holo-card-out' : 'holo-card-in'}`}
             onClick={e => e.stopPropagation()}
           >
             {/* header */}
-            <div className="relative flex items-center gap-2.5 px-4 py-3.5 border-b hairline">
+            <div className="ttc-modal-header ttc-brown-frame relative flex items-center gap-2.5 px-4 py-2.5 border-b border-white/15">
               {activeOrder ? (
                 <button className="pnb-iconbtn -ml-1" onClick={backToList} aria-label="ย้อนกลับ" disabled={saving}>
                   <Icon name="chevron-l" size={20} />
@@ -637,11 +875,11 @@ export default function TikTokConfirmPanel({ toast, size = 50 }) {
                   <Icon name="cart" size={15} />
                 </span>
               )}
-              <div className="min-w-0">
-                <div className="font-semibold text-[16px] sm:text-[17px] leading-tight truncate">
+              <div className="min-w-0 flex-1 ttc-modal-header__text">
+                <div className="ttc-modal-header__title font-semibold text-[15px] sm:text-[16px] leading-tight truncate">
                   {activeOrder ? 'ยืนยันการขาย TikTok' : 'Order TikTok รอยืนยัน'}
                 </div>
-                <div className="text-[12px] sm:text-[13px] text-muted-soft mt-0.5 tabular-nums truncate">
+                <div className="ttc-modal-header__sub text-[11px] sm:text-[12px] mt-0.5 tabular-nums truncate">
                   {activeOrder
                     ? `${fmtTime(activeOrder.sale_date)} · ${fmtTHB(activeOrder.grand_total)}`
                     : `${count} ออเดอร์รอจับคู่ + กรอกเงินที่ร้านได้รับ`}
@@ -649,18 +887,18 @@ export default function TikTokConfirmPanel({ toast, size = 50 }) {
               </div>
               {!activeOrder && (
                 <button
-                  className="pnb-iconbtn ml-auto mr-1"
+                  className="pnb-iconbtn mr-1"
                   onClick={syncFromTikTok}
                   aria-label="อัปเดตข้อมูลจาก TikTok"
                   title="อัปเดตข้อมูล TikTok (เหมือนหน้า TikTok Shop)"
                   disabled={refreshing}
                 >
                   {refreshing
-                    ? <span className="text-[11px] font-semibold tabular-nums min-w-[2ch] text-primary">{syncProgress.pct}%</span>
+                    ? <span className="ttc-modal-header__sub text-[11px] font-semibold tabular-nums min-w-[2ch]">{syncProgress.pct}%</span>
                     : <Icon name="refresh" size={16} />}
                 </button>
               )}
-              <button className={'pnb-iconbtn ' + (activeOrder ? 'ml-auto' : '')} onClick={closeAll} aria-label="ปิด" disabled={saving || closing}>
+              <button className="pnb-iconbtn" onClick={closeAll} aria-label="ปิด" disabled={saving || closing}>
                 <Icon name="x" size={18} />
               </button>
             </div>
@@ -700,14 +938,20 @@ export default function TikTokConfirmPanel({ toast, size = 50 }) {
             ) : (
               <OrderConfirmView
                 order={activeOrder}
-                matchByItem={matchByItem}
                 picks={picks}
                 setPicks={setPicks}
                 net={net}
                 setNet={setNet}
+                deferNet={deferNet}
+                setDeferNet={setDeferNet}
                 saving={saving}
                 allMatched={allMatched}
+                netOk={netOk}
                 onConfirm={confirm}
+                catalog={products}
+                catalogLoading={catalogLoading}
+                catalogError={catalogError}
+                onRetryCatalog={() => loadCatalog({ force: true })}
               />
             )}
           </div>

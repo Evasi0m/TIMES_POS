@@ -76,6 +76,7 @@ import ECommerceView from './views/ECommerceView.jsx';
 import FullTaxInvoiceA4 from './components/invoice/FullTaxInvoiceA4.jsx';
 import BulkReceiveView from './components/ai/BulkReceiveView.jsx';
 import PendingNetBell from './components/pos/PendingNetBell.jsx';
+import DeferNetButton from './components/pos/DeferNetButton.jsx';
 import TikTokConfirmPanel from './components/pos/TikTokConfirmPanel.jsx';
 import AnimatedLogo from './components/ui/AnimatedLogo.jsx';
 import './styles.css';
@@ -4481,25 +4482,6 @@ function DisplayPricePanel({ line, onApply, onClear }) {
   );
 }
 
-// "ใส่ทีหลัง" — defer entering "เงินที่ร้านได้รับ" until the platform pays out.
-// Shown for every payment method on e-commerce channels. When toggled on the
-// sale still completes (stock decremented, status active) but net_received stays
-// empty and the bill is flagged net_received_pending — the notification bell then
-// lets the shop fill in the real amount later.
-function DeferNetButton({ active, onToggle }) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-pressed={active}
-      title="บันทึกตอนนี้โดยยังไม่ใส่ยอดที่ร้านได้รับ แล้วมากรอกทีหลังผ่านปุ่มกระดิ่ง"
-      className={"btn-tiffany-premium" + (active ? " active" : "")}
-    >
-      <Icon name={active ? "check" : "calendar"} size={14}/>
-      <span>ใส่ทีหลัง</span>
-    </button>
-  );
-}
 
 function POSView() {
   const toast = useToast();
