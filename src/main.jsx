@@ -3632,6 +3632,7 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
   const askConfirm = useConfirm();
   const askPrompt = usePrompt();
   const isAdmin = useIsAdmin();
+  const isSuperAdmin = useIsSuperAdmin();
   const [order, setOrder] = useState(null);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -3642,24 +3643,28 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
   const [issuingDoc, setIssuingDoc] = useState(false);
   const [creditNoteOpen, setCreditNoteOpen] = useState(false);
   const [issuingCN, setIssuingCN] = useState(false);
+  const [deletingLineId, setDeletingLineId] = useState(null);
   const voidLockRef = useRef(false);
+
+  const reload = useCallback(async () => {
+    if (!orderId) return;
+    const [oRes, iRes] = await Promise.all([
+      sb.from(meta.table).select('*').eq('id', orderId).single(),
+      sb.from(meta.itemTable).select('*').eq(meta.itemFk, orderId).order('id'),
+    ]);
+    setOrder(oRes.data); setItems(iRes.data || []);
+  }, [orderId, meta.table, meta.itemTable, meta.itemFk]);
 
   useEffect(() => {
     if (!orderId) { setOrder(null); setItems([]); setEditing(false); return; }
     let cancel = false;
     (async () => {
       setLoading(true);
-      const [oRes, iRes] = await Promise.all([
-        sb.from(meta.table).select('*').eq('id', orderId).single(),
-        sb.from(meta.itemTable).select('*').eq(meta.itemFk, orderId).order('id'),
-      ]);
-      if (!cancel) {
-        setOrder(oRes.data); setItems(iRes.data || []);
-        setLoading(false);
-      }
+      await reload();
+      if (!cancel) setLoading(false);
     })();
     return () => { cancel = true; };
-  }, [orderId, kind]);
+  }, [orderId, kind, reload]);
 
   const startEdit = () => {
     setDraft({ ...order });
@@ -3744,6 +3749,35 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
       onChanged?.();
     }
     setCreditNoteOpen(true);
+  };
+
+  // ลบรายการรับเข้าทีละบรรทัด (super admin) — ปรับสต็อก + ยอดบิลอัตโนมัติ
+  const deleteReceiveLine = async (line) => {
+    const reason = await askPrompt({
+      title: `ลบรายการ: ${line.product_name}`,
+      label: "เหตุผลการลบ (ไม่บังคับ)",
+      defaultValue: "", multiline: true, okLabel: "ถัดไป", danger: true,
+    });
+    if (reason === null) return;
+    const lastOne = items.length <= 1;
+    const ok = await askConfirm({
+      title: "ยืนยันการลบรายการ",
+      message: lastOne
+        ? "นี่เป็นรายการสุดท้ายในบิล — ลบแล้วบิลนี้จะถูกยกเลิกทั้งใบ และปรับสต็อกกลับอัตโนมัติ"
+        : "สต็อกจะถูกปรับกลับ และยอดรวม/VAT ของบิลจะถูกคำนวณใหม่อัตโนมัติ — ดำเนินการต่อ?",
+      okLabel: "ลบรายการ", danger: true,
+    });
+    if (!ok) return;
+    setDeletingLineId(line.id);
+    try {
+      const { data, error } = await sb.rpc('delete_receive_line', { p_line_id: line.id, p_reason: reason || null });
+      if (error) throw error;
+      toast.push(data?.voided ? 'ลบรายการสุดท้าย · ยกเลิกบิลแล้ว' : 'ลบรายการแล้ว · ปรับสต็อก/ยอดบิลเรียบร้อย', 'success');
+      await reload();
+      onChanged?.();
+    } catch (e) {
+      toast.push('ลบไม่สำเร็จ: ' + mapError(e), 'error');
+    } finally { setDeletingLineId(null); }
   };
 
   const dateInput = editing ? draft[meta.dateField]?.slice(0,10) : null;
@@ -3940,13 +3974,15 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
               <div className="text-xs uppercase tracking-wider text-muted">รายการสินค้า ({items.length})</div>
               <span
                 className="text-xs px-1.5 py-0.5 rounded-full bg-muted/15 text-muted-soft font-medium"
-                title="แก้ไขรายการ/จำนวนไม่ได้ — ต้องยกเลิกบิลแล้วทำใหม่"
+                title={kind==='receive' && isSuperAdmin ? "แก้จำนวน/ราคาไม่ได้ — แต่ super admin ลบรายตัวได้" : "แก้ไขรายการ/จำนวนไม่ได้ — ต้องยกเลิกบิลแล้วทำใหม่"}
               >
-                แก้ไขไม่ได้
+                {kind==='receive' && isSuperAdmin ? 'ลบรายตัวได้ (super admin)' : 'แก้ไขไม่ได้'}
               </span>
             </div>
             <div className="card-canvas overflow-hidden">
-              {items.map(it => (
+              {items.map(it => {
+                const canDeleteLine = kind==='receive' && isSuperAdmin && !isVoided && !editing;
+                return (
                 <div key={it.id} className="px-4 py-2.5 border-b hairline last:border-0 flex items-center gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="text-sm truncate">{it.product_name}</div>
@@ -3955,8 +3991,15 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
                   <div className="text-sm font-medium tabular-nums flex-shrink-0">
                     {fmtTHB(applyDiscounts(it.unit_price, it.quantity, it.discount1_value, it.discount1_type, it.discount2_value, it.discount2_type))}
                   </div>
+                  {canDeleteLine && (
+                    <button type="button" className="btn-ghost !p-1.5 !text-error flex-shrink-0" title="ลบรายการนี้ออกจากบิล"
+                      disabled={deletingLineId===it.id} onClick={()=>deleteReceiveLine(it)}>
+                      {deletingLineId===it.id ? <span className="spinner"/> : <Icon name="trash" size={15}/>}
+                    </button>
+                  )}
                 </div>
-              ))}
+                );
+              })}
               <div className="px-4 py-3 bg-surface-cream-strong flex justify-between font-medium">
                 <span>รวม</span>
                 <span className="tabular-nums">{fmtTHB(order.total_value)}</span>
@@ -6535,6 +6578,7 @@ function ProductsView() {
       </div>
 
       <ProductEditor editing={editing} onClose={()=>setEditing(null)} onSave={save}
+        onDeleted={()=>{ setEditing(null); loadProducts(); }}
         brands={brands} categories={categories} addBrand={addBrand} addCategory={addCategory} />
 
       <ProductFilterSheet
@@ -6893,7 +6937,7 @@ function ProductCostHistory({ productId }) {
   );
 }
 
-function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand, addCategory, createHint }) {
+function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories, addBrand, addCategory, createHint }) {
   const [draft, setDraft] = useState(null);
   const [barcodeEdit, setBarcodeEdit] = useState(false);
   const [manualApproved, setManualApproved] = useState(false);
@@ -6901,6 +6945,8 @@ function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand,
   const [autoPct, setAutoPct] = useState(null);    // last preset % applied
   const [customPctStr, setCustomPctStr] = useState(''); // raw string in custom input
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const isSuperAdmin = useIsSuperAdmin();
   const barcodeRef = useRef(null);
   const askPrompt = usePrompt();
   const askConfirm = useConfirm();
@@ -7004,6 +7050,45 @@ function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand,
       setSaving(false);
     }
   };
+
+  // ลบสินค้า (super admin) — ตรวจอ้างอิงก่อนเพื่อโชว์ข้อความที่ถูกต้อง
+  const handleDelete = async () => {
+    if (!draft?.id) return;
+    // pre-check references for an accurate warning (RPC enforces the real rule)
+    const [soldR, recvR] = await Promise.all([
+      sb.from('sale_order_items').select('id', { count: 'exact', head: true }).eq('product_id', draft.id),
+      sb.from('receive_order_items').select('id', { count: 'exact', head: true }).eq('product_id', draft.id),
+    ]);
+    if ((soldR.count || 0) > 0) {
+      tryToast.push('ลบไม่ได้: สินค้านี้มีประวัติการขายแล้ว (เพื่อความถูกต้องของรายงานภาษี)', 'error');
+      return;
+    }
+    const reason = await askPrompt({
+      title: `ลบสินค้า: ${draft.name}`,
+      label: "เหตุผลการลบ (ไม่บังคับ)",
+      defaultValue: "", multiline: true, okLabel: "ถัดไป", danger: true,
+    });
+    if (reason === null) return;
+    const recvCount = recvR.count || 0;
+    const ok = await askConfirm({
+      title: "ยืนยันการลบสินค้า",
+      message: recvCount > 0
+        ? `สินค้านี้มีในใบรับเข้า ${recvCount} รายการ — ระบบจะลบบรรทัดเหล่านั้น ปรับยอด/สต็อกของบิลให้อัตโนมัติ แล้วลบสินค้า (ลบถาวร)`
+        : "ลบสินค้านี้ถาวร — ไม่มีประวัติเชื่อมโยง",
+      okLabel: "ลบสินค้า", danger: true,
+    });
+    if (!ok) return;
+    setDeleting(true);
+    try {
+      const { data, error } = await sb.rpc('delete_product', { p_id: draft.id, p_reason: reason || null });
+      if (error) throw error;
+      const n = data?.receive_lines_removed || 0;
+      tryToast.push(n > 0 ? `ลบสินค้าแล้ว · ลบรับเข้า ${n} บรรทัด, ปรับ ${data.bills_recomputed} ใบ, ยกเลิก ${data.bills_voided} ใบ` : 'ลบสินค้าแล้ว', 'success');
+      onDeleted?.();
+    } catch (e) {
+      tryToast.push('ลบไม่สำเร็จ: ' + mapError(e), 'error');
+    } finally { setDeleting(false); }
+  };
   // Live margin % for the pricing section header badge.
   const marginPct = draft.retail_price > 0
     ? ((draft.retail_price - (draft.cost_price || 0)) / draft.retail_price * 100)
@@ -7020,8 +7105,13 @@ function ProductEditor({ editing, onClose, onSave, brands, categories, addBrand,
     <>
     <Modal open={!!draft} onClose={onClose} title={draft.id ? "แก้ไขสินค้า" : "เพิ่มสินค้าใหม่"}
       footer={<>
+        {draft.id && isSuperAdmin && (
+          <button className="btn-secondary !text-error hover:!bg-error/10 lg:mr-auto" onClick={handleDelete} disabled={deleting || saving}>
+            {deleting ? <span className="spinner"/> : <Icon name="trash" size={16}/>} ลบสินค้า
+          </button>
+        )}
         <button className="btn-secondary" onClick={onClose}>ยกเลิก</button>
-        <button className="btn-primary" onClick={handleSave} disabled={saving}>
+        <button className="btn-primary" onClick={handleSave} disabled={saving || deleting}>
           {saving ? 'กำลังตรวจสอบ…' : <><Icon name="check" size={16}/>บันทึก</>}
         </button>
       </>}>
