@@ -172,6 +172,11 @@ const bahtText = (amount) => {
   return txt;
 };
 
+// ใบกำกับภาษีเต็มรูป (ม.86/4) บังคับ: ชื่อ + เลขผู้เสียภาษี 10-13 หลัก + ที่อยู่ผู้ซื้อ
+const fullBuyerValid = (b) =>
+  !!(b && b.name?.trim() && b.address?.trim() &&
+     /^\d{10,13}$/.test((b.taxId || '').replace(/\D/g, '')));
+
 // True when the viewport is at or below Tailwind's `lg` breakpoint
 // (1024px) — used to suppress page-entry auto-focus on phones/tablets
 // so the iOS keyboard doesn't pop up uninvited when the user lands on
@@ -2848,6 +2853,164 @@ function PurchaseDocModal({ open, onClose, receiveId }) {
 }
 
 /* =========================================================
+   CREDIT NOTE — A4 (ใบลดหนี้ขาย, ม.86/10)
+   Issued by the shop (seller) to a customer for returned goods. Must
+   reference the ORIGINAL tax invoice (number + date) and show the
+   reduced value + VAT on the reduction separately.
+========================================================= */
+function CreditNoteA4({ order, items, origOrder, shop }) {
+  const rows = items.map(it => ({
+    ...it,
+    shownTotal: applyDiscounts(it.unit_price, it.quantity, it.discount1_value, it.discount1_type, it.discount2_value, it.discount2_type),
+  }));
+  const grand = Number(order.total_value || 0);            // reduced amount (VAT-inclusive)
+  const vat = grand * VAT_RATE_DEFAULT / (100 + VAT_RATE_DEFAULT);
+  const exVat = grand - vat;
+  const origGrand = Number(origOrder?.grand_total || 0);
+  const correctGrand = Math.max(0, origGrand - grand);
+  return (
+    <div className="fulltax-a4 creditnote-a4">
+      <div className="ft-head">
+        <div className="ft-seller">
+          <div className="ft-shop">{shop?.shop_name || 'TIMES'}</div>
+          {shop?.shop_branch && <div className="ft-line">({shop.shop_branch})</div>}
+          {shop?.shop_address && <div className="ft-line">{shop.shop_address}</div>}
+          <div className="ft-line">เลขประจำตัวผู้เสียภาษี {shop?.shop_tax_id || '-'}</div>
+          {shop?.shop_phone && <div className="ft-line">โทร {shop.shop_phone}</div>}
+        </div>
+        <div className="ft-title">
+          <div className="ft-title-main">ใบลดหนี้</div>
+          <div className="ft-title-sub">CREDIT NOTE</div>
+        </div>
+      </div>
+
+      <div className="ft-meta">
+        <div className="ft-buyer">
+          <div className="ft-meta-label">ลูกค้า / ผู้ซื้อ</div>
+          <div className="ft-buyer-name">{origOrder?.buyer_name || 'ลูกค้าทั่วไป'}</div>
+          {origOrder?.buyer_address && <div className="ft-line">{origOrder.buyer_address}</div>}
+          <div className="ft-line">
+            {origOrder?.buyer_tax_id ? `เลขประจำตัวผู้เสียภาษี ${origOrder.buyer_tax_id}` : ''}
+            {origOrder?.buyer_branch ? `  (${origOrder.buyer_branch})` : ''}
+          </div>
+        </div>
+        <div className="ft-docinfo">
+          <div className="ft-row"><span>เลขที่ใบลดหนี้</span><b>{order.credit_note_no || '-'}</b></div>
+          <div className="ft-row"><span>วันที่</span><span>{fmtDate(order.credit_note_issued_at || order.return_date)}</span></div>
+          <div className="ft-row"><span>อ้างอิงใบกำกับเลขที่</span><span>{origOrder?.tax_invoice_no || (order.original_sale_order_id ? `#${order.original_sale_order_id}` : '-')}</span></div>
+          <div className="ft-row"><span>วันที่ใบกำกับเดิม</span><span>{origOrder?.sale_date ? fmtDate(origOrder.sale_date) : '-'}</span></div>
+        </div>
+      </div>
+
+      <div className="ft-line" style={{margin:'2px 0 6px'}}>
+        <b>เหตุผลการลดหนี้:</b> {order.return_reason || 'รับคืนสินค้า'}
+      </div>
+
+      <table className="ft-table">
+        <thead>
+          <tr>
+            <th className="ft-c-no">ลำดับ</th>
+            <th className="ft-c-desc">รายการที่รับคืน</th>
+            <th className="ft-c-qty">จำนวน</th>
+            <th className="ft-c-price">ราคา/หน่วย</th>
+            <th className="ft-c-amt">จำนวนเงิน</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={r.id}>
+              <td className="ft-c-no">{i+1}</td>
+              <td className="ft-c-desc">{r.product_name}</td>
+              <td className="ft-c-qty">{r.quantity} {r.unit || ''}</td>
+              <td className="ft-c-price">{fmtTHB(r.unit_price)}</td>
+              <td className="ft-c-amt">{fmtTHB(r.shownTotal)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div className="ft-bottom">
+        <div className="ft-words">
+          <div className="ft-meta-label">จำนวนเงินที่ลดลง (ตัวอักษร)</div>
+          <div className="ft-words-val">{bahtText(grand)}</div>
+          <div className="ft-note" style={{marginTop:'8px'}}>
+            มูลค่าตามใบกำกับเดิม {fmtTHB(origGrand)} · มูลค่าที่ถูกต้อง {fmtTHB(correctGrand)}
+          </div>
+        </div>
+        <div className="ft-summary">
+          <div className="ft-row"><span>มูลค่าที่ลดลง (ก่อน VAT)</span><span>{fmtTHB(exVat)}</span></div>
+          <div className="ft-row"><span>ภาษีมูลค่าเพิ่ม {VAT_RATE_DEFAULT}%</span><span>{fmtTHB(vat)}</span></div>
+          <div className="ft-row ft-grand"><span>รวมเงินที่ลดหนี้</span><span>{fmtTHB(grand)}</span></div>
+        </div>
+      </div>
+
+      <div className="ft-signs">
+        <div className="ft-sign"><div className="ft-sign-line"/>ผู้รับเงินคืน / ผู้ซื้อ</div>
+        <div className="ft-sign"><div className="ft-sign-line"/>ผู้มีอำนาจ / ผู้ขาย</div>
+      </div>
+    </div>
+  );
+}
+
+function CreditNoteModal({ open, onClose, returnId }) {
+  const { shop } = useShop();
+  const [order, setOrder] = useState(null);
+  const [items, setItems] = useState([]);
+  const [origOrder, setOrigOrder] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open || !returnId) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const [oRes, iRes] = await Promise.all([
+        sb.from('return_orders').select('*').eq('id', returnId).single(),
+        sb.from('return_order_items').select('*').eq('return_order_id', returnId).order('id'),
+      ]);
+      let orig = null;
+      if (oRes.data?.original_sale_order_id) {
+        const sRes = await sb.from('sale_orders').select('*').eq('id', oRes.data.original_sale_order_id).single();
+        orig = sRes.data || null;
+      }
+      if (!cancelled) {
+        setOrder(oRes.data); setItems(iRes.data || []); setOrigOrder(orig);
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, returnId]);
+
+  return (
+    <Modal open={open} onClose={onClose} title="ใบลดหนี้ (A4)"
+      footer={<>
+        <button className="btn-secondary" onClick={onClose}>ปิด</button>
+        <button className="btn-primary" onClick={()=>window.print()} disabled={!order}>
+          <Icon name="receipt" size={16}/> พิมพ์
+        </button>
+      </>}>
+      {loading && <div className="p-6 text-muted text-sm flex items-center gap-2"><span className="spinner"/>กำลังโหลด...</div>}
+      {!loading && order && (
+        <div>
+          <div className="bg-surface-soft p-3 rounded-lg overflow-auto no-print">
+            <div className="mx-auto bg-white shadow-sm" style={{width:'190mm', maxWidth:'100%'}}>
+              <CreditNoteA4 order={order} items={items} origOrder={origOrder} shop={shop}/>
+            </div>
+          </div>
+          <div className="text-xs text-muted-soft mt-2 text-center no-print">ตัวอย่าง — กด "พิมพ์" เพื่อพิมพ์ลงกระดาษ A4</div>
+        </div>
+      )}
+      {!loading && order && createPortal(
+        <div className="fulltax-print-portal">
+          <CreditNoteA4 order={order} items={items} origOrder={origOrder} shop={shop}/>
+        </div>,
+        document.body
+      )}
+    </Modal>
+  );
+}
+
+/* =========================================================
    RECEIPT MODAL — preview + print
 ========================================================= */
 // Receipt visual style is locked to 'minimal' (clean thin lines, mono
@@ -3477,6 +3640,8 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [purchaseDocOpen, setPurchaseDocOpen] = useState(false);
   const [issuingDoc, setIssuingDoc] = useState(false);
+  const [creditNoteOpen, setCreditNoteOpen] = useState(false);
+  const [issuingCN, setIssuingCN] = useState(false);
   const voidLockRef = useRef(false);
 
   useEffect(() => {
@@ -3567,6 +3732,20 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
     setPurchaseDocOpen(true);
   };
 
+  // เปิดใบลดหนี้ A4 (return) — ออกเลขใบลดหนี้ก่อนถ้ายังไม่มี (admin)
+  const openCreditNote = async () => {
+    if (!order) return;
+    if (!order.credit_note_no && isAdmin) {
+      setIssuingCN(true);
+      const { data, error } = await sb.rpc('issue_credit_note_for_return', { p_return_id: order.id });
+      setIssuingCN(false);
+      if (error) { toast.push('ออกเลขใบลดหนี้ไม่ได้: ' + mapError(error), 'error'); return; }
+      setOrder(o => ({ ...o, ...data }));
+      onChanged?.();
+    }
+    setCreditNoteOpen(true);
+  };
+
   const dateInput = editing ? draft[meta.dateField]?.slice(0,10) : null;
   const isVoided = !!order?.voided_at;
 
@@ -3578,6 +3757,11 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
         {order && kind==='receive' && !isVoided && !editing && (
           <button className="btn-print-receipt" onClick={openPurchaseDoc} disabled={issuingDoc}>
             {issuingDoc ? <span className="spinner"/> : <Icon name="receipt" size={16}/>} พิมพ์เอกสารซื้อ
+          </button>
+        )}
+        {order && kind==='return' && !isVoided && !editing && (
+          <button className="btn-print-receipt" onClick={openCreditNote} disabled={issuingCN}>
+            {issuingCN ? <span className="spinner"/> : <Icon name="receipt" size={16}/>} พิมพ์ใบลดหนี้
           </button>
         )}
         {order && !isVoided && !editing && isAdmin && (<>
@@ -3784,6 +3968,9 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
     </Modal>
     {kind==='receive' && (
       <PurchaseDocModal open={purchaseDocOpen} onClose={()=>setPurchaseDocOpen(false)} receiveId={order?.id}/>
+    )}
+    {kind==='return' && (
+      <CreditNoteModal open={creditNoteOpen} onClose={()=>setCreditNoteOpen(false)} returnId={order?.id}/>
     )}
     </>
   );
@@ -4653,7 +4840,7 @@ function POSView() {
     if (submitLockRef.current) return; // hard guard against double-submit
     if (!cart.length) { toast.push("ไม่มีสินค้าในตะกร้า", "error"); return; }
     if (!netPriceFilled) { toast.push("กรุณากรอก 'ราคาที่ลูกค้าจ่าย'", "error"); return; }
-    if (taxInvoice && !buyer.name.trim()) { toast.push("กรุณากรอกชื่อผู้ซื้อสำหรับใบกำกับภาษี", 'error'); return; }
+    if (taxInvoice && !fullBuyerValid(buyer)) { toast.push("ใบกำกับภาษีเต็มรูปต้องมี ชื่อ + เลขผู้เสียภาษี (10-13 หลัก) + ที่อยู่ผู้ซื้อ", 'error'); return; }
     if (!deferNet && requiresNetReceived(channel, payment) && (netReceived === "" || Number(netReceived) <= 0)) {
       toast.push("กรุณากรอก 'เงินที่ร้านค้าได้รับ' (ช่องทาง e-commerce + ชำระทันที)", 'error');
       return;
@@ -5705,7 +5892,7 @@ function POSView() {
             </button>
           )}
           <button className="btn-secondary" onClick={()=>setTaxInvoiceModalOpen(false)}>ปิด</button>
-          <button className="btn-primary" disabled={!buyer.name.trim()} onClick={()=>{
+          <button className="btn-primary" disabled={!fullBuyerValid(buyer)} onClick={()=>{
             setTaxInvoice(true);
             setTaxInvoiceModalOpen(false);
           }}>บันทึก</button>
@@ -5720,8 +5907,8 @@ function POSView() {
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-xs uppercase tracking-wider text-muted">เลขผู้เสียภาษี</label>
-              <input className="input mt-1 font-mono" inputMode="numeric" placeholder="13 หลัก" value={buyer.taxId} onChange={e=>setBuyer(b=>({...b,taxId:e.target.value}))}/>
+              <label className="text-xs uppercase tracking-wider text-muted">เลขผู้เสียภาษี <span className="text-error">*</span></label>
+              <input className="input mt-1 font-mono" inputMode="numeric" maxLength={13} placeholder="10-13 หลัก" value={buyer.taxId} onChange={e=>setBuyer(b=>({...b,taxId:e.target.value.replace(/\D/g,'').slice(0,13)}))}/>
             </div>
             <div>
               <label className="text-xs uppercase tracking-wider text-muted">สำนักงานใหญ่ / สาขา</label>
@@ -5729,8 +5916,8 @@ function POSView() {
             </div>
           </div>
           <div>
-            <label className="text-xs uppercase tracking-wider text-muted">ที่อยู่</label>
-            <textarea className="input mt-1" rows="3" placeholder="ที่อยู่ผู้ซื้อ (พิมพ์ในใบเสร็จ)" value={buyer.address} onChange={e=>setBuyer(b=>({...b,address:e.target.value}))}/>
+            <label className="text-xs uppercase tracking-wider text-muted">ที่อยู่ <span className="text-error">*</span></label>
+            <textarea className="input mt-1" rows="3" placeholder="ที่อยู่ผู้ซื้อ (พิมพ์ในใบกำกับภาษี)" value={buyer.address} onChange={e=>setBuyer(b=>({...b,address:e.target.value}))}/>
           </div>
         </div>
       </Modal>
@@ -7508,7 +7695,7 @@ function SalesView({ onGoPOS }) {
   // the bill doesn't have one yet (issue_tax_invoice_for_order RPC).
   const submitIssueInvoice = async () => {
     if (!detail || issuing) return;
-    if (!issueBuyer.name.trim()) { toast.push("กรุณากรอกชื่อผู้ซื้อ", 'error'); return; }
+    if (!fullBuyerValid(issueBuyer)) { toast.push("ใบกำกับภาษีเต็มรูปต้องมี ชื่อ + เลขผู้เสียภาษี (10-13 หลัก) + ที่อยู่ผู้ซื้อ", 'error'); return; }
     setIssuing(true);
     try {
       const { data, error } = await sb.rpc('issue_tax_invoice_for_order', {
@@ -8212,7 +8399,7 @@ function SalesView({ onGoPOS }) {
         title="ออกใบกำกับภาษีแบบเต็มรูป"
         footer={<>
           <button className="btn-secondary" onClick={()=>setIssueOpen(false)}>ยกเลิก</button>
-          <button className="btn-primary" disabled={issuing || !issueBuyer.name.trim()} onClick={submitIssueInvoice}>
+          <button className="btn-primary" disabled={issuing || !fullBuyerValid(issueBuyer)} onClick={submitIssueInvoice}>
             {issuing ? <span className="spinner"/> : <Icon name="check" size={16}/>}
             ออก + พิมพ์ A4
           </button>
@@ -8229,8 +8416,8 @@ function SalesView({ onGoPOS }) {
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-xs uppercase tracking-wider text-muted">เลขผู้เสียภาษี</label>
-              <input className="input mt-1 font-mono" inputMode="numeric" placeholder="13 หลัก" value={issueBuyer.taxId} onChange={e=>setIssueBuyer(b=>({...b,taxId:e.target.value}))}/>
+              <label className="text-xs uppercase tracking-wider text-muted">เลขผู้เสียภาษี <span className="text-error">*</span></label>
+              <input className="input mt-1 font-mono" inputMode="numeric" maxLength={13} placeholder="10-13 หลัก" value={issueBuyer.taxId} onChange={e=>setIssueBuyer(b=>({...b,taxId:e.target.value.replace(/\D/g,'').slice(0,13)}))}/>
             </div>
             <div>
               <label className="text-xs uppercase tracking-wider text-muted">สำนักงานใหญ่ / สาขา</label>
@@ -8238,7 +8425,7 @@ function SalesView({ onGoPOS }) {
             </div>
           </div>
           <div>
-            <label className="text-xs uppercase tracking-wider text-muted">ที่อยู่</label>
+            <label className="text-xs uppercase tracking-wider text-muted">ที่อยู่ <span className="text-error">*</span></label>
             <textarea className="input mt-1" rows="3" placeholder="ที่อยู่ผู้ซื้อ (พิมพ์ในใบกำกับภาษี)" value={issueBuyer.address} onChange={e=>setIssueBuyer(b=>({...b,address:e.target.value}))}/>
           </div>
         </div>
@@ -11993,6 +12180,8 @@ function VatView({ embedded = false, dateRange: dateRangeProp, onDateRangeChange
   // are required for an accurate ภ.พ.30 figure but were previously ignored.
   const [returnRows, setReturnRows]     = useState([]); // active return_orders in range
   const [claimRows, setClaimRows]       = useState([]); // active supplier_claim_orders in range
+  const [voidedSalesRows, setVoidedSalesRows] = useState([]); // voided sales w/ tax_invoice_no (cancelled rows)
+  const [stockRows, setStockRows]       = useState([]); // stock_movements in range (goods report)
 
   // ── Quick presets — covers the standard tax-filing windows ────────
   // Each computes (from, to) on the fly so a tab left open across midnight
@@ -12055,8 +12244,21 @@ function VatView({ embedded = false, dateRange: dateRangeProp, onDateRangeChange
         //    legacy bills; we'll fall back to 7/107 in the renderer).
         const salesQ = fetchAll((fromIdx, toIdx) =>
           sb.from('sale_orders')
-            .select('id, sale_date, channel, grand_total, vat_amount, vat_rate, tax_invoice_no, buyer_name, buyer_tax_id, buyer_address')
+            .select('id, sale_date, channel, grand_total, vat_amount, vat_rate, tax_invoice_no, buyer_name, buyer_tax_id, buyer_address, buyer_branch')
             .eq('status', 'active')
+            .gte('sale_date', startOfDayBangkok(from))
+            .lte('sale_date', endOfDayBangkok(to))
+            .order('sale_date', { ascending: true })
+            .range(fromIdx, toIdx)
+        );
+        // 1b) Voided sales that still carry a tax-invoice number — listed in
+        //     the sales report as "ยกเลิก" (value 0) so the running invoice
+        //     number sequence has no unexplained gaps for an RD audit.
+        const voidedSalesQ = fetchAll((fromIdx, toIdx) =>
+          sb.from('sale_orders')
+            .select('id, sale_date, tax_invoice_no, buyer_name')
+            .eq('status', 'voided')
+            .not('tax_invoice_no', 'is', null)
             .gte('sale_date', startOfDayBangkok(from))
             .lte('sale_date', endOfDayBangkok(to))
             .order('sale_date', { ascending: true })
@@ -12068,7 +12270,7 @@ function VatView({ embedded = false, dateRange: dateRangeProp, onDateRangeChange
         //    the header total_value & vat_amount.
         const recvQ = fetchAll((fromIdx, toIdx) =>
           sb.from('receive_orders')
-            .select('id, receive_date, total_value, vat_amount, vat_rate, supplier_name, supplier_invoice_no, supplier_tax_id')
+            .select('id, receive_date, total_value, vat_amount, vat_rate, supplier_name, supplier_invoice_no, supplier_tax_id, supplier_branch')
             .is('voided_at', null)
             .gte('receive_date', startOfDayBangkok(from))
             .lte('receive_date', endOfDayBangkok(to))
@@ -12099,8 +12301,9 @@ function VatView({ embedded = false, dateRange: dateRangeProp, onDateRangeChange
             .order('claim_date', { ascending: true })
             .range(fromIdx, toIdx)
         );
-        const [salesRes, recvRes, returnRes, claimRes] = await Promise.all([salesQ, recvQ, returnQ, claimQ]);
+        const [salesRes, voidedSalesRes, recvRes, returnRes, claimRes] = await Promise.all([salesQ, voidedSalesQ, recvQ, returnQ, claimQ]);
         const sales = salesRes.data || [];
+        const voidedSales = voidedSalesRes.data || [];
         const recvs = recvRes.data || [];
         const rets  = returnRes.data || [];
         const clms  = claimRes.data || [];
@@ -12122,12 +12325,41 @@ function VatView({ embedded = false, dateRange: dateRangeProp, onDateRangeChange
           }
         }
 
+        // 4) Goods & raw-materials ledger (ม.87(3)) — every stock movement in
+        //    the period, plus the opening balance carried in via balance_after.
+        const stockQ = fetchAll((fromIdx, toIdx) =>
+          sb.from('stock_movements')
+            .select('id, product_id, qty_delta, balance_after, reason, ref_table, ref_id, created_at')
+            .gte('created_at', startOfDayBangkok(from))
+            .lte('created_at', endOfDayBangkok(to))
+            .order('product_id', { ascending: true })
+            .order('id', { ascending: true })
+            .range(fromIdx, toIdx)
+        );
+        const stockRes = await stockQ;
+        const stock = stockRes.data || [];
+        // attach product names for the moved products
+        const movedPids = [...new Set(stock.map(s => s.product_id).filter(Boolean))];
+        const nameMap = {};
+        for (let i = 0; i < movedPids.length; i += 500) {
+          const chunk = movedPids.slice(i, i + 500);
+          const { data: prods } = await sb.from('products').select('id, name, barcode').in('id', chunk);
+          (prods || []).forEach(p => { nameMap[p.id] = p; });
+        }
+        const stockWithNames = stock.map(s => ({
+          ...s,
+          product_name: nameMap[s.product_id]?.name || `#${s.product_id}`,
+          barcode: nameMap[s.product_id]?.barcode || '',
+        }));
+
         if (cancelled) return;
         setSalesRows(sales);
+        setVoidedSalesRows(voidedSales);
         setRecvRows(recvs);
         setCogsRows(cogs);
         setReturnRows(rets);
         setClaimRows(clms);
+        setStockRows(stockWithNames);
       } catch (e) {
         console.error('VAT load failed', e);
         if (!cancelled) toast.push('โหลด VAT ไม่สำเร็จ', 'error');
@@ -12294,11 +12526,23 @@ function VatView({ embedded = false, dateRange: dateRangeProp, onDateRangeChange
         r.tax_invoice_no || `#${r.id} (ไม่มีเลขใบกำกับ)`,
         r.buyer_name || 'ลูกค้าทั่วไป',
         r.buyer_tax_id || '',
-        'สำนักงานใหญ่',
+        r.buyer_branch || 'สำนักงานใหญ่',
         num(exVat),
         num(vAmt),
       ];
     });
+    // Cancelled tax invoices (บิลยกเลิก) — listed with value 0 so the running
+    // invoice-number sequence is unbroken for an RD audit.
+    const cancelledRows = voidedSalesRows.map((r, i) => [
+      salesRows.length + i + 1,
+      fmtThaiDDMMYYYY(r.sale_date),
+      r.tax_invoice_no,
+      `(ยกเลิก) ${r.buyer_name || ''}`.trim(),
+      '',
+      '',
+      '0.00',
+      '0.00',
+    ]);
     // Credit notes (ใบลดหนี้) — customer returns are listed AFTER sales
     // with negative VAT/value so the running total nets out correctly.
     const creditRows = returnRows.map((r, i) => {
@@ -12327,6 +12571,7 @@ function VatView({ embedded = false, dateRange: dateRangeProp, onDateRangeChange
         ...csvHeader('รายงานภาษีขาย'),
         headerCols,
         ...dataRows,
+        ...(cancelledRows.length ? [[], ['', '', '— ใบกำกับภาษีที่ยกเลิก —'], ...cancelledRows] : []),
         ...(creditRows.length ? [[], ['', '', '— ใบลดหนี้ขาย (รับคืนจากลูกค้า) —'], ...creditRows] : []),
         [],
         subtotalSales,
@@ -12357,7 +12602,7 @@ function VatView({ embedded = false, dateRange: dateRangeProp, onDateRangeChange
         r.supplier_invoice_no || `#${r.id} (ไม่มีเลขใบกำกับ)`,
         r.supplier_name || '',
         r.supplier_tax_id || '',
-        'สำนักงานใหญ่',
+        r.supplier_branch || 'สำนักงานใหญ่',
         num(exVat),
         num(vAmt),
       ];
@@ -12397,6 +12642,52 @@ function VatView({ embedded = false, dateRange: dateRangeProp, onDateRangeChange
       ],
     );
   };
+  // รายงานสินค้าและวัตถุดิบ (ม.87(3)) — per-product movement ledger with a
+  // running balance. Opening balance for each product = (balance_after of its
+  // first movement in the period) − (that movement's qty_delta).
+  const STOCK_REASON_TH = {
+    sale: 'ขายออก', sale_void: 'ยกเลิกการขาย', sale_edit: 'แก้ไขการขาย',
+    receive: 'รับเข้า', receive_void: 'ยกเลิกรับเข้า',
+    return_in: 'รับคืนจากลูกค้า', return_void: 'ยกเลิกรับคืน',
+    manual_adjust: 'ปรับปรุงยอด', initial: 'ยอดยกมา',
+    supplier_claim: 'ส่งคืนผู้ขาย', supplier_claim_void: 'ยกเลิกส่งคืน',
+  };
+  const exportGoodsCsv = () => {
+    if (!stockRows.length) { toast.push('ไม่มีความเคลื่อนไหวสินค้าในช่วงนี้', 'info'); return; }
+    // group movements by product, preserving the id-ascending order
+    const byProduct = {};
+    stockRows.forEach(s => { (byProduct[s.product_id] ||= []).push(s); });
+    const headerCols = ['ลำดับ', 'วัน เดือน ปี', 'เอกสารอ้างอิง', 'รายการ', 'รับ', 'จ่าย', 'คงเหลือ'];
+    const rows = [];
+    let n = 0;
+    Object.keys(byProduct).forEach(pid => {
+      const moves = byProduct[pid];
+      const first = moves[0];
+      const opening = (Number(first.balance_after) || 0) - (Number(first.qty_delta) || 0);
+      rows.push([]);
+      rows.push([`สินค้า: ${first.product_name}${first.barcode ? ` (${first.barcode})` : ''}`]);
+      rows.push(headerCols);
+      rows.push(['', '', '', 'ยอดยกมา', '', '', opening]);
+      moves.forEach(m => {
+        n += 1;
+        const qty = Number(m.qty_delta) || 0;
+        rows.push([
+          n,
+          fmtThaiDDMMYYYY(m.created_at),
+          m.ref_table ? `${m.ref_table}#${m.ref_id}` : '',
+          STOCK_REASON_TH[m.reason] || m.reason,
+          qty > 0 ? qty : '',
+          qty < 0 ? -qty : '',
+          Number(m.balance_after) || 0,
+        ]);
+      });
+    });
+    downloadStructuredCsv(
+      `รายงานสินค้าและวัตถุดิบ_${dateRange.from}_to_${dateRange.to}.csv`,
+      [...csvHeader('รายงานสินค้าและวัตถุดิบ'), ...rows],
+    );
+  };
+
   const exportBoth = () => {
     if (salesRows.length) exportSalesCsv();
     // Stagger the second download slightly so the browser doesn't
@@ -12504,6 +12795,11 @@ function VatView({ embedded = false, dateRange: dateRangeProp, onDateRangeChange
                 <button type="button" className="btn-secondary !py-2 !px-3 !text-xs flex-1 lg:flex-initial"
                   onClick={exportPurchasesCsv} disabled={loading || !recvRows.length}>
                   <Icon name="file" size={12}/> ภาษีซื้อ
+                </button>
+                <button type="button" className="btn-secondary !py-2 !px-3 !text-xs flex-1 lg:flex-initial"
+                  onClick={exportGoodsCsv} disabled={loading || !stockRows.length}
+                  title="รายงานสินค้าและวัตถุดิบ (ม.87(3))">
+                  <Icon name="file" size={12}/> สินค้า
                 </button>
               </div>
             </div>
