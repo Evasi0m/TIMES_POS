@@ -22,9 +22,21 @@ export function formatPollToast(data, { beforeCount, afterCount } = {}) {
   const updated = Number(data?.updated ?? 0);
   const changed = imported + updated;
   const capped = data?.capped === true;
+  const awaitingFound = Number(data?.awaiting_found ?? 0);
+  const staleFound = Number(data?.stale_found ?? 0);
+  const staleRefreshed = Number(data?.stale_refreshed ?? 0);
+
   let base = `อัปเดตแล้ว — นำเข้า ${imported} · อัปเดต ${updated}`;
   if (changed > 0) {
     base += ` · เปลี่ยนแปลง ${changed} รายการ`;
+  }
+  if (awaitingFound > 0) {
+    base += ` · TikTok ที่จะจัดส่ง ${awaitingFound}`;
+  }
+  if (staleFound > 0) {
+    base += staleRefreshed > 0
+      ? ` · เคลียร์สถานะค้าง ${staleRefreshed}/${staleFound}`
+      : ` · สถานะค้างใน POS ${staleFound} (กำลัง sync)`;
   }
   if (beforeCount != null && afterCount != null) {
     const delta = afterCount - beforeCount;
@@ -36,8 +48,17 @@ export function formatPollToast(data, { beforeCount, afterCount } = {}) {
       base += ` · คิวรอยืนยัน ${afterCount} รายการ`;
     }
   }
+  if (capped) {
+    base += ' (ยังมีต่อ — กดอีกครั้งเพื่อ sync ส่วนที่เหลือ)';
+  }
+  const hadStaleWork = staleFound > 0 && staleRefreshed < staleFound;
+  if (hadStaleWork && !capped) {
+    base += ' · ยังมีสถานะค้าง — กดอัปเดตอีกครั้ง';
+  }
   return {
-    message: capped ? `${base} (ยังมีต่อ — กดอีกครั้งเพื่อ sync ส่วนที่เหลือ)` : base,
-    level: changed > 0 || (afterCount != null && afterCount !== beforeCount) ? 'success' : 'info',
+    message: base,
+    level: changed > 0 || staleRefreshed > 0 || (afterCount != null && afterCount !== beforeCount)
+      ? 'success'
+      : 'info',
   };
 }

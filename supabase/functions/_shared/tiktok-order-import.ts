@@ -495,6 +495,23 @@ export async function discoverPollOrders(
   return { awaiting, others: [...others] };
 }
 
+/**
+ * POS rows still marked "ที่จะจัดส่ง" but no longer returned by TikTok's
+ * awaiting search — force re-import so tiktok_order_status catches up.
+ */
+export async function discoverStaleToShipInDb(supa: SupabaseClient): Promise<string[]> {
+  const { data, error } = await supa.from('sale_orders')
+    .select('tiktok_order_id')
+    .eq('channel', 'tiktok')
+    .in('status', ['active', 'pending'])
+    .in('tiktok_order_status', TO_SHIP_STATUSES)
+    .not('tiktok_order_id', 'is', null);
+  if (error) throw error;
+  return (data || [])
+    .map((r) => String((r as { tiktok_order_id: unknown }).tiktok_order_id))
+    .filter(Boolean);
+}
+
 /** Fetch fresh order detail from TikTok (for shipping labels). */
 export async function fetchTikTokOrderDetail(
   supa: SupabaseClient,

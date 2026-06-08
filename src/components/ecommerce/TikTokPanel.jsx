@@ -84,14 +84,20 @@ const DELIVERY_FAILED = new Set([
 /** ที่จะจัดส่ง = รอจัดส่ง + รอเข้ารับ (+ ส่งบางส่วนที่ยังไม่ครบ) */
 const TO_SHIP = new Set(['AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'PARTIALLY_SHIPPING']);
 
+/** แท็บปฏิบัติการ — นับเฉพาะออเดอร์ที่ยังไม่ void (ตรง TikTok Seller Center) */
+function isOperationalOrder(o) {
+  return o.status !== 'voided' && (o.status === 'active' || o.status === 'pending');
+}
+
 function orderMatchesTab(o, tabKey) {
   const st = normStatus(o.tiktok_order_status);
   if (tabKey === 'all') return true;
+  if (tabKey === 'cancelled') return o.status === 'voided' || CANCELLED.has(st);
+  if (!isOperationalOrder(o)) return false;
   if (tabKey === 'to_ship') return TO_SHIP.has(st);
   if (tabKey === 'shipped') return SHIPPED.has(st);
   if (tabKey === 'completed') return COMPLETED.has(st);
   if (tabKey === 'on_hold') return ON_HOLD.has(st);
-  if (tabKey === 'cancelled') return o.status === 'voided' || CANCELLED.has(st);
   if (tabKey === 'delivery_failed') return DELIVERY_FAILED.has(st);
   return true;
 }

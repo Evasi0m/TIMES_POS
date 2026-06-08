@@ -193,6 +193,7 @@ export default function BulkReceiveView({ toast }) {
     stocksByProductId,
     searchCatalog: searchTiktokCatalog,
     reloadCatalog: reloadTiktokCatalog,
+    refreshMappings,
   } = useTikTokMirrorCatalog({ enabled: tiktokMirrorOn && phase === 'review', lines: tiktokCatalogLines });
 
   useEffect(() => {

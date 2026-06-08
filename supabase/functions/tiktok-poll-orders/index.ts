@@ -3,6 +3,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { serviceClient } from '../_shared/tiktok-client.ts';
 import {
   discoverPollOrders,
+  discoverStaleToShipInDb,
   importTikTokOrder,
   type ImportResult,
 } from '../_shared/tiktok-order-import.ts';
@@ -41,8 +42,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { awaiting, others } = await discoverPollOrders(supa, hours);
+    const [{ awaiting, others }, staleToShip] = await Promise.all([
+      discoverPollOrders(supa, hours),
+      discoverStaleToShipInDb(supa),
+    ]);
     const awaitingSet = new Set(awaiting);
+    const staleSet = new Set(staleToShip);
 
     // Always refresh orders still sitting in the POS confirm queue so a buyer
     // cancellation lands within one poll even when the realtime webhook is down:
@@ -65,17 +70,18 @@ Deno.serve(async (req) => {
     // MAX_PER_RUN. Dedupe so a single order is never imported twice per run.
     const seen = new Set<string>();
     const ordered: string[] = [];
-    for (const id of [...awaiting, ...pendingIds, ...others]) {
+    for (const id of [...awaiting, ...staleToShip, ...pendingIds, ...others]) {
       if (id && !seen.has(id)) { seen.add(id); ordered.push(id); }
     }
     let processed = 0;
     let capped = false;
+    const staleRefreshedIds = new Set<string>();
 
     for (const id of ordered) {
       if (processed >= MAX_PER_RUN) { capped = true; break; }
-      // Awaiting + still-pending orders always update; other existing orders
-      // only when new (unless resync).
-      const forceUpdate = resync || awaitingSet.has(id) || pendingSet.has(id);
+      // Awaiting + stale-to-ship + still-pending orders always update; other
+      // existing orders only when new (unless resync).
+      const forceUpdate = resync || awaitingSet.has(id) || staleSet.has(id) || pendingSet.has(id);
       if (!forceUpdate) {
         const { data: existing } = await supa.from('sale_orders')
           .select('id')
@@ -87,6 +93,9 @@ Deno.serve(async (req) => {
       try {
         const r = await importTikTokOrder(supa, id);
         results.push(r);
+        if (staleSet.has(id) && (r as ImportResult).action === 'updated') {
+          staleRefreshedIds.add(id);
+        }
       } catch (e) {
         results.push({ tiktok_order_id: id, error: e instanceof Error ? e.message : 'fail' });
       }
@@ -97,6 +106,8 @@ Deno.serve(async (req) => {
       resync,
       capped,
       awaiting_found: awaiting.length,
+      stale_found: staleToShip.length,
+      stale_refreshed: staleRefreshedIds.size,
       scanned: ordered.length,
       processed: results.length,
       imported: results.filter((r) => (r as ImportResult).action === 'imported').length,
