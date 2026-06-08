@@ -92,8 +92,8 @@ import {
   getTikTokConnectionStatus,
   isTikTokLineReady,
   mirrorStockToTikTok,
+  persistTiktokMatchMapping,
   runVoidMirrorWithFeedback,
-  upsertTiktokInventoryMapping,
 } from './lib/tiktok-inventory-sync.js';
 import { mappingRowFromTiktokSku } from './lib/tiktok-mirror-helpers.js';
 import AnimatedLogo from './components/ui/AnimatedLogo.jsx';
@@ -9183,29 +9183,24 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
     closeTiktokFlow();
   };
 
-  const persistTiktokMatchMapping = (productId, patch) => {
-    if (!productId || patch?.tiktok_skip) return;
-    upsertTiktokInventoryMapping({
-      productId,
-      tiktokSku: patch.tiktok_sku,
-      tiktokMapping: patch.tiktok_mapping,
-    })
-      .then(() => refreshTiktokMappings([productId]))
-      .catch((e) => console.warn('[TikTok match] persist mapping failed:', e));
-  };
-
   const onTiktokMatchConfirm = (patch) => {
     if (tiktokMatchLineIndex != null) {
       const line = items[tiktokMatchLineIndex];
       upd(tiktokMatchLineIndex, { ...patch, tiktok_manual: true });
-      if (line?.product_id) persistTiktokMatchMapping(line.product_id, patch);
+      if (line?.product_id) {
+        persistTiktokMatchMapping(line.product_id, patch, {
+          onPersisted: (id) => refreshTiktokMappings([id]),
+        }).catch((e) => console.warn('[TikTok match] persist mapping failed:', e));
+      }
       closeTiktokFlow();
       return;
     }
     const p = pendingTiktokProduct;
     if (p) {
       pushReceiveItem(p, patch);
-      persistTiktokMatchMapping(p.id, patch);
+      persistTiktokMatchMapping(p.id, patch, {
+        onPersisted: (id) => refreshTiktokMappings([id]),
+      }).catch((e) => console.warn('[TikTok match] persist mapping failed:', e));
     }
     closeTiktokFlow();
   };

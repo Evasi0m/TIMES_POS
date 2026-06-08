@@ -5,7 +5,7 @@ import { fetchAll } from '../../lib/sb-paginate.js';
 import { mapError } from '../../lib/error-map.js';
 import { fmtTHB, fmtThaiDateShort } from '../../lib/format.js';
 import { fullBuyerValid } from '../../lib/tax-buyer.js';
-import { pollTikTokOrders, formatPollToast } from '../../lib/tiktok-poll-sync.js';
+import { formatPollToast } from '../../lib/tiktok-poll-sync.js';
 import { TIKTOK_LIVE_POLL_MS, useTikTokLiveSync } from '../../lib/use-tiktok-live-sync.js';
 import { useSimulatedSyncProgress } from '../../lib/use-simulated-sync-progress.js';
 import Icon from '../ui/Icon.jsx';
@@ -199,7 +199,7 @@ export default function TikTokPanel({ toast, section = 'orders', onSyncChange, i
 
   const reloadQuiet = useCallback(() => load({ quiet: true }), [load]);
 
-  const { pullBusyRef } = useTikTokLiveSync({
+  const { pullFromTikTok, pullBusy } = useTikTokLiveSync({
     enabled: section === 'orders',
     onReload: reloadQuiet,
     onPulled: () => setLastSyncedAt(new Date()),
@@ -244,12 +244,16 @@ export default function TikTokPanel({ toast, section = 'orders', onSyncChange, i
   }), [orders, tabCounts]);
 
   const syncOrders = async () => {
-    if (pullBusyRef.current) return;
+    if (syncing) return;
     const beforeCount = orders.length;
+    const queued = pullBusy;
     setSyncing(true);
     syncProgress.start();
+    if (queued) {
+      toast?.push('กำลังซิงค์จาก TikTok อยู่แล้ว — จะอัปเดตต่อในคิวถัดไป…', 'info');
+    }
     try {
-      const data = await pollTikTokOrders({ resync: true, hours: 720 });
+      const data = await pullFromTikTok({ queue: true });
       let list = null;
       await syncProgress.finish(async () => {
         list = await load({ quiet: true });
@@ -403,8 +407,8 @@ export default function TikTokPanel({ toast, section = 'orders', onSyncChange, i
             {liveLabel && <> · อัปเดตล่าสุด {liveLabel}</>}
             {' · '}
             <span className="inline-flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#0a7a43] animate-pulse"/>
-              Live
+              <span className={'w-1.5 h-1.5 rounded-full ' + (pullBusy ? 'bg-amber-500 animate-pulse' : 'bg-[#0a7a43] animate-pulse')}/>
+              {pullBusy ? 'กำลังซิงค์…' : 'Live'}
             </span>
           </p>
         </div>
@@ -436,14 +440,16 @@ export default function TikTokPanel({ toast, section = 'orders', onSyncChange, i
               ซิงค์ &amp; ดึงข้อมูล
             </h3>
             <div className="flex flex-wrap gap-2">
-              <button type="button" className="btn-secondary !py-1.5 !text-xs" onClick={load} disabled={loading || syncing}>
+              <button type="button" className="btn-secondary !py-1.5 !text-xs" onClick={load} disabled={loading || syncing || pullBusy}>
                 {loading && !syncing ? <span className="spinner"/> : <Icon name="refresh" size={14}/>}
                 รีเฟรช
               </button>
               <button type="button" className="btn-primary !py-1.5 !text-xs" onClick={syncOrders} disabled={syncing}>
                 {syncing
                   ? <span className="text-[11px] font-semibold tabular-nums min-w-[2ch]">{syncProgress.pct}%</span>
-                  : <Icon name="refresh" size={14}/>}
+                  : pullBusy
+                    ? <span className="spinner"/>
+                    : <Icon name="refresh" size={14}/>}
                 อัปเดตข้อมูล TikTok
               </button>
             </div>
@@ -556,7 +562,9 @@ export default function TikTokPanel({ toast, section = 'orders', onSyncChange, i
                 <button type="button" className="btn-primary !text-sm" onClick={syncOrders} disabled={syncing}>
                   {syncing
                     ? <span className="text-sm font-semibold tabular-nums">{syncProgress.pct}%</span>
-                    : <Icon name="refresh" size={16}/>}
+                    : pullBusy
+                      ? <span className="spinner"/>
+                      : <Icon name="refresh" size={16}/>}
                   อัปเดตข้อมูลจาก TikTok
                 </button>
                 <p className="text-xs text-muted-soft mt-3 max-w-md mx-auto">

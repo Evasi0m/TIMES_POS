@@ -1,5 +1,5 @@
 // Live TikTok order mirror — Supabase Realtime + periodic TikTok API poll.
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { sb } from './supabase-client.js';
 import { pollTikTokOrders } from './tiktok-poll-sync.js';
 import { useRealtimeInvalidate } from './use-realtime-invalidate.js';
@@ -8,24 +8,36 @@ import { useRealtimeInvalidate } from './use-realtime-invalidate.js';
 export const TIKTOK_LIVE_POLL_MS = 60_000;
 
 export function useTikTokLiveSync({ enabled, onReload, onPulled }) {
+  const [pullBusy, setPullBusy] = useState(false);
   const pullBusyRef = useRef(false);
+  const pullQueueRef = useRef(Promise.resolve());
   const onReloadRef = useRef(onReload);
   const onPulledRef = useRef(onPulled);
 
   useEffect(() => { onReloadRef.current = onReload; }, [onReload]);
   useEffect(() => { onPulledRef.current = onPulled; }, [onPulled]);
 
-  const pullFromTikTok = useCallback(async () => {
-    if (!enabled || pullBusyRef.current) return null;
-    pullBusyRef.current = true;
-    try {
-      const data = await pollTikTokOrders({ resync: true, hours: 720 });
-      await onReloadRef.current?.();
-      onPulledRef.current?.(data);
-      return data;
-    } finally {
-      pullBusyRef.current = false;
-    }
+  const pullFromTikTok = useCallback(async ({ queue = false } = {}) => {
+    if (!enabled) return null;
+    if (pullBusyRef.current && !queue) return null;
+
+    const run = async () => {
+      pullBusyRef.current = true;
+      setPullBusy(true);
+      try {
+        const data = await pollTikTokOrders({ resync: true, hours: 720 });
+        await onReloadRef.current?.();
+        onPulledRef.current?.(data);
+        return data;
+      } finally {
+        pullBusyRef.current = false;
+        setPullBusy(false);
+      }
+    };
+
+    const task = pullQueueRef.current.then(run, run);
+    pullQueueRef.current = task.catch(() => {});
+    return task;
   }, [enabled]);
 
   useRealtimeInvalidate(
@@ -42,5 +54,5 @@ export function useTikTokLiveSync({ enabled, onReload, onPulled }) {
     return () => clearInterval(id);
   }, [enabled, pullFromTikTok]);
 
-  return { pullFromTikTok, pullBusyRef };
+  return { pullFromTikTok, pullBusy, pullBusyRef };
 }

@@ -23,6 +23,12 @@ export function tiktokSkuDisplayLabel(skuOrMapping) {
     || '';
 }
 
+/** True when a TikTok match should be written to tiktok_product_mappings. */
+export function shouldPersistTiktokMatch(productId, patch) {
+  if (productId == null || patch?.tiktok_skip) return false;
+  return !!(patch?.tiktok_sku || patch?.tiktok_mapping);
+}
+
 /** True when line is ready to save (matched or explicitly skipped). */
 export function isTikTokLineReady(line) {
   if (!line || line.tiktok_skip) return true;

@@ -185,7 +185,9 @@ flowchart LR
 - **Mirror** = ตั้ง TikTok ให้เท่า `current_stock` POS หลังรับเข้า (ไม่ใช่บวก delta)
   - ตัวอย่าง: POS 10 + TikTok 9 รับเข้า 5 → ทั้งคู่เป็น **15** (ไม่ใช่ 14)
 - Preview ก่อนบันทึก: `current_stock + quantity` · หลังบันทึกใช้สต็อกจริงจาก DB
-- Mapping เดิมใน `tiktok_product_mappings` → auto-fill ในรายการ
+- Mapping เดิมใน `tiktok_product_mappings` → auto-fill ในรายการ (manual, ×10, Order TikTok ใช้ตารางเดียวกัน)
+- **×10 บันทึก mapping** — สินค้าที่มี `product.id` แล้ว: upsert ทันทีเมื่อเลือก SKU ใน review; สินค้าใหม่ (`status === 'new'`): upsert ตอนบันทึกบิล ก่อน mirror
+- หลัง persist ทันที → `refreshMappings` → แถวอื่นในบิลเดียวกัน/บิลอื่นใน batch auto-fill
 - TikTok sync ล้มเหลว **ไม่ rollback** รับเข้า POS
 - Idempotency: `tiktok_inventory_sync_log` UNIQUE `(receive_order_id, product_id, sync_operation) WHERE status='success'`
 - ต้องมี scope **Product write** + migration 048 + deploy `tiktok-products-search` / `tiktok-inventory-update`

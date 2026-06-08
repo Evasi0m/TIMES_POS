@@ -10,6 +10,7 @@ import {
   formatVoidMirrorProgressToast,
   formatVoidMirrorToast,
   mappingRowFromTiktokSku,
+  shouldPersistTiktokMatch,
   voidMirrorToastDurationMs,
 } from './tiktok-mirror-helpers.js';
 import { filterTikTokSkusByTerm } from './tiktok-receive-match.js';
@@ -23,6 +24,7 @@ export {
   formatVoidMirrorToast,
   formatTikTokApiError,
   voidMirrorToastDurationMs,
+  shouldPersistTiktokMatch,
 };
 
 /** Pull `{ error }` from supabase-js FunctionsHttpError (non-2xx body). */
@@ -71,6 +73,17 @@ export async function upsertTiktokInventoryMapping({ productId, tiktokSku, tikto
     p_warehouse_id: m.warehouse_id || null,
   });
   if (error) throw error;
+}
+
+/** Persist mapping after user picks TikTok SKU (manual + bulk ×10). */
+export async function persistTiktokMatchMapping(productId, patch, { onPersisted } = {}) {
+  if (!shouldPersistTiktokMatch(productId, patch)) return;
+  await upsertTiktokInventoryMapping({
+    productId,
+    tiktokSku: patch.tiktok_sku,
+    tiktokMapping: patch.tiktok_mapping,
+  });
+  await onPersisted?.(productId);
 }
 
 export async function searchTikTokCatalog(query, { variants = [], maxPages = 5 } = {}) {

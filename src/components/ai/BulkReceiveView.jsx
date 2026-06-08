@@ -46,6 +46,7 @@ import {
   getTikTokConnectionStatus,
   isTikTokLineReady,
   mirrorStockToTikTok,
+  persistTiktokMatchMapping,
 } from '../../lib/tiktok-inventory-sync.js';
 
 // ─── Auto invoice number generator ────────────────────────────────────
@@ -511,6 +512,15 @@ export default function BulkReceiveView({ toast }) {
     });
   const setNewProduct = (uid, np) =>
     updateRow(uid, { status: 'new', product: null, newProduct: np });
+
+  const handleTiktokRowMatch = useCallback((rowUid, patch) => {
+    const row = billsRef.current[currentIdx]?.rows.find((r) => r.uid === rowUid);
+    const productId = row?.product?.id;
+    if (!productId) return;
+    persistTiktokMatchMapping(productId, patch, {
+      onPersisted: (id) => refreshMappings([id]),
+    }).catch((e) => console.warn('[BulkReceiveView] TikTok mapping persist failed:', e));
+  }, [currentIdx, refreshMappings]);
   const updateInvoiceNo = (val) =>
     patchCurrent((b) => ({ ...b, supplier_invoice_no: val }));
   const updateHasVat = (val) =>
@@ -787,6 +797,18 @@ export default function BulkReceiveView({ toast }) {
         if (tiktokMirrorOn) {
           try {
             const productIds = resolvedRows.map(r => r.product?.id).filter(Boolean);
+            for (const r of resolvedRows) {
+              const pid = r.product?.id;
+              if (!pid || r.tiktok_skip) continue;
+              try {
+                await persistTiktokMatchMapping(pid, r);
+              } catch (persistErr) {
+                console.warn('[BulkReceiveView] TikTok mapping persist on save failed:', persistErr);
+              }
+            }
+            if (productIds.length) {
+              await refreshMappings(productIds).catch(() => {});
+            }
             const stocks = await fetchPosStocks(productIds);
             const mirrorPayload = resolvedRows
               .filter(r => r.product?.id)
@@ -986,6 +1008,7 @@ export default function BulkReceiveView({ toast }) {
           onTiktokMinPctChange={setTiktokMinPct}
           onTiktokSearchCatalog={searchTiktokCatalog}
           stocksByProductId={stocksByProductId}
+          onTiktokRowMatch={handleTiktokRowMatch}
         />
       )}
 
@@ -1122,7 +1145,7 @@ function ReviewWizard({
   tiktokConnected, syncTikTokAfterReceive, onSyncTikTokChange,
   tiktokMirrorOn, tiktokCatalog, tiktokCatalogLoading, tiktokCatalogError,
   onTiktokRetryCatalog, tiktokMinPct, onTiktokMinPctChange, onTiktokSearchCatalog,
-  stocksByProductId,
+  stocksByProductId, onTiktokRowMatch,
 }) {
   const current = bills[currentIdx];
   const canPrev = currentIdx > 0;
@@ -1213,6 +1236,7 @@ function ReviewWizard({
           tiktokMinPct={tiktokMinPct}
           onTiktokSearchCatalog={onTiktokSearchCatalog}
           stocksByProductId={stocksByProductId}
+          onTiktokRowMatch={onTiktokRowMatch}
         />
       )}
 
@@ -1303,6 +1327,7 @@ function BillCard({
   tiktokMinPct = 60,
   onTiktokSearchCatalog,
   stocksByProductId = {},
+  onTiktokRowMatch,
 }) {
   const itemCount = bill.rows.length;
   const unresolved = bill.rows.filter((r) => r.status === 'suggestions' || r.status === 'none').length;
@@ -1485,6 +1510,7 @@ function BillCard({
           tiktokMinPct={tiktokMinPct}
           onTiktokSearchCatalog={onTiktokSearchCatalog}
           stocksByProductId={stocksByProductId}
+          onTiktokRowMatch={onTiktokRowMatch}
         />
       </div>
     </div>

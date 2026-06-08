@@ -133,6 +133,7 @@ export default function BillReviewPanel({
   tiktokMinPct = 60,
   onTiktokSearchCatalog,
   stocksByProductId = {},
+  onTiktokRowMatch,
 }) {
   // Grid-row equalizer — per user feedback, every RowCard should be
   // as tall as the tallest card in the whole grid, regardless of
@@ -252,6 +253,7 @@ export default function BillReviewPanel({
           tiktokMinPct={tiktokMinPct}
           onTiktokSearchCatalog={onTiktokSearchCatalog}
           stocksByProductId={stocksByProductId}
+          onTiktokRowMatch={onTiktokRowMatch ? (patch) => onTiktokRowMatch(row.uid, patch) : undefined}
         />
       ))}
     </div>
@@ -269,6 +271,7 @@ export function RowCard({
   tiktokMinPct = 60,
   onTiktokSearchCatalog,
   stocksByProductId = {},
+  onTiktokRowMatch,
 }) {
   const meta = STATUS_META[row.status] || { card: 'border-hairline', icon: 'alert', iconCls: 'text-muted' };
   // H3: visual flags for rows where AI couldn't read the numeric. We
@@ -456,7 +459,11 @@ export function RowCard({
           onRetryCatalog={onTiktokRetryCatalog}
           minPct={tiktokMinPct}
           onSearchCatalog={onTiktokSearchCatalog}
-          onChange={patch => onUpdate({ ...patch, tiktok_manual: true })}
+          onChange={(patch) => {
+            const full = { ...patch, tiktok_manual: true };
+            onUpdate(full);
+            onTiktokRowMatch?.(full);
+          }}
         />
       )}
     </div>

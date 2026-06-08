@@ -7,6 +7,7 @@ import {
   formatVoidMirrorToast,
   formatVoidMirrorProgressToast,
   voidMirrorToastDurationMs,
+  shouldPersistTiktokMatch,
   formatTikTokApiError,
   tiktokSkuDisplayLabel,
   mappingRowFromTiktokSku,
@@ -80,6 +81,19 @@ describe('voidMirrorToastDurationMs', () => {
   it('scales duration with SKU count', () => {
     expect(voidMirrorToastDurationMs(14)).toBeGreaterThan(voidMirrorToastDurationMs(1));
     expect(voidMirrorToastDurationMs(14)).toBeLessThanOrEqual(20000);
+  });
+});
+
+describe('shouldPersistTiktokMatch', () => {
+  it('persists when product and sku present', () => {
+    expect(shouldPersistTiktokMatch(42, { tiktok_sku: { tiktok_sku_id: 'a' } })).toBe(true);
+    expect(shouldPersistTiktokMatch(42, { tiktok_mapping: { tiktok_sku_id: 'b' } })).toBe(true);
+  });
+
+  it('skips without product, skip flag, or sku', () => {
+    expect(shouldPersistTiktokMatch(null, { tiktok_sku: { tiktok_sku_id: 'a' } })).toBe(false);
+    expect(shouldPersistTiktokMatch(42, { tiktok_skip: true, tiktok_sku: { tiktok_sku_id: 'a' } })).toBe(false);
+    expect(shouldPersistTiktokMatch(42, {})).toBe(false);
   });
 });
 
