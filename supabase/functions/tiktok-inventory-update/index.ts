@@ -30,6 +30,16 @@ function resolveSyncOperation(it: SyncItem): 'receive' | 'void' {
   return it.sync_operation === 'void' ? 'void' : 'receive';
 }
 
+async function rpcOrThrow(
+  supa: ReturnType<typeof serviceClient>,
+  fn: string,
+  args: Record<string, unknown>,
+) {
+  const { data, error } = await supa.rpc(fn, args);
+  if (error) throw new Error(`${fn}: ${error.message}`);
+  return data;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
 
@@ -71,7 +81,7 @@ Deno.serve(async (req) => {
       const syncOp = resolveSyncOperation(it);
 
       if (it.skip) {
-        await supa.rpc('log_tiktok_inventory_sync', {
+        await rpcOrThrow(supa, 'log_tiktok_inventory_sync', {
           p_receive_order_id: receiveOrderId,
           p_product_id: productId,
           p_tiktok_sku_id: it.tiktok_sku_id || null,
@@ -100,7 +110,7 @@ Deno.serve(async (req) => {
       const warehouseId = String(it.warehouse_id || defaultWarehouse);
 
       if (!tiktokProductId || !tiktokSkuId) {
-        await supa.rpc('log_tiktok_inventory_sync', {
+        await rpcOrThrow(supa, 'log_tiktok_inventory_sync', {
           p_receive_order_id: receiveOrderId,
           p_product_id: productId,
           p_tiktok_sku_id: tiktokSkuId || null,
@@ -123,7 +133,7 @@ Deno.serve(async (req) => {
           accessToken, shopCipher, tiktokProductId, tiktokSkuId, warehouseId, posStock,
         );
 
-        await supa.rpc('upsert_tiktok_inventory_mapping', {
+        await rpcOrThrow(supa, 'upsert_tiktok_inventory_mapping', {
           p_tiktok_sku_id: tiktokSkuId,
           p_product_id: productId,
           p_tiktok_product_id: tiktokProductId,
@@ -132,7 +142,7 @@ Deno.serve(async (req) => {
           p_warehouse_id: warehouseId,
         });
 
-        await supa.rpc('log_tiktok_inventory_sync', {
+        await rpcOrThrow(supa, 'log_tiktok_inventory_sync', {
           p_receive_order_id: receiveOrderId,
           p_product_id: productId,
           p_tiktok_sku_id: tiktokSkuId,
@@ -151,17 +161,19 @@ Deno.serve(async (req) => {
         });
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'sync failed';
-        await supa.rpc('log_tiktok_inventory_sync', {
-          p_receive_order_id: receiveOrderId,
-          p_product_id: productId,
-          p_tiktok_sku_id: tiktokSkuId,
-          p_pos_stock_after: posStock,
-          p_tiktok_qty_before: null,
-          p_tiktok_qty_after: null,
-          p_status: 'failed',
-          p_error_message: msg,
-          p_sync_operation: syncOp,
-        });
+        try {
+          await rpcOrThrow(supa, 'log_tiktok_inventory_sync', {
+            p_receive_order_id: receiveOrderId,
+            p_product_id: productId,
+            p_tiktok_sku_id: tiktokSkuId,
+            p_pos_stock_after: posStock,
+            p_tiktok_qty_before: null,
+            p_tiktok_qty_after: null,
+            p_status: 'failed',
+            p_error_message: msg,
+            p_sync_operation: syncOp,
+          });
+        } catch { /* best-effort failure log */ }
         results.push({ product_id: productId, status: 'failed', error: msg });
       }
     }

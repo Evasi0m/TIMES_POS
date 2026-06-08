@@ -1,4 +1,4 @@
--- 049_tiktok_resync_pending_items.sql
+-- 051_tiktok_resync_pending_items.sql
 -- Re-sync line items for PENDING TikTok orders on every import/poll/webhook.
 --
 -- Gap: import_tiktok_sale_order's re-sync path only refreshed order metadata

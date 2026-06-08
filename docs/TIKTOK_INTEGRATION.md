@@ -57,8 +57,10 @@
 15. `supabase-migrations/046_tiktok_matching_super_admin.sql` — matching เฉพาะ super_admin
 16. `supabase-migrations/047_tiktok_confirm_defer_net.sql` — ใส่ทีหลัง net ตอนยืนยัน + backfill bell queue
 17. `supabase-migrations/048_tiktok_inventory_sync.sql` — **mirror สต็อก POS → TikTok หลังรับเข้า** (opt-in, audit log, idempotency)
-18. `supabase-migrations/049_tiktok_resync_pending_items.sql` — re-sync line items/total ของออเดอร์ **pending** เมื่อลูกค้าแก้ออเดอร์บน TikTok (active/voided ไม่แตะ)
-19. `supabase-migrations/050_tiktok_health_rpc.sql` — `get_tiktok_health()` สำหรับ health card ใน ตั้งค่า → TikTok Shop
+18. `supabase-migrations/049_tiktok_void_mirror.sql` — void / ลบบรรทัดรับเข้า → mirror สต็อกกลับ TikTok
+19. `supabase-migrations/051_tiktok_resync_pending_items.sql` — re-sync line items/total ของออเดอร์ **pending** เมื่อลูกค้าแก้ออเดอร์บน TikTok (active/voided ไม่แตะ)
+20. `supabase-migrations/052_tiktok_inventory_sync_service_role.sql` — ให้ Edge Function บันทึก `tiktok_inventory_sync_log` ได้ (แก้ void mirror ไม่ทำงานหลัง receive สำเร็จ)
+21. `supabase-migrations/050_tiktok_health_rpc.sql` — `get_tiktok_health()` สำหรับ health card ใน ตั้งค่า → TikTok Shop
 
 **Go-live cutoff:** 13:00 07/06/2026 Asia/Bangkok — ออเดอร์หลัง cutoff เข้า `pending`; ก่อน cutoff → `voided`
 
