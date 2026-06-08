@@ -7,8 +7,10 @@ import {
   isTikTokLineReady,
   countTikTokMirrorReady,
   formatMirrorToast,
+  formatVoidMirrorProgressToast,
   formatVoidMirrorToast,
   mappingRowFromTiktokSku,
+  voidMirrorToastDurationMs,
 } from './tiktok-mirror-helpers.js';
 import { filterTikTokSkusByTerm } from './tiktok-receive-match.js';
 
@@ -17,8 +19,10 @@ export {
   isTikTokLineReady,
   countTikTokMirrorReady,
   formatMirrorToast,
+  formatVoidMirrorProgressToast,
   formatVoidMirrorToast,
   formatTikTokApiError,
+  voidMirrorToastDurationMs,
 };
 
 /** Pull `{ error }` from supabase-js FunctionsHttpError (non-2xx body). */
@@ -102,17 +106,25 @@ export async function mirrorStockToTikTok(items) {
   return data.results || [];
 }
 
-/**
- * Mirror POS stock to TikTok after voiding a receive bill or deleting a line.
- * Only products with a prior successful receive mirror are synced.
- */
-export async function mirrorStockAfterReceiveVoid({ receiveOrderId, productIds = null }) {
-  const { data: targets, error } = await sb.rpc('get_tiktok_void_mirror_targets', {
+/** Products eligible for void mirror on a receive bill. */
+export async function fetchVoidMirrorTargets(receiveOrderId, productIds = null) {
+  const { data, error } = await sb.rpc('get_tiktok_void_mirror_targets', {
     p_receive_order_id: receiveOrderId,
     p_product_ids: productIds?.length ? productIds : null,
   });
   if (error) throw error;
-  if (!targets?.length) return { results: [], skipped: true };
+  return data || [];
+}
+
+/**
+ * Mirror POS stock to TikTok after voiding a receive bill or deleting a line.
+ * Only products with a prior successful receive mirror are synced.
+ */
+export async function mirrorStockAfterReceiveVoid({
+  receiveOrderId, productIds = null, targets: preloadedTargets = null,
+}) {
+  const targets = preloadedTargets ?? await fetchVoidMirrorTargets(receiveOrderId, productIds);
+  if (!targets.length) return { results: [], skipped: true, targetCount: 0 };
 
   const stocks = await fetchPosStocks(targets.map(t => t.product_id));
   const mirrorPayload = targets.map(t => buildSyncLine({
@@ -123,5 +135,36 @@ export async function mirrorStockAfterReceiveVoid({ receiveOrderId, productIds =
     syncOperation: 'void',
   }));
   const results = await mirrorStockToTikTok(mirrorPayload);
-  return { results, skipped: false };
+  return { results, skipped: false, targetCount: targets.length };
+}
+
+/**
+ * Void mirror with progress + summary toasts (multi-SKU UX).
+ * @param {{ push: (msg: string, type?: string, opts?: { durationMs?: number }) => void }} toast
+ */
+export async function runVoidMirrorWithFeedback({ toast, receiveOrderId, productIds = null }) {
+  const targets = await fetchVoidMirrorTargets(receiveOrderId, productIds);
+  if (!targets.length) return { results: [], skipped: true, targetCount: 0 };
+
+  const count = targets.length;
+  if (count >= 2) {
+    toast?.push(formatVoidMirrorProgressToast(count), 'info', {
+      durationMs: voidMirrorToastDurationMs(count),
+    });
+  }
+
+  const { results, skipped, targetCount } = await mirrorStockAfterReceiveVoid({
+    receiveOrderId,
+    productIds,
+    targets,
+  });
+
+  if (!skipped) {
+    const { msg, isError } = formatVoidMirrorToast(results);
+    toast?.push(msg, isError ? 'error' : 'success', {
+      durationMs: voidMirrorToastDurationMs(targetCount || count, { isError }),
+    });
+  }
+
+  return { results, skipped, targetCount: targetCount || count };
 }

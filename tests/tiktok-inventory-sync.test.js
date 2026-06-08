@@ -5,6 +5,8 @@ import {
   countTikTokMirrorReady,
   formatMirrorToast,
   formatVoidMirrorToast,
+  formatVoidMirrorProgressToast,
+  voidMirrorToastDurationMs,
   formatTikTokApiError,
   tiktokSkuDisplayLabel,
   mappingRowFromTiktokSku,
@@ -62,6 +64,22 @@ describe('formatVoidMirrorToast', () => {
     const { msg } = formatVoidMirrorToast([{ status: 'success' }]);
     expect(msg).toContain('TikTok void mirror');
     expect(msg).toContain('สำเร็จ 1');
+  });
+});
+
+describe('formatVoidMirrorProgressToast', () => {
+  it('formats multi-SKU progress message', () => {
+    expect(formatVoidMirrorProgressToast(14)).toBe('กำลัง sync TikTok 14 รายการ...');
+  });
+  it('formats single SKU', () => {
+    expect(formatVoidMirrorProgressToast(1)).toBe('กำลัง sync TikTok 1 รายการ...');
+  });
+});
+
+describe('voidMirrorToastDurationMs', () => {
+  it('scales duration with SKU count', () => {
+    expect(voidMirrorToastDurationMs(14)).toBeGreaterThan(voidMirrorToastDurationMs(1));
+    expect(voidMirrorToastDurationMs(14)).toBeLessThanOrEqual(20000);
   });
 });
 

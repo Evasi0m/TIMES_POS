@@ -89,11 +89,10 @@ import {
   fetchPosStocks,
   fetchTikTokMappings,
   formatMirrorToast,
-  formatVoidMirrorToast,
   getTikTokConnectionStatus,
   isTikTokLineReady,
-  mirrorStockAfterReceiveVoid,
   mirrorStockToTikTok,
+  runVoidMirrorWithFeedback,
   upsertTiktokInventoryMapping,
 } from './lib/tiktok-inventory-sync.js';
 import { mappingRowFromTiktokSku } from './lib/tiktok-mirror-helpers.js';
@@ -423,10 +422,10 @@ const ToastCtx = React.createContext({ push: ()=>{} });
 // enough time to read them before they disappear.
 function ToastProvider({ children }) {
   const [list, setList] = useState([]);
-  const push = useCallback((msg, type='info') => {
+  const push = useCallback((msg, type = 'info', opts = {}) => {
     const id = Date.now()+Math.random();
     setList(l => [...l, { id, msg, type, closing: false }]);
-    const visibleMs = type === 'error' ? 6500 : 3300;
+    const visibleMs = opts.durationMs ?? (type === 'error' ? 6500 : 3300);
     // Stage 1: mark closing → triggers .toast-out keyframe.
     setTimeout(() => setList(l => l.map(t => t.id === id ? { ...t, closing: true } : t)), visibleMs);
     // Stage 2: unmount once exit animation has played out.
@@ -3500,13 +3499,9 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
       onChanged?.();
       if (kind === 'receive') {
         try {
-          const { results, skipped } = await mirrorStockAfterReceiveVoid({ receiveOrderId: order.id });
-          if (!skipped) {
-            const { msg, isError } = formatVoidMirrorToast(results);
-            toast.push(msg, isError ? 'error' : 'success');
-          }
+          await runVoidMirrorWithFeedback({ toast, receiveOrderId: order.id });
         } catch (e) {
-          toast.push('Mirror TikTok (void) ไม่สำเร็จ: ' + mapError(e), 'error');
+          toast.push('Mirror TikTok (void) ไม่สำเร็จ: ' + mapError(e), 'error', { durationMs: 8000 });
         }
       }
     } finally { setBusy(false); voidLockRef.current = false; }
@@ -3563,16 +3558,13 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
       if (error) throw error;
       toast.push(data?.voided ? 'ลบรายการสุดท้าย · ยกเลิกบิลแล้ว' : 'ลบรายการแล้ว · ปรับสต็อก/ยอดบิลเรียบร้อย', 'success');
       try {
-        const { results, skipped } = await mirrorStockAfterReceiveVoid({
+        await runVoidMirrorWithFeedback({
+          toast,
           receiveOrderId: order.id,
           productIds: [line.product_id],
         });
-        if (!skipped) {
-          const { msg, isError } = formatVoidMirrorToast(results);
-          toast.push(msg, isError ? 'error' : 'success');
-        }
       } catch (e) {
-        toast.push('Mirror TikTok (void) ไม่สำเร็จ: ' + mapError(e), 'error');
+        toast.push('Mirror TikTok (void) ไม่สำเร็จ: ' + mapError(e), 'error', { durationMs: 8000 });
       }
       await reload();
       onChanged?.();

@@ -50,6 +50,20 @@ export function formatVoidMirrorToast(results) {
   return formatMirrorToast(results, { label: 'TikTok void mirror' });
 }
 
+/** Progress toast while void mirror runs (multi-SKU bills). */
+export function formatVoidMirrorProgressToast(count) {
+  const n = Math.max(0, Number(count) || 0);
+  if (n <= 0) return 'กำลัง sync TikTok...';
+  return `กำลัง sync TikTok ${n} รายการ...`;
+}
+
+/** Suggested toast duration (ms) after void mirror by SKU count. */
+export function voidMirrorToastDurationMs(count, { isError = false } = {}) {
+  if (isError) return 8000;
+  const n = Math.max(1, Number(count) || 1);
+  return Math.min(20000, 4500 + n * 900);
+}
+
 /** Build sync payload line from mapping + POS stock. */
 export function buildSyncLine({
   receiveOrderId, productId, posStockAfter, mapping, tiktokSku, skipped,
