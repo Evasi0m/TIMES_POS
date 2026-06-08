@@ -99,6 +99,38 @@ function OrderListItemLine({ item, showDivider }) {
   );
 }
 
+// TikTok fulfillment status → Thai label + full theme class string. Class
+// names are written out in full (not interpolated) so Tailwind's JIT keeps
+// them. Shown next to the order number so the cashier sees the live shipping
+// state at a glance.
+const TIKTOK_STATUS_BADGE = {
+  AWAITING_SHIPMENT:   { label: 'รอจัดส่ง',    cls: 'bg-warning/10 text-warning border-warning/30' },
+  AWAITING_COLLECTION: { label: 'รอเข้ารับ',   cls: 'bg-accent-teal/10 text-accent-teal border-accent-teal/30' },
+  PARTIALLY_SHIPPING:  { label: 'ส่งบางส่วน',  cls: 'bg-warning/10 text-warning border-warning/30' },
+  IN_TRANSIT:          { label: 'กำลังจัดส่ง', cls: 'bg-accent-teal/10 text-accent-teal border-accent-teal/30' },
+  DELIVERED:           { label: 'จัดส่งแล้ว',  cls: 'bg-success/10 text-success border-success/20' },
+  COMPLETED:           { label: 'สำเร็จ',       cls: 'bg-success/10 text-success border-success/20' },
+  ON_HOLD:             { label: 'พักไว้',       cls: 'bg-muted/10 text-muted border-hairline' },
+  CANCELLED:           { label: 'ยกเลิก',       cls: 'bg-error/10 text-error border-error/30' },
+};
+
+function TikTokOrderStatusBadge({ status, className = '' }) {
+  if (!status) return null;
+  const key = String(status).toUpperCase();
+  const b = TIKTOK_STATUS_BADGE[key]
+    || { label: key.replace(/_/g, ' ').toLowerCase(), cls: 'bg-muted/10 text-muted border-hairline' };
+  return (
+    <span
+      className={
+        'inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium leading-none ' +
+        b.cls + ' ' + className
+      }
+    >
+      {b.label}
+    </span>
+  );
+}
+
 /** One row in the pending-order list — large, scannable layout. */
 function OrderListRow({ order, onOpen }) {
   const items = order.items || [];
@@ -163,6 +195,7 @@ function OrderListRow({ order, onOpen }) {
           <div className="text-[13px] text-muted-soft leading-snug">
             <span className="text-muted">หมายเลขคำสั่งซื้อ: </span>
             <span className="font-mono text-ink/80 break-all">{order.tiktok_order_id}</span>
+            <TikTokOrderStatusBadge status={order.tiktok_order_status} className="ml-1.5 align-middle"/>
           </div>
         </div>
 
@@ -507,6 +540,7 @@ function OrderConfirmView({
         <div className="ttc-confirm-header__order truncate" title={order.tiktok_order_id}>
           <span className="text-muted-soft">หมายเลขคำสั่งซื้อ: </span>
           <span className="font-mono text-ink/75">{order.tiktok_order_id}</span>
+          <TikTokOrderStatusBadge status={order.tiktok_order_status} className="ml-1.5 align-middle"/>
         </div>
         <div className="ttc-confirm-header__status">
           <span className="tabular-nums">{fmtTime(order.sale_date)}</span>
@@ -635,7 +669,7 @@ function OrderConfirmView({
   );
 }
 
-export default function TikTokConfirmPanel({ toast, size = 50 }) {
+export default function TikTokConfirmPanel({ toast, size = 50, onConfirmed }) {
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -810,27 +844,38 @@ export default function TikTokConfirmPanel({ toast, size = 50 }) {
     if (!activeOrder || !allMatched || !netOk) return;
     const value = deferNet ? null : Number(net);
     if (!deferNet && !(value > 0)) { toast?.('กรอกเงินที่ร้านได้รับให้ถูกต้อง', 'error'); return; }
+    const confirmedId = activeOrder.id;
+    const confirmedTid = activeOrder.tiktok_order_id;
     setSaving(true);
+    let ok = false;
     try {
       const p_items = (activeOrder.items || []).map(it => ({
         item_id: it.id,
         product_id: picks[it.id]?.id ?? null,
       }));
       const { error } = await sb.rpc('confirm_tiktok_sale_order', {
-        p_order_id: activeOrder.id,
+        p_order_id: confirmedId,
         p_items,
         p_net_received: value,
       });
       if (error) throw error;
-      toast?.(`ยืนยันออเดอร์ TikTok #${activeOrder.tiktok_order_id} แล้ว`, 'success');
+      ok = true;
+      toast?.(`ยืนยันออเดอร์ TikTok #${confirmedTid} แล้ว`, 'success');
       window.dispatchEvent(new Event('tiktok-pending-changed'));
       window.dispatchEvent(new Event('pending-net-changed'));
-      backToList();
-      await load();
     } catch (e) {
       toast?.('ยืนยันไม่สำเร็จ: ' + mapError(e), 'error');
     } finally {
       setSaving(false);
+    }
+    if (ok) {
+      // Pop the receipt right away, same as a manual sale. confirm_tiktok_sale_order
+      // issues a tax-invoice number, so ReceiptModal opens as ใบกำกับภาษีอย่างย่อ.
+      // Close the panel first so the receipt modal (z-100) isn't hidden behind
+      // this one (z-130); the pending list refreshes in the background.
+      onConfirmed?.(confirmedId);
+      closeAll();
+      load();
     }
   };
 

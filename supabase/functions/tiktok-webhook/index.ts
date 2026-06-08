@@ -1,6 +1,6 @@
 // TikTok webhook — handles order status, address, package, and return events.
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import { getEnv, serviceClient, verifyWebhookSignature } from '../_shared/tiktok-client.ts';
+import { getEnv, serviceClient, verifyTikTokWebhook } from '../_shared/tiktok-client.ts';
 import { importTikTokOrder } from '../_shared/tiktok-order-import.ts';
 
 // Webhook topic types (TikTok 202309 numeric "type").
@@ -16,13 +16,14 @@ Deno.serve(async (req) => {
   }
 
   const rawBody = await req.text();
-  const { webhookSecret } = getEnv();
-  const sigHeader = req.headers.get('Tiktok-Signature') || req.headers.get('tiktok-signature');
+  const { appKey, appSecret, webhookSecret } = getEnv();
 
-  if (webhookSecret) {
-    const ok = await verifyWebhookSignature(rawBody, sigHeader, webhookSecret);
-    if (!ok) return new Response('Invalid signature', { status: 401 });
-  }
+  const verified = await verifyTikTokWebhook(rawBody, req.headers, {
+    appKey,
+    appSecret,
+    webhookSecret,
+  });
+  if (!verified) return new Response('Invalid signature', { status: 401 });
 
   let payload: Record<string, unknown>;
   try {

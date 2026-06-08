@@ -44,15 +44,38 @@ Deno.serve(async (req) => {
     const { awaiting, others } = await discoverPollOrders(supa, hours);
     const awaitingSet = new Set(awaiting);
 
-    // Awaiting first (always refreshed), then the rest — capped to MAX_PER_RUN.
-    const ordered = [...awaiting, ...others];
+    // Always refresh orders still sitting in the POS confirm queue so a buyer
+    // cancellation lands within one poll even when the realtime webhook is down:
+    // importTikTokOrder voids CANCELLED orders, so they drop off the queue. Any
+    // other status (incl. already shipped / completed) stays 'pending' and keeps
+    // showing — the cashier must still record it into POS before it leaves the
+    // queue. The queue is small, and these ids are forced even if order
+    // discovery didn't surface them.
+    const { data: pendingRows } = await supa.from('sale_orders')
+      .select('tiktok_order_id')
+      .eq('channel', 'tiktok')
+      .eq('status', 'pending')
+      .not('tiktok_order_id', 'is', null);
+    const pendingIds = (pendingRows || [])
+      .map((r) => String((r as { tiktok_order_id: unknown }).tiktok_order_id))
+      .filter(Boolean);
+    const pendingSet = new Set(pendingIds);
+
+    // Awaiting + pending first (always refreshed), then the rest — capped to
+    // MAX_PER_RUN. Dedupe so a single order is never imported twice per run.
+    const seen = new Set<string>();
+    const ordered: string[] = [];
+    for (const id of [...awaiting, ...pendingIds, ...others]) {
+      if (id && !seen.has(id)) { seen.add(id); ordered.push(id); }
+    }
     let processed = 0;
     let capped = false;
 
     for (const id of ordered) {
       if (processed >= MAX_PER_RUN) { capped = true; break; }
-      // Awaiting orders always update; others only when new (unless resync).
-      const forceUpdate = resync || awaitingSet.has(id);
+      // Awaiting + still-pending orders always update; other existing orders
+      // only when new (unless resync).
+      const forceUpdate = resync || awaitingSet.has(id) || pendingSet.has(id);
       if (!forceUpdate) {
         const { data: existing } = await supa.from('sale_orders')
           .select('id')

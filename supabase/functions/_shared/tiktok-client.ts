@@ -7,6 +7,26 @@ export const API_BASE = 'https://open-api.tiktokglobalshop.com';
 
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
+/**
+ * TikTok token endpoints return `*_expire_in` as an ABSOLUTE UTC epoch in
+ * SECONDS (the instant the token expires) — not a relative "expires in N"
+ * duration. Treating it as relative (now + expire_in) produced year-2082
+ * expiries, which made getValidAccessToken believe the token never expires and
+ * silently disabled auto-refresh. Guard both shapes so a future API that ever
+ * returns a small relative duration still works.
+ */
+export function tiktokExpiryToISO(
+  expireIn: unknown,
+  nowMs: number = Date.now(),
+): string | null {
+  const n = Number(expireIn) || 0;
+  if (n <= 0) return null;
+  // ~1e9 s ≈ year 2001. TikTok's absolute epochs are ~1.7e9+; any plausible
+  // relative duration in seconds is far smaller than this threshold.
+  const ms = n > 1_000_000_000 ? n * 1000 : nowMs + n * 1000;
+  return new Date(ms).toISOString();
+}
+
 export interface TikTokTokens {
   access_token: string | null;
   refresh_token: string | null;
@@ -92,6 +112,74 @@ export async function verifyWebhookSignature(
   return expected === s;
 }
 
+async function hmacHex(key: string, msg: string): Promise<string> {
+  const k = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(key),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const sig = await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(msg));
+  return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function timingSafeEqualHex(a: string, b: string): boolean {
+  const x = (a || '').trim().toLowerCase();
+  const y = (b || '').trim().toLowerCase();
+  if (x.length !== y.length || !x.length) return false;
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x.charCodeAt(i) ^ y.charCodeAt(i);
+  return diff === 0;
+}
+
+/**
+ * Verify a TikTok Shop Partner webhook.
+ *
+ * Primary (what our order / package / return webhooks actually use):
+ *   Authorization header = hex HMAC-SHA256( key=app_secret, msg=app_key + rawBody ).
+ * The previous implementation only checked the TikTok-for-Developers scheme
+ * (HMAC(secret, `${t}.${body}`) in a TikTok-Signature header), so every Shop
+ * webhook was rejected with 401. We try the Shop scheme first, then fall back to
+ * the developers scheme (signed with webhook_secret or app_secret) so either
+ * configuration works. Accepting requires a valid HMAC under a real secret, so
+ * supporting both schemes does not weaken security.
+ */
+export async function verifyTikTokWebhook(
+  rawBody: string,
+  headers: Headers,
+  opts: { appKey: string; appSecret: string; webhookSecret?: string },
+): Promise<boolean> {
+  const { appKey, appSecret, webhookSecret } = opts;
+
+  // ── TikTok Shop scheme ──────────────────────────────────────────────────
+  const auth = headers.get('authorization')
+    || headers.get('x-tts-signature')
+    || '';
+  if (auth && appKey && appSecret) {
+    const expected = await hmacHex(appSecret, appKey + rawBody);
+    if (timingSafeEqualHex(auth, expected)) return true;
+  }
+
+  // ── TikTok-for-Developers scheme (t=<ts>,s=<hmac>) ──────────────────────
+  const sigHeader = headers.get('tiktok-signature');
+  if (sigHeader) {
+    const parts: Record<string, string> = {};
+    for (const seg of sigHeader.split(',')) {
+      const [k, v] = seg.trim().split('=');
+      if (k) parts[k] = v;
+    }
+    if (parts.t && parts.s) {
+      for (const key of [webhookSecret, appSecret]) {
+        if (!key) continue;
+        const expected = await hmacHex(key, `${parts.t}.${rawBody}`);
+        if (timingSafeEqualHex(parts.s, expected)) return true;
+      }
+    }
+  }
+  return false;
+}
+
 export async function exchangeAuthCode(code: string): Promise<Record<string, unknown>> {
   const { appKey, appSecret } = getEnv();
   const qs = new URLSearchParams({
@@ -153,12 +241,10 @@ export async function getValidAccessToken(supa: SupabaseClient): Promise<{
   const update = {
     access_token: accessToken,
     refresh_token: refreshToken,
-    access_token_expires_at: accessExpire
-      ? new Date(now.getTime() + accessExpire * 1000).toISOString()
-      : row.access_token_expires_at,
-    refresh_token_expires_at: refreshExpire
-      ? new Date(now.getTime() + refreshExpire * 1000).toISOString()
-      : row.refresh_token_expires_at,
+    access_token_expires_at: tiktokExpiryToISO(accessExpire, now.getTime())
+      ?? row.access_token_expires_at,
+    refresh_token_expires_at: tiktokExpiryToISO(refreshExpire, now.getTime())
+      ?? row.refresh_token_expires_at,
     last_refresh_error: null,
     updated_at: now.toISOString(),
   };
@@ -335,6 +421,37 @@ export function skuMatchTier(a: string, b: string): SkuMatchResult {
   return { tier: 'none', score: sim, auto: false };
 }
 
+/** Keep only SKUs that actually match any query variant (API may ignore seller_sku filter). */
+export function filterSkusForQueries(
+  skus: TikTokSkuInventory[],
+  queries: string[],
+  minScore = 0.5,
+): TikTokSkuInventory[] {
+  const qs = [...new Set(queries.map(q => String(q || '').trim()).filter(q => q.length >= 2))];
+  if (!qs.length) return skus;
+  const out: TikTokSkuInventory[] = [];
+  const seen = new Set<string>();
+  for (const s of skus) {
+    const code = (s.seller_sku || s.product_name || '').trim();
+    if (!code) continue;
+    let best = 0;
+    for (const q of qs) {
+      const m = skuMatchTier(q, code);
+      if (m.score > best) best = m.score;
+      const title = (s.product_name || '').trim();
+      if (title && title !== code) {
+        const m2 = skuMatchTier(q, title);
+        if (m2.score > best) best = m2.score;
+      }
+    }
+    if (best >= minScore && !seen.has(s.tiktok_sku_id)) {
+      seen.add(s.tiktok_sku_id);
+      out.push(s);
+    }
+  }
+  return out;
+}
+
 export const IMPORT_STATUSES = new Set([
   'ON_HOLD',
   'AWAITING_SHIPMENT',
@@ -347,3 +464,198 @@ export const IMPORT_STATUSES = new Set([
 
 export const SKIP_STATUSES = new Set(['UNPAID']);
 export const VOID_STATUSES = new Set(['CANCELLED']);
+
+// ── Product / inventory API (mirror POS stock → TikTok) ─────────────────────
+
+export interface TikTokSkuInventory {
+  tiktok_product_id: string;
+  tiktok_sku_id: string;
+  seller_sku: string;
+  product_name: string;
+  quantity: number;
+  warehouse_id?: string;
+}
+
+/** Flatten product search results into SKU rows with current qty. */
+export function flattenProductSkus(products: Record<string, unknown>[]): TikTokSkuInventory[] {
+  const out: TikTokSkuInventory[] = [];
+  for (const p of products) {
+    const productId = String(p.id || p.product_id || '');
+    const title = String(p.title || p.product_name || '');
+    const skus = (p.skus as Record<string, unknown>[]) || [];
+    for (const sku of skus) {
+      const skuId = String(sku.id || sku.sku_id || '');
+      if (!skuId || !productId) continue;
+      const sellerSku = String(sku.seller_sku || sku.sku_name || '');
+      let qty = 0;
+      let warehouseId: string | undefined;
+      const inv = (sku.inventory as Record<string, unknown>[]) || [];
+      for (const w of inv) {
+        const wh = String(w.warehouse_id || '');
+        const q = Number(w.quantity ?? w.available_stock ?? 0) || 0;
+        if (!warehouseId && wh) warehouseId = wh;
+        qty += q;
+      }
+      out.push({
+        tiktok_product_id: productId,
+        tiktok_sku_id: skuId,
+        seller_sku: sellerSku,
+        product_name: title,
+        quantity: qty,
+        warehouse_id: warehouseId,
+      });
+    }
+  }
+  return out;
+}
+
+/** Search TikTok catalog — returns flat SKU list. */
+export async function searchTikTokProducts(
+  accessToken: string,
+  shopCipher: string,
+  opts: {
+    query?: string;
+    queryVariants?: string[];
+    pageSize?: number;
+    maxPages?: number;
+  } = {},
+): Promise<TikTokSkuInventory[]> {
+  const pageSize = Math.min(Math.max(opts.pageSize ?? 50, 1), 50);
+  const maxPages = opts.maxPages ?? 5;
+  const baseBody: Record<string, unknown> = { status: 'ACTIVATE' };
+
+  const listPage = async (body: Record<string, unknown>, pageToken = '') => {
+    const queryParams: Record<string, string | number> = { page_size: pageSize };
+    if (pageToken) queryParams.page_token = pageToken;
+    const data = await apiPost(
+      '/product/202502/products/search',
+      queryParams,
+      accessToken,
+      shopCipher,
+      body,
+    );
+    const nextToken = String(
+      data?.next_page_token || data?.page_token || '',
+    );
+    return {
+      skus: flattenProductSkus((data?.products as Record<string, unknown>[]) || []),
+      nextToken: nextToken && nextToken !== pageToken ? nextToken : '',
+    };
+  };
+
+  const q = (opts.query || '').trim();
+  const variants = [...new Set([
+    ...(opts.queryVariants || []).map(v => String(v || '').trim()).filter(v => v.length >= 2),
+    ...(q ? [q] : []),
+  ])];
+
+  for (const v of variants) {
+    try {
+      const { skus } = await listPage({ ...baseBody, seller_sku: v });
+      const filtered = filterSkusForQueries(skus, variants, 0.55);
+      if (filtered.length) return filtered;
+    } catch { /* try next variant */ }
+  }
+
+  const needles = variants.map(s => s.toLowerCase());
+  if (needles.length) {
+    const matched: TikTokSkuInventory[] = [];
+    const seen = new Set<string>();
+    let pageToken = '';
+    for (let page = 0; page < maxPages; page++) {
+      const { skus, nextToken } = await listPage(baseBody, pageToken);
+      const pageHits = filterSkusForQueries(skus, variants, 0.55);
+      for (const s of pageHits) {
+        if (!seen.has(s.tiktok_sku_id)) {
+          seen.add(s.tiktok_sku_id);
+          matched.push(s);
+        }
+      }
+      if (!nextToken) break;
+      pageToken = nextToken;
+    }
+    return matched;
+  }
+
+  const merged: TikTokSkuInventory[] = [];
+  const seen = new Set<string>();
+  let pageToken = '';
+  for (let page = 0; page < maxPages; page++) {
+    const { skus, nextToken } = await listPage(baseBody, pageToken);
+    for (const s of skus) {
+      if (!seen.has(s.tiktok_sku_id)) {
+        seen.add(s.tiktok_sku_id);
+        merged.push(s);
+      }
+    }
+    if (!nextToken) break;
+    pageToken = nextToken;
+  }
+  return merged;
+}
+
+/** Read current qty for one SKU (first warehouse in response). */
+export async function getTikTokSkuQuantity(
+  accessToken: string,
+  shopCipher: string,
+  productId: string,
+  skuId: string,
+  warehouseId: string,
+): Promise<number> {
+  const data = await apiGet(
+    `/product/202309/products/${productId}`,
+    {},
+    accessToken,
+    shopCipher,
+  );
+  const skus = (data?.skus as Record<string, unknown>[]) || [];
+  const sku = skus.find(s => String(s.id || s.sku_id) === skuId);
+  if (!sku) return 0;
+  const inv = (sku.inventory as Record<string, unknown>[]) || [];
+  const wh = inv.find(w => String(w.warehouse_id) === warehouseId);
+  return Number(wh?.quantity ?? wh?.available_stock ?? 0) || 0;
+}
+
+/** Mirror POS stock — set TikTok warehouse qty to posStock. */
+export async function updateTikTokInventoryMirror(
+  accessToken: string,
+  shopCipher: string,
+  productId: string,
+  skuId: string,
+  warehouseId: string,
+  posStock: number,
+): Promise<void> {
+  const qty = Math.max(0, Math.floor(posStock));
+  await apiPost(
+    `/product/202309/products/${productId}/inventory/update`,
+    {},
+    accessToken,
+    shopCipher,
+    {
+      skus: [{
+        id: skuId,
+        inventory: [{ warehouse_id: warehouseId, quantity: qty }],
+      }],
+    },
+  );
+}
+
+/** List warehouses for the shop. */
+export async function fetchTikTokWarehouses(
+  accessToken: string,
+  shopCipher: string,
+): Promise<Array<{ id: string; name: string }>> {
+  const data = await apiGet(
+    '/logistics/202309/warehouses',
+    {},
+    accessToken,
+    shopCipher,
+  );
+  const list = (data?.warehouses as Record<string, unknown>[])
+    || (data?.warehouse_list as Record<string, unknown>[])
+    || [];
+  return list.map(w => ({
+    id: String(w.id || w.warehouse_id || ''),
+    name: String(w.name || w.warehouse_name || w.id || ''),
+  })).filter(w => w.id);
+}

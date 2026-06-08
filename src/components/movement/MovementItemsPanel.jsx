@@ -1,22 +1,61 @@
 import React from 'react';
 import RecentReceiveBadge from './RecentReceiveBadge.jsx';
+import { isTikTokLineReady } from '../../lib/tiktok-inventory-sync.js';
+import { tiktokSkuDisplayLabel } from '../../lib/tiktok-mirror-helpers.js';
+
+function TikTokLineBadge({ line, unresolved, onRematch }) {
+  if (line.tiktok_skip) {
+    return (
+      <button
+        type="button"
+        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted/15 text-muted border border-hairline hover:bg-muted/25 transition-colors"
+        onClick={onRematch}
+      >
+        ไม่ sync
+      </button>
+    );
+  }
+  if (line.tiktok_sku) {
+    return (
+      <button
+        type="button"
+        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-success/10 text-success border border-success/20 hover:bg-success/15 transition-colors"
+        onClick={onRematch}
+      >
+        ✓ {tiktokSkuDisplayLabel(line.tiktok_sku)}
+      </button>
+    );
+  }
+  if (line.tiktok_mapping?.seller_sku) {
+    return (
+      <button
+        type="button"
+        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-success/10 text-success border border-success/20 hover:bg-success/15 transition-colors"
+        onClick={onRematch}
+      >
+        ✓ {line.tiktok_mapping.seller_sku}
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className={
+        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium border transition-colors ' +
+        (unresolved
+          ? 'bg-error/10 text-error border-error/30 hover:bg-error/15 animate-pulse'
+          : 'bg-warning/10 text-warning border-warning/30 hover:bg-warning/15')
+      }
+      onClick={onRematch}
+    >
+      รอจับคู่
+    </button>
+  );
+}
 
 /**
  * Per-line items list inside the right panel of StockMovementForm.
  * Pure presentational — parent owns `items` state and the update fns.
- *
- * Props:
- *   Icon, fmtTHB, applyDiscounts, UNITS
- *   items, kind, costPctEnabled, costPct
- *   onUpdItem(i, patch) / onUpdPrice(i, val) / onRemoveItem(i)
- *   showItemsError (Phase 2.3) — visual error glow when submit attempted
- *                                with no items
- *   recentReceivesMap — Map<product_id, {lastDate,supplier,invoice}> from
- *                      useRecentReceivesMap(). When provided AND kind ===
- *                      'receive', a small amber "พึ่งรับ X วันก่อน" badge
- *                      shows next to any product line that matches.
- *                      Designed to prevent the user from entering the
- *                      same supplier bill twice within a week.
  */
 export default function MovementItemsPanel({
   Icon, fmtTHB, applyDiscounts, UNITS,
@@ -28,9 +67,13 @@ export default function MovementItemsPanel({
   totalNet = 0,
   vatAmount = 0,
   totalGross = 0,
+  tiktokMirrorEnabled = false,
+  showTiktokMatchError = false,
+  onTiktokRematch,
 }) {
   const empty = !items.length;
   const isReceiveOrClaim = kind === 'receive' || kind === 'claim';
+
   return (
     <div className="flex flex-col h-full min-h-0">
       <div
@@ -45,21 +88,23 @@ export default function MovementItemsPanel({
           </div>
         )}
         {items.map((l, i) => {
-          // Only flag on the receive form — claim/return don't add stock
-          // from a supplier bill, so a "พึ่งรับ" badge would be confusing.
           const recentInfo = (kind === 'receive' && recentReceivesMap && l.product_id)
             ? recentReceivesMap.get(l.product_id)
             : null;
           const showItemVat = isReceiveOrClaim && hasVat;
           const grossPerUnit = showItemVat ? (Number(l.unit_price) * 1.07) : Number(l.unit_price);
+          const tiktokUnresolved = tiktokMirrorEnabled && !isTikTokLineReady(l);
+          const tiktokErr = showTiktokMatchError && tiktokUnresolved;
+
           return (
-          <div key={l._uid || i} className="glass-soft rounded-lg p-3 mb-2 hover-lift fade-in">
+          <div
+            key={l._uid || i}
+            className={
+              'glass-soft rounded-lg p-3 mb-2 hover-lift fade-in ' +
+              (tiktokErr ? 'ring-2 ring-error/40' : '')
+            }
+          >
             <div className="flex items-start justify-between gap-2">
-              {/* Big index — 24px bold terra-cotta numeral that matches
-                  `.btn-add-product`'s palette. Purely decorative (the
-                  item identity is the product_name) so aria-hidden, but
-                  invaluable when the user is verifying 10+ bills and
-                  wants to quickly say "row 3 wrong". */}
               <span className="movement-item-index" aria-hidden="true">
                 {i + 1}
               </span>
@@ -72,12 +117,19 @@ export default function MovementItemsPanel({
                 <Icon name="trash" size={14} />
               </button>
             </div>
-            {/* Duplicate-bill guard — shows when this product was already
-                received within the last 7 days. Placed on its own row so
-                long product names don't get pushed around. */}
             {recentInfo && (
               <div className="mt-1.5 -ml-0.5">
                 <RecentReceiveBadge info={recentInfo} />
+              </div>
+            )}
+            {tiktokMirrorEnabled && (
+              <div className="mt-1.5 flex items-center gap-1.5">
+                <span className="text-[10px] text-muted-soft uppercase tracking-wider">TikTok</span>
+                <TikTokLineBadge
+                  line={l}
+                  unresolved={tiktokUnresolved}
+                  onRematch={() => onTiktokRematch?.(i)}
+                />
               </div>
             )}
             <div className="grid grid-cols-12 gap-2 mt-2">
@@ -149,7 +201,6 @@ export default function MovementItemsPanel({
         })}
       </div>
 
-      {/* Embedded Summary Panel for VAT calculations (Phase 5) */}
       {!empty && isReceiveOrClaim && hasVat && (
         <div className="px-4 py-3 mx-3 mb-2 rounded-xl bg-primary/5 border border-primary/10 space-y-1 text-xs">
           <div className="flex justify-between text-muted-soft">

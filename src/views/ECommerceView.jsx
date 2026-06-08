@@ -36,12 +36,8 @@ function TikTokSectionNav({ view, setView, disabled, isSuperAdmin }) {
   );
 }
 
-export default function ECommerceView({ view, setView, toast, DatePicker, todayISO, isSuperAdmin = false }) {
+export default function ECommerceView({ view, setView, toast, isSuperAdmin = false }) {
   const { platform, section } = parseEcommerceView(view);
-  const [dateRange, setDateRange] = useState(() => {
-    const today = todayISO();
-    return { from: today, to: today };
-  });
   const [pageSync, setPageSync] = useState({ visible: false, pct: 0, phase: 'in' });
   const [syncTop, setSyncTop] = useState(0);
   const fadeTimerRef = useRef(null);
@@ -130,26 +126,12 @@ export default function ECommerceView({ view, setView, toast, DatePicker, todayI
           )}
           <div className={pageBlocked ? 'pointer-events-none select-none' : ''}>
             <div className="px-4 lg:px-10 pt-5 lg:pt-6">
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-                <TikTokSectionNav view={view} setView={setView} disabled={pageBlocked} isSuperAdmin={isSuperAdmin}/>
-                {section === 'orders' && (
-                  <div className="lg:w-72 shrink-0">
-                    <DatePicker
-                      mode="range"
-                      value={dateRange}
-                      onChange={setDateRange}
-                      placeholder="เลือกช่วงวันที่"
-                      className="w-full"
-                    />
-                  </div>
-                )}
-              </div>
+              <TikTokSectionNav view={view} setView={setView} disabled={pageBlocked} isSuperAdmin={isSuperAdmin}/>
             </div>
 
             <div className="px-4 lg:px-10 pt-4 lg:pt-5 pb-8">
               <TikTokPanel
                 toast={toast}
-                dateRange={dateRange}
                 section={section}
                 isSuperAdmin={isSuperAdmin}
                 onSyncChange={handleSyncChange}

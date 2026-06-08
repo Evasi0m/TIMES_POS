@@ -58,6 +58,11 @@ import {
 } from './lib/vat-report.js';
 import { downloadStructuredCsv } from './lib/csv.js';
 import Icon from './components/ui/Icon.jsx';
+import Modal from './components/ui/Modal.jsx';
+import { useMountedToggle } from './lib/use-mounted-toggle.js';
+import TikTokMatchPromptModal from './components/ecommerce/TikTokMatchPromptModal.jsx';
+import TikTokReceiveMatchCard from './components/ecommerce/TikTokReceiveMatchCard.jsx';
+import TikTokLinkedBadge from './components/ecommerce/TikTokLinkedBadge.jsx';
 import ProductThumb from './components/ui/ProductThumb.jsx';
 import { useRealtimeInvalidate } from './lib/use-realtime-invalidate.js';
 import { useNumberTween } from './lib/use-number-tween.js';
@@ -78,6 +83,20 @@ import BulkReceiveView from './components/ai/BulkReceiveView.jsx';
 import PendingNetBell from './components/pos/PendingNetBell.jsx';
 import DeferNetButton from './components/pos/DeferNetButton.jsx';
 import TikTokConfirmPanel from './components/pos/TikTokConfirmPanel.jsx';
+import { useTikTokMirrorCatalog } from './hooks/useTikTokMirrorCatalog.js';
+import {
+  buildSyncLine,
+  fetchPosStocks,
+  fetchTikTokMappings,
+  formatMirrorToast,
+  formatVoidMirrorToast,
+  getTikTokConnectionStatus,
+  isTikTokLineReady,
+  mirrorStockAfterReceiveVoid,
+  mirrorStockToTikTok,
+  upsertTiktokInventoryMapping,
+} from './lib/tiktok-inventory-sync.js';
+import { mappingRowFromTiktokSku } from './lib/tiktok-mirror-helpers.js';
 import AnimatedLogo from './components/ui/AnimatedLogo.jsx';
 import './styles.css';
 
@@ -458,127 +477,7 @@ function SkeletonRows({ n = 5, label = 'กำลังโหลด' }) {
   );
 }
 
-/* Hook: keep a component mounted briefly after `open` flips false so an exit animation can run.
-   Returns { render, closing } — render the element while `render`, apply close-animation classes when `closing`. */
-function useMountedToggle(open, exitMs = 220) {
-  const [render, setRender]   = useState(open);
-  const [closing, setClosing] = useState(false);
-  useEffect(() => {
-    if (open) { setRender(true); setClosing(false); }
-    else if (render) {
-      setClosing(true);
-      const t = setTimeout(() => { setRender(false); setClosing(false); }, exitMs);
-      return () => clearTimeout(t);
-    }
-  }, [open]);
-  return { render, closing };
-}
-
-// Selector matching every focusable interactive element inside the modal.
-// Used by the focus trap below.
-const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), textarea:not([disabled]), ' +
-  'input:not([disabled]), select:not([disabled]), ' +
-  '[tabindex]:not([tabindex="-1"])';
-
-function Modal({ open, onClose, title, children, footer, wide }) {
-  const { render, closing } = useMountedToggle(open, 220);
-  const dialogRef = useRef(null);
-  const previousFocusRef = useRef(null);
-  // Keep the latest onClose in a ref so the focus-trap effect below does NOT
-  // depend on it. Callers almost always pass an inline `onClose={()=>...}`
-  // whose identity changes every render; if the effect depended on it, every
-  // parent re-render (e.g. a keystroke updating sibling state) would re-run
-  // the trap and yank focus out of the input mid-typing. See git history.
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-
-  // Capture focus on open, restore it on close. Trap Tab inside the dialog.
-  useEffect(() => {
-    if (!render || closing) return;
-    previousFocusRef.current = document.activeElement;
-
-    // Focus the first focusable child after the dialog mounts and CSS lays
-    // out (a 0ms timeout is enough; rAF here would skip a paint).
-    // On mobile we deliberately focus the dialog root instead of the
-    // first input — this keeps the focus trap working for a11y but
-    // prevents the iOS keyboard from auto-popping every time the user
-    // opens a modal. The user can tap the input themselves when ready.
-    const t = setTimeout(() => {
-      const root = dialogRef.current;
-      if (!root) return;
-      if (isMobileViewport()) { root.focus(); return; }
-      const first = root.querySelector(FOCUSABLE_SELECTOR);
-      (first || root).focus();
-    }, 0);
-
-    const onKey = (e) => {
-      if (e.key === 'Escape') { e.stopPropagation(); onCloseRef.current?.(); return; }
-      if (e.key !== 'Tab') return;
-      const root = dialogRef.current;
-      if (!root) return;
-      const focusables = root.querySelectorAll(FOCUSABLE_SELECTOR);
-      if (focusables.length === 0) { e.preventDefault(); return; }
-      const first = focusables[0];
-      const last  = focusables[focusables.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault(); last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault(); first.focus();
-      }
-    };
-    document.addEventListener('keydown', onKey, true);
-
-    return () => {
-      clearTimeout(t);
-      document.removeEventListener('keydown', onKey, true);
-      // Restore focus to whatever opened us, but only if the focus didn't
-      // already move somewhere else (e.g. a toast button).
-      const prev = previousFocusRef.current;
-      if (prev && document.contains(prev)) {
-        try { prev.focus({ preventScroll: true }); } catch {}
-      }
-    };
-  }, [render, closing]);
-
-  if (!render) return null;
-  // Portal to <body> so the `fixed inset-0` overlay is always relative to the
-  // viewport — never to a transformed/animated ancestor (e.g. the page's
-  // `.view-fade`). Without this, a modal opened from deep inside an animated
-  // view (like the supplier picker on the receive page) renders offset and
-  // overlaps the page content instead of covering the whole screen.
-  return createPortal(
-    <div
-      className={"fixed inset-0 modal-overlay z-[100] flex items-end lg:items-center justify-center lg:p-6 " + (closing ? "overlay-out" : "overlay-in")}
-      onClick={onClose}
-    >
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={typeof title === 'string' ? title : undefined}
-        tabIndex={-1}
-        className={"bg-surface-strong rounded-t-2xl lg:rounded-lg shadow-2xl w-full " + (wide?"lg:max-w-3xl":"lg:max-w-lg") + " max-h-[92vh] flex flex-col " + (closing ? "sheet-out" : "sheet-anim")}
-        onClick={e=>e.stopPropagation()}
-      >
-        <div className="px-5 py-4 border-b hairline flex items-center justify-between flex-shrink-0">
-          <div className="font-display text-xl lg:text-2xl">{title}</div>
-          {/* Close button gets a 44pt hit zone on mobile so it's easy
-              to tap with a thumb. Visible icon size is unchanged. */}
-          <button className="btn-ghost icon-btn-44 lg:!p-2 lg:!w-auto lg:!h-auto" onClick={onClose} aria-label="ปิด"><Icon name="x" size={20}/></button>
-        </div>
-        <div className="p-5 overflow-y-auto flex-1">{children}</div>
-        {/* Footer: on mobile we stack buttons vertically (primary on top
-            via flex-col-reverse since callers pass [secondary, primary]
-            left-to-right). Each child is forced full-width through
-            `.modal-footer-row > button` so the user can tap anywhere on
-            the bar. Desktop keeps the original right-aligned row. */}
-        {footer && <div className="px-5 py-4 border-t hairline flex flex-col-reverse lg:flex-row lg:justify-end gap-2 flex-shrink-0 pb-safe modal-footer-row">{footer}</div>}
-      </div>
-    </div>,
-    document.body
-  );
-}
+/* Modal — extracted to src/components/ui/Modal.jsx */
 
 /* =========================================================
    BARCODE SCANNER MODAL — camera-based fallback for mobile/tablet.
@@ -2475,23 +2374,23 @@ function Receipt({ order, items, shop, variant = 'receipt' }) {
             hands a customer (receipt or tax invoice alike). */}
         {shop?.shop_branch && <div className="r-addr">({shop.shop_branch})</div>}
         {shop?.shop_address && <div className="r-addr">{shop.shop_address}</div>}
-        {shop?.shop_tax_id && <div className="r-addr">เลขผู้เสียภาษี {shop.shop_tax_id}</div>}
-        {shop?.shop_phone   && <div className="r-addr">โทร. {shop.shop_phone}</div>}
+        {shop?.shop_tax_id && <div className="r-addr">TAX:{shop.shop_tax_id}</div>}
+        {!isAbbr && shop?.shop_phone && <div className="r-addr">โทร. {shop.shop_phone}</div>}
       </div>
 
       <hr className="r-double"/>
-      <div className="r-title">{isAbbr ? 'ใบกำกับภาษีอย่างย่อ / ใบเสร็จรับเงิน' : isInvoice ? 'ใบกำกับภาษี / ใบเสร็จรับเงิน' : 'ใบเสร็จรับเงิน'}</div>
+      <div className="r-title">{isAbbr ? 'RECEIPT' : isInvoice ? 'ใบกำกับภาษี / ใบเสร็จรับเงิน' : 'ใบเสร็จรับเงิน'}</div>
       {order.tax_invoice_no && <div className="r-row" style={{justifyContent:'center',fontWeight:700,letterSpacing:'0.04em'}}>{order.tax_invoice_no}</div>}
       <hr className="r-hr"/>
 
       <div className="r-meta">
         <div className="r-row"><span>เลขที่บิล</span><span>#{order.id}</span></div>
-        <div className="r-row"><span>ช่องทาง</span><span>{CHANNEL_LABELS[order.channel]||'—'}</span></div>
-        <div className="r-row"><span>วันที่</span><span>{fmtDateTime(order.sale_date)}</span></div>
+        <div className="r-row"><span>วันที่(คำสั่งซื้อ)</span><span>{fmtDateTime(order.sale_date)}</span></div>
+        <div className="r-row"><span>Platform</span><span>{CHANNEL_LABELS[order.channel] || 'หน้าร้าน'}</span></div>
         <div className="r-row"><span>ชำระโดย</span><span>{PAYMENT_LABELS[order.payment_method]||'—'}</span></div>
       </div>
 
-      {isInvoice && (order.buyer_name || order.buyer_tax_id) && (<>
+      {isInvoice && !isAbbr && (order.buyer_name || order.buyer_tax_id) && (<>
         <hr className="r-hr"/>
         <div className="r-bold">ผู้ซื้อ</div>
         {order.buyer_name && <div>{order.buyer_name}</div>}
@@ -2541,9 +2440,9 @@ function Receipt({ order, items, shop, variant = 'receipt' }) {
         {displayedDiscount > 0 && (
           <div className="r-row"><span>จำนวนเงินหลังหักส่วนลด</span><span>{fmtTHB(order.grand_total)}</span></div>
         )}
-        {isInvoice ? (<>
-          {/* Full Thai tax-invoice breakdown: exempt base, VAT-able base,
-              and VAT amount shown separately (matches the standard form). */}
+        {/* แบบย่อ (ม.86/6): ไม่ต้องแตก VAT — แค่ยอดรวมที่รวมภาษีแล้ว + ข้อความกำกับ.
+            ใบกำกับเต็มยังแตกฐาน/ภาษีตามแบบมาตรฐาน; ใบเสร็จธรรมดาคงเดิม. */}
+        {isAbbr ? null : isInvoice ? (<>
           <div className="r-row"><span>มูลค่าที่ไม่มี/ยกเว้นภาษี</span><span>{fmtTHB(exemptAmount)}</span></div>
           <div className="r-row"><span>มูลค่าที่คำนวณภาษี</span><span>{fmtTHB(exVat)}</span></div>
           <div className="r-row"><span>ภาษีมูลค่าเพิ่ม {order.vat_rate}%</span><span>{fmtTHB(order.vat_amount)}</span></div>
@@ -2553,7 +2452,7 @@ function Receipt({ order, items, shop, variant = 'receipt' }) {
         </>))}
         <hr className="r-double"/>
         <div className="r-row r-grand"><span>รวมทั้งสิ้น</span><span>{fmtTHB(order.grand_total)}</span></div>
-        {isInvoice && <div className="r-sm" style={{textAlign:'center',marginTop:'2px'}}>ราคานี้รวมภาษีมูลค่าเพิ่มแล้ว</div>}
+        {isInvoice && <div className="r-sm" style={{textAlign:'center',marginTop:'2px'}}>ราคารวมภาษีมูลค่าเพิ่ม {order.vat_rate}% แล้ว</div>}
       </div>
 
       {order.notes && (<>
@@ -2569,7 +2468,6 @@ function Receipt({ order, items, shop, variant = 'receipt' }) {
 
       <hr className="r-hr"/>
       <div className="r-footer">{shop?.receipt_footer || 'ขอบคุณที่ใช้บริการ'}</div>
-      <div className="r-printed-at">พิมพ์ {fmtDateTime(new Date().toISOString())}</div>
     </div>
   );
 }
@@ -3600,6 +3498,17 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
       toast.push("ยกเลิกแล้ว · สต็อกถูกปรับกลับ", 'success');
       setOrder({ ...order, voided_at: new Date().toISOString(), void_reason: reason || null });
       onChanged?.();
+      if (kind === 'receive') {
+        try {
+          const { results, skipped } = await mirrorStockAfterReceiveVoid({ receiveOrderId: order.id });
+          if (!skipped) {
+            const { msg, isError } = formatVoidMirrorToast(results);
+            toast.push(msg, isError ? 'error' : 'success');
+          }
+        } catch (e) {
+          toast.push('Mirror TikTok (void) ไม่สำเร็จ: ' + mapError(e), 'error');
+        }
+      }
     } finally { setBusy(false); voidLockRef.current = false; }
   };
 
@@ -3653,6 +3562,18 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
       const { data, error } = await sb.rpc('delete_receive_line', { p_line_id: line.id, p_reason: reason || null });
       if (error) throw error;
       toast.push(data?.voided ? 'ลบรายการสุดท้าย · ยกเลิกบิลแล้ว' : 'ลบรายการแล้ว · ปรับสต็อก/ยอดบิลเรียบร้อย', 'success');
+      try {
+        const { results, skipped } = await mirrorStockAfterReceiveVoid({
+          receiveOrderId: order.id,
+          productIds: [line.product_id],
+        });
+        if (!skipped) {
+          const { msg, isError } = formatVoidMirrorToast(results);
+          toast.push(msg, isError ? 'error' : 'success');
+        }
+      } catch (e) {
+        toast.push('Mirror TikTok (void) ไม่สำเร็จ: ' + mapError(e), 'error');
+      }
       await reload();
       onChanged?.();
     } catch (e) {
@@ -5502,7 +5423,7 @@ function POSView() {
       <PageHeader
         title="ขายสินค้า"
         subtitle="POS"
-        right={<div className="flex items-center gap-3"><CartGlowBadge count={totalQty}/><TikTokConfirmPanel toast={toast.push}/></div>}
+        right={<div className="flex items-center gap-3"><CartGlowBadge count={totalQty}/><TikTokConfirmPanel toast={toast.push} onConfirmed={setReceiptOrderId}/></div>}
         farRight={<PendingNetBell toast={toast.push} size={50}/>}
       />
       {/* DESKTOP LAYOUT */}
@@ -8599,6 +8520,7 @@ function AddProductModal({ open, onClose, onAdded }) {
    STOCK VIEW (Receive + Return tabs)
 ========================================================= */
 function ReceiveView() {
+  const toast = useToast();
   const [tab, setTab] = useState('receive');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [addProductOpen, setAddProductOpen] = useState(false);
@@ -8671,7 +8593,7 @@ function ReceiveView() {
           // wizard review, sequential submit). Mounting under a stable
           // `key` ensures switching away and back doesn't reset progress
           // mid-batch.
-          <BulkReceiveView key="bulk_receive" />
+          <BulkReceiveView key="bulk_receive" toast={toast} />
         ) : (
           <StockMovementForm key={tab} kind={tab} ref={formRef} />
         )}
@@ -8971,6 +8893,102 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const submitLockRef = useRef(false); // hard guard against double-submit
+  const [syncTikTokAfterReceive, setSyncTikTokAfterReceive] = useState(true);
+  const [tiktokConnected, setTiktokConnected] = useState(false);
+  const [tiktokMinPct, setTiktokMinPct] = useState(60);
+  const [showTiktokMatchError, setShowTiktokMatchError] = useState(false);
+  const [pendingTiktokProduct, setPendingTiktokProduct] = useState(null);
+  const [tiktokPromptOpen, setTiktokPromptOpen] = useState(false);
+  const [tiktokMatchOpen, setTiktokMatchOpen] = useState(false);
+  const [tiktokMatchLineIndex, setTiktokMatchLineIndex] = useState(null);
+
+  useEffect(() => {
+    if (kind !== 'receive') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const st = await getTikTokConnectionStatus();
+        if (!cancelled) setTiktokConnected(!!st?.connected && !st?.token_expired);
+      } catch {
+        if (!cancelled) setTiktokConnected(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [kind]);
+
+  const tiktokMirrorOn = kind === 'receive' && syncTikTokAfterReceive && tiktokConnected;
+  const tiktokCatalogLines = React.useMemo(() => {
+    const seen = new Set();
+    const lines = [];
+    const pushLine = (l) => {
+      if (!l.product_id || seen.has(l.product_id)) return;
+      seen.add(l.product_id);
+      lines.push(l);
+    };
+    items.forEach(l => pushLine({
+      product_id: l.product_id,
+      product_name: l.product_name,
+      barcode: l.barcode,
+      quantity: l.quantity,
+    }));
+    if (kind === 'receive' && tiktokMirrorOn) {
+      results.forEach(p => pushLine({
+        product_id: p.id,
+        product_name: p.name,
+        barcode: p.barcode || null,
+        quantity: 1,
+      }));
+    }
+    if (
+      pendingTiktokProduct &&
+      tiktokMatchLineIndex == null &&
+      (tiktokPromptOpen || tiktokMatchOpen)
+    ) {
+      pushLine({
+        product_id: pendingTiktokProduct.id,
+        product_name: pendingTiktokProduct.name,
+        barcode: pendingTiktokProduct.barcode || null,
+        quantity: 1,
+      });
+    }
+    return lines;
+  }, [items, results, kind, tiktokMirrorOn, pendingTiktokProduct, tiktokPromptOpen, tiktokMatchOpen, tiktokMatchLineIndex]);
+  const {
+    catalog: tiktokCatalog,
+    catalogLoading: tiktokCatalogLoading,
+    loadError: tiktokCatalogError,
+    mappingsByProductId,
+    stocksByProductId,
+    searchCatalog: searchTiktokCatalog,
+    reloadCatalog: reloadTiktokCatalog,
+    refreshMappings: refreshTiktokMappings,
+  } = useTikTokMirrorCatalog({ enabled: tiktokMirrorOn, lines: tiktokCatalogLines });
+
+  const effectiveMappingsByProductId = React.useMemo(() => {
+    const out = { ...mappingsByProductId };
+    for (const l of items) {
+      if (l.tiktok_skip || !l.product_id) continue;
+      if (l.tiktok_mapping) out[l.product_id] = l.tiktok_mapping;
+      else if (l.tiktok_sku) {
+        out[l.product_id] = mappingRowFromTiktokSku(l.tiktok_sku, l.product_id);
+      }
+    }
+    return out;
+  }, [mappingsByProductId, items]);
+
+  useEffect(() => {
+    if (!tiktokMirrorOn) return;
+    setItems(prev => {
+      let changed = false;
+      const next = prev.map(l => {
+        if (l.tiktok_manual || l.tiktok_skip || l.tiktok_sku || l.tiktok_mapping) return l;
+        const m = mappingsByProductId[l.product_id];
+        if (m) { changed = true; return { ...l, tiktok_mapping: m }; }
+        return l;
+      });
+      return changed ? next : prev;
+    });
+  }, [tiktokMirrorOn, mappingsByProductId]);
 
   // Recent sales for the search-by-bill-id list shown when no bill is locked.
   // Only relevant on the return form. Pulled once per mount per kind change —
@@ -9133,10 +9151,130 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
     // Default for receive/claim: show retail price (ราคาป้าย) as starting point
     return Number(p.retail_price) || 0;
   };
+
+  const buildReceiveLine = (p, tiktokPatch = {}) => ({
+    _uid: (crypto.randomUUID?.() || `r${Math.random().toString(36).slice(2)}${Date.now()}`),
+    product_id: p.id, product_name: p.name,
+    barcode: p.barcode || null,
+    retail_price: Number(p.retail_price) || 0,
+    cost_price: Number(p.cost_price) || 0,
+    quantity: 1, unit: 'เรือน',
+    unit_price: computeAutoPrice(p, costPctEnabled, costPct),
+    manualPrice: false,
+    discount1_value: 0, discount1_type: null,
+    discount2_value: 0, discount2_type: null,
+    tiktok_skip: false,
+    tiktok_sku: null,
+    tiktok_mapping: null,
+    ...tiktokPatch,
+  });
+
+  const pushReceiveItem = (p, tiktokPatch = {}) => {
+    setItems(it => [...it, buildReceiveLine(p, tiktokPatch)]);
+  };
+
+  const closeTiktokFlow = () => {
+    setTiktokPromptOpen(false);
+    setTiktokMatchOpen(false);
+    setPendingTiktokProduct(null);
+    setTiktokMatchLineIndex(null);
+  };
+
+  const onTiktokPromptMatch = () => {
+    setTiktokPromptOpen(false);
+    setTiktokMatchOpen(true);
+  };
+
+  const onTiktokPromptSkip = () => {
+    const p = pendingTiktokProduct;
+    if (p) pushReceiveItem(p, { tiktok_skip: true, tiktok_manual: true });
+    closeTiktokFlow();
+  };
+
+  const persistTiktokMatchMapping = (productId, patch) => {
+    if (!productId || patch?.tiktok_skip) return;
+    upsertTiktokInventoryMapping({
+      productId,
+      tiktokSku: patch.tiktok_sku,
+      tiktokMapping: patch.tiktok_mapping,
+    })
+      .then(() => refreshTiktokMappings([productId]))
+      .catch((e) => console.warn('[TikTok match] persist mapping failed:', e));
+  };
+
+  const onTiktokMatchConfirm = (patch) => {
+    if (tiktokMatchLineIndex != null) {
+      const line = items[tiktokMatchLineIndex];
+      upd(tiktokMatchLineIndex, { ...patch, tiktok_manual: true });
+      if (line?.product_id) persistTiktokMatchMapping(line.product_id, patch);
+      closeTiktokFlow();
+      return;
+    }
+    const p = pendingTiktokProduct;
+    if (p) {
+      pushReceiveItem(p, patch);
+      persistTiktokMatchMapping(p.id, patch);
+    }
+    closeTiktokFlow();
+  };
+
+  const openTiktokRematch = (i) => {
+    const l = items[i];
+    if (!l) return;
+    setPendingTiktokProduct({
+      id: l.product_id,
+      name: l.product_name,
+      barcode: l.barcode,
+    });
+    setTiktokMatchLineIndex(i);
+    setTiktokMatchOpen(true);
+  };
+
+  const tiktokMatchQty = tiktokMatchLineIndex != null
+    ? (items[tiktokMatchLineIndex]?.quantity ?? 1)
+    : 1;
+  const tiktokMatchInitialLine = tiktokMatchLineIndex != null ? items[tiktokMatchLineIndex] : null;
+  const tiktokMatchPreviewStock = pendingTiktokProduct?.id != null && stocksByProductId[pendingTiktokProduct.id] != null
+    ? (Number(stocksByProductId[pendingTiktokProduct.id].current_stock) || 0) + tiktokMatchQty
+    : null;
+
+  const openTiktokPromptForProduct = (p) => {
+    setPendingTiktokProduct(p);
+    setTiktokMatchLineIndex(null);
+    setTiktokPromptOpen(true);
+  };
+
+  const tryReceiveWithExistingMapping = async (p) => {
+    let m = effectiveMappingsByProductId[p.id];
+    if (!m) {
+      try {
+        const rows = await fetchTikTokMappings([p.id]);
+        m = rows.find(r => r.product_id === p.id);
+        if (m) refreshTiktokMappings([p.id]).catch(() => {});
+      } catch {
+        // fall through to manual match prompt
+      }
+    }
+    if (m) {
+      pushReceiveItem(p, { tiktok_mapping: m });
+      return true;
+    }
+    return false;
+  };
+
+  // If mapping loads after the prompt opens (race with catalog hook), auto-add.
+  useEffect(() => {
+    if (!tiktokMirrorOn || !tiktokPromptOpen || !pendingTiktokProduct) return;
+    const m = effectiveMappingsByProductId[pendingTiktokProduct.id];
+    if (!m) return;
+    pushReceiveItem(pendingTiktokProduct, { tiktok_mapping: m });
+    closeTiktokFlow();
+  }, [tiktokMirrorOn, tiktokPromptOpen, pendingTiktokProduct, effectiveMappingsByProductId]);
+
   // addItem — entry point for every "add this product to the cart" action
   // (search-result tap, barcode hit, camera scan). The return form layers
   // on bill-gating logic; receive/claim just push the line straight in.
-  const addItem = (p) => {
+  const addItem = async (p) => {
     if (kind === 'return') {
       // No bill locked yet → open the picker for THIS product. The item
       // gets added only after the user confirms a bill (selectSaleFromPopup).
@@ -9163,17 +9301,12 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
       setItems(it => [...it, lineFromSaleItem(saleLine, 1)]);
       return;
     }
-    setItems(it => [...it, {
-      _uid: (crypto.randomUUID?.() || `r${Math.random().toString(36).slice(2)}${Date.now()}`),
-      product_id: p.id, product_name: p.name,
-      retail_price: Number(p.retail_price) || 0,
-      cost_price: Number(p.cost_price) || 0,
-      quantity: 1, unit: 'เรือน',
-      unit_price: computeAutoPrice(p, costPctEnabled, costPct),
-      manualPrice: false,
-      discount1_value: 0, discount1_type: null,
-      discount2_value: 0, discount2_type: null,
-    }]);
+    if (kind === 'receive' && tiktokMirrorOn) {
+      if (await tryReceiveWithExistingMapping(p)) return;
+      openTiktokPromptForProduct(p);
+      return;
+    }
+    pushReceiveItem(p);
     // Keep search & results visible so the user can pick another color/variant of the same model
     // without retyping. They can clear via the × button or pick a different search.
   };
@@ -9192,6 +9325,7 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
         return [...it, {
           _uid: (crypto.randomUUID?.() || `r${Math.random().toString(36).slice(2)}${Date.now()}`),
           product_id: p.id, product_name: p.name,
+          barcode: p.barcode || null,
           retail_price: Number(p.retail_price) || 0,
           cost_price: Number(p.cost_price) || 0,
           quantity: 0, unit: 'เรือน',
@@ -9199,6 +9333,9 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
           manualPrice: true,
           discount1_value: 0, discount1_type: null,
           discount2_value: 0, discount2_type: null,
+          tiktok_skip: false,
+          tiktok_sku: null,
+          tiktok_mapping: null,
         }];
       });
     },
@@ -9223,6 +9360,7 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
             _uid: (crypto.randomUUID?.() || `r${Math.random().toString(36).slice(2)}${Date.now()}`),
             product_id:   x.product.id,
             product_name: x.product.name,
+            barcode:      x.product.barcode || null,
             retail_price: Number(x.product.retail_price) || 0,
             cost_price:   Number(x.product.cost_price)   || 0,
             quantity:     Math.max(1, Number(x.quantity) || 1),
@@ -9231,6 +9369,9 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
             manualPrice:  true,
             discount1_value: 0, discount1_type: null,
             discount2_value: 0, discount2_type: null,
+            tiktok_skip: false,
+            tiktok_sku: null,
+            tiktok_mapping: null,
           }));
         return [...it, ...fresh];
       });
@@ -9326,6 +9467,15 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
       toast.push("กรุณากรอกข้อมูลให้ครบ", 'error');
       return;
     }
+    if (tiktokMirrorOn) {
+      const bad = items.find(l => !isTikTokLineReady(l));
+      if (bad) {
+        setShowTiktokMatchError(true);
+        toast.push(`กรุณาจับคู่ TikTok หรือเลือก "ไม่ sync" — ${bad.product_name}`, 'error');
+        return;
+      }
+      setShowTiktokMatchError(false);
+    }
     // Returns can't exceed what was originally sold on the locked bill —
     // a 5-piece sale can only generate up to a 5-piece return. We check
     // here (not in `missing`) so the error message can name the offender.
@@ -9396,7 +9546,29 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
 
       const verb = kind==='receive' ? 'การรับ' : kind==='claim' ? 'ส่งเคลม' : 'การคืน';
       toast.push(`บันทึก${verb} #${head.id} สำเร็จ`, 'success');
+
+      if (kind === 'receive' && tiktokMirrorOn && items.length) {
+        try {
+          const productIds = [...new Set(items.map(l => l.product_id).filter(Boolean))];
+          const stocks = await fetchPosStocks(productIds);
+          const mirrorPayload = items.map(l => buildSyncLine({
+            receiveOrderId: head.id,
+            productId: l.product_id,
+            posStockAfter: stocks[l.product_id]?.current_stock ?? 0,
+            mapping: l.tiktok_mapping,
+            tiktokSku: l.tiktok_sku,
+            skipped: l.tiktok_skip,
+          }));
+          const results = await mirrorStockToTikTok(mirrorPayload);
+          const { msg, isError } = formatMirrorToast(results);
+          toast.push(msg, isError ? 'error' : 'success');
+        } catch (e) {
+          toast.push('Mirror TikTok ไม่สำเร็จ: ' + mapError(e), 'error');
+        }
+      }
+
       setItems([]); setNotes(""); setSupplierName(""); setSupplierInvoiceNo(""); setSupplierTaxId(""); setSelectedSupplier(null); setOrigSaleId(""); setReturnReason("");
+      setShowTiktokMatchError(false);
       setSelectedSale(null); setSaleSearch(""); setSaleLookupHits([]); setGoodsReturned(true);
       setCreatedVia('manual');
       // Cost % toggle: 'once' resets after save, 'persist' stays on until leaving page
@@ -9471,7 +9643,12 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
             {results.map(p => (
               <div key={p.id} className="px-4 py-3 border-b hairline last:border-0 hover:bg-surface-strong/40 cursor-pointer flex items-center gap-3 transition-colors" onClick={()=>addItem(p)}>
                 <div className="min-w-0 flex-1">
-                  <div className="font-medium truncate text-sm">{p.name}</div>
+                  <div className="font-medium text-sm flex items-center gap-1.5 min-w-0">
+                    <span className="truncate">{p.name}</span>
+                    {tiktokMirrorOn && effectiveMappingsByProductId[p.id] && (
+                      <TikTokLinkedBadge mapping={effectiveMappingsByProductId[p.id]} />
+                    )}
+                  </div>
                   <div className="text-xs text-muted font-mono truncate">{p.barcode||'—'}</div>
                 </div>
                 <div className="text-right text-xs flex-shrink-0 tabular-nums">
@@ -9507,6 +9684,18 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
             />
           )}
 
+          {kind === 'receive' && tiktokConnected && (
+            <label className="flex items-center gap-2.5 px-4 py-3 border-b hairline cursor-pointer select-none text-sm text-muted">
+              <input
+                type="checkbox"
+                className="rounded border-hairline"
+                checked={syncTikTokAfterReceive}
+                onChange={e => setSyncTikTokAfterReceive(e.target.checked)}
+              />
+              <span>Mirror สต็อกไป TikTok Shop</span>
+            </label>
+          )}
+
           <MovementItemsPanel
             Icon={Icon} fmtTHB={fmtTHB} applyDiscounts={applyDiscounts} UNITS={UNITS}
             items={items} kind={kind}
@@ -9518,6 +9707,9 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
             totalNet={totalNet}
             vatAmount={vatAmount}
             totalGross={totalGross}
+            tiktokMirrorEnabled={tiktokMirrorOn}
+            showTiktokMatchError={showTiktokMatchError}
+            onTiktokRematch={openTiktokRematch}
           />
 
           {/* BILL DETAILS — moved from left panel */}
@@ -9751,6 +9943,38 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
           onPick={selectSaleFromPopup}
           onClose={() => { setBillPickerOpen(false); setPendingProduct(null); }}
         />
+      )}
+
+      {kind === 'receive' && (
+        <>
+          <TikTokMatchPromptModal
+            open={tiktokPromptOpen}
+            product={pendingTiktokProduct}
+            onMatch={onTiktokPromptMatch}
+            onSkipSync={onTiktokPromptSkip}
+            onClose={closeTiktokFlow}
+          />
+          <TikTokReceiveMatchCard
+            open={tiktokMatchOpen}
+            onClose={closeTiktokFlow}
+            product={pendingTiktokProduct}
+            lineIndex={tiktokMatchLineIndex}
+            quantity={tiktokMatchQty}
+            initialSkip={!!tiktokMatchInitialLine?.tiktok_skip}
+            initialSku={tiktokMatchInitialLine?.tiktok_sku ?? null}
+            initialMapping={tiktokMatchInitialLine?.tiktok_mapping ?? null}
+            previewStockAfter={tiktokMatchPreviewStock}
+            catalog={tiktokCatalog}
+            catalogLoading={tiktokCatalogLoading}
+            catalogError={tiktokCatalogError}
+            onRetryCatalog={reloadTiktokCatalog}
+            onSearchCatalog={searchTiktokCatalog}
+            minPct={tiktokMinPct}
+            onMinPctChange={setTiktokMinPct}
+            onConfirm={onTiktokMatchConfirm}
+            confirmLabel={tiktokMatchLineIndex != null ? 'ยืนยันการจับคู่' : 'ยืนยันเพิ่มเข้ารายการ'}
+          />
+        </>
       )}
     </div>
   );

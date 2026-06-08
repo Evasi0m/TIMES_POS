@@ -5,6 +5,7 @@ import {
   fetchAuthorizedShops,
   getEnv,
   serviceClient,
+  tiktokExpiryToISO,
 } from '../_shared/tiktok-client.ts';
 
 Deno.serve(async (req) => {
@@ -46,12 +47,8 @@ Deno.serve(async (req) => {
       shop_cipher: shopCipher || null,
       shop_id: shopId || null,
       shop_name: shopName,
-      access_token_expires_at: accessExpire
-        ? new Date(now.getTime() + accessExpire * 1000).toISOString()
-        : null,
-      refresh_token_expires_at: refreshExpire
-        ? new Date(now.getTime() + refreshExpire * 1000).toISOString()
-        : null,
+      access_token_expires_at: tiktokExpiryToISO(accessExpire, now.getTime()),
+      refresh_token_expires_at: tiktokExpiryToISO(refreshExpire, now.getTime()),
       oauth_state: null,
       oauth_state_at: null,
       last_error: null,

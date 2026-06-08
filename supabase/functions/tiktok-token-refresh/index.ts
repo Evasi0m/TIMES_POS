@@ -1,6 +1,6 @@
 // Refresh TikTok tokens — cron or manual (service role).
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import { refreshAccessToken, serviceClient } from '../_shared/tiktok-client.ts';
+import { refreshAccessToken, serviceClient, tiktokExpiryToISO } from '../_shared/tiktok-client.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -26,12 +26,10 @@ Deno.serve(async (req) => {
     await supa.from('tiktok_tokens').update({
       access_token: String(refreshed.access_token || row.access_token),
       refresh_token: String(refreshed.refresh_token || row.refresh_token),
-      access_token_expires_at: accessExpire
-        ? new Date(now.getTime() + accessExpire * 1000).toISOString()
-        : row.access_token_expires_at,
-      refresh_token_expires_at: refreshExpire
-        ? new Date(now.getTime() + refreshExpire * 1000).toISOString()
-        : row.refresh_token_expires_at,
+      access_token_expires_at: tiktokExpiryToISO(accessExpire, now.getTime())
+        ?? row.access_token_expires_at,
+      refresh_token_expires_at: tiktokExpiryToISO(refreshExpire, now.getTime())
+        ?? row.refresh_token_expires_at,
       last_refresh_error: null,
       updated_at: now.toISOString(),
     }).eq('id', 1);

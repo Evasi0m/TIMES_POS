@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { sb } from '../../lib/supabase-client.js';
 import { mapError } from '../../lib/error-map.js';
 import Icon from '../ui/Icon.jsx';
+import TikTokHealthCard from './TikTokHealthCard.jsx';
 
 function fmtExpiry(iso) {
   if (!iso) return '—';
@@ -181,6 +182,8 @@ export default function TikTokSettings({ toast, compact = false }) {
           {connected ? 'เชื่อมต่อใหม่' : 'เชื่อมต่อ TikTok Shop'}
         </button>
       </div>
+
+      {connected && <TikTokHealthCard />}
     </div>
   );
 }

@@ -17,11 +17,11 @@
    - **Finance** (read) — net received / settlement
    - **Fulfillment** (read + write) — label, packing slip, ship/RTS
    - **Logistics** (read) — shipping providers
-   - **Product** (read) — catalog/รูป SKU + จับคู่สินค้า
+   - **Product** (read + **write**) — catalog/รูป SKU + จับคู่สินค้า + **mirror สต็อกหลังรับเข้า**
    - **Return & Refund** (read) — คืนเงิน/คืนสินค้า
    - **Authorization**
 5. รอ category **การจัดการกลยุทธ์การขาย → ตัวเชื่อมต่อ** อนุมัติ (~3-5 วัน)
-6. **หลังเพิ่ม scope Fulfillment** — admin ต้อง **เชื่อมต่อใหม่** ใน POS (ตั้งค่า → TikTok Shop → เชื่อมต่อ)
+6. **หลังเพิ่ม scope Fulfillment หรือ Product write** — admin ต้อง **เชื่อมต่อใหม่** ใน POS (ตั้งค่า → TikTok Shop → เชื่อมต่อ)
 
 ## Supabase Secrets
 
@@ -56,6 +56,9 @@
 14. `supabase-migrations/045_tiktok_product_image_sync.sql` — sync รูป SKU → product_images
 15. `supabase-migrations/046_tiktok_matching_super_admin.sql` — matching เฉพาะ super_admin
 16. `supabase-migrations/047_tiktok_confirm_defer_net.sql` — ใส่ทีหลัง net ตอนยืนยัน + backfill bell queue
+17. `supabase-migrations/048_tiktok_inventory_sync.sql` — **mirror สต็อก POS → TikTok หลังรับเข้า** (opt-in, audit log, idempotency)
+18. `supabase-migrations/049_tiktok_resync_pending_items.sql` — re-sync line items/total ของออเดอร์ **pending** เมื่อลูกค้าแก้ออเดอร์บน TikTok (active/voided ไม่แตะ)
+19. `supabase-migrations/050_tiktok_health_rpc.sql` — `get_tiktok_health()` สำหรับ health card ใน ตั้งค่า → TikTok Shop
 
 **Go-live cutoff:** 13:00 07/06/2026 Asia/Bangkok — ออเดอร์หลัง cutoff เข้า `pending`; ก่อน cutoff → `voided`
 
@@ -86,6 +89,8 @@ supabase functions deploy tiktok-shipping-label
 supabase functions deploy tiktok-ship-package
 supabase functions deploy tiktok-returns-sync
 supabase functions deploy tiktok-invoice-submit --no-verify-jwt
+supabase functions deploy tiktok-products-search
+supabase functions deploy tiktok-inventory-update
 ```
 
 ## เชื่อมต่อร้าน
@@ -157,6 +162,51 @@ flowchart LR
 - Cron `tiktok-settlement-sync` (03:00 UTC) อาจเติม net อัตโนมัติเมื่อ `net_received_pending = true`
 - ออเดอร์ที่ยืนยันแล้วแต่ยังไม่มี net → แสดงใน **PendingNetBell** (รอใส่ราคาที่ร้านได้รับ)
 
+### Mirror สต็อกหลังรับเข้า (048)
+
+```mermaid
+flowchart LR
+  AddItem[เพิ่มรายการรับเข้า] --> OptIn{เปิด Mirror TikTok?}
+  OptIn -->|ใช่| InlineMatch[จับคู่ TikTok inline ในรายการ]
+  OptIn -->|ไม่| Save[บันทึกการรับ]
+  InlineMatch --> Save
+  Save --> RPC[create_stock_movement_with_items]
+  RPC --> Edge[tiktok-inventory-update อัตโนมัติ]
+  Edge --> Mirror["SET TikTok qty = current_stock POS"]
+```
+
+- ใช้ได้ทั้ง **รับเข้า manual** และ **รับเข้า ×10** (bulk)
+- **จับคู่ TikTok ก่อนบันทึก** — แต่ละบรรทัดในรายการรับเข้า (ไม่มี modal หลังบันทึก)
+- **Opt-in** — checkbox "Mirror สต็อกไป TikTok Shop"; แต่ละบรรทัดเลือก **ไม่ sync** ได้
+- บันทึกไม่ได้จนกว่าทุกบรรทัด (ที่ไม่ skip) จะจับคู่ TikTok แล้ว
+- หลังบันทึกสำเร็จ → mirror อัตโนมัติ + toast สรุป (ไม่เปิด panel)
+- **Mirror** = ตั้ง TikTok ให้เท่า `current_stock` POS หลังรับเข้า (ไม่ใช่บวก delta)
+  - ตัวอย่าง: POS 10 + TikTok 9 รับเข้า 5 → ทั้งคู่เป็น **15** (ไม่ใช่ 14)
+- Preview ก่อนบันทึก: `current_stock + quantity` · หลังบันทึกใช้สต็อกจริงจาก DB
+- Mapping เดิมใน `tiktok_product_mappings` → auto-fill ในรายการ
+- TikTok sync ล้มเหลว **ไม่ rollback** รับเข้า POS
+- Idempotency: `tiktok_inventory_sync_log` UNIQUE `(receive_order_id, product_id, sync_operation) WHERE status='success'`
+- ต้องมี scope **Product write** + migration 048 + deploy `tiktok-products-search` / `tiktok-inventory-update`
+
+### Mirror สต็อกหลังยกเลิกบิล / ลบบรรทัด (049)
+
+```mermaid
+flowchart LR
+  Void[ยกเลิกบิลหรือลบบรรทัด] --> RPC[void_receive_order / delete_receive_line]
+  RPC --> PosStock[ปรับสต็อก POS กลับ]
+  PosStock --> Targets[get_tiktok_void_mirror_targets]
+  Targets --> Edge[tiktok-inventory-update sync_operation void]
+  Edge --> Mirror["SET TikTok qty = current_stock POS"]
+```
+
+- ทำงานอัตโนมัติหลัง **ยกเลิกทั้งบิล** (admin) หรือ **ลบทีละบรรทัด** (super admin)
+- Mirror เฉพาะสินค้าที่เคย mirror สำเร็จตอนรับเข้า (`sync_operation='receive'` + `status='success'`)
+- ไม่ขึ้นกับ checkbox Mirror ปัจจุบัน — ถ้าเคย sync สำเร็จตอนรับเข้า ยกเลิกแล้วต้อง sync กลับ
+- ตัวอย่าง: POS 5 รับเข้า 3 mirror สำเร็จ → POS/TikTok 8 · ยกเลิกบิล → POS/TikTok **5**
+- ลบ 1 บรรทัดจากบิลหลาย SKU → sync เฉพาะ SKU นั้น
+- TikTok sync ล้มเหลว **ไม่ rollback** การยกเลิก POS
+- ต้องรัน migration **049** + redeploy `tiktok-inventory-update`
+
 ### จับคู่สินค้า (Product Matching) — super_admin เท่านั้น (046)
 - แท็บ **จับคู่สินค้า** แสดงรายการที่ยังไม่ match (`get_tiktok_unmatched_items`)
 - เลือกสินค้า POS (ค้นชื่อ/บาร์โค้ด) → `link_tiktok_item_to_product` (มี option ตัด stock ย้อนหลัง)
@@ -175,3 +225,7 @@ flowchart LR
 | แคชเชียร์ key-in manual ซ้ำกับ API pending | ใช้ badge "Order TikTok รอยืนยัน" — POS จะเตือนก่อน checkout |
 | Telegram ยอดไม่ตรง app | redeploy `daily-telegram-summary` + `telegram-send` หลังอัปเดต filter |
 | Cron TikTok ไม่ทำงาน | ตั้ง `vault.create_secret(..., 'service_role_key')` |
+| Mirror สต็อก TikTok 403 / ไม่พบ warehouse | เพิ่ม Product **write** scope + re-authorize; รัน migration 048 |
+| บันทึกรับเข้าไม่ได้เพราะ TikTok | จับคู่ TikTok ในแต่ละบรรทัด หรือติ๊ก "ไม่ sync" |
+| Mirror ไม่ทำงานหลังบันทึก | เช็ค checkbox Mirror + TikTok เชื่อมต่อ + Product write scope |
+| ยกเลิกบิลแล้ว TikTok ไม่ลด | รัน migration 049 + redeploy `tiktok-inventory-update`; ต้องเคย mirror สำเร็จตอนรับเข้า |

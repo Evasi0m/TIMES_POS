@@ -37,6 +37,16 @@ import BillImageLightbox from './BillImageLightbox.jsx';
 import AIErrorCard, { parseAIError } from './AIErrorCard.jsx';
 import { useRecentReceivesMap, findExistingCmgInvoices } from '../../lib/recent-receives.js';
 import { saveDraft, loadDraft, clearDraft, base64ToBlob } from '../../lib/ai-draft.js';
+import TikTokMirrorToolbar from '../ecommerce/TikTokMirrorToolbar.jsx';
+import { useTikTokMirrorCatalog } from '../../hooks/useTikTokMirrorCatalog.js';
+import {
+  buildSyncLine,
+  fetchPosStocks,
+  formatMirrorToast,
+  getTikTokConnectionStatus,
+  isTikTokLineReady,
+  mirrorStockToTikTok,
+} from '../../lib/tiktok-inventory-sync.js';
 
 // ─── Auto invoice number generator ────────────────────────────────────
 // Mirror StockMovementForm's autoInvoiceNo so users get the same shape
@@ -64,7 +74,7 @@ function autoInvoiceNo(seq) {
 // "unreadable" sentinels — the user MUST fix them before submit
 // otherwise we'd persist `unit_price=0` rows that silently wreck
 // profit calculations).
-function billStatus(bill) {
+function billStatus(bill, mirrorOn = false) {
   if (bill.saveState === 'saved')   return 'saved';
   if (bill.saveState === 'failed')  return 'failed';
   if (bill.saveState === 'saving')  return 'saving';
@@ -75,12 +85,19 @@ function billStatus(bill) {
     !(Number(r.unit_cost) > 0) || !(Number(r.quantity) > 0)
   );
   if (incomplete) return 'incomplete';
+  if (mirrorOn) {
+    const tiktokBad = bill.rows.some((r) => {
+      const hasPos = r.product || (r.status === 'new' && r.newProduct);
+      return hasPos && !r.tiktok_skip && !isTikTokLineReady(r);
+    });
+    if (tiktokBad) return 'tiktok_unresolved';
+  }
   return 'ready';
 }
 
 // Returns true if a bill can be submitted (passes H3 guards too).
-function isBillSubmittable(bill) {
-  const s = billStatus(bill);
+function isBillSubmittable(bill, mirrorOn = false) {
+  const s = billStatus(bill, mirrorOn);
   return s === 'ready' || s === 'failed';
 }
 
@@ -88,6 +105,7 @@ const STEP_STATUS_META = {
   ready:      { icon: 'check', cls: 'bg-success/15 text-success border-success/40' },
   unresolved: { icon: 'alert', cls: 'bg-warning/15 text-warning border-warning/40' },
   incomplete: { icon: 'alert', cls: 'bg-warning/15 text-warning border-warning/40' },
+  tiktok_unresolved: { icon: 'store', cls: 'bg-warning/15 text-warning border-warning/40' },
   empty:      { icon: 'alert', cls: 'bg-error/15 text-error border-error/40' },
   saving:     { icon: 'refresh', cls: 'bg-primary/15 text-primary border-primary/40', spin: true },
   saved:      { icon: 'check', cls: 'bg-success/20 text-success border-success/55' },
@@ -95,7 +113,7 @@ const STEP_STATUS_META = {
 };
 
 // ─── Main component ───────────────────────────────────────────────────
-export default function BulkReceiveView() {
+export default function BulkReceiveView({ toast }) {
   const [phase, setPhase] = useState('empty'); // empty | parsing | review | done
   // Duplicate-bill guard — same hook as StockMovementForm uses.
   // Loads once on mount; powers the small "พึ่งรับ X วันก่อน" badge on
@@ -111,6 +129,9 @@ export default function BulkReceiveView() {
   const [usage, setUsage] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitSummary, setSubmitSummary] = useState(null); // {savedIds:[], failed:[]}
+  const [syncTikTokAfterReceive, setSyncTikTokAfterReceive] = useState(true);
+  const [tiktokConnected, setTiktokConnected] = useState(false);
+  const [tiktokMinPct, setTiktokMinPct] = useState(60);
   const [lightboxSrc, setLightboxSrc] = useState(null);     // A1: bill image zoom
   const [savingProgress, setSavingProgress] = useState(null); // A4: {done,total}
   const [undo, setUndo] = useState(null);                   // A3: {label, restore}
@@ -137,6 +158,60 @@ export default function BulkReceiveView() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const st = await getTikTokConnectionStatus();
+        if (!cancelled) setTiktokConnected(!!st?.connected && !st?.token_expired);
+      } catch {
+        if (!cancelled) setTiktokConnected(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const tiktokMirrorOn = syncTikTokAfterReceive && tiktokConnected;
+  const tiktokCatalogLines = useMemo(
+    () => bills.flatMap(b => b.rows)
+      .filter(r => r.product?.id || (r.status === 'new' && r.newProduct))
+      .map(r => ({
+        product_id: r.product?.id,
+        product_name: r.product?.name || r.newProduct?.name || r.model_code,
+        barcode: r.product?.barcode || r.newProduct?.barcode,
+        quantity: r.quantity,
+      })),
+    [bills],
+  );
+  const {
+    catalog: tiktokCatalog,
+    catalogLoading: tiktokCatalogLoading,
+    loadError: tiktokCatalogError,
+    mappingsByProductId,
+    stocksByProductId,
+    searchCatalog: searchTiktokCatalog,
+    reloadCatalog: reloadTiktokCatalog,
+  } = useTikTokMirrorCatalog({ enabled: tiktokMirrorOn && phase === 'review', lines: tiktokCatalogLines });
+
+  useEffect(() => {
+    if (!tiktokMirrorOn) return;
+    setBills(prev => {
+      let changed = false;
+      const next = prev.map(bill => {
+        let billChanged = false;
+        const rows = bill.rows.map(r => {
+          if (!r.product?.id || r.tiktok_manual || r.tiktok_skip || r.tiktok_sku || r.tiktok_mapping) return r;
+          const m = mappingsByProductId[r.product.id];
+          if (m) { billChanged = true; return { ...r, tiktok_mapping: m }; }
+          return r;
+        });
+        if (billChanged) { changed = true; return { ...bill, rows }; }
+        return bill;
+      });
+      return changed ? next : prev;
+    });
+  }, [tiktokMirrorOn, mappingsByProductId]);
 
   // A3: stash a just-deleted thing with a 6s "เลิกทำ" snackbar instead of
   // removing it irreversibly. `restore` re-applies the captured state;
@@ -425,7 +500,15 @@ export default function BulkReceiveView() {
     }
   };
   const pickCandidate = (uid, product) =>
-    updateRow(uid, { status: 'auto', product, newProduct: null });
+    updateRow(uid, {
+      status: 'auto',
+      product,
+      newProduct: null,
+      tiktok_skip: false,
+      tiktok_sku: null,
+      tiktok_mapping: mappingsByProductId[product?.id] || null,
+      tiktok_manual: false,
+    });
   const setNewProduct = (uid, np) =>
     updateRow(uid, { status: 'new', product: null, newProduct: np });
   const updateInvoiceNo = (val) =>
@@ -473,8 +556,8 @@ export default function BulkReceiveView() {
   const summary = useMemo(() => {
     const actionable = bills.filter((b) => b.is_cmg_bill && b.rows.length > 0);
     const blocked = actionable.filter((b) => {
-      const s = billStatus(b);
-      return s === 'unresolved' || s === 'incomplete';
+      const s = billStatus(b, tiktokMirrorOn);
+      return s === 'unresolved' || s === 'incomplete' || s === 'tiktok_unresolved';
     });
     const skip = bills.filter((b) => !b.is_cmg_bill || b.rows.length === 0);
     const saved = bills.filter((b) => b.saveState === 'saved');
@@ -488,7 +571,7 @@ export default function BulkReceiveView() {
       failed: failed.length,
       readyToSubmit: actionable.length > 0 && blocked.length === 0,
     };
-  }, [bills]);
+  }, [bills, tiktokMirrorOn]);
 
   // ─── Sequential submit with partial-success ────────────────────────
   // For each bill that is_cmg_bill && rows.length > 0 && saveState !==
@@ -512,6 +595,7 @@ export default function BulkReceiveView() {
     // permanently lock the UI.
     let savedIdsThisPass = [];
     let failedThisPass = [];
+    const mirrorResultsAll = [];
     try {
       // Snapshot the indices we'll attempt so concurrent state changes
       // can't shift them mid-loop. We re-read bills[i] each iteration
@@ -700,6 +784,27 @@ export default function BulkReceiveView() {
         });
         if (rpcErr) throw rpcErr;
 
+        if (tiktokMirrorOn) {
+          try {
+            const productIds = resolvedRows.map(r => r.product?.id).filter(Boolean);
+            const stocks = await fetchPosStocks(productIds);
+            const mirrorPayload = resolvedRows
+              .filter(r => r.product?.id)
+              .map(r => buildSyncLine({
+                receiveOrderId: head.id,
+                productId: r.product.id,
+                posStockAfter: stocks[r.product.id]?.current_stock ?? 0,
+                mapping: r.tiktok_mapping,
+                tiktokSku: r.tiktok_sku,
+                skipped: r.tiktok_skip,
+              }));
+            const results = await mirrorStockToTikTok(mirrorPayload);
+            mirrorResultsAll.push(...results);
+          } catch (mirrorErr) {
+            toast?.push('Mirror TikTok ไม่สำเร็จ: ' + mapError(mirrorErr), 'error');
+          }
+        }
+
         // From this point the products are "adopted" by the saved
         // receive_order — clear okProducts so the catch block doesn't
         // try to delete them on some unrelated thrown error later.
@@ -762,6 +867,10 @@ export default function BulkReceiveView() {
         failed: allFailed,
         skipped: allSkipped,
       });
+      if (mirrorResultsAll.length) {
+        const { msg, isError } = formatMirrorToast(mirrorResultsAll);
+        toast?.push(msg, isError ? 'error' : 'success');
+      }
       setSubmitting(false);
       setSavingProgress(null);
       setPhase('done');
@@ -865,6 +974,18 @@ export default function BulkReceiveView() {
           onSetAllVat={setAllVat}
           savingProgress={savingProgress}
           supplierName={supplier?.business_name || 'CMG'}
+          tiktokConnected={tiktokConnected}
+          syncTikTokAfterReceive={syncTikTokAfterReceive}
+          onSyncTikTokChange={setSyncTikTokAfterReceive}
+          tiktokMirrorOn={tiktokMirrorOn}
+          tiktokCatalog={tiktokCatalog}
+          tiktokCatalogLoading={tiktokCatalogLoading}
+          tiktokCatalogError={tiktokCatalogError}
+          onTiktokRetryCatalog={reloadTiktokCatalog}
+          tiktokMinPct={tiktokMinPct}
+          onTiktokMinPctChange={setTiktokMinPct}
+          onTiktokSearchCatalog={searchTiktokCatalog}
+          stocksByProductId={stocksByProductId}
         />
       )}
 
@@ -998,6 +1119,10 @@ function ReviewWizard({
   onUpdateRow, onRemoveRow, onPickCandidate, onSetNewProduct,
   onInvoiceNoChange, onHasVatChange, onRemoveBill, onSubmitAll, onCancel,
   dupInvoices, onZoom, onSetAllVat, savingProgress, supplierName,
+  tiktokConnected, syncTikTokAfterReceive, onSyncTikTokChange,
+  tiktokMirrorOn, tiktokCatalog, tiktokCatalogLoading, tiktokCatalogError,
+  onTiktokRetryCatalog, tiktokMinPct, onTiktokMinPctChange, onTiktokSearchCatalog,
+  stocksByProductId,
 }) {
   const current = bills[currentIdx];
   const canPrev = currentIdx > 0;
@@ -1042,11 +1167,23 @@ function ReviewWizard({
         </div>
       </div>
 
+      {tiktokMirrorOn && (
+        <TikTokMirrorToolbar
+          minPct={tiktokMinPct}
+          onMinPctChange={onTiktokMinPctChange}
+          onSearchCatalog={onTiktokSearchCatalog}
+          onRetryCatalog={onTiktokRetryCatalog}
+          catalogLoading={tiktokCatalogLoading}
+          catalogError={tiktokCatalogError}
+        />
+      )}
+
       {/* Stepper — click any bill to jump to it */}
       <Stepper
         bills={bills}
         currentIdx={currentIdx}
         onJump={(i) => setCurrentIdx(i)}
+        mirrorOn={tiktokMirrorOn}
       />
 
       {/* Current bill card */}
@@ -1068,6 +1205,14 @@ function ReviewWizard({
           onRemoveBill={onRemoveBill}
           disabled={current.saveState === 'saved' || submitting}
           supplierName={supplierName}
+          tiktokMirrorEnabled={tiktokMirrorOn}
+          tiktokCatalog={tiktokCatalog}
+          tiktokCatalogLoading={tiktokCatalogLoading}
+          tiktokCatalogError={tiktokCatalogError}
+          onTiktokRetryCatalog={onTiktokRetryCatalog}
+          tiktokMinPct={tiktokMinPct}
+          onTiktokSearchCatalog={onTiktokSearchCatalog}
+          stocksByProductId={stocksByProductId}
         />
       )}
 
@@ -1102,18 +1247,21 @@ function ReviewWizard({
         bills={bills}
         onSetAllVat={onSetAllVat}
         onSubmit={onSubmitAll}
+        tiktokConnected={tiktokConnected}
+        syncTikTokAfterReceive={syncTikTokAfterReceive}
+        onSyncTikTokChange={onSyncTikTokChange}
       />
     </div>
   );
 }
 
 // ─── Sub: stepper ─────────────────────────────────────────────────────
-function Stepper({ bills, currentIdx, onJump }) {
+function Stepper({ bills, currentIdx, onJump, mirrorOn = false }) {
   return (
     <div className="card-canvas p-2 lg:p-2.5">
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
         {bills.map((b, i) => {
-          const status = billStatus(b);
+          const status = billStatus(b, mirrorOn);
           const meta = STEP_STATUS_META[status];
           const isCurrent = i === currentIdx;
           return (
@@ -1147,6 +1295,14 @@ function BillCard({
   bill, billNumber, totalBills, products, recentReceivesMap, dup, onZoom,
   onUpdateRow, onRemoveRow, onPickCandidate, onSetNewProduct,
   onInvoiceNoChange, onHasVatChange, onRemoveBill, disabled, supplierName,
+  tiktokMirrorEnabled = false,
+  tiktokCatalog = [],
+  tiktokCatalogLoading = false,
+  tiktokCatalogError = null,
+  onTiktokRetryCatalog,
+  tiktokMinPct = 60,
+  onTiktokSearchCatalog,
+  stocksByProductId = {},
 }) {
   const itemCount = bill.rows.length;
   const unresolved = bill.rows.filter((r) => r.status === 'suggestions' || r.status === 'none').length;
@@ -1263,6 +1419,18 @@ function BillCard({
               เหลือ {incompleteRows} รายการที่ AI อ่าน ทุน/จำนวน ไม่ออก — กรอกให้ครบก่อนบันทึก
             </div>
           )}
+          {tiktokMirrorEnabled && !isNonCmg && !isEmpty && unresolved === 0 && incompleteRows === 0 && (() => {
+            const tiktokLeft = bill.rows.filter(r => {
+              const hasPos = r.product || (r.status === 'new' && r.newProduct);
+              return hasPos && !r.tiktok_skip && !isTikTokLineReady(r);
+            }).length;
+            return tiktokLeft > 0 ? (
+              <div className="text-xs text-warning bg-warning/10 border border-warning/30 rounded-md px-2 py-1 inline-flex items-center gap-1.5">
+                <Icon name="store" size={12}/>
+                เหลือ {tiktokLeft} รายการที่ต้องจับคู่ TikTok
+              </div>
+            ) : null;
+          })()}
           {reviewRows > 0 && (
             <button
               type="button"
@@ -1309,6 +1477,14 @@ function BillCard({
           onRemoveRow={onRemoveRow}
           onPickCandidate={onPickCandidate}
           onSetNewProduct={onSetNewProduct}
+          tiktokMirrorEnabled={tiktokMirrorEnabled}
+          tiktokCatalog={tiktokCatalog}
+          tiktokCatalogLoading={tiktokCatalogLoading}
+          tiktokCatalogError={tiktokCatalogError}
+          onTiktokRetryCatalog={onTiktokRetryCatalog}
+          tiktokMinPct={tiktokMinPct}
+          onTiktokSearchCatalog={onTiktokSearchCatalog}
+          stocksByProductId={stocksByProductId}
         />
       </div>
     </div>
@@ -1316,7 +1492,10 @@ function BillCard({
 }
 
 // ─── Sub: submit bar ──────────────────────────────────────────────────
-function SubmitBar({ summary, submitting, savingProgress, bills, onSetAllVat, onSubmit }) {
+function SubmitBar({
+  summary, submitting, savingProgress, bills, onSetAllVat, onSubmit,
+  tiktokConnected, syncTikTokAfterReceive, onSyncTikTokChange,
+}) {
   const ready = summary.readyToSubmit && !submitting;
   // A2: are all bills currently set to "add VAT"? Drives the one-tap toggle.
   const allVat = (bills || []).length > 0 && bills.every((b) => b.has_vat !== false);
@@ -1336,6 +1515,18 @@ function SubmitBar({ summary, submitting, savingProgress, bills, onSetAllVat, on
             <div className="h-full rounded-full glass-tube-fill bg-primary transition-all duration-300" style={{ width: `${pct}%` }}/>
           </div>
         </div>
+      )}
+      {tiktokConnected && (
+        <label className="flex items-center gap-2.5 cursor-pointer select-none text-sm text-muted">
+          <input
+            type="checkbox"
+            className="rounded border-hairline"
+            checked={syncTikTokAfterReceive}
+            onChange={e => onSyncTikTokChange?.(e.target.checked)}
+            disabled={submitting}
+          />
+                <span>Mirror สต็อกไป TikTok Shop</span>
+        </label>
       )}
       <div className="flex items-center justify-between gap-3 flex-wrap">
       <div className="flex items-center gap-1.5 text-xs flex-wrap">

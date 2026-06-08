@@ -6,6 +6,7 @@ import { mapError } from '../../lib/error-map.js';
 import { fmtTHB, fmtThaiDateShort } from '../../lib/format.js';
 import { fullBuyerValid } from '../../lib/tax-buyer.js';
 import { pollTikTokOrders, formatPollToast } from '../../lib/tiktok-poll-sync.js';
+import { TIKTOK_LIVE_POLL_MS, useTikTokLiveSync } from '../../lib/use-tiktok-live-sync.js';
 import { useSimulatedSyncProgress } from '../../lib/use-simulated-sync-progress.js';
 import Icon from '../ui/Icon.jsx';
 import ExpandableImageThumb from '../ui/ExpandableImageThumb.jsx';
@@ -14,9 +15,6 @@ import TikTokInvoiceSection, { buyerReady } from './TikTokInvoiceBulk.jsx';
 import TikTokReturns from './TikTokReturns.jsx';
 import TikTokMatching from './TikTokMatching.jsx';
 import { fetchShippingLabels, printLabelUrl, printMergedLabels } from './TikTokLabelPrint.js';
-
-const BKK_START = (iso) => `${iso}T00:00:00+07:00`;
-const BKK_END = (iso) => `${iso}T23:59:59.999+07:00`;
 
 function fmtDateTime(iso) {
   if (!iso) return '—';
@@ -126,12 +124,13 @@ function SkuThumb({ url, alt }) {
   );
 }
 
-export default function TikTokPanel({ toast, dateRange, section = 'orders', onSyncChange, isSuperAdmin = false }) {
+export default function TikTokPanel({ toast, section = 'orders', onSyncChange, isSuperAdmin = false }) {
   const [orders, setOrders] = useState([]);
   const [itemsByOrder, setItemsByOrder] = useState({});
   const [imageByProduct, setImageByProduct] = useState({});
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState(null);
   const [labelBusy, setLabelBusy] = useState(null);
   const [shipBusy, setShipBusy] = useState(null);
   const [shipFilter, setShipFilter] = useState('to_ship');
@@ -144,13 +143,12 @@ export default function TikTokPanel({ toast, dateRange, section = 'orders', onSy
   const load = useCallback(async ({ quiet = false } = {}) => {
     if (!quiet) setLoading(true);
     try {
+      // โหลดออเดอร์ TikTok ทั้งหมดใน DB — กรองวันที่ทำฝั่ง client ตามแท็บ
       const { data: orderRows } = await fetchAll((fromIdx, toIdx) =>
         sb.from('sale_orders')
           .select('*')
           .eq('channel', 'tiktok')
           .not('tiktok_order_id', 'is', null)
-          .gte('sale_date', BKK_START(dateRange.from))
-          .lte('sale_date', BKK_END(dateRange.to))
           .order('sale_date', { ascending: false })
           .range(fromIdx, toIdx),
       );
@@ -197,7 +195,15 @@ export default function TikTokPanel({ toast, dateRange, section = 'orders', onSy
     } finally {
       if (!quiet) setLoading(false);
     }
-  }, [dateRange.from, dateRange.to, toast]);
+  }, [toast]);
+
+  const reloadQuiet = useCallback(() => load({ quiet: true }), [load]);
+
+  const { pullBusyRef } = useTikTokLiveSync({
+    enabled: section === 'orders',
+    onReload: reloadQuiet,
+    onPulled: () => setLastSyncedAt(new Date()),
+  });
 
   useEffect(() => { load(); }, [load]);
 
@@ -221,12 +227,13 @@ export default function TikTokPanel({ toast, dateRange, section = 'orders', onSy
     return counts;
   }, [orders]);
 
-  const filteredOrders = useMemo(() => {
-    return orders.filter(o => orderMatchesTab(o, shipFilter));
-  }, [orders, shipFilter]);
+  const filteredOrders = useMemo(
+    () => orders.filter(o => orderMatchesTab(o, shipFilter)),
+    [orders, shipFilter],
+  );
 
   const stats = useMemo(() => ({
-    total: tabCounts.all ?? orders.length,
+    total: orders.length,
     awaitingShip: tabCounts.to_ship ?? 0,
     shipped: tabCounts.shipped ?? 0,
     pendingTax: orders.filter(o =>
@@ -237,6 +244,7 @@ export default function TikTokPanel({ toast, dateRange, section = 'orders', onSy
   }), [orders, tabCounts]);
 
   const syncOrders = async () => {
+    if (pullBusyRef.current) return;
     const beforeCount = orders.length;
     setSyncing(true);
     syncProgress.start();
@@ -246,6 +254,7 @@ export default function TikTokPanel({ toast, dateRange, section = 'orders', onSy
       await syncProgress.finish(async () => {
         list = await load({ quiet: true });
       });
+      setLastSyncedAt(new Date());
       const afterCount = list?.length ?? beforeCount;
       const { message, level } = formatPollToast(data, { beforeCount, afterCount });
       toast?.push(message, level);
@@ -374,11 +383,15 @@ export default function TikTokPanel({ toast, dateRange, section = 'orders', onSy
   const activeFiltered = filteredOrders.filter(o => o.status === 'active');
 
   const statCards = [
-    { label: 'ออเดอร์ (ช่วงที่เลือก)', value: stats.total, icon: 'receipt' },
+    { label: 'ออเดอร์ทั้งหมด', value: stats.total, icon: 'receipt' },
     { label: 'ที่จะจัดส่ง', value: stats.awaitingShip, icon: 'truck', warn: stats.awaitingShip > 0 },
     { label: 'จัดส่งแล้ว', value: stats.shipped, icon: 'package' },
     { label: 'รอ Tax ID', value: stats.pendingTax, icon: 'tag', warn: stats.pendingTax > 0 },
   ];
+
+  const liveLabel = lastSyncedAt
+    ? lastSyncedAt.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    : null;
 
   return (
     <div className="space-y-6 fade-in">
@@ -386,7 +399,13 @@ export default function TikTokPanel({ toast, dateRange, section = 'orders', onSy
         <div className="space-y-3">
           <TikTokSettings toast={toast} compact />
           <p className="text-[11px] text-muted-soft leading-snug px-0.5 pb-0.5">
-            ดึงออเดอร์อัตโนมัติผ่าน Partner Center — ตั้งค่า secrets ก่อนใช้งาน (docs/TIKTOK_INTEGRATION.md)
+            ซิงค์อัตโนมัติจาก TikTok ทุก {TIKTOK_LIVE_POLL_MS / 1000} วินาทีขณะเปิดหน้านี้
+            {liveLabel && <> · อัปเดตล่าสุด {liveLabel}</>}
+            {' · '}
+            <span className="inline-flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#0a7a43] animate-pulse"/>
+              Live
+            </span>
           </p>
         </div>
       )}
@@ -531,8 +550,8 @@ export default function TikTokPanel({ toast, dateRange, section = 'orders', onSy
               <div className="p-10 text-center">
                 <div className="text-muted text-sm mb-3">
                   {shipFilter === 'to_ship'
-                    ? 'ยังไม่มีออเดอร์ "ที่จะจัดส่ง" (รอจัดส่ง + รอเข้ารับ) ในช่วงวันที่เลือก'
-                    : 'ยังไม่มีออเดอร์ในช่วงนี้'}
+                    ? 'ยังไม่มีออเดอร์ "ที่จะจัดส่ง" — ระบบกำลังดึงจาก TikTok อัตโนมัติ'
+                    : 'ยังไม่มีออเดอร์ในแท็บนี้ — รอซิงค์จาก TikTok หรือกดปุ่มด้านล่าง'}
                 </div>
                 <button type="button" className="btn-primary !text-sm" onClick={syncOrders} disabled={syncing}>
                   {syncing
@@ -541,8 +560,8 @@ export default function TikTokPanel({ toast, dateRange, section = 'orders', onSy
                   อัปเดตข้อมูลจาก TikTok
                 </button>
                 <p className="text-xs text-muted-soft mt-3 max-w-md mx-auto">
-                  ออเดอร์ใหม่เข้าอัตโนมัติทุก 5 นาที — ถ้า Seller Center มีรายการแต่ POS เป็น 0 กดปุ่มด้านบน
-                  หรือ redeploy <code className="font-mono">tiktok-poll-orders</code> ให้เป็นเวอร์ชันล่าสุด
+                  ซิงค์อัตโนมัติทุก {TIKTOK_LIVE_POLL_MS / 1000} วินาที + cron ทุก 5 นาที —
+                  ครั้งแรกอาจใช้เวลาสักครู่ถ้ามีออเดอร์จำนวนมาก (ดึงทีละ ~60 รายการ)
                 </p>
               </div>
             )}

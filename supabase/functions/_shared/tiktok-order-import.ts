@@ -419,6 +419,7 @@ export async function searchOrdersByStatus(
   statuses: string[],
   hours = 720,
   maxPages = 20,
+  { useTimeFilter = true }: { useTimeFilter?: boolean } = {},
 ): Promise<string[]> {
   const { accessToken, shopCipher } = await getValidAccessToken(supa);
   const timeGe = Math.floor((Date.now() - hours * 3600 * 1000) / 1000);
@@ -429,17 +430,18 @@ export async function searchOrdersByStatus(
       try {
         const query: Record<string, string | number> = { page_size: 100 };
         if (pageToken) query.page_token = pageToken;
+        const body: Record<string, unknown> = {
+          order_status: status,
+          sort_field: 'create_time',
+          sort_order: 'DESC',
+        };
+        if (useTimeFilter) body.create_time_ge = timeGe;
         const data = await apiPost(
           '/order/202309/orders/search',
           query,
           accessToken,
           shopCipher,
-          {
-            order_status: status,
-            sort_field: 'create_time',
-            sort_order: 'DESC',
-            create_time_ge: timeGe,
-          },
+          body,
         );
         const orders = (data?.orders || data?.order_list || []) as Record<string, unknown>[];
         for (const o of orders) {
@@ -471,8 +473,14 @@ export async function discoverPollOrders(
   hours = 168,
 ): Promise<{ awaiting: string[]; others: string[] }> {
   const settled = await Promise.allSettled([
-    searchOrdersByStatus(supa, TO_SHIP_STATUSES, Math.max(hours, 720)),
-    searchOrdersByStatus(supa, ['IN_TRANSIT', 'DELIVERED', 'COMPLETED', 'ON_HOLD', 'CANCELLED'], Math.max(hours, 336)),
+    searchOrdersByStatus(supa, TO_SHIP_STATUSES, hours, 50, { useTimeFilter: false }),
+    searchOrdersByStatus(
+      supa,
+      ['IN_TRANSIT', 'DELIVERED', 'COMPLETED', 'ON_HOLD', 'CANCELLED'],
+      hours,
+      50,
+      { useTimeFilter: false },
+    ),
     searchRecentOrders(supa, hours),
   ]);
   const awaiting = settled[0].status === 'fulfilled' ? settled[0].value : [];

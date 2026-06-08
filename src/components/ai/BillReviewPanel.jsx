@@ -30,6 +30,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 're
 import Icon from '../ui/Icon.jsx';
 import { classifyMatch, findCandidates } from '../../lib/fuzzy-match.js';
 import RecentReceiveBadge from '../movement/RecentReceiveBadge.jsx';
+import TikTokSkuMatchRow from '../ecommerce/TikTokSkuMatchRow.jsx';
 import { addVat, stripVat, fmtTHB } from '../../lib/money.js';
 import { suggestedRetail } from '../../lib/ai-receive.js';
 
@@ -102,6 +103,9 @@ export function buildRowFromAi(it, catalog) {
     // Used when user picks "add new product" — store the entered
     // retail_price so it's saved when they confirm.
     newProduct: null,                // {name, barcode, retail_price}
+    tiktok_skip: false,
+    tiktok_sku: null,
+    tiktok_mapping: null,
   };
 }
 
@@ -121,6 +125,14 @@ export default function BillReviewPanel({
   onRemoveRow,
   onPickCandidate,
   onSetNewProduct,
+  tiktokMirrorEnabled = false,
+  tiktokCatalog = [],
+  tiktokCatalogLoading = false,
+  tiktokCatalogError = null,
+  onTiktokRetryCatalog,
+  tiktokMinPct = 60,
+  onTiktokSearchCatalog,
+  stocksByProductId = {},
 }) {
   // Grid-row equalizer — per user feedback, every RowCard should be
   // as tall as the tallest card in the whole grid, regardless of
@@ -232,6 +244,14 @@ export default function BillReviewPanel({
           onPickCandidate={(p) => onPickCandidate(row.uid, p)}
           onSetNewProduct={(np) => onSetNewProduct(row.uid, np)}
           onRemove={() => onRemoveRow(row.uid)}
+          tiktokMirrorEnabled={tiktokMirrorEnabled}
+          tiktokCatalog={tiktokCatalog}
+          tiktokCatalogLoading={tiktokCatalogLoading}
+          tiktokCatalogError={tiktokCatalogError}
+          onTiktokRetryCatalog={onTiktokRetryCatalog}
+          tiktokMinPct={tiktokMinPct}
+          onTiktokSearchCatalog={onTiktokSearchCatalog}
+          stocksByProductId={stocksByProductId}
         />
       ))}
     </div>
@@ -239,7 +259,17 @@ export default function BillReviewPanel({
 }
 
 // ─── Per-line row component ──────────────────────────────────────────
-export function RowCard({ index, row, products, recentReceivesMap, hasVat, onUpdate, onPickCandidate, onSetNewProduct, onRemove }) {
+export function RowCard({
+  index, row, products, recentReceivesMap, hasVat, onUpdate, onPickCandidate, onSetNewProduct, onRemove,
+  tiktokMirrorEnabled = false,
+  tiktokCatalog = [],
+  tiktokCatalogLoading = false,
+  tiktokCatalogError = null,
+  onTiktokRetryCatalog,
+  tiktokMinPct = 60,
+  onTiktokSearchCatalog,
+  stocksByProductId = {},
+}) {
   const meta = STATUS_META[row.status] || { card: 'border-hairline', icon: 'alert', iconCls: 'text-muted' };
   // H3: visual flags for rows where AI couldn't read the numeric. We
   // don't override the status colour (a row can be `auto` AND have
@@ -402,6 +432,31 @@ export function RowCard({ index, row, products, recentReceivesMap, hasVat, onUpd
           hasVat={hasVat}
           onPick={onPickCandidate}
           onCreateNew={onSetNewProduct}
+        />
+      )}
+
+      {tiktokMirrorEnabled && (row.product || (row.status === 'new' && row.newProduct)) && (
+        <TikTokSkuMatchRow
+          compact
+          line={{
+            product_id: row.product?.id,
+            product_name: row.product?.name || row.newProduct?.name || row.model_code,
+            barcode: row.product?.barcode || row.newProduct?.barcode,
+            quantity: row.quantity,
+          }}
+          skipped={!!row.tiktok_skip}
+          tiktokSku={row.tiktok_sku}
+          mapping={row.tiktok_mapping}
+          previewStockAfter={
+            (Number(row.product?.current_stock) || 0) + (Number(row.quantity) || 0)
+          }
+          catalog={tiktokCatalog}
+          catalogLoading={tiktokCatalogLoading}
+          catalogError={tiktokCatalogError}
+          onRetryCatalog={onTiktokRetryCatalog}
+          minPct={tiktokMinPct}
+          onSearchCatalog={onTiktokSearchCatalog}
+          onChange={patch => onUpdate({ ...patch, tiktok_manual: true })}
         />
       )}
     </div>
