@@ -111,7 +111,7 @@ export default function TikTokSettings({ toast, compact = false }) {
                 <div className="tabular-nums">{fmtExpiry(status.connected_at)}</div>
               </div>
               <div className="text-xs shrink-0">
-                <div className="text-muted-soft mb-0.5">Token หมดอายุ</div>
+                <div className="text-muted-soft mb-0.5">{expired ? 'หมดอายุเมื่อ' : 'ใช้ได้ถึง'}</div>
                 <div className={'tabular-nums ' + (expired ? 'text-error font-medium' : '')}>
                   {fmtExpiry(status.access_token_expires_at)}
                 </div>
@@ -165,7 +165,7 @@ export default function TikTokSettings({ toast, compact = false }) {
               <div>{fmtExpiry(status.connected_at)}</div>
             </div>
             <div>
-              <div className="text-xs text-muted-soft mb-0.5">Token หมดอายุ</div>
+              <div className="text-xs text-muted-soft mb-0.5">{expired ? 'หมดอายุเมื่อ' : 'ใช้ได้ถึง'}</div>
               <div className={expired ? 'text-error font-medium' : ''}>{fmtExpiry(status.access_token_expires_at)}</div>
             </div>
           </div>
