@@ -1,13 +1,22 @@
 import React from 'react';
 import Icon from '../../ui/Icon.jsx';
 import SkuThumb from './SkuThumb.jsx';
+import { resolvePickStock, stockShortfall } from './helpers.js';
 
 /**
  * Horizontal item switcher for the focus-one-at-a-time confirm flow.
  * Replaces the old vertical item list. Pure presentation — drives the
  * existing activeItemId / handleClear handlers from the pane.
  */
-export default function TikTokItemNavigator({ items, activeItemId, picks, onSelect, onClear, disabled }) {
+export default function TikTokItemNavigator({
+  items,
+  activeItemId,
+  picks,
+  catalog,
+  onSelect,
+  onClear,
+  disabled,
+}) {
   if (!items.length) return null;
 
   return (
@@ -20,13 +29,17 @@ export default function TikTokItemNavigator({ items, activeItemId, picks, onSele
           const matched = Boolean(picks[it.id]?.id);
           const active = activeItemId === it.id;
           const skuName = it.sku_name || it.product_name || '—';
+          const shortfall = matched ? stockShortfall(it, picks[it.id], catalog) : null;
+          const stock = matched ? resolvePickStock(picks[it.id], catalog) : null;
           return (
             <div
               key={it.id}
               className={
                 'ttc-focus-chip' +
                 (active ? ' ttc-focus-chip--active' : '') +
-                (matched ? ' ttc-focus-chip--matched' : ' ttc-focus-chip--pending') +
+                (matched
+                  ? (shortfall ? ' ttc-focus-chip--stock-warn' : ' ttc-focus-chip--matched')
+                  : ' ttc-focus-chip--pending') +
                 (disabled ? ' is-disabled' : '')
               }
               role="button"
@@ -39,9 +52,16 @@ export default function TikTokItemNavigator({ items, activeItemId, picks, onSele
                 <div className="ttc-focus-chip__name">{skuName}</div>
                 <div className="ttc-focus-chip__status">
                   {matched ? (
-                    <span className="inline-flex items-center gap-0.5 text-[#0a7a43]">
-                      <Icon name="check" size={10}/> จับคู่แล้ว
-                    </span>
+                    shortfall ? (
+                      <span className="inline-flex items-center gap-0.5 text-[#b3261e]">
+                        <Icon name="alert" size={10}/>
+                        stock {stock ?? '?'} · ไม่พอ
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-0.5 text-[#0a7a43]">
+                        <Icon name="check" size={10}/> จับคู่แล้ว · stock {stock ?? '?'}
+                      </span>
+                    )
                   ) : (
                     <span className="inline-flex items-center gap-0.5 text-[#8a6500]">
                       <Icon name="alert" size={10}/> รอจับคู่

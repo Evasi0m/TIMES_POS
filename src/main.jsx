@@ -46,6 +46,7 @@ import {
   fmtTimeBangkok,
 } from './lib/date.js';
 import { syncServerClock, todayISO, serverNowISO, serverNowDate } from './lib/server-clock.js';
+import { saleLineSku, saleLineCartCaption, saleLineSearchText } from './lib/sale-line-display.js';
 import {
   BRAND_RULES, SERIES_RULES, SERIES_SUBS, MATERIAL_MAP, COLOR_MAP, PRICE_PRESETS,
   classifyBrand, classifySeries, parseCasioModel, enrichProduct,
@@ -3907,11 +3908,14 @@ const CLAIM_REASONS = ["ชำรุดจากโรงงาน", "ส่ง�
 /* =========================================================
    DESKTOP SIDEBAR
 ========================================================= */
-function AppUpdateButton({ className = 'btn-secondary w-full !justify-start gap-2', onDone }) {
-  const [available, setAvailable] = useState(false);
+function AppUpdateButton({ className = 'btn-update-sidebar', onDone }) {
+  const [state, setState] = useState({ status: 'idle' });
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => onUpdateStateChange((s) => setAvailable(s.status === 'available')), []);
+  useEffect(() => onUpdateStateChange(setState), []);
+
+  const available = state.status === 'available';
+  const applying = state.status === 'applying' || busy;
 
   const handleClick = async () => {
     if (busy) return;
@@ -3927,18 +3931,12 @@ function AppUpdateButton({ className = 'btn-secondary w-full !justify-start gap-
     }
   };
 
+  if (!available && !applying) return null;
+
   return (
-    <button type="button" className={className} onClick={handleClick} disabled={busy}>
-      <span className="relative inline-flex shrink-0">
-        <Icon name="refresh" size={16}/>
-        {available && (
-          <span
-            className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-primary ring-2 ring-canvas"
-            aria-hidden
-          />
-        )}
-      </span>
-      {busy ? 'กำลังอัปเดต…' : 'อัปเดตแอป'}
+    <button type="button" className={className} onClick={handleClick} disabled={applying}>
+      <Icon name="refresh" size={16}/>
+      {applying ? 'กำลังอัปเดต…' : 'อัปเดตแอป'}
     </button>
   );
 }
@@ -4029,18 +4027,16 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
                   } : undefined}
                   aria-expanded={ecomExpanded}
                 >
-                  <span className="flex items-center gap-2 flex-1 min-w-0">
-                    <Icon name={it.icon} size={18}/>
-                    <span className="truncate">{it.labelLong || it.label}</span>
-                    {allowed && (
-                      <Icon
-                        name="chevron-d"
-                        size={14}
-                        className={'ml-auto shrink-0 transition-transform ' + (ecomExpanded ? 'rotate-180' : '')}
-                      />
-                    )}
-                    {!allowed && <Icon name="lock" size={13} className="opacity-70 ml-auto"/>}
-                  </span>
+                  <Icon name={it.icon} size={22} strokeWidth={ecomActive && allowed ? 2.1 : 1.85}/>
+                  <span className="flex-1 truncate">{it.labelLong || it.label}</span>
+                  {allowed && (
+                    <Icon
+                      name="chevron-d"
+                      size={14}
+                      className={'shrink-0 transition-transform ' + (ecomExpanded ? 'rotate-180' : '')}
+                    />
+                  )}
+                  {!allowed && <Icon name="lock" size={13} className="opacity-70 shrink-0"/>}
                 </button>
                 {ecomExpanded && allowed && (
                   <div className="pl-3 ml-4 border-l hairline space-y-0.5 mt-0.5 mb-1">
@@ -4112,7 +4108,7 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
         })}
       </nav>
       <div className="sidebar-footer p-4 border-t space-y-2">
-        <AppUpdateButton className="btn-secondary w-full !justify-start gap-2" />
+        <AppUpdateButton />
         {/* User-management button — super_admin only. Reuses the yellow
             `.btn-settings-sidebar` style so it visually contrasts with
             the coral "การตั้งค่า" below and signals "privileged action". */}
@@ -4207,10 +4203,7 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
                 <Icon name="crown" size={16}/> การตั้งค่า user
               </button>
             )}
-            <AppUpdateButton
-              className="btn-secondary !justify-start gap-2 w-full"
-              onDone={() => setOpenMenu(false)}
-            />
+            <AppUpdateButton onDone={() => setOpenMenu(false)} />
             <button className="btn-app-settings-sidebar" onClick={()=>{ setOpenMenu(false); onOpenSettings?.(); }}>
               <Icon name="settings" size={16}/> การตั้งค่า
             </button>
@@ -7462,14 +7455,12 @@ function SalesView({ onGoPOS }) {
             totalProfit += lineRev - unitCost * qty;
           });
           const productLabel = lines.length === 0 ? '—'
-            : lines.length === 1 ? (lines[0].product_name || '—')
-            : `${lines[0].product_name || '—'} +${lines.length - 1}`;
+            : lines.length === 1 ? saleLineSku(lines[0])
+            : `${saleLineSku(lines[0])} +${lines.length - 1}`;
           summary[o.id] = {
             productLabel,
-            // Full list of product names in the bill — powers the
-            // free-text search filter. Stored lowercased once so the
-            // per-keystroke filter can do cheap .includes() checks.
-            allProductNames: lines.map(l => (l.product_name || '').toLowerCase()),
+            // Full list of searchable names — powers the free-text filter.
+            allProductNames: lines.map(l => saleLineSearchText(l)),
             // "ใส่ทีหลัง" bills have no recorded payout yet → profit is 0 until
             // the real net_received is entered (matches the cart indicator).
             profit: (o.status === 'voided' || o.net_received_pending) ? 0 : totalProfit,
@@ -7813,6 +7804,13 @@ function SalesView({ onGoPOS }) {
         color: '#ffffff',
         boxShadow: '0 1px 0 rgba(255,255,255,0.15) inset, 0 -1px 0 rgba(0,0,0,0.25) inset, 0 4px 14px -4px rgba(0,0,0,0.20)',
       },
+      // TikTok Shop API — same dark pill as TikTok with a subtle red wash.
+      tiktok_api: {
+        background: 'radial-gradient(circle at 12% 10%, rgba(254,44,85,0.38), transparent 38%), radial-gradient(circle at 88% 20%, rgba(255,80,120,0.22), transparent 34%), radial-gradient(circle at 50% 105%, rgba(30,30,30,0.52), transparent 44%), linear-gradient(135deg, rgba(58,28,36,0.94), rgba(28,22,26,0.90))',
+        border: '1px solid rgba(254,44,85,0.42)',
+        color: '#ffffff',
+        boxShadow: '0 1px 0 rgba(255,255,255,0.14) inset, 0 -1px 0 rgba(254,44,85,0.22) inset, 0 4px 14px -4px rgba(254,44,85,0.28)',
+      },
       facebook: {
         background: 'radial-gradient(circle at 14% 8%, rgba(33,150,243,0.18), transparent 34%), radial-gradient(circle at 90% 18%, rgba(100,181,246,0.16), transparent 32%), radial-gradient(circle at 50% 105%, rgba(227,242,253,0.50), transparent 44%), linear-gradient(135deg, rgba(187,222,251,0.92), rgba(144,202,249,0.78))',
         border: '1px solid rgba(33,150,243,0.35)',
@@ -7821,6 +7819,22 @@ function SalesView({ onGoPOS }) {
       },
     };
     return { ...base, ...(recipes[ch] || recipes.store) };
+  };
+
+  /** One pill per row — TikTok API replaces the plain TikTok badge (no double badge). */
+  const channelBadgeForOrder = (order) => {
+    if (isApiImportedOrder(order)) {
+      return {
+        label: 'TikTok API',
+        style: channelBadgeStyle('tiktok_api'),
+        title: 'ดึงอัตโนมัติจาก TikTok Shop API — ไม่ต้องบันทึกซ้ำ',
+      };
+    }
+    return {
+      label: CHANNEL_LABELS[order.channel] || order.channel || '—',
+      style: channelBadgeStyle(order.channel),
+      title: undefined,
+    };
   };
 
   const FilterControls = (
@@ -7972,7 +7986,7 @@ function SalesView({ onGoPOS }) {
             <div className="grid grid-cols-12 px-4 py-2 text-xs uppercase tracking-wider text-muted-soft border-b hairline">
               <div className="col-span-1">เลขที่บิล</div>
               <div className="col-span-1">เวลา</div>
-              <div className="col-span-3">ชื่อสินค้า</div>
+              <div className="col-span-3">SKU</div>
               <div className="col-span-2">ช่องทาง</div>
               <div className="col-span-1">ชำระ</div>
               <div className="col-span-2 text-right">ยอดสุทธิ</div>
@@ -7990,6 +8004,7 @@ function SalesView({ onGoPOS }) {
             {/* Rows */}
             {g.list.map(o => {
               const sm = orderSummary[o.id];
+              const chBadge = channelBadgeForOrder(o);
               return (
               <div key={o.id} className={"grid grid-cols-12 px-4 py-3 items-center gap-x-2 border-b hairline last:border-0 hover:bg-surface-strong/40 cursor-pointer transition-colors " + (o.status==='voided'?'opacity-60':'') + (o.net_received_pending && o.status!=='voided' ? ' bg-error/5' : '')} onClick={()=>openDetail(o)}>
                 <div className="col-span-1 font-mono text-sm flex items-center gap-1 truncate">
@@ -8002,10 +8017,7 @@ function SalesView({ onGoPOS }) {
                   {sm?.costApprox && <span className="badge-pill !bg-warning/15 !text-[#8a6500] !text-xs mt-0.5">ทุนประมาณ</span>}
                 </div>
                 <div className="col-span-2 flex flex-wrap items-center gap-1">
-                  <span style={channelBadgeStyle(o.channel)}>{CHANNEL_LABELS[o.channel] || o.channel || '—'}</span>
-                  {isApiImportedOrder(o) && (
-                    <span className="badge-pill !text-[10px] !px-1.5" style={{ background: '#fe2c55', color: '#fff' }} title="ดึงอัตโนมัติจาก TikTok Shop API — ไม่ต้องบันทึกซ้ำ">TikTok API</span>
-                  )}
+                  <span style={chBadge.style} title={chBadge.title}>{chBadge.label}</span>
                 </div>
                 <div className="col-span-1 text-xs text-muted truncate">{PAYMENTS.find(p=>p.v===o.payment_method)?.label || '—'}</div>
                 <div className={"col-span-2 text-right tabular-nums " + (o.status==='voided'?'line-through':'')}>
@@ -8059,15 +8071,13 @@ function SalesView({ onGoPOS }) {
             <div className="space-y-2">
               {g.list.map(o => {
                 const sm = orderSummary[o.id];
+                const chBadge = channelBadgeForOrder(o);
                 return (
                 <div key={o.id} className={"card-canvas pressable p-3.5 flex items-center gap-3 " + (o.status==='voided'?'opacity-60':'') + (o.net_received_pending && o.status!=='voided' ? ' !bg-error/5' : '')} onClick={()=>openDetail(o)}>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-xs text-muted">#{o.id}</span>
-                      <span style={channelBadgeStyle(o.channel)}>{CHANNEL_LABELS[o.channel] || o.channel || '—'}</span>
-                      {isApiImportedOrder(o) && (
-                        <span className="badge-pill !text-[10px] !px-1.5" style={{ background: '#fe2c55', color: '#fff' }} title="ดึงอัตโนมัติจาก TikTok Shop API — ไม่ต้องบันทึกซ้ำ">TikTok API</span>
-                      )}
+                      <span style={chBadge.style} title={chBadge.title}>{chBadge.label}</span>
                       {o.status==='voided' && <span className="badge-pill !bg-error/10 !text-error !text-xs">VOIDED</span>}
                     </div>
                     {sm && sm.itemCount > 0 && (
@@ -8219,7 +8229,11 @@ function SalesView({ onGoPOS }) {
                   {detail.order.tax_invoice_no && <div className="font-mono text-xs">เลขที่ {detail.order.tax_invoice_no}</div>}
                   {detail.order.buyer_name && <div>{detail.order.buyer_name}</div>}
                   {detail.order.buyer_tax_id && <div className="font-mono text-xs text-muted">TAX ID {detail.order.buyer_tax_id}</div>}
-                  {detail.order.buyer_address && <div className="text-xs text-muted">{detail.order.buyer_address}</div>}
+                  {detail.order.buyer_address && (
+                    <div className="text-xs text-muted break-words [overflow-wrap:anywhere] whitespace-pre-wrap max-w-full">
+                      {detail.order.buyer_address}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -8246,7 +8260,14 @@ function SalesView({ onGoPOS }) {
                   return (
                   <div key={it.id} className="py-2.5 flex justify-between gap-3 items-center">
                     <div className="min-w-0 flex-1">
-                      <div className="font-medium text-sm truncate">{it.product_name}</div>
+                      <div className="font-medium text-sm font-mono truncate" title={saleLineSku(it)}>
+                        {saleLineSku(it)}
+                      </div>
+                      {saleLineCartCaption(it) && (
+                        <div className="text-xs text-muted mt-0.5 line-clamp-2 break-words" title={saleLineCartCaption(it)}>
+                          {saleLineCartCaption(it)}
+                        </div>
+                      )}
                       <div className="text-xs text-muted mt-0.5">
                         {editMode ? (
                           <>เดิม {it.quantity} × {fmtTHB(it.unit_price)}</>

@@ -83,9 +83,10 @@ export default function TikTokConfirmActionBar({
   saving,
   allMatched,
   netOk,
+  stockBlocked,
   onConfirm,
 }) {
-  const canConfirm = allMatched && netOk && !saving;
+  const canConfirm = allMatched && netOk && !saving && !stockBlocked;
 
   return (
     <div className="px-4 py-3 border-t-2 border-ink/10 bg-surface-cream-strong shrink-0 space-y-2.5">
@@ -111,6 +112,13 @@ export default function TikTokConfirmActionBar({
         <div className="text-sm text-[#0a7a43] flex items-center gap-2 px-1">
           <Icon name="check" size={16}/>
           <span>พร้อมยืนยัน — กดปุ่มด้านล่างเพื่อตัดสต็อกและออกใบเสร็จ</span>
+        </div>
+      )}
+
+      {allMatched && stockBlocked && (
+        <div className="text-sm text-[#b3261e] flex items-start gap-2 px-1 leading-relaxed">
+          <Icon name="alert" size={16} className="shrink-0 mt-0.5"/>
+          <span>สต็อก POS ไม่พอ — แก้การจับคู่หรือยกเลิกออเดอร์บน TikTok</span>
         </div>
       )}
 

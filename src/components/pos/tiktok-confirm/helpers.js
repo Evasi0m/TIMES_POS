@@ -48,3 +48,25 @@ export function orderListMeta(order) {
 export function itemSkuLabel(item) {
   return item?.sku_name || item?.product_name || item?.seller_sku || '—';
 }
+
+/** Live POS stock for a matched pick — catalog wins over cached pick value. */
+export function resolvePickStock(pick, catalog) {
+  const live = catalog?.find(p => p.id === pick?.id);
+  const n = live?.current_stock ?? pick?.current_stock;
+  return n != null && n !== '' ? Number(n) : null;
+}
+
+/** null = sufficient stock | { stock, need } = cannot confirm without going negative. */
+export function stockShortfall(item, pick, catalog) {
+  const stock = resolvePickStock(pick, catalog);
+  const need = Number(item?.quantity) || 1;
+  if (stock == null || !Number.isFinite(stock)) return null;
+  if (stock < need) return { stock, need };
+  return null;
+}
+
+export function orderHasStockIssue(items, picks, catalog) {
+  return (items || []).some(
+    it => picks[it.id]?.id && stockShortfall(it, picks[it.id], catalog),
+  );
+}

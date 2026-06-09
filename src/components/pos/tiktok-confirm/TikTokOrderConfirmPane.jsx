@@ -4,6 +4,7 @@ import TikTokOrderSummaryCard from './TikTokOrderSummaryCard.jsx';
 import TikTokItemNavigator from './TikTokItemNavigator.jsx';
 import TikTokMatchSidePanel from './TikTokMatchSidePanel.jsx';
 import TikTokConfirmActionBar from './TikTokConfirmActionBar.jsx';
+import { orderHasStockIssue } from './helpers.js';
 
 export default function TikTokOrderConfirmPane({
   order,
@@ -37,9 +38,13 @@ export default function TikTokOrderConfirmPane({
   const activeItem = items.find(it => it.id === activeItemId) ?? null;
   const activePick = activeItem ? picks[activeItem.id] : null;
   const activeMatched = Boolean(activePick?.id);
+  const stockBlocked = orderHasStockIssue(items, picks, catalog);
 
   const handlePick = (itemId, p) => {
-    setPicks(prev => ({ ...prev, [itemId]: { id: p.id, name: p.name } }));
+    setPicks(prev => ({
+      ...prev,
+      [itemId]: { id: p.id, name: p.name, current_stock: p.current_stock },
+    }));
     const next = items.find(it => it.id !== itemId && !picks[it.id]?.id);
     setActiveItemId(next?.id ?? null);
   };
@@ -70,6 +75,7 @@ export default function TikTokOrderConfirmPane({
             items={items}
             activeItemId={activeItemId}
             picks={picks}
+            catalog={catalog}
             disabled={saving}
             onSelect={setActiveItemId}
             onClear={handleClear}
@@ -82,6 +88,8 @@ export default function TikTokOrderConfirmPane({
         {items.length ? (
           <TikTokMatchSidePanel
             item={activeItem}
+            items={items}
+            picks={picks}
             matched={activeMatched}
             pick={activePick}
             disabled={saving}
@@ -108,6 +116,7 @@ export default function TikTokOrderConfirmPane({
         saving={saving}
         allMatched={allMatched}
         netOk={netOk}
+        stockBlocked={stockBlocked}
         onConfirm={onConfirm}
       />
     </div>

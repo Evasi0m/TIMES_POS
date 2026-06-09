@@ -148,7 +148,14 @@ export default function TikTokConfirmPanel({ toast, onConfirmed }) {
     setActiveId(o.id);
     const seed = {};
     (o.items || []).forEach(it => {
-      if (it.product_id) seed[it.id] = { id: it.product_id, name: it.product_name || it.sku_name || '' };
+      if (it.product_id) {
+        const prod = products.find(p => p.id === it.product_id);
+        seed[it.id] = {
+          id: it.product_id,
+          name: prod?.name || it.product_name || it.sku_name || '',
+          current_stock: prod?.current_stock,
+        };
+      }
     });
     setPicks(seed);
     setNet('');
