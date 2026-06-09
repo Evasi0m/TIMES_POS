@@ -3,18 +3,21 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { sb } from '../../lib/supabase-client.js';
 import { fetchAll } from '../../lib/sb-paginate.js';
 import { mapError } from '../../lib/error-map.js';
-import { fmtTHB, fmtThaiDateShort } from '../../lib/format.js';
 import { fullBuyerValid } from '../../lib/tax-buyer.js';
 import { formatPollToast } from '../../lib/tiktok-poll-sync.js';
 import { TIKTOK_LIVE_POLL_MS, useTikTokLiveSync } from '../../lib/use-tiktok-live-sync.js';
 import { useSimulatedSyncProgress } from '../../lib/use-simulated-sync-progress.js';
-import Icon from '../ui/Icon.jsx';
-import ExpandableImageThumb from '../ui/ExpandableImageThumb.jsx';
 import TikTokSettings from '../settings/TikTokSettings.jsx';
 import TikTokInvoiceSection, { buyerReady } from './TikTokInvoiceBulk.jsx';
 import TikTokReturns from './TikTokReturns.jsx';
 import TikTokMatching from './TikTokMatching.jsx';
 import { fetchShippingLabels, printLabelUrl, printMergedLabels } from './TikTokLabelPrint.js';
+import TikTokConnectionStrip from './tiktok/TikTokConnectionStrip.jsx';
+import TikTokStatStrip from './tiktok/TikTokStatStrip.jsx';
+import TikTokOrdersToolbar from './tiktok/TikTokOrdersToolbar.jsx';
+import TikTokStatusTabs from './tiktok/TikTokStatusTabs.jsx';
+import TikTokBulkActionBar from './tiktok/TikTokBulkActionBar.jsx';
+import TikTokOrderList from './tiktok/TikTokOrderList.jsx';
 
 function fmtDateTime(iso) {
   if (!iso) return '—';
@@ -32,26 +35,11 @@ const NUMERIC_STATUS = {
   '140': 'CANCELLED',
 };
 
-/** Normalize DB/API status (handles numeric codes like "111"). */
 function normStatus(st) {
   if (!st) return '';
   const s = String(st).trim();
   return NUMERIC_STATUS[s] || s.toUpperCase();
 }
-
-const STATUS_LABEL = {
-  AWAITING_SHIPMENT: 'รอจัดส่ง',
-  AWAITING_COLLECTION: 'รอเข้ารับ',
-  IN_TRANSIT: 'กำลังส่ง',
-  DELIVERED: 'ส่งแล้ว',
-  COMPLETED: 'สำเร็จ',
-  CANCELLED: 'ยกเลิก',
-  UNPAID: 'ยังไม่ชำระ',
-  ON_HOLD: 'รอดำเนินการ',
-  PARTIALLY_SHIPPING: 'ส่งบางส่วน',
-  DELIVERY_FAILED: 'จัดส่งไม่สำเร็จ',
-  FAILED_DELIVERY: 'จัดส่งไม่สำเร็จ',
-};
 
 const PAYMENT_LABEL = {
   cod: 'เก็บเงินปลายทาง',
@@ -60,7 +48,6 @@ const PAYMENT_LABEL = {
   card: 'บัตร',
 };
 
-/** TikTok Seller Center — 7 แท็บหลัก (ไม่แตก sub-tab) */
 const ORDER_TABS = [
   { k: 'all', label: 'ทั้งหมด' },
   { k: 'to_ship', label: 'ที่จะจัดส่ง' },
@@ -71,7 +58,6 @@ const ORDER_TABS = [
   { k: 'delivery_failed', label: 'การจัดส่งไม่สำเร็จ' },
 ];
 
-/** ยังต้องกด RTS / เตรียมจัดส่ง (ไม่รวม รอเข้ารับ ที่ส่งแล้ว) */
 const NEEDS_RTS = new Set(['AWAITING_SHIPMENT', 'PARTIALLY_SHIPPING']);
 const SHIPPED = new Set(['IN_TRANSIT', 'DELIVERED']);
 const COMPLETED = new Set(['COMPLETED']);
@@ -80,11 +66,8 @@ const CANCELLED = new Set(['CANCELLED']);
 const DELIVERY_FAILED = new Set([
   'DELIVERY_FAILED', 'FAILED_DELIVERY', 'UNABLE_TO_DELIVER', 'DELIVERY_FAILURE',
 ]);
-
-/** ที่จะจัดส่ง = รอจัดส่ง + รอเข้ารับ (+ ส่งบางส่วนที่ยังไม่ครบ) */
 const TO_SHIP = new Set(['AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'PARTIALLY_SHIPPING']);
 
-/** แท็บปฏิบัติการ — นับเฉพาะออเดอร์ที่ยังไม่ void (ตรง TikTok Seller Center) */
 function isOperationalOrder(o) {
   return o.status !== 'voided' && (o.status === 'active' || o.status === 'pending');
 }
@@ -114,20 +97,12 @@ function lineTitle(item) {
   return item.product_name || item.sku_name || '—';
 }
 
-function SkuThumb({ url, alt }) {
-  return (
-    <ExpandableImageThumb
-      src={url}
-      alt={alt || ''}
-      className="w-12 h-12 rounded-lg border hairline bg-surface-soft shrink-0"
-      imgClassName="w-full h-full object-cover rounded-lg"
-      placeholder={(
-        <div className="w-12 h-12 rounded-lg bg-surface-soft border hairline flex items-center justify-center shrink-0 text-muted">
-          <Icon name="image" size={18}/>
-        </div>
-      )}
-    />
-  );
+function paymentLabel(o) {
+  return PAYMENT_LABEL[o.payment_method] || o.payment_method || '—';
+}
+
+function canShipOrder(o) {
+  return NEEDS_RTS.has(normStatus(o.tiktok_order_status));
 }
 
 export default function TikTokPanel({ toast, section = 'orders', onSyncChange, isSuperAdmin = false }) {
@@ -149,7 +124,6 @@ export default function TikTokPanel({ toast, section = 'orders', onSyncChange, i
   const load = useCallback(async ({ quiet = false } = {}) => {
     if (!quiet) setLoading(true);
     try {
-      // โหลดออเดอร์ TikTok ทั้งหมดใน DB — กรองวันที่ทำฝั่ง client ตามแท็บ
       const { data: orderRows } = await fetchAll((fromIdx, toIdx) =>
         sb.from('sale_orders')
           .select('*')
@@ -176,7 +150,6 @@ export default function TikTokPanel({ toast, section = 'orders', onSyncChange, i
         });
         setItemsByOrder(map);
 
-        // Fallback images: for matched products, pull product_images.
         const productIds = [...new Set((items || [])
           .map(it => it.product_id).filter(Boolean))];
         if (productIds.length) {
@@ -404,109 +377,78 @@ export default function TikTokPanel({ toast, section = 'orders', onSyncChange, i
     : null;
 
   return (
-    <div className="space-y-6 fade-in">
+    <div className="space-y-5 lg:space-y-6 fade-in">
       {section === 'orders' && (
-        <div className="space-y-3">
-          <TikTokSettings toast={toast} compact />
-          <p className="text-[11px] text-muted-soft leading-snug px-0.5 pb-0.5">
-            ซิงค์อัตโนมัติจาก TikTok ทุก {TIKTOK_LIVE_POLL_MS / 1000} วินาทีขณะเปิดหน้านี้
-            {liveLabel && <> · อัปเดตล่าสุด {liveLabel}</>}
-            {' · '}
-            <span className="inline-flex items-center gap-1">
-              <span className={'w-1.5 h-1.5 rounded-full ' + (pullBusy ? 'bg-amber-500 animate-pulse' : 'bg-[#0a7a43] animate-pulse')}/>
-              {pullBusy ? 'กำลังซิงค์…' : 'Live'}
-            </span>
-          </p>
-        </div>
+        <>
+          <TikTokConnectionStrip
+            toast={toast}
+            livePollSec={TIKTOK_LIVE_POLL_MS / 1000}
+            liveLabel={liveLabel}
+            pullBusy={pullBusy}
+          />
+          <TikTokStatStrip cards={statCards}/>
+          <TikTokOrdersToolbar
+            singleId={singleId}
+            onSingleIdChange={setSingleId}
+            onSyncSingle={syncSingle}
+            onSyncOrders={syncOrders}
+            onRefresh={load}
+            onPrintLabels={() => printLabels(selectedIds.length ? selectedIds : activeFiltered.map(o => o.id))}
+            onShipPackages={() => shipPackages(selectedIds)}
+            loading={loading}
+            syncing={syncing}
+            pullBusy={pullBusy}
+            singleBusy={singleBusy}
+            syncPct={syncProgress.pct}
+            labelBusy={labelBusy}
+            shipBusy={shipBusy}
+            selectedCount={selectedIds.length}
+            activeFilteredCount={activeFiltered.length}
+          />
+          <TikTokStatusTabs
+            tabs={ORDER_TABS}
+            activeKey={shipFilter}
+            tabCounts={tabCounts}
+            onSelect={setShipFilter}
+            onSelectAll={selectAllVisible}
+            selectableCount={activeFiltered.length}
+          />
+          <TikTokBulkActionBar
+            selectedCount={selectedIds.length}
+            onPrint={() => printLabels(selectedIds)}
+            onShip={() => shipPackages(selectedIds)}
+            labelBusy={labelBusy}
+            shipBusy={shipBusy}
+          />
+          <TikTokOrderList
+            loading={loading}
+            orders={filteredOrders}
+            itemsByOrder={itemsByOrder}
+            imageByProduct={imageByProduct}
+            selected={selected}
+            shipFilter={shipFilter}
+            canShipFn={canShipOrder}
+            labelBusy={labelBusy}
+            shipBusy={shipBusy}
+            lineTitle={lineTitle}
+            shippingLabel={shippingLabel}
+            paymentLabel={paymentLabel}
+            fmtDateTime={fmtDateTime}
+            livePollSec={TIKTOK_LIVE_POLL_MS / 1000}
+            syncing={syncing}
+            pullBusy={pullBusy}
+            syncPct={syncProgress.pct}
+            onToggleSelect={toggleSelect}
+            onShip={shipPackages}
+            onPrintLabel={printOneLabel}
+            onPrintPackingSlip={printOneLabel}
+            onSyncOrders={syncOrders}
+          />
+        </>
       )}
 
       {section !== 'orders' && (
         <TikTokSettings toast={toast} />
-      )}
-
-      {section === 'orders' && (
-      <div className="rounded-xl border hairline overflow-hidden bg-surface-strong/30">
-        <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 hairline border-b hairline bg-surface-soft/50">
-          {statCards.map(s => (
-            <div key={s.label} className="px-4 py-4">
-              <div className="flex items-center gap-1.5 text-[11px] text-muted mb-1">
-                <Icon name={s.icon} size={13}/>
-                <span className="leading-tight">{s.label}</span>
-              </div>
-              <div className={'font-display text-2xl tabular-nums leading-none ' + (s.warn ? 'text-error' : 'text-ink')}>
-                {s.value}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x hairline">
-          <div className="p-4">
-            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted mb-3">
-              ซิงค์ &amp; ดึงข้อมูล
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className="btn-secondary !py-1.5 !text-xs" onClick={load} disabled={loading || syncing || pullBusy}>
-                {loading && !syncing ? <span className="spinner"/> : <Icon name="refresh" size={14}/>}
-                รีเฟรช
-              </button>
-              <button type="button" className="btn-primary !py-1.5 !text-xs" onClick={syncOrders} disabled={syncing}>
-                {syncing
-                  ? <span className="text-[11px] font-semibold tabular-nums min-w-[2ch]">{syncProgress.pct}%</span>
-                  : pullBusy
-                    ? <span className="spinner"/>
-                    : <Icon name="refresh" size={14}/>}
-                อัปเดตข้อมูล TikTok
-              </button>
-            </div>
-            <div className="flex flex-wrap items-stretch gap-2 mt-3 pt-3 border-t hairline">
-              <input
-                type="text"
-                value={singleId}
-                onChange={e => setSingleId(e.target.value)}
-                placeholder="TikTok Order ID (ดึงรายตัว)"
-                className="input !h-9 !min-h-9 !rounded-lg !py-0 !px-3 !text-xs flex-1 min-w-[10rem]"
-                onKeyDown={e => { if (e.key === 'Enter') syncSingle(); }}
-              />
-              <button type="button" className="btn-secondary !h-9 !min-h-9 !py-0 !px-3 !text-xs shrink-0" onClick={syncSingle} disabled={singleBusy}>
-                {singleBusy ? <span className="spinner"/> : <Icon name="download" size={14}/>}
-                ดึงรายตัว
-              </button>
-            </div>
-          </div>
-
-          <div className="p-4">
-            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted mb-3">
-              จัดส่ง &amp; Label
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="btn-primary !py-1.5 !text-xs"
-                disabled={labelBusy === 'bulk'}
-                onClick={() => printLabels(selectedIds.length ? selectedIds : activeFiltered.map(o => o.id))}
-              >
-                {labelBusy === 'bulk' ? <span className="spinner"/> : <Icon name="printer" size={14}/>}
-                {selectedIds.length ? `ปริ้น label (${selectedIds.length})` : 'ปริ้น label ทั้งหมด'}
-              </button>
-              <button
-                type="button"
-                className="btn-secondary !py-1.5 !text-xs"
-                disabled={shipBusy === 'bulk' || !selectedIds.length}
-                onClick={() => shipPackages(selectedIds)}
-              >
-                {shipBusy === 'bulk' ? <span className="spinner"/> : <Icon name="truck" size={14}/>}
-                เตรียมจัดส่ง{selectedIds.length ? ` (${selectedIds.length})` : ''}
-              </button>
-            </div>
-            <p className="text-[11px] text-muted mt-3 leading-snug">
-              {selectedIds.length > 0
-                ? `เลือกแล้ว ${selectedIds.length} ออเดอร์ — ใช้ปุ่มด้านบนหรือเลือกจากรายการด้านล่าง`
-                : 'เลือกออเดอร์จากรายการด้านล่างก่อนเตรียมจัดส่ง · ปริ้น label ได้ทั้งหมดหรือเฉพาะที่เลือก'}
-            </p>
-          </div>
-        </div>
-      </div>
       )}
 
       {section === 'invoices' && (
@@ -524,191 +466,6 @@ export default function TikTokPanel({ toast, section = 'orders', onSyncChange, i
 
       {section === 'matching' && isSuperAdmin && (
         <TikTokMatching toast={toast} />
-      )}
-
-      {section === 'orders' && (
-        <>
-          {/* Status tabs — 7 แท็บตาม TikTok Seller Center */}
-          <div className="flex items-center gap-0.5 border-b hairline pb-0 overflow-x-auto">
-            {ORDER_TABS.map(f => (
-              <button
-                key={f.k}
-                type="button"
-                onClick={() => setShipFilter(f.k)}
-                className={'px-3 py-2.5 text-sm font-medium border-b-2 -mb-px transition whitespace-nowrap shrink-0 ' +
-                  (shipFilter === f.k
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-muted hover:text-ink')}
-              >
-                {f.label}
-                <span className={'ml-1 tabular-nums ' + (shipFilter === f.k ? 'text-primary' : 'text-muted-soft')}>
-                  {tabCounts[f.k] ?? 0}
-                </span>
-              </button>
-            ))}
-            <button type="button" className="text-xs text-muted hover:text-ink ml-auto mb-2" onClick={selectAllVisible}>
-              เลือกทั้งหมด ({activeFiltered.length})
-            </button>
-          </div>
-
-          {/* Orders — layout คล้าย TikTok Shop */}
-          <div className="rounded-xl border hairline overflow-hidden bg-surface-strong">
-            {loading && (
-              <div className="p-6 text-muted text-sm flex items-center gap-2">
-                <span className="spinner"/> กำลังโหลด…
-              </div>
-            )}
-            {!loading && filteredOrders.length === 0 && (
-              <div className="p-10 text-center">
-                <div className="text-muted text-sm mb-3">
-                  {shipFilter === 'to_ship'
-                    ? 'ยังไม่มีออเดอร์ "ที่จะจัดส่ง" — ระบบกำลังดึงจาก TikTok อัตโนมัติ'
-                    : 'ยังไม่มีออเดอร์ในแท็บนี้ — รอซิงค์จาก TikTok หรือกดปุ่มด้านล่าง'}
-                </div>
-                <button type="button" className="btn-primary !text-sm" onClick={syncOrders} disabled={syncing}>
-                  {syncing
-                    ? <span className="text-sm font-semibold tabular-nums">{syncProgress.pct}%</span>
-                    : pullBusy
-                      ? <span className="spinner"/>
-                      : <Icon name="refresh" size={16}/>}
-                  อัปเดตข้อมูลจาก TikTok
-                </button>
-                <p className="text-xs text-muted-soft mt-3 max-w-md mx-auto">
-                  ซิงค์อัตโนมัติทุก {TIKTOK_LIVE_POLL_MS / 1000} วินาที + cron ทุก 5 นาที —
-                  ครั้งแรกอาจใช้เวลาสักครู่ถ้ามีออเดอร์จำนวนมาก (ดึงทีละ ~60 รายการ)
-                </p>
-              </div>
-            )}
-            {!loading && filteredOrders.length > 0 && (
-              <>
-                {/* Table header (desktop) */}
-                <div className="hidden lg:grid grid-cols-[minmax(0,2.2fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1.1fr)] gap-3 px-4 py-2 bg-surface-soft border-b hairline text-xs text-muted font-medium">
-                  <div>สินค้า</div>
-                  <div>สถานะ</div>
-                  <div>การจัดส่ง</div>
-                  <div className="text-right">ราคา</div>
-                  <div className="text-right">การดำเนินการ</div>
-                </div>
-                <div className="divide-y hairline">
-                  {filteredOrders.map(o => {
-                    const lines = itemsByOrder[o.id] || [];
-                    const st = normStatus(o.tiktok_order_status);
-                    const isSelected = selected.has(o.id);
-                    const isToShip = TO_SHIP.has(st);
-                    const canShip = NEEDS_RTS.has(st);
-                    return (
-                      <div key={o.id} className={isSelected ? 'bg-primary/[0.04]' : ''}>
-                        {/* Order header bar */}
-                        <div className="flex items-center gap-3 px-4 py-2 bg-surface-soft/80 border-b hairline text-xs">
-                          {o.status === 'active' && (
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => toggleSelect(o.id)}
-                            />
-                          )}
-                          <span className="font-mono font-semibold text-ink">
-                            หมายเลขคำสั่งซื้อ: {o.tiktok_order_id || `#${o.id}`}
-                          </span>
-                          <span className="text-muted ml-auto tabular-nums">{fmtDateTime(o.sale_date)}</span>
-                          <span className="text-muted-soft hidden sm:inline">POS #{o.id}</span>
-                        </div>
-
-                        {/* Order body */}
-                        <div className="grid lg:grid-cols-[minmax(0,2.2fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1.1fr)] gap-3 p-4 items-start">
-                          {/* Product column */}
-                          <div className="space-y-3">
-                            {lines.length === 0 && (
-                              <div className="text-sm text-muted">ไม่มีรายการสินค้า</div>
-                            )}
-                            {lines.map(l => (
-                              <div key={l.id} className="flex gap-3">
-                                <SkuThumb url={l.sku_image_url || imageByProduct[l.product_id]} alt={lineTitle(l)}/>
-                                <div className="min-w-0 flex-1">
-                                  <div className="text-sm font-medium line-clamp-2">{lineTitle(l)}</div>
-                                  <div className="text-xs text-muted mt-0.5">× {l.quantity}</div>
-                                  {l.seller_sku && (
-                                    <div className="text-xs text-muted-soft font-mono mt-0.5">SKU: {l.seller_sku}</div>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-
-                          {/* Status */}
-                          <div className="text-sm">
-                            <span className={'inline-flex px-2 py-0.5 rounded-md text-xs font-medium ' +
-                              (isToShip ? 'bg-[#fff7e6] text-[#8a6500]' : 'bg-surface-soft text-muted')}>
-                              {STATUS_LABEL[st] || st || '—'}
-                            </span>
-                          </div>
-
-                          {/* Shipping */}
-                          <div className="text-sm text-muted">
-                            <div>{shippingLabel(o)}</div>
-                            {o.tracking_number && (
-                              <div className="text-xs font-mono mt-1 text-muted-soft">#{o.tracking_number}</div>
-                            )}
-                            {o.shipping_recipient_name && (
-                              <div className="text-xs mt-1 line-clamp-2 text-muted-soft">{o.shipping_recipient_name}</div>
-                            )}
-                          </div>
-
-                          {/* Price */}
-                          <div className="text-right">
-                            <div className="font-display text-lg tabular-nums">{fmtTHB(o.grand_total)}</div>
-                            <div className="text-xs text-muted mt-0.5">
-                              {PAYMENT_LABEL[o.payment_method] || o.payment_method || '—'}
-                            </div>
-                            {o.net_received != null && (
-                              <div className="text-xs text-muted-soft tabular-nums mt-0.5">net {fmtTHB(o.net_received)}</div>
-                            )}
-                          </div>
-
-                          {/* Actions */}
-                          <div className="flex flex-col gap-2 lg:items-end">
-                            {o.status === 'active' && canShip && (
-                              <button
-                                type="button"
-                                className="btn-primary !py-2 !text-xs w-full lg:w-auto whitespace-nowrap"
-                                disabled={shipBusy === o.id}
-                                onClick={() => shipPackages([o.id])}
-                              >
-                                {shipBusy === o.id ? <span className="spinner"/> : null}
-                                เตรียมจัดส่ง+พิมพ์
-                              </button>
-                            )}
-                            {o.status === 'active' && (
-                              <>
-                                <button
-                                  type="button"
-                                  className="btn-secondary !py-1.5 !text-xs w-full lg:w-auto"
-                                  disabled={labelBusy === o.id || o.tiktok_shipping_type === 'SELLER'}
-                                  onClick={() => printOneLabel(o.id)}
-                                >
-                                  {labelBusy === o.id ? <span className="spinner"/> : <Icon name="printer" size={14}/>}
-                                  ปริ้น label
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn-secondary !py-1.5 !text-xs w-full lg:w-auto"
-                                  disabled={labelBusy === o.id || o.tiktok_shipping_type === 'SELLER'}
-                                  onClick={() => printOneLabel(o.id, 'PACKING_SLIP')}
-                                >
-                                  packing slip
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </div>
-        </>
       )}
     </div>
   );

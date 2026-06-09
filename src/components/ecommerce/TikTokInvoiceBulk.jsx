@@ -7,6 +7,7 @@ import { fmtThaiDateShort } from '../../lib/format.js';
 import { fullBuyerValid } from '../../lib/tax-buyer.js';
 import FullTaxInvoiceA4 from '../invoice/FullTaxInvoiceA4.jsx';
 import Icon from '../ui/Icon.jsx';
+import TikTokSection from './tiktok/TikTokSection.jsx';
 
 function buyerReady(order) {
   return fullBuyerValid({
@@ -134,19 +135,20 @@ export default function TikTokInvoiceSection({ orders, itemsByOrder, toast, onOr
   const a4Copies = copies === 'both' ? ['ต้นฉบับ', 'สำเนา'] : copies === 'copy' ? ['สำเนา'] : ['ต้นฉบับ'];
 
   return (
-    <div className="rounded-xl border hairline overflow-hidden">
-      <div className="px-4 py-3 bg-surface-soft border-b hairline flex flex-wrap items-center justify-between gap-2">
-        <span className="font-medium text-sm">ใบกำกับภาษีเต็มรูป</span>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" className="btn-secondary !py-1.5 !text-xs" onClick={exportCsv}>
-            <Icon name="download" size={14}/> Export CSV
+    <TikTokSection
+      title="ใบกำกับภาษีเต็มรูป"
+      subtitle={`${activeOrders.length} ออเดอร์ TikTok`}
+      actions={(
+        <>
+          <button type="button" className="btn-secondary !h-11 !py-0 !px-4 !text-sm" onClick={exportCsv}>
+            <Icon name="download" size={16}/> Export CSV
           </button>
-          <button type="button" className="btn-primary !py-1.5 !text-xs" onClick={printBulk}>
-            <Icon name="receipt" size={14}/> พิมพ์ใบกำกับทั้งหมด
+          <button type="button" className="btn-primary !h-11 !py-0 !px-4 !text-sm" onClick={printBulk}>
+            <Icon name="receipt" size={16}/> พิมพ์ใบกำกับทั้งหมด
           </button>
-        </div>
-      </div>
-
+        </>
+      )}
+    >
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -192,8 +194,6 @@ export default function TikTokInvoiceSection({ orders, itemsByOrder, toast, onOr
           </tbody>
         </table>
       </div>
-
-      {/* Edit buyer modal */}
       {editOrder && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40" onClick={() => setEditOrder(null)}>
           <div className="card-canvas rounded-xl p-5 w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()}>
@@ -243,7 +243,7 @@ export default function TikTokInvoiceSection({ orders, itemsByOrder, toast, onOr
         </div>,
         document.body,
       )}
-    </div>
+    </TikTokSection>
   );
 }
 

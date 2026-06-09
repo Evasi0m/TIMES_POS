@@ -695,22 +695,23 @@
   color: #fff;
 }
 
-/* TikTok confirm modal — subtle dark-brown outer glow */
+/* TikTok confirm modal — single dark-brown stroke that follows the rounded
+   corners cleanly and continues the brown header frame around the card */
 :root:not([data-theme="dark"]) .ttc-modal-card.glass-strong {
-  border-color: rgba(107, 66, 40, 0.22) !important;
+  border-width: 2px !important;
+  border-color: rgba(95, 57, 32, 0.65) !important;
   box-shadow:
-    0 0 0 1px rgba(107, 66, 40, 0.14),
-    0 4px 20px -6px rgba(69, 39, 20, 0.22),
-    0 16px 48px -12px rgba(50, 28, 14, 0.28),
-    0 0 72px -16px rgba(107, 66, 40, 0.18);
+    0 4px 20px -6px rgba(69, 39, 20, 0.26),
+    0 16px 48px -12px rgba(50, 28, 14, 0.32),
+    0 0 72px -16px rgba(107, 66, 40, 0.2);
 }
 :root[data-theme="dark"] .ttc-modal-card.glass-strong {
-  border-color: rgba(180, 120, 70, 0.20) !important;
+  border-width: 2px !important;
+  border-color: rgba(180, 120, 70, 0.5) !important;
   box-shadow:
-    0 0 0 1px rgba(180, 120, 70, 0.12),
     0 4px 24px -6px rgba(0, 0, 0, 0.45),
     0 16px 52px -12px rgba(30, 16, 8, 0.55),
-    0 0 80px -16px rgba(107, 66, 40, 0.22);
+    0 0 80px -16px rgba(107, 66, 40, 0.28);
 }
 
 .ttc-modal-header {
@@ -819,6 +820,294 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+}
+.ttc-match-panel__body--compact {
+  max-height: min(120px, 22vh);
+}
+.ttc-match-panel__body--split {
+  max-height: min(160px, 28vh);
+  flex: 1;
+  min-height: 0;
+}
+.ttc-match-panel__body--side {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+}
+.ttc-match--split {
+  min-height: 0;
+  gap: 6px;
+}
+.ttc-match--side {
+  flex: 1;
+  min-height: 0;
+}
+.ttc-match-split-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ttc-match-panel--side {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ttc-match-side-panel-wrap {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.ttc-match-side-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ttc-match-item--selected {
+  background: rgba(var(--primary-rgb, 184, 100, 72), 0.04);
+}
+
+/* ── Focus-one-at-a-time confirm redesign ─────────────────────────────── */
+
+.ttc-teal-ink {
+  color: #0a6a62;
+}
+:root[data-theme='dark'] .ttc-teal-ink {
+  color: #5fd6cc;
+}
+
+/* Order summary strip — cream frame + soft teal accent (cart tone) */
+.ttc-order-strip {
+  border: 1px solid rgba(15, 163, 154, 0.3);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(15, 163, 154, 0.12), transparent 58%),
+    linear-gradient(135deg, rgba(239, 233, 222, 0.92), rgba(232, 224, 210, 0.78));
+  box-shadow: var(--shadow-low);
+}
+:root[data-theme='dark'] .ttc-order-strip {
+  border-color: rgba(43, 196, 184, 0.28);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(15, 163, 154, 0.2), transparent 58%),
+    linear-gradient(135deg, rgba(56, 50, 42, 0.94), rgba(48, 43, 37, 0.82));
+}
+.ttc-order-strip__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  color: #fff;
+  background: linear-gradient(160deg, #2bc4b8, #0a8c83);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 2px 6px -2px rgba(10, 110, 98, 0.5);
+}
+
+/* Item navigator chips */
+.ttc-focus-nav__track {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
+}
+.ttc-focus-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  min-width: 150px;
+  max-width: 240px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--hairline, rgba(0, 0, 0, 0.08));
+  background: var(--surface-strong, #fff);
+  cursor: pointer;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.ttc-focus-chip:hover:not(.is-disabled) {
+  border-color: rgba(var(--primary-rgb, 184, 100, 72), 0.4);
+}
+.ttc-focus-chip--active {
+  border-color: rgb(var(--c-primary));
+  background: rgba(var(--primary-rgb, 184, 100, 72), 0.05);
+  box-shadow: 0 0 0 1px rgb(var(--c-primary) / 0.35);
+}
+.ttc-focus-chip.is-disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.ttc-focus-chip__name {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ttc-focus-chip__status {
+  font-size: 10px;
+  font-weight: 600;
+  margin-top: 1px;
+}
+.ttc-focus-chip__num {
+  flex-shrink: 0;
+  min-width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-soft, #888);
+  background: var(--surface-soft, #f8f6f2);
+}
+.ttc-focus-chip__change {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted, #666);
+  padding: 2px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--hairline, rgba(0, 0, 0, 0.08));
+  background: var(--surface-soft, #f8f6f2);
+  cursor: pointer;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+.ttc-focus-chip__change:hover {
+  color: rgb(var(--c-primary));
+  border-color: rgba(var(--primary-rgb, 184, 100, 72), 0.45);
+}
+
+/* Active-item header card in the focus pane */
+.ttc-focus-item-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border-radius: 12px;
+  border: 1px solid var(--hairline, rgba(0, 0, 0, 0.08));
+  background: var(--surface-soft, #f8f6f2);
+}
+.ttc-focus-item-head--matched {
+  border-color: rgba(10, 122, 67, 0.25);
+  background: rgba(10, 122, 67, 0.05);
+}
+.ttc-focus-done-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(10, 122, 67, 0.1);
+  border: 1px solid rgba(10, 122, 67, 0.25);
+}
+
+/* Candidate list — full-width vertical rows, fills remaining height
+   (override the base .ttc-match-panel__body 240px cap so empty space is used) */
+.ttc-match-panel__body--focus {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.ttc-match-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--hairline, rgba(0, 0, 0, 0.08));
+  background: var(--surface-strong, #fff);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    transform 0.08s ease;
+}
+.ttc-match-cell:hover:not(:disabled),
+.ttc-match-cell:focus-visible:not(:disabled) {
+  background: rgba(var(--primary-rgb, 184, 100, 72), 0.07);
+  border-color: rgba(var(--primary-rgb, 184, 100, 72), 0.35);
+  outline: none;
+}
+.ttc-match-cell:active:not(:disabled) {
+  transform: scale(0.985);
+}
+.ttc-match-cell:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ttc-match-cell--auto {
+  border-color: rgba(10, 122, 67, 0.4);
+  background: rgba(10, 122, 67, 0.06);
+}
+.ttc-match-cell--auto:hover:not(:disabled) {
+  background: rgba(10, 122, 67, 0.12);
+}
+.ttc-match-cell__score {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted, #666);
+  background: var(--surface-soft, #f8f6f2);
+  border: 1px solid var(--hairline, rgba(0, 0, 0, 0.08));
+  border-radius: 6px;
+  padding: 1px 5px;
+}
+
+/* Net-received card — softened red on cream frame */
+.ttc-net-card {
+  border: 1px solid rgba(220, 40, 40, 0.22);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(220, 40, 40, 0.07), transparent 55%),
+    linear-gradient(135deg, rgba(239, 233, 222, 0.92), rgba(232, 224, 210, 0.78));
+  box-shadow: var(--shadow-low);
+}
+:root[data-theme='dark'] .ttc-net-card {
+  border-color: rgba(240, 90, 90, 0.26);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(220, 40, 40, 0.16), transparent 55%),
+    linear-gradient(135deg, rgba(56, 50, 42, 0.94), rgba(48, 43, 37, 0.82));
+}
+.ttc-pending-modal {
+  display: flex;
+  flex-direction: column;
+}
+.ttc-pending-split-list,
+.ttc-pending-split-detail {
+  min-height: 0;
+}
+.ttc-pending-card:active {
+  transform: scale(0.995);
+}
+.ttc-confirm-item-row {
+  position: relative;
+  z-index: 0;
+}
+.ttc-confirm-item-row:focus-within {
+  z-index: 1;
 }
 .ttc-match-row {
   display: flex;
@@ -1168,7 +1457,14 @@
   display: inline-flex;
   overflow: hidden;
   cursor: zoom-in;
-  border-radius: inherit;
+}
+/* Radius comes from the consumer's own rounded-* utility (in @layer utilities).
+   It must win over any inherited radius so the clipped image matches its frame
+   — keep this fallback in @layer components so utilities take precedence. */
+@layer components {
+  .product-img-expandable {
+    border-radius: inherit;
+  }
 }
 .product-img-expand-overlay {
   position: absolute;

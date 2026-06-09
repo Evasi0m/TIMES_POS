@@ -4,6 +4,7 @@ import { sb } from '../../lib/supabase-client.js';
 import { mapError } from '../../lib/error-map.js';
 import { fmtTHB } from '../../lib/format.js';
 import Icon from '../ui/Icon.jsx';
+import TikTokSection from './tiktok/TikTokSection.jsx';
 
 const RETURN_STATUS = {
   RETURN_OR_REFUND_REQUEST_PENDING: 'รอตรวจสอบ',
@@ -76,19 +77,20 @@ export default function TikTokReturns({ toast }) {
   };
 
   return (
-    <div className="rounded-xl border hairline overflow-hidden">
-      <div className="px-4 py-3 bg-surface-soft border-b hairline flex flex-wrap items-center justify-between gap-2">
-        <span className="font-medium text-sm">คืนเงิน / คืนสินค้า</span>
-        <div className="flex gap-2">
-          <button type="button" className="btn-secondary !py-1.5 !text-xs" onClick={load} disabled={loading}>
-            {loading ? <span className="spinner"/> : <Icon name="refresh" size={14}/>} รีเฟรช
+    <TikTokSection
+      title="คืนเงิน / คืนสินค้า"
+      subtitle={`${rows.length} รายการ`}
+      actions={(
+        <>
+          <button type="button" className="btn-secondary !h-11 !py-0 !px-4 !text-sm" onClick={load} disabled={loading}>
+            {loading ? <span className="spinner"/> : <Icon name="refresh" size={16}/>} รีเฟรช
           </button>
-          <button type="button" className="btn-primary !py-1.5 !text-xs" onClick={sync} disabled={syncing}>
-            {syncing ? <span className="spinner"/> : <Icon name="download" size={14}/>} ดึงรายการคืน
+          <button type="button" className="btn-primary !h-11 !py-0 !px-4 !text-sm" onClick={sync} disabled={syncing}>
+            {syncing ? <span className="spinner"/> : <Icon name="download" size={16}/>} ดึงรายการคืน
           </button>
-        </div>
-      </div>
-
+        </>
+      )}
+    >
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -132,6 +134,6 @@ export default function TikTokReturns({ toast }) {
           </tbody>
         </table>
       </div>
-    </div>
+    </TikTokSection>
   );
 }

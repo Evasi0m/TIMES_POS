@@ -6,6 +6,7 @@ import { mapError } from '../../lib/error-map.js';
 import { classifySkuMatch } from '../../lib/fuzzy-match.js';
 import Icon from '../ui/Icon.jsx';
 import ExpandableImageThumb from '../ui/ExpandableImageThumb.jsx';
+import TikTokSection from './tiktok/TikTokSection.jsx';
 
 const TIER_LABEL = {
   exact: 'ตรงกัน',
@@ -181,33 +182,34 @@ export default function TikTokMatching({ toast }) {
   };
 
   return (
-    <div className="rounded-xl border hairline overflow-hidden">
-      <div className="px-4 py-3 bg-surface-soft border-b hairline flex flex-wrap items-center justify-between gap-2">
-        <span className="font-medium text-sm">จับคู่สินค้า ({items.length})</span>
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="flex items-center gap-1.5 text-xs text-muted">
+    <TikTokSection
+      title="จับคู่สินค้า"
+      subtitle={`${items.length} รายการที่ยังไม่จับคู่`}
+      actions={(
+        <>
+          <label className="flex items-center gap-1.5 text-xs text-muted mr-1">
             <input type="checkbox" checked={applyStock} onChange={e => setApplyStock(e.target.checked)}/>
             ตัดสต็อกย้อนหลัง
           </label>
-          <button type="button" className="btn-secondary !py-1.5 !text-xs" onClick={load} disabled={loading}>
-            {loading ? <span className="spinner"/> : <Icon name="refresh" size={14}/>} รีเฟรช
+          <button type="button" className="btn-secondary !h-11 !py-0 !px-4 !text-sm" onClick={load} disabled={loading}>
+            {loading ? <span className="spinner"/> : <Icon name="refresh" size={16}/>} รีเฟรช
           </button>
           <button
             type="button"
-            className="btn-primary !py-1.5 !text-xs"
+            className="btn-primary !h-11 !py-0 !px-4 !text-sm"
             onClick={autoMatchBySku}
             disabled={skuBusy || autoMatchCount === 0}
             title="จับคู่อัตโนมัติเฉพาะคู่ที่ SKU ตรงรุ่น (suffix อยู่ใน whitelist)"
           >
-            {skuBusy ? <span className="spinner"/> : <Icon name="zap" size={14}/>}
+            {skuBusy ? <span className="spinner"/> : <Icon name="zap" size={16}/>}
             จับคู่ด้วย SKU{autoMatchCount > 0 ? ` (${autoMatchCount})` : ''}
           </button>
-          <button type="button" className="btn-secondary !py-1.5 !text-xs" onClick={autoRelink} disabled={autoBusy}>
-            {autoBusy ? <span className="spinner"/> : <Icon name="link" size={14}/>} จับคู่อัตโนมัติใหม่
+          <button type="button" className="btn-secondary !h-11 !py-0 !px-4 !text-sm" onClick={autoRelink} disabled={autoBusy}>
+            {autoBusy ? <span className="spinner"/> : <Icon name="link" size={16}/>} จับคู่อัตโนมัติใหม่
           </button>
-        </div>
-      </div>
-
+        </>
+      )}
+    >
       <div className="divide-y hairline">
         {items.length === 0 && (
           <div className="py-6 text-center text-muted text-sm">ไม่มีรายการที่ต้องจับคู่</div>
@@ -278,6 +280,6 @@ export default function TikTokMatching({ toast }) {
           );
         })}
       </div>
-    </div>
+    </TikTokSection>
   );
 }
