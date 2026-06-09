@@ -23,11 +23,15 @@ interface SyncItem {
   seller_sku?: string;
   tiktok_product_name?: string;
   skip?: boolean;
-  sync_operation?: 'receive' | 'void';
+  sync_operation?: 'receive' | 'void' | 'sale' | 'sale_void' | 'sale_edit';
 }
 
-function resolveSyncOperation(it: SyncItem): 'receive' | 'void' {
-  return it.sync_operation === 'void' ? 'void' : 'receive';
+type SyncOp = 'receive' | 'void' | 'sale' | 'sale_void' | 'sale_edit';
+
+function resolveSyncOperation(it: SyncItem): SyncOp {
+  const op = it.sync_operation;
+  if (op === 'void' || op === 'sale' || op === 'sale_void' || op === 'sale_edit') return op;
+  return 'receive';
 }
 
 async function rpcOrThrow(
@@ -95,11 +99,13 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const { data: already } = await supa.rpc('tiktok_inventory_already_synced', {
-        p_receive_order_id: receiveOrderId,
-        p_product_id: productId,
-        p_sync_operation: syncOp,
-      });
+      const { data: already } = syncOp === 'sale_edit'
+        ? { data: false }
+        : await supa.rpc('tiktok_inventory_already_synced', {
+          p_receive_order_id: receiveOrderId,
+          p_product_id: productId,
+          p_sync_operation: syncOp,
+        });
       if (already === true) {
         results.push({ product_id: productId, status: 'duplicate' });
         continue;

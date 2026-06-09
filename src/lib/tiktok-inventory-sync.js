@@ -9,7 +9,10 @@ import {
   formatMirrorToast,
   formatVoidMirrorProgressToast,
   formatVoidMirrorToast,
+  formatSaleMirrorToast,
+  formatSaleVoidMirrorToast,
   mappingRowFromTiktokSku,
+  normalizeSyncOperation,
   shouldPersistTiktokMatch,
   voidMirrorToastDurationMs,
 } from './tiktok-mirror-helpers.js';
@@ -22,9 +25,12 @@ export {
   formatMirrorToast,
   formatVoidMirrorProgressToast,
   formatVoidMirrorToast,
+  formatSaleMirrorToast,
+  formatSaleVoidMirrorToast,
   formatTikTokApiError,
   voidMirrorToastDurationMs,
   shouldPersistTiktokMatch,
+  normalizeSyncOperation,
 };
 
 /** Pull `{ error }` from supabase-js FunctionsHttpError (non-2xx body). */
@@ -180,4 +186,163 @@ export async function runVoidMirrorWithFeedback({ toast, receiveOrderId, product
   }
 
   return { results, skipped, targetCount: targetCount || count };
+}
+
+async function isTikTokMirrorAvailable() {
+  try {
+    const status = await getTikTokConnectionStatus();
+    return status?.connected === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Mapped products with TikTok product id ready to mirror. */
+function filterMirrorEligibleMappings(mappings) {
+  return (mappings || []).filter(m => m?.product_id != null && m.tiktok_sku_id && m.tiktok_product_id);
+}
+
+/**
+ * Mirror POS stock to TikTok after a sale (any channel).
+ * Uses sale_order_id as receive_order_id ref in sync log.
+ */
+export async function mirrorStockAfterSale({
+  saleOrderId,
+  productIds,
+  syncOperation = 'sale',
+  mappings: preloadedMappings = null,
+}) {
+  const ids = [...new Set((productIds || []).filter(id => id != null))];
+  if (!saleOrderId || !ids.length) return { results: [], skipped: true, targetCount: 0 };
+
+  if (!(await isTikTokMirrorAvailable())) {
+    return { results: [], skipped: true, targetCount: 0, reason: 'not_connected' };
+  }
+
+  const mappings = filterMirrorEligibleMappings(
+    preloadedMappings ?? await fetchTikTokMappings(ids),
+  );
+  if (!mappings.length) return { results: [], skipped: true, targetCount: 0 };
+
+  const stocks = await fetchPosStocks(mappings.map(m => m.product_id));
+  const mirrorPayload = mappings.map(m => buildSyncLine({
+    saleOrderId,
+    productId: m.product_id,
+    posStockAfter: stocks[m.product_id]?.current_stock ?? 0,
+    mapping: m,
+    syncOperation,
+  }));
+  const results = await mirrorStockToTikTok(mirrorPayload);
+  return { results, skipped: false, targetCount: mappings.length };
+}
+
+/** Products eligible for sale void mirror (prior successful sale sync). */
+export async function fetchSaleVoidMirrorTargets(saleOrderId, productIds = null) {
+  const { data, error } = await sb.rpc('get_tiktok_sale_mirror_targets', {
+    p_sale_order_id: saleOrderId,
+    p_product_ids: productIds?.length ? productIds : null,
+  });
+  if (error) throw error;
+  return data || [];
+}
+
+/** Mirror after voiding a sale bill — only SKUs previously sale-mirrored. */
+export async function mirrorStockAfterSaleVoid({
+  saleOrderId, productIds = null, targets: preloadedTargets = null,
+}) {
+  const targets = preloadedTargets ?? await fetchSaleVoidMirrorTargets(saleOrderId, productIds);
+  if (!targets.length) return { results: [], skipped: true, targetCount: 0 };
+
+  if (!(await isTikTokMirrorAvailable())) {
+    return { results: [], skipped: true, targetCount: 0, reason: 'not_connected' };
+  }
+
+  const stocks = await fetchPosStocks(targets.map(t => t.product_id));
+  const mirrorPayload = targets.map(t => buildSyncLine({
+    saleOrderId,
+    productId: t.product_id,
+    posStockAfter: stocks[t.product_id]?.current_stock ?? 0,
+    mapping: t,
+    syncOperation: 'sale_void',
+  }));
+  const results = await mirrorStockToTikTok(mirrorPayload);
+  return { results, skipped: false, targetCount: targets.length };
+}
+
+/**
+ * Sale mirror with optional toast feedback (non-blocking for checkout).
+ */
+export async function runSaleMirrorWithFeedback({
+  toast,
+  saleOrderId,
+  productIds,
+  syncOperation = 'sale',
+  labelFormatter = formatSaleMirrorToast,
+}) {
+  const ids = [...new Set((productIds || []).filter(id => id != null))];
+  if (!saleOrderId || !ids.length) return { results: [], skipped: true, targetCount: 0 };
+
+  const count = ids.length;
+  if (count >= 2 && toast) {
+    toast.push(formatVoidMirrorProgressToast(count), 'info', {
+      durationMs: voidMirrorToastDurationMs(count),
+    });
+  }
+
+  try {
+    const { results, skipped, targetCount } = await mirrorStockAfterSale({
+      saleOrderId,
+      productIds: ids,
+      syncOperation,
+    });
+    if (!skipped && toast) {
+      const { msg, isError } = labelFormatter(results);
+      toast.push(msg, isError ? 'error' : 'success', {
+        durationMs: voidMirrorToastDurationMs(targetCount || count, { isError }),
+      });
+    }
+    return { results, skipped, targetCount };
+  } catch (e) {
+    if (toast) {
+      toast.push('TikTok sale mirror: ' + formatTikTokApiError(e?.message || e), 'error', {
+        durationMs: 8000,
+      });
+    }
+    return { results: [], skipped: true, targetCount: 0, error: e };
+  }
+}
+
+/** Void sale mirror with toast feedback. */
+export async function runSaleVoidMirrorWithFeedback({ toast, saleOrderId, productIds = null }) {
+  const targets = await fetchSaleVoidMirrorTargets(saleOrderId, productIds);
+  if (!targets.length) return { results: [], skipped: true, targetCount: 0 };
+
+  const count = targets.length;
+  if (count >= 2 && toast) {
+    toast.push(formatVoidMirrorProgressToast(count), 'info', {
+      durationMs: voidMirrorToastDurationMs(count),
+    });
+  }
+
+  try {
+    const { results, skipped, targetCount } = await mirrorStockAfterSaleVoid({
+      saleOrderId,
+      productIds,
+      targets,
+    });
+    if (!skipped && toast) {
+      const { msg, isError } = formatSaleVoidMirrorToast(results);
+      toast.push(msg, isError ? 'error' : 'success', {
+        durationMs: voidMirrorToastDurationMs(targetCount || count, { isError }),
+      });
+    }
+    return { results, skipped, targetCount: targetCount || count };
+  } catch (e) {
+    if (toast) {
+      toast.push('TikTok sale void mirror: ' + formatTikTokApiError(e?.message || e), 'error', {
+        durationMs: 8000,
+      });
+    }
+    return { results: [], skipped: true, targetCount: 0, error: e };
+  }
 }

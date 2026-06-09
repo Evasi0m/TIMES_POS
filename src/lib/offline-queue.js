@@ -12,6 +12,8 @@
 // The queue stores raw RPC payloads (header + items), not opaque blobs, so
 // they remain inspectable / fixable by hand if anything ever breaks.
 
+import { mirrorStockAfterSale } from './tiktok-inventory-sync.js';
+
 const DB_NAME = 'times-pos-offline';
 const DB_VERSION = 1;
 const STORE = 'sales';
@@ -130,8 +132,9 @@ export async function drainQueue(sb, mapErr) {
 
   for (const item of items) {
     try {
-      const { error } = await sb.rpc('create_sale_order_with_items', item.payload);
+      const { data: order, error } = await sb.rpc('create_sale_order_with_items', item.payload);
       if (error) throw error;
+      await mirrorQueuedSale(order, item.payload);
       await remove(item.id);
       sent++;
     } catch (e) {
@@ -152,6 +155,18 @@ export async function drainQueue(sb, mapErr) {
   };
   notifyState();
   return { sent, failed, lastError };
+}
+
+function productIdsFromQueuedPayload(payload) {
+  return (payload?.p_items || []).map(it => it.product_id).filter(Boolean);
+}
+
+async function mirrorQueuedSale(order, payload) {
+  const productIds = productIdsFromQueuedPayload(payload);
+  if (!order?.id || !productIds.length) return;
+  try {
+    await mirrorStockAfterSale({ saleOrderId: order.id, productIds });
+  } catch { /* non-blocking */ }
 }
 
 /** Manually drop a single queued sale by id (escape hatch for malformed payloads). */

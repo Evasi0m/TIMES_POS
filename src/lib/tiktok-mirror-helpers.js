@@ -56,6 +56,16 @@ export function formatVoidMirrorToast(results) {
   return formatMirrorToast(results, { label: 'TikTok void mirror' });
 }
 
+/** Toast after sale mirror. */
+export function formatSaleMirrorToast(results) {
+  return formatMirrorToast(results, { label: 'TikTok sale mirror' });
+}
+
+/** Toast after void sale mirror. */
+export function formatSaleVoidMirrorToast(results) {
+  return formatMirrorToast(results, { label: 'TikTok sale void mirror' });
+}
+
 /** Progress toast while void mirror runs (multi-SKU bills). */
 export function formatVoidMirrorProgressToast(count) {
   const n = Math.max(0, Number(count) || 0);
@@ -72,13 +82,20 @@ export function voidMirrorToastDurationMs(count, { isError = false } = {}) {
 
 /** Build sync payload line from mapping + POS stock. */
 export function buildSyncLine({
-  receiveOrderId, productId, posStockAfter, mapping, tiktokSku, skipped,
+  receiveOrderId,
+  saleOrderId,
+  productId,
+  posStockAfter,
+  mapping,
+  tiktokSku,
+  skipped,
   syncOperation = 'receive',
 }) {
-  const syncOp = syncOperation === 'void' ? 'void' : 'receive';
+  const refOrderId = saleOrderId ?? receiveOrderId;
+  const syncOp = normalizeSyncOperation(syncOperation);
   if (skipped) {
     return {
-      receive_order_id: receiveOrderId,
+      receive_order_id: refOrderId,
       product_id: productId,
       pos_stock_after: posStockAfter,
       skip: true,
@@ -88,7 +105,7 @@ export function buildSyncLine({
   const sku = tiktokSku || {};
   const m = mapping || {};
   return {
-    receive_order_id: receiveOrderId,
+    receive_order_id: refOrderId,
     product_id: productId,
     tiktok_product_id: sku.tiktok_product_id || m.tiktok_product_id,
     tiktok_sku_id: sku.tiktok_sku_id || m.tiktok_sku_id,
@@ -99,6 +116,13 @@ export function buildSyncLine({
     skip: false,
     sync_operation: syncOp,
   };
+}
+
+/** @returns {'receive'|'void'|'sale'|'sale_void'|'sale_edit'} */
+export function normalizeSyncOperation(syncOperation) {
+  const op = syncOperation || 'receive';
+  if (op === 'void' || op === 'sale' || op === 'sale_void' || op === 'sale_edit') return op;
+  return 'receive';
 }
 
 /** Map common TikTok / connection errors to Thai hints. */

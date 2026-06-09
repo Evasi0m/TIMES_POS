@@ -126,6 +126,32 @@ describe('buildSyncLine', () => {
     });
     expect(line.sync_operation).toBe('receive');
   });
+
+  it('includes sync_operation sale when requested', () => {
+    const line = buildSyncLine({
+      saleOrderId: 500,
+      productId: 42,
+      posStockAfter: 0,
+      mapping: {
+        tiktok_sku_id: 'sku-1',
+        tiktok_product_id: 'prod-1',
+      },
+      syncOperation: 'sale',
+    });
+    expect(line.sync_operation).toBe('sale');
+    expect(line.receive_order_id).toBe(500);
+  });
+
+  it('includes sync_operation sale_void when requested', () => {
+    const line = buildSyncLine({
+      saleOrderId: 501,
+      productId: 43,
+      posStockAfter: 2,
+      mapping: { tiktok_sku_id: 's', tiktok_product_id: 'p' },
+      syncOperation: 'sale_void',
+    });
+    expect(line.sync_operation).toBe('sale_void');
+  });
 });
 
 describe('mappingRowFromTiktokSku', () => {

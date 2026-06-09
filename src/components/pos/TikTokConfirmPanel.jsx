@@ -18,6 +18,7 @@ import { pollTikTokOrders, formatPollToast } from '../../lib/tiktok-poll-sync.js
 import { useSimulatedSyncProgress } from '../../lib/use-simulated-sync-progress.js';
 import TikTokPendingModal from './tiktok-confirm/TikTokPendingModal.jsx';
 import { SORT_OLDEST, SORT_NEWEST } from './tiktok-confirm/helpers.js';
+import { runSaleMirrorWithFeedback } from '../../lib/tiktok-inventory-sync.js';
 
 export default function TikTokConfirmPanel({ toast, onConfirmed }) {
   const [orders, setOrders] = useState([]);
@@ -213,6 +214,16 @@ export default function TikTokConfirmPanel({ toast, onConfirmed }) {
       if (error) throw error;
       ok = true;
       toast?.(`ยืนยันออเดอร์ TikTok #${confirmedTid} แล้ว`, 'success');
+      const confirmedProductIds = (activeOrder.items || [])
+        .map(it => picks[it.id]?.id)
+        .filter(Boolean);
+      if (confirmedProductIds.length) {
+        runSaleMirrorWithFeedback({
+          toast: toast ? { push: (msg, type, opts) => toast(msg, type, opts) } : null,
+          saleOrderId: confirmedId,
+          productIds: confirmedProductIds,
+        }).catch(() => {});
+      }
       window.dispatchEvent(new Event('tiktok-pending-changed'));
       window.dispatchEvent(new Event('pending-net-changed'));
     } catch (e) {

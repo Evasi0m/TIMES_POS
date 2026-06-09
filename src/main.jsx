@@ -120,6 +120,8 @@ import {
   isTikTokLineReady,
   mirrorStockToTikTok,
   persistTiktokMatchMapping,
+  runSaleMirrorWithFeedback,
+  runSaleVoidMirrorWithFeedback,
   runVoidMirrorWithFeedback,
 } from './lib/tiktok-inventory-sync.js';
 import { mappingRowFromTiktokSku } from './lib/tiktok-mirror-helpers.js';
@@ -4831,6 +4833,7 @@ function POSView() {
         discount1_value: roundMoney(l.discount1_value || 0), discount1_type: l.discount1_type,
         discount2_value: roundMoney(l.discount2_value || 0), discount2_type: l.discount2_type,
       }));
+      const soldProductIds = itemsPayload.map(it => it.product_id).filter(Boolean);
       const rpcArgs = { p_header: headerPayload, p_items: itemsPayload };
 
       // Offline path: stash the sale in IndexedDB and let the SW-aware drainer
@@ -4875,6 +4878,11 @@ function POSView() {
         if (headerPayload.net_received_pending) {
           window.dispatchEvent(new Event('pending-net-changed'));
         }
+        runSaleMirrorWithFeedback({
+          toast,
+          saleOrderId: order.id,
+          productIds: soldProductIds,
+        }).catch(() => {});
       }
 
       setCart([]); setNetPrice(""); setNetReceived(""); setDeferNet(false);
@@ -7617,6 +7625,17 @@ function SalesView({ onGoPOS }) {
         sb.from('sale_order_items').select('*').eq('sale_order_id', detail.order.id),
         sb.from('sale_order_edits').select('*').eq('sale_order_id', detail.order.id).order('edited_at', { ascending: false }),
       ]);
+      const editedProductIds = itemsPayload
+        .map(it => detail.items.find(row => row.id === it.id)?.product_id)
+        .filter(Boolean);
+      if (editedProductIds.length) {
+        runSaleMirrorWithFeedback({
+          toast,
+          saleOrderId: detail.order.id,
+          productIds: editedProductIds,
+          syncOperation: 'sale_edit',
+        }).catch(() => {});
+      }
       setDetail(d => d ? { ...d, order: data || d.order, items: iRes.data || d.items } : d);
       setEditHistory(hRes.data || []);
       setEditMode(false);
@@ -7699,10 +7718,17 @@ function SalesView({ onGoPOS }) {
     if (reason === null) return; // user cancelled the prompt
     voidLockRef.current = true;
     setVoiding(true);
+    const voidOrderId = detail.order.id;
+    const voidProductIds = (detail.items || []).map(it => it.product_id).filter(Boolean);
     try {
-      const { error } = await sb.rpc('void_sale_order', { p_sale_order_id: detail.order.id, p_reason: reason || null });
+      const { error } = await sb.rpc('void_sale_order', { p_sale_order_id: voidOrderId, p_reason: reason || null });
       if (error) throw error;
-      toast.push(`ยกเลิกบิล #${detail.order.id} แล้ว · สต็อกถูกบวกคืน`, 'success');
+      toast.push(`ยกเลิกบิล #${voidOrderId} แล้ว · สต็อกถูกบวกคืน`, 'success');
+      runSaleVoidMirrorWithFeedback({
+        toast,
+        saleOrderId: voidOrderId,
+        productIds: voidProductIds,
+      }).catch(() => {});
       setDetail(null);
       load();
     } catch (e) {

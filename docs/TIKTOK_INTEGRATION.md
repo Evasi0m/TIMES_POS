@@ -212,6 +212,27 @@ flowchart LR
 - TikTok sync ล้มเหลว **ไม่ rollback** การยกเลิก POS
 - ต้องรัน migration **049** + redeploy `tiktok-inventory-update`
 
+### Mirror สต็อกหลังขายทุกช่องทาง (055)
+
+```mermaid
+flowchart LR
+  Sale[ขาย POS ทุก channel] --> RPC[create_sale_order_with_items / confirm_tiktok_sale_order]
+  RPC --> PosStock[adjust_stock ลด qty]
+  PosStock --> Map[get_tiktok_mappings_for_products]
+  Map --> Edge[tiktok-inventory-update sync_operation sale]
+  Edge --> Mirror["SET TikTok qty = current_stock POS"]
+```
+
+- ทำงานหลัง **checkout POS** (หน้าร้าน / Shopee / Lazada / Facebook / TikTok manual), **ยืนยัน TikTok API**, **คิวออฟไลน์ drain**
+- เฉพาะสินค้าที่มี mapping ใน `tiktok_product_mappings` + `sync_enabled` + TikTok เชื่อมต่อ
+- **Mirror** = ตั้ง TikTok ให้เท่า `current_stock` POS หลังขาย (ไม่ใช่ลด delta)
+- ตัวอย่าง: POS 1, TikTok 1, ขาย Shopee ×1 → POS/TikTok **0**
+- TikTok sync ล้มเหลว **ไม่ rollback** บิล POS (non-blocking + toast)
+- **ยกเลิกบิล** → `sync_operation sale_void` (เฉพาะ SKU ที่เคย mirror `sale` สำเร็จในบิลนั้น)
+- **แก้ไข qty บิล** → `sync_operation sale_edit` (re-sync SKU ที่เปลี่ยน)
+- Idempotency: `(receive_order_id=sale_order_id, product_id, sync_operation)` — `sale_edit` ยกเว้น (แก้บิลซ้ำได้)
+- ต้องรัน migration **055** + redeploy `tiktok-inventory-update`
+
 ### จับคู่สินค้า (Product Matching) — super_admin เท่านั้น (046)
 - แท็บ **จับคู่สินค้า** แสดงรายการที่ยังไม่ match (`get_tiktok_unmatched_items`)
 - เลือกสินค้า POS (ค้นชื่อ/บาร์โค้ด) → `link_tiktok_item_to_product` (มี option ตัด stock ย้อนหลัง)
@@ -234,3 +255,5 @@ flowchart LR
 | บันทึกรับเข้าไม่ได้เพราะ TikTok | จับคู่ TikTok ในแต่ละบรรทัด หรือติ๊ก "ไม่ sync" |
 | Mirror ไม่ทำงานหลังบันทึก | เช็ค checkbox Mirror + TikTok เชื่อมต่อ + Product write scope |
 | ยกเลิกบิลแล้ว TikTok ไม่ลด | รัน migration 049 + redeploy `tiktok-inventory-update`; ต้องเคย mirror สำเร็จตอนรับเข้า |
+| ขาย Shopee/Lazada แล้ว TikTok ไม่ลด | รัน migration 055; ต้องจับคู่ mapping + TikTok เชื่อมต่อ; ดู toast TikTok sale mirror |
+| ยกเลิกบิลขายแล้ว TikTok ไม่คืน | ต้องเคย mirror `sale` สำเร็จในบิลนั้นก่อน (sale_void) |
