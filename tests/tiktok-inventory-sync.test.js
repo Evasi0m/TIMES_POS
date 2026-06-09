@@ -14,6 +14,7 @@ import {
   mappingNeedsProductId,
   pickCatalogSkuForMapping,
   formatMirrorSkipToast,
+  normalizeSyncOperation,
 } from '../src/lib/tiktok-mirror-helpers.js';
 
 describe('isTikTokLineReady', () => {
@@ -155,6 +156,39 @@ describe('buildSyncLine', () => {
     });
     expect(line.sync_operation).toBe('sale_void');
   });
+
+  it('includes sync_operation return when requested', () => {
+    const line = buildSyncLine({
+      receiveOrderId: 88,
+      productId: 44,
+      posStockAfter: 3,
+      mapping: { tiktok_sku_id: 's', tiktok_product_id: 'p' },
+      syncOperation: 'return',
+    });
+    expect(line.sync_operation).toBe('return');
+    expect(line.receive_order_id).toBe(88);
+  });
+
+  it('includes sync_operation sale_edit when requested', () => {
+    const line = buildSyncLine({
+      saleOrderId: 502,
+      productId: 45,
+      posStockAfter: 1,
+      mapping: { tiktok_sku_id: 's', tiktok_product_id: 'p' },
+      syncOperation: 'sale_edit',
+    });
+    expect(line.sync_operation).toBe('sale_edit');
+  });
+});
+
+describe('normalizeSyncOperation', () => {
+  it('passes through known ops including return', () => {
+    expect(normalizeSyncOperation('return')).toBe('return');
+    expect(normalizeSyncOperation('sale_edit')).toBe('sale_edit');
+  });
+  it('defaults unknown to receive', () => {
+    expect(normalizeSyncOperation('bogus')).toBe('receive');
+  });
 });
 
 describe('mappingRowFromTiktokSku', () => {
@@ -223,6 +257,18 @@ describe('formatMirrorSkipToast', () => {
     const t = formatMirrorSkipToast({ reason: 'incomplete_mapping', incompleteCount: 2 });
     expect(t.type).toBe('error');
     expect(t.msg).toContain('2 รายการ');
+  });
+
+  it('warns when no mapping', () => {
+    const t = formatMirrorSkipToast({ reason: 'no_mapping' });
+    expect(t.type).toBe('warning');
+    expect(t.msg).toContain('ยังไม่ได้จับคู่');
+  });
+
+  it('warns when void has no target', () => {
+    const t = formatMirrorSkipToast({ reason: 'void_no_target' });
+    expect(t.type).toBe('warning');
+    expect(t.msg).toContain('ไม่เคย mirror');
   });
 });
 

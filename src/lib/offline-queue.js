@@ -13,6 +13,7 @@
 // they remain inspectable / fixable by hand if anything ever breaks.
 
 import { mirrorStockAfterSale } from './tiktok-inventory-sync.js';
+import { formatMirrorSkipToast, logMirrorBackgroundError } from './tiktok-mirror-helpers.js';
 
 const DB_NAME = 'times-pos-offline';
 const DB_VERSION = 1;
@@ -49,7 +50,7 @@ export function onQueueChange(cb) {
 //   { state: 'idle'|'draining'|'error',
 //     lastError: string|null,   // Thai-mapped if mapError() was used by caller
 //     lastDrainAt: ISO|null }
-let _drainState = { state: 'idle', lastError: null, lastDrainAt: null };
+let _drainState = { state: 'idle', lastError: null, mirrorWarning: null, lastDrainAt: null };
 const stateListeners = new Set();
 function notifyState() {
   stateListeners.forEach((cb) => { try { cb(_drainState); } catch {} });
@@ -121,7 +122,7 @@ async function remove(id) {
  * @returns {{sent:number, failed:number, lastError:string|null}}
  */
 export async function drainQueue(sb, mapErr) {
-  _drainState = { state: 'draining', lastError: null, lastDrainAt: _drainState.lastDrainAt };
+  _drainState = { state: 'draining', lastError: null, mirrorWarning: null, lastDrainAt: _drainState.lastDrainAt };
   notifyState();
 
   const fmt = typeof mapErr === 'function' ? mapErr : (e) => String(e?.message || e);
@@ -129,12 +130,14 @@ export async function drainQueue(sb, mapErr) {
   let sent = 0;
   let failed = 0;
   let lastError = null;
+  let mirrorWarning = null;
 
   for (const item of items) {
     try {
       const { data: order, error } = await sb.rpc('create_sale_order_with_items', item.payload);
       if (error) throw error;
-      await mirrorQueuedSale(order, item.payload);
+      const warn = await mirrorQueuedSale(order, item.payload);
+      if (warn) mirrorWarning = warn;
       await remove(item.id);
       sent++;
     } catch (e) {
@@ -151,6 +154,7 @@ export async function drainQueue(sb, mapErr) {
   _drainState = {
     state: failed > 0 ? 'error' : 'idle',
     lastError,
+    mirrorWarning,
     lastDrainAt: new Date().toISOString(),
   };
   notifyState();
@@ -163,10 +167,18 @@ function productIdsFromQueuedPayload(payload) {
 
 async function mirrorQueuedSale(order, payload) {
   const productIds = productIdsFromQueuedPayload(payload);
-  if (!order?.id || !productIds.length) return;
+  if (!order?.id || !productIds.length) return null;
   try {
-    await mirrorStockAfterSale({ saleOrderId: order.id, productIds });
-  } catch { /* non-blocking */ }
+    const result = await mirrorStockAfterSale({ saleOrderId: order.id, productIds });
+    if (result.skipped) {
+      const t = formatMirrorSkipToast({ reason: result.reason });
+      return t?.msg || null;
+    }
+  } catch (e) {
+    logMirrorBackgroundError('offline-queue-sale', e);
+    return 'TikTok sale mirror ล้มเหลวหลังส่งบิลออฟไลน์';
+  }
+  return null;
 }
 
 /** Manually drop a single queued sale by id (escape hatch for malformed payloads). */

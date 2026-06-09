@@ -4,7 +4,11 @@ import { sb } from '../../lib/supabase-client.js';
 import { getProductCatalog } from '../../lib/product-catalog-cache.js';
 import { mapError } from '../../lib/error-map.js';
 import { classifySkuMatch } from '../../lib/fuzzy-match.js';
-import { resolveTikTokCatalogMatch } from '../../lib/tiktok-inventory-sync.js';
+import {
+  resolveTikTokCatalogMatch,
+  runSaleMirrorWithFeedback,
+} from '../../lib/tiktok-inventory-sync.js';
+import { logMirrorBackgroundError } from '../../lib/tiktok-mirror-helpers.js';
 import Icon from '../ui/Icon.jsx';
 import ExpandableImageThumb from '../ui/ExpandableImageThumb.jsx';
 import TikTokSection from './tiktok/TikTokSection.jsx';
@@ -140,6 +144,13 @@ export default function TikTokMatching({ toast }) {
     try {
       await linkItem(item, product);
       toast?.push(`จับคู่ "${product.name}" แล้ว`, 'success');
+      if (applyStock && item.sale_order_id) {
+        runSaleMirrorWithFeedback({
+          toast,
+          saleOrderId: item.sale_order_id,
+          productIds: [product.id],
+        }).catch((e) => logMirrorBackgroundError('tiktok-matching', e));
+      }
       await load();
     } catch (e) {
       toast?.push('จับคู่ไม่ได้: ' + mapError(e), 'error');

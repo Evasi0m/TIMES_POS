@@ -118,10 +118,12 @@ export function buildSyncLine({
   };
 }
 
-/** @returns {'receive'|'void'|'sale'|'sale_void'|'sale_edit'} */
+/** @returns {'receive'|'void'|'sale'|'sale_void'|'sale_edit'|'return'} */
 export function normalizeSyncOperation(syncOperation) {
   const op = syncOperation || 'receive';
-  if (op === 'void' || op === 'sale' || op === 'sale_void' || op === 'sale_edit') return op;
+  if (op === 'void' || op === 'sale' || op === 'sale_void' || op === 'sale_edit' || op === 'return') {
+    return op;
+  }
   return 'receive';
 }
 
@@ -152,6 +154,18 @@ export function formatMirrorSkipToast({ reason, incompleteCount = 0, healed = 0 
   if (reason === 'not_connected') {
     return { msg: 'TikTok sale mirror ข้าม: ยังไม่ได้เชื่อมต่อ TikTok Shop', type: 'warning' };
   }
+  if (reason === 'no_mapping') {
+    return {
+      msg: 'TikTok sale mirror ข้าม: สินค้านี้ยังไม่ได้จับคู่ TikTok',
+      type: 'warning',
+    };
+  }
+  if (reason === 'void_no_target') {
+    return {
+      msg: 'TikTok ไม่ได้ sync คืน — บิลนี้ไม่เคย mirror ขายไป TikTok',
+      type: 'warning',
+    };
+  }
   if (reason === 'incomplete_mapping') {
     if (healed > 0 && incompleteCount === 0) {
       return { msg: 'ซ่อม mapping TikTok อัตโนมัติแล้ว', type: 'info' };
@@ -163,6 +177,12 @@ export function formatMirrorSkipToast({ reason, incompleteCount = 0, healed = 0 
     };
   }
   return null;
+}
+
+/** Log background mirror failures (checkout / void fire-and-forget). */
+export function logMirrorBackgroundError(context, error) {
+  const msg = error?.message || String(error || '');
+  if (msg) console.warn(`[TikTok mirror] ${context}:`, msg);
 }
 
 /** Map common TikTok / connection errors to Thai hints. */

@@ -7,7 +7,7 @@ import { mapError } from '../../lib/error-map.js';
 import { formatTikTokApiError } from '../../lib/tiktok-mirror-helpers.js';
 import {
   backfillMissingTikTokProductIds,
-  resyncSaleMirrorBill,
+  resyncPendingSaleMirrors,
 } from '../../lib/tiktok-inventory-sync.js';
 import Icon from '../ui/Icon.jsx';
 
@@ -77,23 +77,13 @@ export default function TikTokHealthCard({ toast }) {
         `ซ่อม mapping TikTok แล้ว ${healed} รายการ${failed ? ` (ไม่พบ ${failed})` : ''}`,
         healed > 0 ? 'success' : failed > 0 ? 'warning' : 'info',
       );
-      // Bill #127254 (GBD-300-9DR) sold before mirror ran — re-sync only if mapping is ready.
-      const { data: gbdMapping } = await sb.from('tiktok_product_mappings')
-        .select('tiktok_product_id')
-        .eq('product_id', 11449)
-        .maybeSingle();
-      if (gbdMapping?.tiktok_product_id) {
-        await resyncSaleMirrorBill({
-          saleOrderId: 127254,
-          productIds: [11449],
-          toast,
-        }).catch(() => {});
-      } else if (healed > 0 || failed > 0) {
-        toast?.push(
-          'GBD-300-9 (บิล #127254) ยัง sync TikTok ไม่ได้ — mapping ขาด product id',
-          'warning',
-          { durationMs: 10000 },
-        );
+      if (healed > 0) {
+        const { synced, bills } = await resyncPendingSaleMirrors({ toast, limit: 20 });
+        if (synced > 0) {
+          toast?.push(`re-sync sale mirror แล้ว ${synced} บิล`, 'info', { durationMs: 8000 });
+        } else if (bills.length === 0 && failed === 0) {
+          toast?.push('ไม่มีบิลค้าง sale mirror', 'info');
+        }
       }
     } catch (e) {
       setError('ซ่อม mapping ไม่สำเร็จ: ' + formatTikTokApiError(mapError(e)));
@@ -192,6 +182,20 @@ export default function TikTokHealthCard({ toast }) {
         hint={health.mappings_missing_product_id > 0 ? `ขาด product link ${health.mappings_missing_product_id} รายการ` : undefined}
         value={`${(health.mappings_total ?? 0) - (health.mappings_missing_product_id ?? 0)}/${health.mappings_total ?? 0}`}
         tone={health.mappings_missing_product_id > 0 ? 'warn' : 'ok'}
+      />
+      {(health.sale_mirror_resync_pending ?? 0) > 0 && (
+        <Row
+          label="บิลค้าง sale mirror"
+          hint="มี mapping แล้วแต่ยังไม่เคย sync TikTok — กดซ่อม mapping เพื่อ re-sync"
+          value={health.sale_mirror_resync_pending}
+          tone="warn"
+        />
+      )}
+      <Row
+        label="Catalog mirror cap"
+        hint="โหลด catalog สูงสุด ~500 SKU ต่อครั้ง — ร้านใหญ่ขึ้นอาจต้องเพิ่ม cap"
+        value={health.catalog_mirror_max_skus ?? 500}
+        tone="muted"
       />
 
       {health.mappings_missing_product_id > 0 && (

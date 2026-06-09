@@ -18,7 +18,11 @@ import { pollTikTokOrders, formatPollToast } from '../../lib/tiktok-poll-sync.js
 import { useSimulatedSyncProgress } from '../../lib/use-simulated-sync-progress.js';
 import TikTokPendingModal from './tiktok-confirm/TikTokPendingModal.jsx';
 import { SORT_OLDEST, SORT_NEWEST } from './tiktok-confirm/helpers.js';
-import { runSaleMirrorWithFeedback } from '../../lib/tiktok-inventory-sync.js';
+import {
+  resolveTikTokCatalogMatch,
+  runSaleMirrorWithFeedback,
+} from '../../lib/tiktok-inventory-sync.js';
+import { logMirrorBackgroundError } from '../../lib/tiktok-mirror-helpers.js';
 
 export default function TikTokConfirmPanel({ toast, onConfirmed }) {
   const [orders, setOrders] = useState([]);
@@ -202,9 +206,21 @@ export default function TikTokConfirmPanel({ toast, onConfirmed }) {
     setSaving(true);
     let ok = false;
     try {
-      const p_items = (activeOrder.items || []).map(it => ({
-        item_id: it.id,
-        product_id: picks[it.id]?.id ?? null,
+      const p_items = await Promise.all((activeOrder.items || []).map(async (it) => {
+        const product_id = picks[it.id]?.id ?? null;
+        let tiktok_product_id = null;
+        let warehouse_id = null;
+        if (product_id && it.tiktok_sku_id) {
+          try {
+            const match = await resolveTikTokCatalogMatch({
+              sellerSku: it.seller_sku || it.sku_name,
+              tiktokSkuId: it.tiktok_sku_id,
+            });
+            tiktok_product_id = match?.tiktok_product_id || null;
+            warehouse_id = match?.warehouse_id || null;
+          } catch { /* confirm RPC may use existing mapping */ }
+        }
+        return { item_id: it.id, product_id, tiktok_product_id, warehouse_id };
       }));
       const { error } = await sb.rpc('confirm_tiktok_sale_order', {
         p_order_id: confirmedId,
@@ -222,7 +238,7 @@ export default function TikTokConfirmPanel({ toast, onConfirmed }) {
           toast: toast ? { push: (msg, type, opts) => toast(msg, type, opts) } : null,
           saleOrderId: confirmedId,
           productIds: confirmedProductIds,
-        }).catch(() => {});
+        }).catch((e) => logMirrorBackgroundError('tiktok-confirm', e));
       }
       window.dispatchEvent(new Event('tiktok-pending-changed'));
       window.dispatchEvent(new Event('pending-net-changed'));

@@ -118,13 +118,14 @@ import {
   formatMirrorToast,
   getTikTokConnectionStatus,
   isTikTokLineReady,
+  mirrorStockAfterGoodsReturn,
   mirrorStockToTikTok,
   persistTiktokMatchMapping,
   runSaleMirrorWithFeedback,
   runSaleVoidMirrorWithFeedback,
   runVoidMirrorWithFeedback,
 } from './lib/tiktok-inventory-sync.js';
-import { mappingRowFromTiktokSku } from './lib/tiktok-mirror-helpers.js';
+import { formatMirrorSkipToast, logMirrorBackgroundError, mappingRowFromTiktokSku } from './lib/tiktok-mirror-helpers.js';
 import AnimatedLogo from './components/ui/AnimatedLogo.jsx';
 import './styles.css';
 
@@ -4882,7 +4883,7 @@ function POSView() {
           toast,
           saleOrderId: order.id,
           productIds: soldProductIds,
-        }).catch(() => {});
+        }).catch((e) => logMirrorBackgroundError('checkout-sale', e));
       }
 
       setCart([]); setNetPrice(""); setNetReceived(""); setDeferNet(false);
@@ -7634,7 +7635,7 @@ function SalesView({ onGoPOS }) {
           saleOrderId: detail.order.id,
           productIds: editedProductIds,
           syncOperation: 'sale_edit',
-        }).catch(() => {});
+        }).catch((e) => logMirrorBackgroundError('sale-edit', e));
       }
       setDetail(d => d ? { ...d, order: data || d.order, items: iRes.data || d.items } : d);
       setEditHistory(hRes.data || []);
@@ -7728,7 +7729,7 @@ function SalesView({ onGoPOS }) {
         toast,
         saleOrderId: voidOrderId,
         productIds: voidProductIds,
-      }).catch(() => {});
+      }).catch((e) => logMirrorBackgroundError('sale-void', e));
       setDetail(null);
       load();
     } catch (e) {
@@ -8992,7 +8993,7 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
   const [tiktokMatchLineIndex, setTiktokMatchLineIndex] = useState(null);
 
   useEffect(() => {
-    if (kind !== 'receive') return;
+    if (kind !== 'receive' && kind !== 'return') return;
     let cancelled = false;
     (async () => {
       try {
@@ -9006,6 +9007,7 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
   }, [kind]);
 
   const tiktokMirrorOn = kind === 'receive' && syncTikTokAfterReceive && tiktokConnected;
+  const tiktokReturnMirrorOn = kind === 'return' && goodsReturned && tiktokConnected;
   const tiktokCatalogLines = React.useMemo(() => {
     const seen = new Set();
     const lines = [];
@@ -9646,6 +9648,25 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
           const results = await mirrorStockToTikTok(mirrorPayload);
           const { msg, isError } = formatMirrorToast(results);
           toast.push(msg, isError ? 'error' : 'success');
+        } catch (e) {
+          toast.push('Mirror TikTok ไม่สำเร็จ: ' + mapError(e), 'error');
+        }
+      }
+
+      if (tiktokReturnMirrorOn && items.length) {
+        try {
+          const productIds = [...new Set(items.map(l => l.product_id).filter(Boolean))];
+          const { results, skipped, reason } = await mirrorStockAfterGoodsReturn({
+            returnOrderId: head.id,
+            productIds,
+          });
+          if (!skipped) {
+            const { msg, isError } = formatMirrorToast(results, { label: 'TikTok return mirror' });
+            toast.push(msg, isError ? 'error' : 'success');
+          } else {
+            const t = formatMirrorSkipToast({ reason });
+            if (t) toast.push(t.msg, t.type);
+          }
         } catch (e) {
           toast.push('Mirror TikTok ไม่สำเร็จ: ' + mapError(e), 'error');
         }
@@ -13719,7 +13740,7 @@ function AnomaliesView({ embedded = false }) {
 function OfflineBanner() {
   const [online, setOnline]   = useState(() => (window._isOnline ? window._isOnline() : true));
   const [queued, setQueued]   = useState(0);
-  const [drainSt, setDrainSt] = useState(() => window._getDrainState?.() || { state: 'idle', lastError: null });
+  const [drainSt, setDrainSt] = useState(() => window._getDrainState?.() || { state: 'idle', lastError: null, mirrorWarning: null });
   const [retrying, setRetrying] = useState(false);
 
   useEffect(() => {
@@ -13734,7 +13755,7 @@ function OfflineBanner() {
     try { await window._tryDrain?.(); } finally { setRetrying(false); }
   };
 
-  if (online && queued === 0 && drainSt.state !== 'error') return null;
+  if (online && queued === 0 && drainSt.state !== 'error' && !drainSt.mirrorWarning) return null;
 
   const stuck = online && drainSt.state === 'error' && queued > 0;
   const cls = !online
@@ -13769,6 +13790,9 @@ function OfflineBanner() {
       )}
       {online && !stuck && queued > 0 && (
         <>มีบิลรอส่ง {queued} รายการ — กำลัง sync…</>
+      )}
+      {online && !stuck && queued === 0 && drainSt.mirrorWarning && (
+        <span className="font-normal">{drainSt.mirrorWarning}</span>
       )}
     </div>
   );

@@ -23,14 +23,16 @@ interface SyncItem {
   seller_sku?: string;
   tiktok_product_name?: string;
   skip?: boolean;
-  sync_operation?: 'receive' | 'void' | 'sale' | 'sale_void' | 'sale_edit';
+  sync_operation?: 'receive' | 'void' | 'sale' | 'sale_void' | 'sale_edit' | 'return';
 }
 
-type SyncOp = 'receive' | 'void' | 'sale' | 'sale_void' | 'sale_edit';
+type SyncOp = 'receive' | 'void' | 'sale' | 'sale_void' | 'sale_edit' | 'return';
 
 function resolveSyncOperation(it: SyncItem): SyncOp {
   const op = it.sync_operation;
-  if (op === 'void' || op === 'sale' || op === 'sale_void' || op === 'sale_edit') return op;
+  if (op === 'void' || op === 'sale' || op === 'sale_void' || op === 'sale_edit' || op === 'return') {
+    return op;
+  }
   return 'receive';
 }
 
@@ -78,7 +80,7 @@ Deno.serve(async (req) => {
       throw new Error('ไม่พบ warehouse — ตั้งค่าใน TikTok Seller Center หรือเพิ่ม Product write scope');
     }
 
-    for (const it of items.slice(0, 30)) {
+    for (const it of items) {
       const productId = Number(it.product_id);
       const receiveOrderId = Number(it.receive_order_id);
       const posStock = Math.max(0, Math.floor(Number(it.pos_stock_after) || 0));

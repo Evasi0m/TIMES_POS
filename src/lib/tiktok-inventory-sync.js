@@ -12,6 +12,7 @@ import {
   formatSaleMirrorToast,
   formatSaleVoidMirrorToast,
   formatMirrorSkipToast,
+  logMirrorBackgroundError,
   mappingNeedsProductId,
   mappingRowFromTiktokSku,
   normalizeSyncOperation,
@@ -32,6 +33,7 @@ export {
   formatSaleVoidMirrorToast,
   formatMirrorSkipToast,
   formatTikTokApiError,
+  logMirrorBackgroundError,
   voidMirrorToastDurationMs,
   shouldPersistTiktokMatch,
   normalizeSyncOperation,
@@ -128,9 +130,18 @@ export async function fetchPosStocks(productIds) {
  * Mirror POS stock to TikTok for receive lines.
  * @param {Array<{ receive_order_id, product_id, tiktok_product_id, tiktok_sku_id, warehouse_id, pos_stock_after, seller_sku, tiktok_product_name, skip }>} items
  */
+const MIRROR_BATCH_SIZE = 30;
+
 export async function mirrorStockToTikTok(items) {
-  const data = await invokeTikTokFunction('tiktok-inventory-update', { items });
-  return data.results || [];
+  const list = items || [];
+  if (!list.length) return [];
+  const allResults = [];
+  for (let i = 0; i < list.length; i += MIRROR_BATCH_SIZE) {
+    const chunk = list.slice(i, i + MIRROR_BATCH_SIZE);
+    const data = await invokeTikTokFunction('tiktok-inventory-update', { items: chunk });
+    allResults.push(...(data.results || []));
+  }
+  return allResults;
 }
 
 /** Products eligible for void mirror on a receive bill. */
@@ -199,7 +210,7 @@ export async function runVoidMirrorWithFeedback({ toast, receiveOrderId, product
 async function isTikTokMirrorAvailable() {
   try {
     const status = await getTikTokConnectionStatus();
-    return status?.connected === true;
+    return status?.connected === true && status?.token_expired !== true;
   } catch {
     return false;
   }
@@ -335,6 +346,39 @@ export async function resyncSaleMirrorBill({ saleOrderId, productIds, toast = nu
   });
 }
 
+/** Bills with mapping ready but no successful sale mirror log (admin resync). */
+export async function fetchBillsNeedingSaleMirrorResync(limit = 20) {
+  const { data, error } = await sb.rpc('get_bills_needing_sale_mirror_resync', {
+    p_limit: Math.min(Math.max(limit, 1), 50),
+  });
+  if (error) throw error;
+  return data || [];
+}
+
+/** Re-sync all pending sale mirrors after mapping backfill. */
+export async function resyncPendingSaleMirrors({ toast = null, limit = 20 } = {}) {
+  const rows = await fetchBillsNeedingSaleMirrorResync(limit);
+  if (!rows.length) return { synced: 0, bills: [] };
+
+  const byBill = new Map();
+  for (const row of rows) {
+    if (!byBill.has(row.sale_order_id)) byBill.set(row.sale_order_id, []);
+    byBill.get(row.sale_order_id).push(row.product_id);
+  }
+
+  let synced = 0;
+  for (const [saleOrderId, productIds] of byBill) {
+    const result = await runSaleMirrorWithFeedback({
+      toast,
+      saleOrderId,
+      productIds: [...new Set(productIds)],
+      syncOperation: 'sale',
+    });
+    if (!result.skipped && result.results?.some(r => r.status === 'success')) synced++;
+  }
+  return { synced, bills: [...byBill.keys()] };
+}
+
 /** Resolve TikTok product/warehouse ids for manual link (TikTok matching UI). */
 export async function resolveTikTokCatalogMatch({ sellerSku, tiktokSkuId }) {
   const query = (sellerSku || '').trim();
@@ -417,11 +461,24 @@ export async function fetchSaleVoidMirrorTargets(saleOrderId, productIds = null)
 export async function mirrorStockAfterSaleVoid({
   saleOrderId, productIds = null, targets: preloadedTargets = null,
 }) {
-  const targets = preloadedTargets ?? await fetchSaleVoidMirrorTargets(saleOrderId, productIds);
-  if (!targets.length) return { results: [], skipped: true, targetCount: 0 };
+  const rawTargets = preloadedTargets ?? await fetchSaleVoidMirrorTargets(saleOrderId, productIds);
+  if (!rawTargets.length) {
+    return { results: [], skipped: true, targetCount: 0, reason: 'void_no_target' };
+  }
 
   if (!(await isTikTokMirrorAvailable())) {
     return { results: [], skipped: true, targetCount: 0, reason: 'not_connected' };
+  }
+
+  const { mappings: readyTargets } = await ensureMappingsReady(rawTargets);
+  const targets = filterMirrorEligibleMappings(readyTargets);
+  if (!targets.length) {
+    return {
+      results: [],
+      skipped: true,
+      targetCount: 0,
+      reason: 'incomplete_mapping',
+    };
   }
 
   const stocks = await fetchPosStocks(targets.map(t => t.product_id));
@@ -434,6 +491,41 @@ export async function mirrorStockAfterSaleVoid({
   }));
   const results = await mirrorStockToTikTok(mirrorPayload);
   return { results, skipped: false, targetCount: targets.length };
+}
+
+/** Mirror POS stock after customer return (goods returned). */
+export async function mirrorStockAfterGoodsReturn({
+  returnOrderId, productIds,
+}) {
+  const ids = [...new Set((productIds || []).filter(id => id != null))];
+  if (!returnOrderId || !ids.length) return { results: [], skipped: true, targetCount: 0 };
+
+  if (!(await isTikTokMirrorAvailable())) {
+    return { results: [], skipped: true, targetCount: 0, reason: 'not_connected' };
+  }
+
+  const rawMappings = await fetchTikTokMappings(ids);
+  const { mappings: readyMappings } = await ensureMappingsReady(rawMappings);
+  const mappings = filterMirrorEligibleMappings(readyMappings);
+  if (!mappings.length) {
+    return {
+      results: [],
+      skipped: true,
+      targetCount: 0,
+      reason: mirrorSkipReason(rawMappings, mappings, 0),
+    };
+  }
+
+  const stocks = await fetchPosStocks(mappings.map(m => m.product_id));
+  const mirrorPayload = mappings.map(m => buildSyncLine({
+    receiveOrderId: returnOrderId,
+    productId: m.product_id,
+    posStockAfter: stocks[m.product_id]?.current_stock ?? 0,
+    mapping: m,
+    syncOperation: 'return',
+  }));
+  const results = await mirrorStockToTikTok(mirrorPayload);
+  return { results, skipped: false, targetCount: mappings.length };
 }
 
 /**
@@ -485,7 +577,10 @@ export async function runSaleMirrorWithFeedback({
 /** Void sale mirror with toast feedback. */
 export async function runSaleVoidMirrorWithFeedback({ toast, saleOrderId, productIds = null }) {
   const targets = await fetchSaleVoidMirrorTargets(saleOrderId, productIds);
-  if (!targets.length) return { results: [], skipped: true, targetCount: 0 };
+  if (!targets.length) {
+    if (toast) pushMirrorSkipToast(toast, { reason: 'void_no_target' });
+    return { results: [], skipped: true, targetCount: 0, reason: 'void_no_target' };
+  }
 
   const count = targets.length;
   if (count >= 2 && toast) {
@@ -501,9 +596,7 @@ export async function runSaleVoidMirrorWithFeedback({ toast, saleOrderId, produc
       targets,
     });
     if (skipped && toast) {
-      if (reason === 'not_connected') {
-        pushMirrorSkipToast(toast, { reason: 'not_connected' });
-      }
+      pushMirrorSkipToast(toast, { reason: reason || 'void_no_target' });
     } else if (!skipped && toast) {
       const { msg, isError } = formatSaleVoidMirrorToast(results);
       toast.push(msg, isError ? 'error' : 'success', {
