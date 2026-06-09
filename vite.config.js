@@ -6,12 +6,21 @@
 // The single HTML file is deploy-ready: copy to any static host
 // (Cloudflare Pages, Vercel, S3, an SD card on a POS terminal). The SW
 // file goes next to it.
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 import { VitePWA } from 'vite-plugin-pwa';
+import { resolveBuildId } from './scripts/resolve-build-id.mjs';
+
+const buildId = resolveBuildId();
 
 export default defineConfig({
+  define: {
+    __APP_BUILD_ID__: JSON.stringify(buildId),
+    __SW_BUILD_ID__: JSON.stringify(buildId),
+  },
   // Use RELATIVE asset URLs so the same dist/ works whether the app is
   // hosted at the domain root (Cloudflare Pages, S3, custom domain) OR
   // under a subpath (GitHub Pages project site at /<repo>/, Netlify
@@ -37,6 +46,7 @@ export default defineConfig({
         // hash. Without this, the SW would install fine but the app shell
         // wouldn't be cached for true offline boot.
         globPatterns: ['**/*.{html,png,ico,json}'],
+        globIgnores: ['**/version.json'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
       },
       manifest: false, // we already ship a hand-written manifest.json
@@ -47,6 +57,18 @@ export default defineConfig({
     // Inline JS + CSS into one index.html. Must run AFTER PWA so the SW
     // file stays separate.
     viteSingleFile({ removeViteModuleLoader: false }),
+
+    // version.json is fetched at runtime (never precached) so clients can
+    // detect a new deploy without waiting for the SW precache list to change.
+    {
+      name: 'write-version-json',
+      closeBundle() {
+        writeFileSync(
+          join('dist', 'version.json'),
+          JSON.stringify({ buildId, builtAt: new Date().toISOString() }, null, 0),
+        );
+      },
+    },
   ],
   build: {
     target: 'es2020',

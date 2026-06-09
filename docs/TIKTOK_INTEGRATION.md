@@ -61,6 +61,7 @@
 19. `supabase-migrations/051_tiktok_resync_pending_items.sql` — re-sync line items/total ของออเดอร์ **pending** เมื่อลูกค้าแก้ออเดอร์บน TikTok (active/voided ไม่แตะ)
 20. `supabase-migrations/052_tiktok_inventory_sync_service_role.sql` — ให้ Edge Function บันทึก `tiktok_inventory_sync_log` ได้ (แก้ void mirror ไม่ทำงานหลัง receive สำเร็จ)
 21. `supabase-migrations/050_tiktok_health_rpc.sql` — `get_tiktok_health()` สำหรับ health card ใน ตั้งค่า → TikTok Shop
+22. `supabase-migrations/053_tiktok_receipt_sku_name.sql` — ใบเสร็จออเดอร์ TikTok แสดง **ชื่อ SKU ที่จับคู่** (ไม่ใช่ชื่อตะกร้า/ชื่อ TikTok); แก้ confirm/link/relink ให้ snapshot `product_name` จากสินค้า POS + backfill ออเดอร์เก่า
 
 **Go-live cutoff:** 13:00 07/06/2026 Asia/Bangkok — ออเดอร์หลัง cutoff เข้า `pending`; ก่อน cutoff → `voided`
 

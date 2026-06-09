@@ -49,6 +49,8 @@ jobs:
 
       - name: Build dist/
         run: npm run build
+        env:
+          APP_BUILD_ID: ${{ github.sha }}
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

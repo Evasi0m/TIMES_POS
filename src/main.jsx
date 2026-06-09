@@ -18,6 +18,14 @@ import {
 import { onOnlineChange, isOnline } from './lib/online-status.js';
 import { mapError } from './lib/error-map.js';
 import { runSelfHeal, manualReset } from './lib/sw-self-heal.js';
+import {
+  setSwRegistration,
+  startUpdatePolling,
+  checkForUpdate,
+  applyAppUpdate,
+  onUpdateStateChange,
+} from './lib/app-update.js';
+import AppUpdateBanner from './components/ui/AppUpdateBanner.jsx';
 import { fetchAll } from './lib/sb-paginate.js';
 import { sb } from './lib/supabase-client.js';
 import {
@@ -104,13 +112,20 @@ import './styles.css';
 const supabase = { createClient };
 
 // Register the service worker (from src/sw.js, emitted by vite-plugin-pwa).
-// `autoUpdate` in vite.config.js means the SW silently swaps itself when a
-// new build reaches the cache — no "Update available" dialog at the front
-// counter. In dev mode this is a stub.
+// One-click update: onRegisteredSW wires registration into app-update.js;
+// version.json polling + reg.update() on focus keep clients current.
 registerSW({
   immediate: true,
   onRegisterError(err) { console.warn('[sw] register failed', err); },
+  onRegisteredSW(_swUrl, registration) {
+    if (!registration) return;
+    setSwRegistration(registration);
+    const bump = () => { try { registration.update(); } catch {} };
+    window.addEventListener('focus', bump);
+    setInterval(bump, 30 * 60 * 1000);
+  },
 });
+startUpdatePolling();
 
 // Self-heal: if the previously-installed SW is broken (e.g. the May 2026
 // `bad-precaching-response` incident, where a hardcoded `/` precache entry
@@ -1435,7 +1450,7 @@ function SystemDiagnosticsSection({ toast }) {
         </button>
         <button type="button" className="btn-primary !py-2 !px-3 text-sm" onClick={doReset} disabled={busy}>
           {busy ? <span className="spinner"/> : <Icon name="alert" size={14}/>}
-          ล้าง cache + รีเซ็ตแอป
+          รีเซ็ตขั้นสูง (กรณีแอปค้าง)
         </button>
       </div>
     </div>
@@ -3916,6 +3931,42 @@ const CLAIM_REASONS = ["ชำรุดจากโรงงาน", "ส่ง�
 /* =========================================================
    DESKTOP SIDEBAR
 ========================================================= */
+function AppUpdateButton({ className = 'btn-secondary w-full !justify-start gap-2', onDone }) {
+  const [available, setAvailable] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => onUpdateStateChange((s) => setAvailable(s.status === 'available')), []);
+
+  const handleClick = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const { available: fresh } = await checkForUpdate();
+      if (fresh || available) {
+        await applyAppUpdate({ manualReset: window._manualReset });
+      }
+    } finally {
+      setBusy(false);
+      onDone?.();
+    }
+  };
+
+  return (
+    <button type="button" className={className} onClick={handleClick} disabled={busy}>
+      <span className="relative inline-flex shrink-0">
+        <Icon name="refresh" size={16}/>
+        {available && (
+          <span
+            className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-primary ring-2 ring-canvas"
+            aria-hidden
+          />
+        )}
+      </span>
+      {busy ? 'กำลังอัปเดต…' : 'อัปเดตแอป'}
+    </button>
+  );
+}
+
 function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagement }) {
   const role = useRole();
   const isSuperAdmin = role === 'super_admin';
@@ -4085,6 +4136,7 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
         })}
       </nav>
       <div className="sidebar-footer p-4 border-t space-y-2">
+        <AppUpdateButton className="btn-secondary w-full !justify-start gap-2" />
         {/* User-management button — super_admin only. Reuses the yellow
             `.btn-settings-sidebar` style so it visually contrasts with
             the coral "การตั้งค่า" below and signals "privileged action". */}
@@ -4179,6 +4231,10 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
                 <Icon name="crown" size={16}/> การตั้งค่า user
               </button>
             )}
+            <AppUpdateButton
+              className="btn-secondary !justify-start gap-2 w-full"
+              onDone={() => setOpenMenu(false)}
+            />
             <button className="btn-app-settings-sidebar" onClick={()=>{ setOpenMenu(false); onOpenSettings?.(); }}>
               <Icon name="settings" size={16}/> การตั้งค่า
             </button>
@@ -4505,6 +4561,11 @@ function POSView() {
     }
     if (shouldClose) setCartOpen(false);
   };
+
+  useEffect(() => {
+    window._getApplyUpdateContext = () => ({ cartCount: cart.length });
+    return () => { delete window._getApplyUpdateContext; };
+  }, [cart.length]);
 
   useEffect(() => {
     if (!search.trim()) { setResults([]); return; }
@@ -13863,6 +13924,7 @@ function App() {
       <DialogProvider>
       <RoleCtx.Provider value={role}>
       <ShopProvider>
+        <AppUpdateBanner />
         <OfflineBanner />
         <div className="lg:flex">
           <Sidebar view={view} setView={setView} userEmail={session.user?.email}
