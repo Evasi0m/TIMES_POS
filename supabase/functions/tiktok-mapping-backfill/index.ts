@@ -69,20 +69,11 @@ Deno.serve(async (req) => {
     let failed = 0;
     const details: Record<string, unknown>[] = [];
 
+    const catalog = await searchTikTokProducts(accessToken, shopCipher, { maxPages: 10 });
+
     for (const row of (rows || []) as MappingRow[]) {
-      const query = String(row.seller_sku || row.tiktok_product_name || '').trim();
-      if (!query) {
-        failed++;
-        details.push({ tiktok_sku_id: row.tiktok_sku_id, status: 'skipped', reason: 'no query' });
-        continue;
-      }
       try {
-        const skus = await searchTikTokProducts(accessToken, shopCipher, {
-          query,
-          queryVariants: [row.seller_sku, row.tiktok_sku_id].filter(Boolean) as string[],
-          maxPages: 10,
-        });
-        const match = pickCatalogMatch(row, skus);
+        const match = pickCatalogMatch(row, catalog);
         if (!match?.tiktok_product_id) {
           failed++;
           details.push({ tiktok_sku_id: row.tiktok_sku_id, status: 'not_found' });
@@ -117,6 +108,7 @@ Deno.serve(async (req) => {
       total: (rows || []).length,
       healed,
       failed,
+      catalog_size: catalog.length,
       details,
     }), {
       headers: { ...CORS, 'Content-Type': 'application/json' },

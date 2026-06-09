@@ -210,8 +210,33 @@ function filterMirrorEligibleMappings(mappings) {
   return (mappings || []).filter(m => m?.product_id != null && m.tiktok_sku_id && m.tiktok_product_id);
 }
 
+/** Load full active TikTok catalog (paginated). TikTok's keyword/seller_sku search
+ *  ignores filters and returns the same first page — match locally instead. */
+export async function fetchFullTikTokCatalog(maxPages = 10) {
+  return searchTikTokCatalog('', { maxPages, skipClientFilter: true });
+}
+
+function applyHealedMapping(m, match) {
+  return {
+    ...m,
+    tiktok_product_id: match.tiktok_product_id,
+    warehouse_id: m.warehouse_id || match.warehouse_id || null,
+    seller_sku: m.seller_sku || match.seller_sku,
+    tiktok_product_name: m.tiktok_product_name || match.product_name,
+  };
+}
+
 /** Search TikTok catalog and pick SKU row for an incomplete mapping. */
-async function healMappingProductId(m) {
+async function healMappingProductId(m, catalog = null) {
+  if (catalog?.length) {
+    const match = pickCatalogSkuForMapping(m, catalog);
+    if (match?.tiktok_product_id) {
+      const healed = applyHealedMapping(m, match);
+      await upsertTiktokInventoryMapping({ productId: m.product_id, tiktokMapping: healed });
+      return healed;
+    }
+  }
+
   const baseVariants = [m.seller_sku, m.tiktok_sku_id].filter(Boolean);
   const queries = [
     ...baseVariants,
@@ -233,13 +258,7 @@ async function healMappingProductId(m) {
     });
     const match = pickCatalogSkuForMapping(m, skus);
     if (!match?.tiktok_product_id) continue;
-    const healed = {
-      ...m,
-      tiktok_product_id: match.tiktok_product_id,
-      warehouse_id: m.warehouse_id || match.warehouse_id || null,
-      seller_sku: m.seller_sku || match.seller_sku,
-      tiktok_product_name: m.tiktok_product_name || match.product_name,
-    };
+    const healed = applyHealedMapping(m, match);
     await upsertTiktokInventoryMapping({ productId: m.product_id, tiktokMapping: healed });
     return healed;
   }
@@ -258,6 +277,11 @@ export async function ensureMappingsReady(mappings) {
 
   let healed = 0;
   let failed = 0;
+  let catalog = null;
+  try {
+    catalog = await fetchFullTikTokCatalog(10);
+  } catch { /* fall back to per-item search in healMappingProductId */ }
+
   const out = [];
   for (const m of list) {
     if (!mappingNeedsProductId(m)) {
@@ -265,7 +289,7 @@ export async function ensureMappingsReady(mappings) {
       continue;
     }
     try {
-      const fixed = await healMappingProductId(m);
+      const fixed = await healMappingProductId(m, catalog);
       if (fixed.tiktok_product_id) {
         healed++;
         out.push(fixed);

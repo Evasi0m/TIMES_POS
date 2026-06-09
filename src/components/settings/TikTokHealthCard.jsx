@@ -69,6 +69,7 @@ export default function TikTokHealthCard({ toast }) {
   const runMappingBackfill = async () => {
     setBackfilling(true);
     try {
+      toast?.push('กำลังโหลด catalog TikTok…', 'info', { durationMs: 8000 });
       const { healed, failed } = await backfillMissingTikTokProductIds({ limit: 50 });
       await load();
       setError(null);
