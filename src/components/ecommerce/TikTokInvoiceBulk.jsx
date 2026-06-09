@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { sb } from '../../lib/supabase-client.js';
 import { mapError } from '../../lib/error-map.js';
 import { fmtThaiDateShort } from '../../lib/format.js';
+import { todayISO } from '../../lib/server-clock.js';
 import { fullBuyerValid } from '../../lib/tax-buyer.js';
 import FullTaxInvoiceA4 from '../invoice/FullTaxInvoiceA4.jsx';
 import Icon from '../ui/Icon.jsx';
@@ -113,7 +114,7 @@ export default function TikTokInvoiceSection({ orders, itemsByOrder, toast, onOr
     const header = ['เลขใบกำกับ', 'วันที่', 'TikTok Order', 'POS #', 'ผู้ซื้อ', 'Tax ID', 'สาขา', 'ที่อยู่', 'ยอดรวม', 'VAT'];
     const lines = rows.map(o => [
       o.tax_invoice_no,
-      fmtThaiDateShort(String(o.sale_date || '').slice(0, 10)),
+      fmtThaiDateShort(o.sale_date),
       o.tiktok_order_id || '',
       o.id,
       o.buyer_name || '',
@@ -127,7 +128,7 @@ export default function TikTokInvoiceSection({ orders, itemsByOrder, toast, onOr
     const blob = new Blob([bom + header.join(',') + '\n' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `tiktok-invoices-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `tiktok-invoices-${todayISO()}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
   };

@@ -64,7 +64,7 @@ export default function SalePickerForReturn({
                   </div>
                   <div className="text-right flex-shrink-0">
                     <div className="text-sm font-medium tabular-nums">{fmtTHB(s.grand_total)}</div>
-                    <div className="text-xs text-muted">{fmtThaiDateShort(s.sale_date?.slice(0, 10))}</div>
+                    <div className="text-xs text-muted">{fmtThaiDateShort(s.sale_date)}</div>
                   </div>
                 </button>
               ))}
@@ -81,7 +81,7 @@ export default function SalePickerForReturn({
           <div className="flex-1 card-canvas p-3 rounded-xl">
             <div className="flex justify-between items-center">
               <span className="font-mono text-sm font-semibold text-ink">บิล #{selectedSale.id}</span>
-              <span className="text-xs text-muted">{fmtThaiDateShort(selectedSale.sale_date?.slice(0, 10))}</span>
+              <span className="text-xs text-muted">{fmtThaiDateShort(selectedSale.sale_date)}</span>
             </div>
             <div className="text-xs text-muted mt-0.5">
               {CHANNEL_LABELS[selectedSale.channel] || selectedSale.channel} · {fmtTHB(selectedSale.grand_total)}

@@ -29,6 +29,24 @@ import AppUpdateBanner from './components/ui/AppUpdateBanner.jsx';
 import { fetchAll } from './lib/sb-paginate.js';
 import { sb } from './lib/supabase-client.js';
 import {
+  dateISOBangkok,
+  startOfDayBangkok,
+  endOfDayBangkok,
+  hourBangkok,
+  bangkokDateKey,
+  isoFromTimestamptz,
+  dateOfIsoBangkok,
+  addDaysBangkok,
+  monthStartBangkok,
+  prevMonthRangeBangkok,
+  fmtThaiDateShort,
+  fmtThaiRange,
+  fmtDate,
+  fmtDateTime,
+  fmtTimeBangkok,
+} from './lib/date.js';
+import { syncServerClock, todayISO, serverNowISO, serverNowDate } from './lib/server-clock.js';
+import {
   BRAND_RULES, SERIES_RULES, SERIES_SUBS, MATERIAL_MAP, COLOR_MAP, PRICE_PRESETS,
   classifyBrand, classifySeries, parseCasioModel, enrichProduct,
   matchSubType, getEffectivePrice, filterProducts, sortProducts,
@@ -146,7 +164,10 @@ let _draining = false;
 async function tryDrain() {
   if (_draining || !isOnline() || !window._sb) return;
   _draining = true;
-  try { await drainQueue(window._sb, mapError); } finally { _draining = false; }
+  try {
+    await syncServerClock(window._sb);
+    await drainQueue(window._sb, mapError);
+  } finally { _draining = false; }
 }
 onOnlineChange((on) => { if (on) tryDrain(); });
 window.addEventListener('focus', tryDrain);
@@ -194,8 +215,7 @@ const fmtTHB = (n) => roundMoney(n).toLocaleString("th-TH", { minimumFractionDig
 // Same as fmtTHB but without the ฿ prefix — used in tables where the column
 // header already implies currency and we want a denser tabular look.
 const fmtMoney = (n) => roundMoney(n).toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-const fmtDate = (s) => s ? new Date(s).toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" }) : "-";
-const fmtDateTime = (s) => s ? new Date(s).toLocaleString("th-TH", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "-";
+// fmtDate / fmtDateTime / Bangkok date helpers → src/lib/date.js
 
 // bahtText + fullBuyerValid → src/lib/baht-text.js, src/lib/tax-buyer.js
 
@@ -209,22 +229,6 @@ const isMobileViewport = () =>
   typeof window !== 'undefined' &&
   typeof window.matchMedia === 'function' &&
   window.matchMedia('(max-width: 1023px)').matches;
-// Bangkok-local YYYY-MM-DD — avoids the off-by-one bug when the server/client clock is in UTC
-// and the sale happens after 17:00 UTC (= 00:00 next day in Bangkok).
-const dateISOBangkok = (d) => (d || new Date()).toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
-const todayISO = () => dateISOBangkok();
-// Stamps a Bangkok-local date (YYYY-MM-DD) as the start/end-of-day in tz-aware ISO so Supabase
-// timestamptz comparisons line up with how Thai users experience "วันนี้".
-const startOfDayBangkok = (yyyymmdd) => `${yyyymmdd}T00:00:00+07:00`;
-const endOfDayBangkok   = (yyyymmdd) => `${yyyymmdd}T23:59:59.999+07:00`;
-// Bangkok-local hour-of-day (0–23) for a timestamp — used to bucket a
-// single-day sparkline into an intraday curve instead of one lone dot.
-const hourBangkok = (ts) => {
-  if (!ts) return null;
-  const h = parseInt(new Date(ts).toLocaleString("en-GB", { timeZone: "Asia/Bangkok", hour: "2-digit", hour12: false }), 10);
-  return Number.isFinite(h) ? h % 24 : null;
-};
-
 const CHANNELS = [
   { v: "store",    label: "หน้าร้าน" },
   { v: "tiktok",   label: "TikTok" },
@@ -743,41 +747,14 @@ const TH_MONTHS       = ["มกราคม","กุมภาพันธ์","
 const TH_MONTHS_SHORT = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 const TH_WEEKDAYS     = ["อา","จ","อ","พ","พฤ","ศ","ส"];
 
-const isoOfDate = (d) => {
-  if (!d) return "";
-  const y = d.getFullYear();
-  const m = String(d.getMonth()+1).padStart(2,'0');
-  const day = String(d.getDate()).padStart(2,'0');
-  return `${y}-${m}-${day}`;
-};
-const dateOfIso = (iso) => {
-  if (!iso) return null;
-  const cleanIso = typeof iso === 'string' ? iso.trim() : String(iso);
-  const str = cleanIso.length === 10 ? cleanIso + "T00:00:00" : cleanIso;
-  return new Date(str);
-};
-
-const fmtThaiDateShort = (iso) => {
-  if (!iso) return "";
-  const d = dateOfIso(iso);
-  if (!d || Number.isNaN(d.getTime())) return "";
-  return `${d.getDate()} ${TH_MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()+543}`;
-};
-const fmtThaiRange = (from, to) => {
-  if (!from && !to) return "";
-  if (from === to) return fmtThaiDateShort(from);
-  const f = dateOfIso(from), t = dateOfIso(to);
-  if (f.getFullYear() === t.getFullYear() && f.getMonth() === t.getMonth())
-    return `${f.getDate()} – ${t.getDate()} ${TH_MONTHS_SHORT[t.getMonth()]} ${t.getFullYear()+543}`;
-  if (f.getFullYear() === t.getFullYear())
-    return `${f.getDate()} ${TH_MONTHS_SHORT[f.getMonth()]} – ${t.getDate()} ${TH_MONTHS_SHORT[t.getMonth()]} ${t.getFullYear()+543}`;
-  return `${fmtThaiDateShort(from)} – ${fmtThaiDateShort(to)}`;
-};
+// Calendar cells → Bangkok YYYY-MM-DD; parsing → Bangkok midnight.
+const isoOfDate = dateISOBangkok;
+const dateOfIso = dateOfIsoBangkok;
 
 function DatePicker({ value, onChange, mode = 'single', placeholder = 'เลือกวันที่', className = '' }) {
   const [open, setOpen] = useState(false);
   const { render: renderPanel, closing: panelClosing } = useMountedToggle(open, 200);
-  const initIso = mode === 'single' ? value : (value?.from || isoOfDate(new Date()));
+  const initIso = mode === 'single' ? value : (value?.from || todayISO());
   const initDate = dateOfIso(initIso) || new Date();
   const [viewMonth, setViewMonth] = useState(() => new Date(initDate.getFullYear(), initDate.getMonth(), 1));
   const [pendingStart, setPendingStart] = useState(null);
@@ -801,8 +778,7 @@ function DatePicker({ value, onChange, mode = 'single', placeholder = 'เลื
     setHoverIso(null);
   }, [open]);
 
-  const today = new Date();
-  const todayIso = isoOfDate(today);
+  const todayIso = todayISO();
 
   // 6×7 grid starting from the Sunday on/before the 1st
   const firstDay = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1);
@@ -853,11 +829,11 @@ function DatePicker({ value, onChange, mode = 'single', placeholder = 'เลื
 
   const presets = [
     { label: "วันนี้",        get: () => ({ from: todayIso, to: todayIso }) },
-    { label: "เมื่อวาน",      get: () => { const d=new Date(); d.setDate(d.getDate()-1); const iso=isoOfDate(d); return { from: iso, to: iso }; } },
-    { label: "7 วันล่าสุด",   get: () => { const d=new Date(); d.setDate(d.getDate()-6); return { from: isoOfDate(d), to: todayIso }; } },
-    { label: "30 วันล่าสุด",  get: () => { const d=new Date(); d.setDate(d.getDate()-29); return { from: isoOfDate(d), to: todayIso }; } },
-    { label: "เดือนนี้",      get: () => { const d=new Date(); return { from: isoOfDate(new Date(d.getFullYear(), d.getMonth(), 1)), to: todayIso }; } },
-    { label: "เดือนก่อน",     get: () => { const d=new Date(); const lm=d.getMonth()-1; const y= lm<0 ? d.getFullYear()-1 : d.getFullYear(); const m=(lm+12)%12; const last=new Date(y, m+1, 0); return { from: isoOfDate(new Date(y,m,1)), to: isoOfDate(last) }; } },
+    { label: "เมื่อวาน",      get: () => { const iso = addDaysBangkok(todayIso, -1); return { from: iso, to: iso }; } },
+    { label: "7 วันล่าสุด",   get: () => ({ from: addDaysBangkok(todayIso, -6), to: todayIso }) },
+    { label: "30 วันล่าสุด",  get: () => ({ from: addDaysBangkok(todayIso, -29), to: todayIso }) },
+    { label: "เดือนนี้",      get: () => ({ from: monthStartBangkok(todayIso), to: todayIso }) },
+    { label: "เดือนก่อน",     get: () => prevMonthRangeBangkok(todayIso) },
   ];
 
   const display = mode === 'single'
@@ -888,7 +864,7 @@ function DatePicker({ value, onChange, mode = 'single', placeholder = 'เลื
             <button type="button" className="btn-ghost !p-2 !min-h-0" onClick={()=>setViewMonth(m=>new Date(m.getFullYear(), m.getMonth()-1, 1))} aria-label="เดือนก่อน">
               <Icon name="chevron-l" size={18}/>
             </button>
-            <button type="button" className="font-display text-lg btn-ghost !min-h-0 !py-1" onClick={()=>setViewMonth(new Date(today.getFullYear(), today.getMonth(), 1))}>
+            <button type="button" className="font-display text-lg btn-ghost !min-h-0 !py-1" onClick={()=>{ const [y,m]=todayIso.split('-').map(Number); setViewMonth(new Date(y, m-1, 1)); }}>
               {TH_MONTHS[viewMonth.getMonth()]} {viewMonth.getFullYear()+543}
             </button>
             <button type="button" className="btn-ghost !p-2 !min-h-0" onClick={()=>setViewMonth(m=>new Date(m.getFullYear(), m.getMonth()+1, 1))} aria-label="เดือนถัดไป">
@@ -3588,7 +3564,7 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
     } finally { setDeletingLineId(null); }
   };
 
-  const dateInput = editing ? draft[meta.dateField]?.slice(0,10) : null;
+  const dateInput = editing ? isoFromTimestamptz(draft[meta.dateField]) || null : null;
   const isVoided = !!order?.voided_at;
 
   return (
@@ -4875,7 +4851,7 @@ function POSView() {
       // omit sale_date entirely so Postgres now() stamps the real
       // server time (independent of the cashier device clock).
       const queueArgs = () => ({
-        p_header: { ...headerPayload, sale_date: new Date().toISOString() },
+        p_header: { ...headerPayload, sale_date: serverNowISO() },
         p_items: itemsPayload,
       });
       // Strategy: ALWAYS attempt the RPC first, regardless of what
@@ -7562,7 +7538,7 @@ function SalesView({ onGoPOS }) {
     }
     const map = new Map();
     for (const o of sortedOrders) {
-      const key = (o.sale_date || '').slice(0, 10);
+      const key = bangkokDateKey(o.sale_date);
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(o);
     }
@@ -8020,7 +7996,7 @@ function SalesView({ onGoPOS }) {
                   <span className="truncate">#{o.id}</span>
                   {o.status==='voided' && <span className="badge-pill !bg-error/10 !text-error !text-xs">VOID</span>}
                 </div>
-                <div className="col-span-1 text-sm tabular-nums">{new Date(o.sale_date).toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"})}</div>
+                <div className="col-span-1 text-sm tabular-nums">{fmtTimeBangkok(o.sale_date)}</div>
                 <div className="col-span-3 text-sm min-w-0">
                   <div className="truncate font-semibold" title={sm?.productLabel || ''}>{sm?.productLabel ?? <span className="text-muted-soft">—</span>}</div>
                   {sm?.costApprox && <span className="badge-pill !bg-warning/15 !text-[#8a6500] !text-xs mt-0.5">ทุนประมาณ</span>}
@@ -8097,7 +8073,7 @@ function SalesView({ onGoPOS }) {
                     {sm && sm.itemCount > 0 && (
                       <div className="text-sm text-ink font-semibold mt-1 truncate" title={sm.productLabel}>{sm.productLabel}</div>
                     )}
-                    <div className="text-xs text-muted mt-1 tabular-nums">{new Date(o.sale_date).toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"})} น. · {PAYMENTS.find(p=>p.v===o.payment_method)?.label || '—'}</div>
+                    <div className="text-xs text-muted mt-1 tabular-nums">{fmtTimeBangkok(o.sale_date)} น. · {PAYMENTS.find(p=>p.v===o.payment_method)?.label || '—'}</div>
                   </div>
                   <div className="text-right flex-shrink-0">
                     <div className={"font-display text-lg leading-none tabular-nums " + (o.status==='voided'?'line-through':'')}>{fmtMoney(o.grand_total)}</div>
@@ -8865,7 +8841,7 @@ function BillPickerPopup({ open, product, onPick, onClose }) {
                   </span>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm">{fmtThaiDateShort(r.sale_date?.slice(0, 10))}</div>
+                  <div className="text-sm">{fmtThaiDateShort(r.sale_date)}</div>
                   <div className="text-xs text-muted mt-0.5">
                     {CHANNEL_LABELS[r.channel] || r.channel} · {r.totalQty.toLocaleString('th-TH')} ชิ้น · {fmtTHB(r.lastUnitPrice)}/ชิ้น
                   </div>
@@ -9144,7 +9120,7 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
     const fullSale = { ...sale, items: data || [] };
     setSelectedSale(fullSale);
     setOrigSaleId(String(sale.id));
-    if (sale.sale_date) setDate(sale.sale_date.slice(0,10));
+    if (sale.sale_date) setDate(isoFromTimestamptz(sale.sale_date));
     if (sale.channel) setChannel(sale.channel);
     if (data && data.length) {
       setItems(data.map(l => lineFromSaleItem(l)));
@@ -9158,7 +9134,7 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
   const selectSaleFromPopup = (sale) => {
     setSelectedSale(sale);
     setOrigSaleId(String(sale.id));
-    if (sale.sale_date) setDate(sale.sale_date.slice(0,10));
+    if (sale.sale_date) setDate(isoFromTimestamptz(sale.sale_date));
     if (sale.channel) setChannel(sale.channel);
     if (pendingProduct) {
       const saleLine = (sale.items || []).find(l => l.product_id === pendingProduct.id);
@@ -10777,7 +10753,7 @@ function DashboardView({ embedded = false, dateRange: dateRangeProp, onDateRange
       const isToday = to === todayISO();
       const saleHours = rangeRows.map(r => hourBangkok(r.sale_date)).filter(h => h != null);
       const lastSaleHour = saleHours.length ? Math.max(...saleHours) : 0;
-      const nowHour = isToday ? (hourBangkok(new Date()) ?? 23) : 23;
+      const nowHour = isToday ? (hourBangkok(serverNowDate()) ?? 23) : 23;
       const maxHour = isToday ? Math.max(nowHour, lastSaleHour) : Math.max(lastSaleHour, 8);
       const hourMap = new Map();
       for (let h = 0; h <= maxHour; h++) hourMap.set(h, 0);
@@ -10798,7 +10774,7 @@ function DashboardView({ embedded = false, dateRange: dateRangeProp, onDateRange
         dayMap.set(dateISOBangkok(d), 0);
       }
       rangeRows.forEach(r => {
-        const key = (r.sale_date || '').slice(0, 10);
+        const key = bangkokDateKey(r.sale_date);
         if (dayMap.has(key)) dayMap.set(key, dayMap.get(key) + revenueOf(r));
       });
       setDailySeries(Array.from(dayMap.entries()).map(([day, value]) => ({ label: day, value })));
@@ -12178,7 +12154,7 @@ function ProfitLossView({ embedded = false }) {
                 return (
                   <tr key={`${r.sale_id}-${r.product_id || r.product_name}-${i}`} className="border-b hairline-soft hover:bg-surface-strong/40">
                     <td className="px-4 py-2 font-mono text-xs">#{r.sale_id}</td>
-                    <td className="px-2 py-2 text-xs whitespace-nowrap">{fmtThaiDateShort(r.sale_date.slice(0,10))}</td>
+                    <td className="px-2 py-2 text-xs whitespace-nowrap">{fmtThaiDateShort(r.sale_date)}</td>
                     <td className="px-2 py-2">
                       <div className="truncate max-w-[260px]" title={r.product_name}>{r.product_name}</div>
                       {r.costSource==='fallback' && <span className="badge-pill !bg-warning/15 !text-[#8a6500] !text-xs mt-0.5">ทุนประมาณ</span>}
@@ -12220,7 +12196,7 @@ function ProfitLossView({ embedded = false }) {
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium truncate">{r.product_name}</div>
                     <div className="text-xs text-muted mt-0.5">
-                      #{r.sale_id} · {fmtThaiDateShort(r.sale_date.slice(0,10))} · {CHANNEL_LABELS[r.channel]||r.channel||'—'}
+                      #{r.sale_id} · {fmtThaiDateShort(r.sale_date)} · {CHANNEL_LABELS[r.channel]||r.channel||'—'}
                     </div>
                     {r.costSource==='fallback' && <span className="badge-pill !bg-warning/15 !text-[#8a6500] !text-xs mt-1">ทุนประมาณ</span>}
                   </div>
@@ -13800,6 +13776,12 @@ function App() {
     const { data: sub } = sb.auth.onAuthStateChange((_e, s) => setSession(s));
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  // Anchor "today" and offline sale timestamps to Postgres clock when online.
+  useEffect(() => {
+    if (!session || mfaState !== 'ok') return;
+    syncServerClock(sb).catch(() => {});
+  }, [session?.access_token, mfaState]);
 
   const role = getUserRole(session);
 

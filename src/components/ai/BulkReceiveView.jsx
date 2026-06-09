@@ -30,6 +30,7 @@ import { mapError } from '../../lib/error-map.js';
 import { VAT_RATE_DEFAULT, fmtTHB } from '../../lib/money.js';
 import { buildReceiveItems, receiveTotals, grossUnitCost } from '../../lib/ai-receive.js';
 import { startOfDayBangkok } from '../../lib/date.js';
+import { todayISO } from '../../lib/server-clock.js';
 import Icon from '../ui/Icon.jsx';
 import BillReviewPanel, { buildRowFromAi, makeRowUid } from './BillReviewPanel.jsx';
 import BulkBillUploadModal from './BulkBillUploadModal.jsx';
@@ -767,7 +768,7 @@ export default function BulkReceiveView({ toast }) {
         // Phase C — call the RPC. Same atomic header+items+adjust_stock
         // path as the regular receive form. Date is today; supplier =
         // CMG; VAT 7% always (CMG always issues VAT invoices).
-        const today = new Date().toISOString().slice(0, 10);
+        const today = todayISO();
         const header = {
           receive_date: startOfDayBangkok(today),
           total_value: total,

@@ -3,6 +3,12 @@ import {
   dateISOBangkok,
   startOfDayBangkok,
   endOfDayBangkok,
+  bangkokDateKey,
+  addDaysBangkok,
+  prevMonthRangeBangkok,
+  fmtThaiDateShort,
+  fmtTimeBangkok,
+  hourBangkok,
 } from '../src/lib/date.js';
 
 describe('dateISOBangkok', () => {
@@ -32,5 +38,47 @@ describe('startOfDayBangkok / endOfDayBangkok', () => {
     // start-of-day Bangkok = 17:00 UTC the previous day
     const d = new Date(startOfDayBangkok('2026-05-04'));
     expect(d.toISOString()).toBe('2026-05-03T17:00:00.000Z');
+  });
+});
+
+describe('bangkokDateKey', () => {
+  it('returns Bangkok calendar date, not UTC prefix', () => {
+    // 2026-05-05 00:30 Bangkok = 2026-05-04T17:30:00Z
+    expect(bangkokDateKey('2026-05-04T17:30:00Z')).toBe('2026-05-05');
+  });
+  it('returns empty for falsy input', () => {
+    expect(bangkokDateKey(null)).toBe('');
+    expect(bangkokDateKey('')).toBe('');
+  });
+});
+
+describe('addDaysBangkok', () => {
+  it('steps calendar days in Bangkok', () => {
+    expect(addDaysBangkok('2026-05-04', 1)).toBe('2026-05-05');
+    expect(addDaysBangkok('2026-05-04', -1)).toBe('2026-05-03');
+  });
+});
+
+describe('prevMonthRangeBangkok', () => {
+  it('returns full previous month', () => {
+    expect(prevMonthRangeBangkok('2026-05-15')).toEqual({
+      from: '2026-04-01',
+      to: '2026-04-30',
+    });
+  });
+});
+
+describe('fmtThaiDateShort', () => {
+  it('formats from timestamptz via Bangkok key', () => {
+    expect(fmtThaiDateShort('2026-05-04T17:30:00Z')).toMatch(/5 พ\.ค\. 2569/);
+  });
+});
+
+describe('fmtTimeBangkok / hourBangkok', () => {
+  it('reads Bangkok wall clock from UTC instant', () => {
+    // 2026-05-04T17:30:00Z = 00:30 Bangkok next day
+    expect(hourBangkok('2026-05-04T17:30:00Z')).toBe(0);
+    const t = fmtTimeBangkok('2026-05-04T16:30:00Z'); // 23:30 Bangkok same day
+    expect(t).toMatch(/23/);
   });
 });
