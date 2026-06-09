@@ -7006,7 +7006,7 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
 
   return (
     <>
-    <Modal open={!!draft} onClose={onClose} title={draft.id ? "แก้ไขสินค้า" : "เพิ่มสินค้าใหม่"}
+    <Modal open={!!draft} onClose={onClose} wide title={draft.id ? "แก้ไขสินค้า" : "เพิ่มสินค้าใหม่"}
       footer={<>
         {draft.id && isSuperAdmin && (
           <button className="btn-secondary !text-error hover:!bg-error/10 lg:mr-auto" onClick={handleDelete} disabled={deleting || saving}>
@@ -7019,72 +7019,72 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
         </button>
       </>}>
 
-      <div className="space-y-3">
+      <div className="grid grid-cols-1 lg:grid-cols-6 gap-3">
 
-        {/* ── ข้อมูลสินค้า ── */}
-        <div className="rounded-xl border hairline p-4">
+        {/* ── ข้อมูลสินค้า (horizontal: thumb + fields) ── */}
+        <div className="lg:col-span-4 rounded-xl border hairline p-4">
           <div className="mb-3">
             <div className="inline-flex items-center gap-1.5 bg-ink/[0.06] rounded-md px-2 py-1">
               <Icon name="box" size={12} className="text-muted"/>
               <span className={labelCls}>ข้อมูลสินค้า</span>
             </div>
           </div>
-          <div className="space-y-3">
-            <div className="flex items-start gap-3">
-              <ProductThumb product={draft} size="lg" className="mt-5" />
-              <div className="flex-1 min-w-0">
+          <div className="flex items-start gap-4">
+            <ProductThumb product={draft} size="lg" className="shrink-0" />
+            <div className="flex-1 min-w-0 space-y-3">
+              <div>
                 <label className={fieldLabel}>ชื่อรุ่น</label>
                 <input className="input mt-1" value={draft.name||""} onChange={e=>set('name', e.target.value)} />
               </div>
-            </div>
-            <div>
-              <label className={fieldLabel + " flex items-center gap-2"}>
-                บาร์โค้ด
-                {draft.id && !barcodeEdit && (
-                  <button type="button" className="inline-flex items-center gap-1 text-xs text-[#6b3a26] bg-[#6b3a26]/10 hover:bg-[#6b3a26]/20 px-2 py-0.5 rounded-md transition-colors normal-case tracking-normal font-medium" onClick={()=>{ setBarcodeEdit(true); setTimeout(()=>barcodeRef.current?.focus(), 50); }}>
-                    <Icon name="barcode" size={11}/> แก้ไข Barcode
+              <div>
+                <label className={fieldLabel + " flex items-center gap-2"}>
+                  บาร์โค้ด
+                  {draft.id && !barcodeEdit && (
+                    <button type="button" className="inline-flex items-center gap-1 text-xs text-[#6b3a26] bg-[#6b3a26]/10 hover:bg-[#6b3a26]/20 px-2 py-0.5 rounded-md transition-colors normal-case tracking-normal font-medium" onClick={()=>{ setBarcodeEdit(true); setTimeout(()=>barcodeRef.current?.focus(), 50); }}>
+                      <Icon name="barcode" size={11}/> แก้ไข Barcode
+                    </button>
+                  )}
+                  {draft.id && barcodeEdit && (
+                    <span className="inline-flex items-center gap-1 text-xs text-success normal-case tracking-normal font-medium">
+                      <Icon name="barcode" size={11}/> พร้อมสแกน
+                    </span>
+                  )}
+                  {!draft.id && (
+                    <span className="inline-flex items-center gap-1 text-muted-soft normal-case tracking-normal font-normal text-xs">
+                      <Icon name="barcode" size={12}/> สแกน หรือ พิมพ์
+                    </span>
+                  )}
+                  {/* Mobile-only camera scan button — desktop hides via .scan-inline-btn @media. */}
+                  <button type="button" className="scan-inline-btn ml-auto !h-11 !w-11" onClick={()=>setScannerOpen(true)} aria-label="สแกนด้วยกล้อง">
+                    <Icon name="camera" size={16}/>
                   </button>
-                )}
-                {draft.id && barcodeEdit && (
-                  <span className="inline-flex items-center gap-1 text-xs text-success normal-case tracking-normal font-medium">
-                    <Icon name="barcode" size={11}/> พร้อมสแกน
-                  </span>
-                )}
-                {!draft.id && (
-                  <span className="inline-flex items-center gap-1 text-muted-soft normal-case tracking-normal font-normal text-xs">
-                    <Icon name="barcode" size={12}/> สแกน หรือ พิมพ์
-                  </span>
-                )}
-                {/* Mobile-only camera scan button — desktop hides via .scan-inline-btn @media. */}
-                <button type="button" className="scan-inline-btn ml-auto !h-11 !w-11" onClick={()=>setScannerOpen(true)} aria-label="สแกนด้วยกล้อง">
-                  <Icon name="camera" size={16}/>
-                </button>
-              </label>
-              <input
-                ref={barcodeRef}
-                className={"input mt-1 font-mono" + (draft.id && !barcodeEdit ? " opacity-60 cursor-not-allowed" : "")}
-                placeholder="วางหัวอ่านแล้วสแกน หรือพิมพ์ตรงนี้..."
-                inputMode="text"
-                autoFocus={!draft.id}
-                readOnly={!!(draft.id && !barcodeEdit)}
-                value={draft.barcode||""}
-                onChange={e=>set('barcode', e.target.value)}
-                onMouseDown={e=>{ if (draft.id && barcodeEdit && !manualApproved) { e.preventDefault(); confirmManualBarcode(); } }}
-                onTouchStart={e=>{ if (draft.id && barcodeEdit && !manualApproved) { e.preventDefault(); confirmManualBarcode(); } }}
-              />
+                </label>
+                <input
+                  ref={barcodeRef}
+                  className={"input mt-1 font-mono" + (draft.id && !barcodeEdit ? " opacity-60 cursor-not-allowed" : "")}
+                  placeholder="วางหัวอ่านแล้วสแกน หรือพิมพ์ตรงนี้..."
+                  inputMode="text"
+                  autoFocus={!draft.id}
+                  readOnly={!!(draft.id && !barcodeEdit)}
+                  value={draft.barcode||""}
+                  onChange={e=>set('barcode', e.target.value)}
+                  onMouseDown={e=>{ if (draft.id && barcodeEdit && !manualApproved) { e.preventDefault(); confirmManualBarcode(); } }}
+                  onTouchStart={e=>{ if (draft.id && barcodeEdit && !manualApproved) { e.preventDefault(); confirmManualBarcode(); } }}
+                />
+              </div>
             </div>
           </div>
         </div>
 
-        {/* ── หมวดหมู่ ── */}
-        <div className="rounded-xl border hairline bg-surface-soft p-4">
+        {/* ── หมวดหมู่ (stacked, narrow column) ── */}
+        <div className="lg:col-span-2 rounded-xl border hairline bg-surface-soft p-4">
           <div className="mb-3">
             <div className="inline-flex items-center gap-1.5 bg-ink/[0.06] rounded-md px-2 py-1">
               <Icon name="tag" size={12} className="text-muted"/>
               <span className={labelCls}>หมวดหมู่</span>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-1 gap-3">
             <div>
               <label className={fieldLabel}>แบรนด์</label>
               <select className="input mt-1" value={draft.brand_id||""} onChange={e=>onBrandChange(e.target.value)}>
@@ -7104,8 +7104,8 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
           </div>
         </div>
 
-        {/* ── ราคา & สต็อก ── */}
-        <div className="rounded-xl border hairline p-4">
+        {/* ── ราคา & สต็อก (full row) ── */}
+        <div className="lg:col-span-6 rounded-xl border hairline p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="inline-flex items-center gap-1.5 bg-ink/[0.06] rounded-md px-2 py-1">
               <Icon name="credit-card" size={12} className="text-muted"/>
@@ -7115,16 +7115,16 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
               <span className={marginBadgeClass}>กำไร {marginPct.toFixed(0)}%</span>
             )}
           </div>
-          {/* ราคาป้าย — primary field, larger text. Catalog data, always editable. */}
-          <div className="mb-3">
-            <label className={fieldLabel}>ราคาขาย (ป้าย)</label>
-            <input type="number" inputMode="decimal" className="input mt-1 !text-lg !font-display !tabular-nums"
-              value={draft.retail_price||0} onChange={e=>set('retail_price', Number(e.target.value))} />
-          </div>
           {!draft.id ? (
             // CREATE mode — cost captured here so catalog never has cost=0.
             // Stock still flows only through stock_movements, so we hide qty.
             <div className="space-y-3">
+              {/* ราคาป้าย — primary field, larger text. Catalog data, always editable. */}
+              <div>
+                <label className={fieldLabel}>ราคาขาย (ป้าย)</label>
+                <input type="number" inputMode="decimal" className="input mt-1 !text-lg !font-display !tabular-nums"
+                  value={draft.retail_price||0} onChange={e=>set('retail_price', Number(e.target.value))} />
+              </div>
               {/* ── Cost calculator card ── */}
               <div className="rounded-xl border hairline bg-[#fdf5ef] p-3 space-y-2.5">
                 <div className="text-xs font-semibold text-muted uppercase tracking-wider flex items-center gap-1.5">
@@ -7199,11 +7199,17 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
           ) : (
             // EDIT mode — cost editable (running average override), stock read-only.
             // current_stock can only change via create_stock_movement_with_items RPC.
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2.5">
+              {/* 3 horizontal value cells: ราคาขาย · ราคาทุน · คงเหลือ */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className={fieldLabel}>ราคาขาย (ป้าย)</label>
+                  <input type="number" inputMode="decimal" className="input mt-1 !text-lg !font-display !tabular-nums"
+                    value={draft.retail_price||0} onChange={e=>set('retail_price', Number(e.target.value))} />
+                </div>
                 <div>
                   <label className={fieldLabel}>ราคาทุน (ตั้งต้น)</label>
-                  <input type="number" inputMode="decimal" className="input mt-1 tabular-nums"
+                  <input type="number" inputMode="decimal" className="input mt-1 !text-lg !font-display tabular-nums"
                     value={draft.cost_price||0} onChange={e=>set('cost_price', Number(e.target.value))} />
                 </div>
                 <div>
@@ -7212,19 +7218,26 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
                     <span className="font-display text-lg tabular-nums">{draft.current_stock||0}</span>
                     <span className="text-xs text-muted-soft">read-only</span>
                   </div>
-                  <div className="text-xs text-muted-soft mt-1 leading-snug">
-                    ปรับสต็อกผ่านหน้า <span className="font-medium">รับเข้า / ส่งเคลม / คืน</span>
-                  </div>
                 </div>
               </div>
-              <ProductCostHistory productId={draft.id}/>
+              <div className="text-xs text-muted-soft leading-snug flex items-center gap-1.5">
+                <Icon name="info" size={13} className="text-muted-soft shrink-0"/>
+                <span>ปรับสต็อกผ่านหน้า <span className="font-medium">รับเข้า / ส่งเคลม / คืน</span></span>
+              </div>
             </div>
           )}
         </div>
 
-        {/* ── ประวัติสต็อก (edit mode only) ── */}
+        {/* ── ประวัติต้นทุน (บิลรับเข้า) — edit mode only ── */}
         {draft.id && (
-          <div className="rounded-xl border hairline bg-surface-soft p-4">
+          <div className="lg:col-span-6 rounded-xl border hairline p-4">
+            <ProductCostHistory productId={draft.id}/>
+          </div>
+        )}
+
+        {/* ── ประวัติสต็อก — edit mode only ── */}
+        {draft.id && (
+          <div className="lg:col-span-6 rounded-xl border hairline bg-surface-soft p-4">
             <StockHistoryPanel productId={draft.id}/>
           </div>
         )}
