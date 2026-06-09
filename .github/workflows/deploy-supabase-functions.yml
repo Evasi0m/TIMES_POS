@@ -1,0 +1,98 @@
+# Deploy Supabase Edge Functions from GitHub Actions (Linux runner).
+# Use this when local `supabase` CLI fails — e.g. macOS beta where Homebrew
+# binaries are unsupported or get SIGKILL.
+#
+# One-time setup:
+#   1. Create a Supabase access token: https://supabase.com/dashboard/account/tokens
+#   2. Repo → Settings → Secrets → Actions:
+#        SUPABASE_ACCESS_TOKEN  = your token
+#        SUPABASE_PROJECT_REF   = zrymhhkqdcttqsdczfcr
+#   3. Actions → "Deploy Supabase Edge Functions" → Run workflow
+#
+# Deploy all TikTok functions (matches docs/TIKTOK_INTEGRATION.md):
+#   function: all-tiktok
+#
+# Deploy one function:
+#   function: tiktok-inventory-update
+
+name: Deploy Supabase Edge Functions
+
+on:
+  workflow_dispatch:
+    inputs:
+      function:
+        description: 'Function slug (or all-tiktok for the full TikTok set)'
+        required: true
+        default: tiktok-inventory-update
+        type: choice
+        options:
+          - tiktok-inventory-update
+          - tiktok-products-search
+          - tiktok-auth
+          - tiktok-connect
+          - tiktok-token-refresh
+          - tiktok-webhook
+          - tiktok-order-import
+          - tiktok-settlement-sync
+          - tiktok-poll-orders
+          - tiktok-shipping-label
+          - tiktok-ship-package
+          - tiktok-returns-sync
+          - tiktok-invoice-submit
+          - all-tiktok
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link project
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase link --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
+
+      - name: Deploy function(s)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          FN="${{ github.event.inputs.function }}"
+
+          deploy_one() {
+            local name="$1"
+            local extra="${2:-}"
+            echo "→ Deploying ${name} ${extra}"
+            # shellcheck disable=SC2086
+            supabase functions deploy "${name}" ${extra}
+          }
+
+          if [ "$FN" = "all-tiktok" ]; then
+            deploy_one tiktok-auth --no-verify-jwt
+            deploy_one tiktok-connect
+            deploy_one tiktok-token-refresh
+            deploy_one tiktok-webhook --no-verify-jwt
+            deploy_one tiktok-order-import
+            deploy_one tiktok-settlement-sync
+            deploy_one tiktok-poll-orders
+            deploy_one tiktok-shipping-label
+            deploy_one tiktok-ship-package
+            deploy_one tiktok-returns-sync
+            deploy_one tiktok-invoice-submit --no-verify-jwt
+            deploy_one tiktok-products-search
+            deploy_one tiktok-inventory-update
+          else
+            case "$FN" in
+              tiktok-auth|tiktok-webhook|tiktok-invoice-submit)
+                deploy_one "$FN" --no-verify-jwt
+                ;;
+              *)
+                deploy_one "$FN"
+                ;;
+            esac
+          fi
