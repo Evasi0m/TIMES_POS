@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
         const skus = await searchTikTokProducts(accessToken, shopCipher, {
           query,
           queryVariants: [row.seller_sku, row.tiktok_sku_id].filter(Boolean) as string[],
-          maxPages: 3,
+          maxPages: 10,
         });
         const match = pickCatalogMatch(row, skus);
         if (!match?.tiktok_product_id) {

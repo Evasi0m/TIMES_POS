@@ -421,6 +421,10 @@ export function skuMatchTier(a: string, b: string): SkuMatchResult {
   return { tier: 'none', score: sim, auto: false };
 }
 
+function isTikTokSkuIdQuery(q: string): boolean {
+  return /^\d{10,}$/.test(String(q || '').trim());
+}
+
 /** Keep only SKUs that actually match any query variant (API may ignore seller_sku filter). */
 export function filterSkusForQueries(
   skus: TikTokSkuInventory[],
@@ -432,10 +436,22 @@ export function filterSkusForQueries(
   const out: TikTokSkuInventory[] = [];
   const seen = new Set<string>();
   for (const s of skus) {
+    if (seen.has(s.tiktok_sku_id)) continue;
+    for (const q of qs) {
+      if (isTikTokSkuIdQuery(q) && String(s.tiktok_sku_id) === q) {
+        seen.add(s.tiktok_sku_id);
+        out.push(s);
+        break;
+      }
+    }
+  }
+  for (const s of skus) {
+    if (seen.has(s.tiktok_sku_id)) continue;
     const code = (s.seller_sku || s.product_name || '').trim();
     if (!code) continue;
     let best = 0;
     for (const q of qs) {
+      if (isTikTokSkuIdQuery(q)) continue;
       const m = skuMatchTier(q, code);
       if (m.score > best) best = m.score;
       const title = (s.product_name || '').trim();
@@ -444,7 +460,7 @@ export function filterSkusForQueries(
         if (m2.score > best) best = m2.score;
       }
     }
-    if (best >= minScore && !seen.has(s.tiktok_sku_id)) {
+    if (best >= minScore) {
       seen.add(s.tiktok_sku_id);
       out.push(s);
     }
@@ -550,11 +566,26 @@ export async function searchTikTokProducts(
   ])];
 
   for (const v of variants) {
+    if (isTikTokSkuIdQuery(v)) continue;
     try {
       const { skus } = await listPage({ ...baseBody, seller_sku: v });
       const filtered = filterSkusForQueries(skus, variants, 0.55);
       if (filtered.length) return filtered;
     } catch { /* try next variant */ }
+  }
+
+  const skuIdQueries = variants.filter(isTikTokSkuIdQuery);
+  if (skuIdQueries.length) {
+    let pageToken = '';
+    for (let page = 0; page < maxPages; page++) {
+      const { skus, nextToken } = await listPage(baseBody, pageToken);
+      for (const q of skuIdQueries) {
+        const hit = skus.find(s => String(s.tiktok_sku_id) === q);
+        if (hit) return [hit];
+      }
+      if (!nextToken) break;
+      pageToken = nextToken;
+    }
   }
 
   const needles = variants.map(s => s.toLowerCase());

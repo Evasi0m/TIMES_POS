@@ -74,15 +74,25 @@ export default function TikTokHealthCard({ toast }) {
       setError(null);
       toast?.push(
         `ซ่อม mapping TikTok แล้ว ${healed} รายการ${failed ? ` (ไม่พบ ${failed})` : ''}`,
-        healed > 0 ? 'success' : 'info',
+        healed > 0 ? 'success' : failed > 0 ? 'warning' : 'info',
       );
-      // Bill #127254 (GBD-300-9DR) sold before mirror ran — re-sync after backfill.
-      if (healed > 0) {
+      // Bill #127254 (GBD-300-9DR) sold before mirror ran — re-sync only if mapping is ready.
+      const { data: gbdMapping } = await sb.from('tiktok_product_mappings')
+        .select('tiktok_product_id')
+        .eq('product_id', 11449)
+        .maybeSingle();
+      if (gbdMapping?.tiktok_product_id) {
         await resyncSaleMirrorBill({
           saleOrderId: 127254,
           productIds: [11449],
           toast,
         }).catch(() => {});
+      } else if (healed > 0 || failed > 0) {
+        toast?.push(
+          'GBD-300-9 (บิล #127254) ยัง sync TikTok ไม่ได้ — mapping ขาด product id',
+          'warning',
+          { durationMs: 10000 },
+        );
       }
     } catch (e) {
       setError('ซ่อม mapping ไม่สำเร็จ: ' + formatTikTokApiError(mapError(e)));

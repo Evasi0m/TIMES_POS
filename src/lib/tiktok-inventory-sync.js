@@ -19,7 +19,7 @@ import {
   shouldPersistTiktokMatch,
   voidMirrorToastDurationMs,
 } from './tiktok-mirror-helpers.js';
-import { filterTikTokSkusByTerm } from './tiktok-receive-match.js';
+import { filterTikTokSkusByTerm, posSkuSearchVariants } from './tiktok-receive-match.js';
 
 export {
   buildSyncLine,
@@ -98,7 +98,9 @@ export async function persistTiktokMatchMapping(productId, patch, { onPersisted 
   await onPersisted?.(productId);
 }
 
-export async function searchTikTokCatalog(query, { variants = [], maxPages = 5 } = {}) {
+export async function searchTikTokCatalog(query, {
+  variants = [], maxPages = 5, skipClientFilter = false,
+} = {}) {
   const q = (query || '').trim();
   const data = await invokeTikTokFunction('tiktok-products-search', {
     query: q,
@@ -107,7 +109,7 @@ export async function searchTikTokCatalog(query, { variants = [], maxPages = 5 }
     max_pages: maxPages,
   });
   const skus = data.skus || [];
-  if (!q) return skus;
+  if (!q || skipClientFilter) return skus;
   return filterTikTokSkusByTerm(q, skus, { minScore: 0.55, limit: 50 });
 }
 
@@ -210,23 +212,38 @@ function filterMirrorEligibleMappings(mappings) {
 
 /** Search TikTok catalog and pick SKU row for an incomplete mapping. */
 async function healMappingProductId(m) {
-  const query = (m.seller_sku || m.tiktok_product_name || '').trim();
-  if (!query) return m;
-  const skus = await searchTikTokCatalog(query, {
-    variants: [m.seller_sku, m.tiktok_sku_id].filter(Boolean),
-    maxPages: 3,
+  const baseVariants = [m.seller_sku, m.tiktok_sku_id].filter(Boolean);
+  const queries = [
+    ...baseVariants,
+    ...posSkuSearchVariants({ barcode: m.seller_sku, name: m.tiktok_product_name }, 8),
+  ].map(q => String(q || '').trim()).filter(q => q.length >= 2);
+  const seenQ = new Set();
+  const uniqueQueries = queries.filter(q => {
+    if (seenQ.has(q)) return false;
+    seenQ.add(q);
+    return true;
   });
-  const match = pickCatalogSkuForMapping(m, skus);
-  if (!match?.tiktok_product_id) return m;
-  const healed = {
-    ...m,
-    tiktok_product_id: match.tiktok_product_id,
-    warehouse_id: m.warehouse_id || match.warehouse_id || null,
-    seller_sku: m.seller_sku || match.seller_sku,
-    tiktok_product_name: m.tiktok_product_name || match.product_name,
-  };
-  await upsertTiktokInventoryMapping({ productId: m.product_id, tiktokMapping: healed });
-  return healed;
+  if (!uniqueQueries.length) return m;
+
+  for (const query of uniqueQueries) {
+    const skus = await searchTikTokCatalog(query, {
+      variants: uniqueQueries,
+      maxPages: 10,
+      skipClientFilter: !!m.tiktok_sku_id,
+    });
+    const match = pickCatalogSkuForMapping(m, skus);
+    if (!match?.tiktok_product_id) continue;
+    const healed = {
+      ...m,
+      tiktok_product_id: match.tiktok_product_id,
+      warehouse_id: m.warehouse_id || match.warehouse_id || null,
+      seller_sku: m.seller_sku || match.seller_sku,
+      tiktok_product_name: m.tiktok_product_name || match.product_name,
+    };
+    await upsertTiktokInventoryMapping({ productId: m.product_id, tiktokMapping: healed });
+    return healed;
+  }
+  return m;
 }
 
 /**
