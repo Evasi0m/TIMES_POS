@@ -4,6 +4,7 @@ import { sb } from '../../lib/supabase-client.js';
 import { getProductCatalog } from '../../lib/product-catalog-cache.js';
 import { mapError } from '../../lib/error-map.js';
 import { classifySkuMatch } from '../../lib/fuzzy-match.js';
+import { resolveTikTokCatalogMatch } from '../../lib/tiktok-inventory-sync.js';
 import Icon from '../ui/Icon.jsx';
 import ExpandableImageThumb from '../ui/ExpandableImageThumb.jsx';
 import TikTokSection from './tiktok/TikTokSection.jsx';
@@ -113,16 +114,31 @@ export default function TikTokMatching({ toast }) {
     [matchByItem],
   );
 
+  const linkItem = async (item, product) => {
+    let tiktokIds = null;
+    if (item.tiktok_sku_id) {
+      try {
+        tiktokIds = await resolveTikTokCatalogMatch({
+          sellerSku: item.seller_sku || item.sku_name,
+          tiktokSkuId: item.tiktok_sku_id,
+        });
+      } catch { /* link without ids — auto-heal at mirror time */ }
+    }
+    const { error } = await sb.rpc('link_tiktok_item_to_product', {
+      p_item_id: item.id,
+      p_product_id: product.id,
+      p_apply_stock: applyStock,
+      p_tiktok_product_id: tiktokIds?.tiktok_product_id || null,
+      p_warehouse_id: tiktokIds?.warehouse_id || null,
+    });
+    if (error) throw error;
+  };
+
   const link = async (item, product) => {
     if (busy) return;
     setBusy(item.id);
     try {
-      const { error } = await sb.rpc('link_tiktok_item_to_product', {
-        p_item_id: item.id,
-        p_product_id: product.id,
-        p_apply_stock: applyStock,
-      });
-      if (error) throw error;
+      await linkItem(item, product);
       toast?.push(`จับคู่ "${product.name}" แล้ว`, 'success');
       await load();
     } catch (e) {
@@ -162,12 +178,7 @@ export default function TikTokMatching({ toast }) {
     let fail = 0;
     for (const { it, m } of targets) {
       try {
-        const { error } = await sb.rpc('link_tiktok_item_to_product', {
-          p_item_id: it.id,
-          p_product_id: m.product.id,
-          p_apply_stock: applyStock,
-        });
-        if (error) throw error;
+        await linkItem(it, m.product);
         ok++;
       } catch {
         fail++;

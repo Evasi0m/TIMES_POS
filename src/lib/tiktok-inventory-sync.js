@@ -11,8 +11,11 @@ import {
   formatVoidMirrorToast,
   formatSaleMirrorToast,
   formatSaleVoidMirrorToast,
+  formatMirrorSkipToast,
+  mappingNeedsProductId,
   mappingRowFromTiktokSku,
   normalizeSyncOperation,
+  pickCatalogSkuForMapping,
   shouldPersistTiktokMatch,
   voidMirrorToastDurationMs,
 } from './tiktok-mirror-helpers.js';
@@ -27,10 +30,13 @@ export {
   formatVoidMirrorToast,
   formatSaleMirrorToast,
   formatSaleVoidMirrorToast,
+  formatMirrorSkipToast,
   formatTikTokApiError,
   voidMirrorToastDurationMs,
   shouldPersistTiktokMatch,
   normalizeSyncOperation,
+  mappingNeedsProductId,
+  pickCatalogSkuForMapping,
 };
 
 /** Pull `{ error }` from supabase-js FunctionsHttpError (non-2xx body). */
@@ -202,6 +208,116 @@ function filterMirrorEligibleMappings(mappings) {
   return (mappings || []).filter(m => m?.product_id != null && m.tiktok_sku_id && m.tiktok_product_id);
 }
 
+/** Search TikTok catalog and pick SKU row for an incomplete mapping. */
+async function healMappingProductId(m) {
+  const query = (m.seller_sku || m.tiktok_product_name || '').trim();
+  if (!query) return m;
+  const skus = await searchTikTokCatalog(query, {
+    variants: [m.seller_sku, m.tiktok_sku_id].filter(Boolean),
+    maxPages: 3,
+  });
+  const match = pickCatalogSkuForMapping(m, skus);
+  if (!match?.tiktok_product_id) return m;
+  const healed = {
+    ...m,
+    tiktok_product_id: match.tiktok_product_id,
+    warehouse_id: m.warehouse_id || match.warehouse_id || null,
+    seller_sku: m.seller_sku || match.seller_sku,
+    tiktok_product_name: m.tiktok_product_name || match.product_name,
+  };
+  await upsertTiktokInventoryMapping({ productId: m.product_id, tiktokMapping: healed });
+  return healed;
+}
+
+/**
+ * Auto-heal mappings missing tiktok_product_id before mirror.
+ * @returns {{ mappings: object[], healed: number, failed: number }}
+ */
+export async function ensureMappingsReady(mappings) {
+  const list = [...(mappings || [])];
+  if (!list.length) return { mappings: [], healed: 0, failed: 0 };
+  const needs = list.filter(mappingNeedsProductId);
+  if (!needs.length) return { mappings: list, healed: 0, failed: 0 };
+
+  let healed = 0;
+  let failed = 0;
+  const out = [];
+  for (const m of list) {
+    if (!mappingNeedsProductId(m)) {
+      out.push(m);
+      continue;
+    }
+    try {
+      const fixed = await healMappingProductId(m);
+      if (fixed.tiktok_product_id) {
+        healed++;
+        out.push(fixed);
+      } else {
+        failed++;
+        out.push(m);
+      }
+    } catch {
+      failed++;
+      out.push(m);
+    }
+  }
+  return { mappings: out, healed, failed };
+}
+
+/** Load mappings missing tiktok_product_id (admin backfill UI). */
+export async function fetchIncompleteTikTokMappings(limit = 50) {
+  const { data, error } = await sb.from('tiktok_product_mappings')
+    .select('tiktok_sku_id, product_id, seller_sku, tiktok_product_name, tiktok_product_id, warehouse_id')
+    .is('tiktok_product_id', null)
+    .eq('sync_enabled', true)
+    .limit(Math.min(Math.max(limit, 1), 50));
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * Backfill tiktok_product_id for incomplete mappings via tiktok-products-search.
+ * Works from the browser — no local Supabase CLI required.
+ */
+export async function backfillMissingTikTokProductIds({ limit = 50 } = {}) {
+  const rows = await fetchIncompleteTikTokMappings(limit);
+  return ensureMappingsReady(rows);
+}
+
+/** Re-sync sale mirror for a bill after mapping backfill (e.g. bill #127254). */
+export async function resyncSaleMirrorBill({ saleOrderId, productIds, toast = null }) {
+  return runSaleMirrorWithFeedback({
+    toast,
+    saleOrderId,
+    productIds,
+    syncOperation: 'sale',
+  });
+}
+
+/** Resolve TikTok product/warehouse ids for manual link (TikTok matching UI). */
+export async function resolveTikTokCatalogMatch({ sellerSku, tiktokSkuId }) {
+  const query = (sellerSku || '').trim();
+  if (!query && !tiktokSkuId) return null;
+  const skus = await searchTikTokCatalog(query || String(tiktokSkuId), {
+    variants: [sellerSku, tiktokSkuId].filter(Boolean),
+    maxPages: 3,
+  });
+  return pickCatalogSkuForMapping({ tiktok_sku_id: tiktokSkuId, seller_sku: sellerSku }, skus);
+}
+
+function mirrorSkipReason(rawMappings, eligibleMappings, failedHeal) {
+  if (!rawMappings.length) return 'no_mapping';
+  if (!eligibleMappings.length) return 'incomplete_mapping';
+  return null;
+}
+
+function pushMirrorSkipToast(toast, result) {
+  const skip = formatMirrorSkipToast(result);
+  if (skip && toast) {
+    toast.push(skip.msg, skip.type, { durationMs: skip.type === 'error' ? 8000 : 6000 });
+  }
+}
+
 /**
  * Mirror POS stock to TikTok after a sale (any channel).
  * Uses sale_order_id as receive_order_id ref in sync log.
@@ -219,10 +335,20 @@ export async function mirrorStockAfterSale({
     return { results: [], skipped: true, targetCount: 0, reason: 'not_connected' };
   }
 
-  const mappings = filterMirrorEligibleMappings(
-    preloadedMappings ?? await fetchTikTokMappings(ids),
-  );
-  if (!mappings.length) return { results: [], skipped: true, targetCount: 0 };
+  const rawMappings = preloadedMappings ?? await fetchTikTokMappings(ids);
+  const { mappings: readyMappings, healed, failed } = await ensureMappingsReady(rawMappings);
+  const mappings = filterMirrorEligibleMappings(readyMappings);
+  if (!mappings.length) {
+    const stillIncomplete = readyMappings.filter(mappingNeedsProductId).length + failed;
+    return {
+      results: [],
+      skipped: true,
+      targetCount: 0,
+      reason: mirrorSkipReason(rawMappings, mappings, failed),
+      incompleteCount: stillIncomplete,
+      healed,
+    };
+  }
 
   const stocks = await fetchPosStocks(mappings.map(m => m.product_id));
   const mirrorPayload = mappings.map(m => buildSyncLine({
@@ -290,18 +416,21 @@ export async function runSaleMirrorWithFeedback({
   }
 
   try {
-    const { results, skipped, targetCount } = await mirrorStockAfterSale({
+    const result = await mirrorStockAfterSale({
       saleOrderId,
       productIds: ids,
       syncOperation,
     });
-    if (!skipped && toast) {
+    const { results, skipped, targetCount, reason } = result;
+    if (skipped && toast) {
+      pushMirrorSkipToast(toast, result);
+    } else if (!skipped && toast) {
       const { msg, isError } = labelFormatter(results);
       toast.push(msg, isError ? 'error' : 'success', {
         durationMs: voidMirrorToastDurationMs(targetCount || count, { isError }),
       });
     }
-    return { results, skipped, targetCount };
+    return { results, skipped, targetCount, reason };
   } catch (e) {
     if (toast) {
       toast.push('TikTok sale mirror: ' + formatTikTokApiError(e?.message || e), 'error', {
@@ -325,12 +454,16 @@ export async function runSaleVoidMirrorWithFeedback({ toast, saleOrderId, produc
   }
 
   try {
-    const { results, skipped, targetCount } = await mirrorStockAfterSaleVoid({
+    const { results, skipped, targetCount, reason } = await mirrorStockAfterSaleVoid({
       saleOrderId,
       productIds,
       targets,
     });
-    if (!skipped && toast) {
+    if (skipped && toast) {
+      if (reason === 'not_connected') {
+        pushMirrorSkipToast(toast, { reason: 'not_connected' });
+      }
+    } else if (!skipped && toast) {
       const { msg, isError } = formatSaleVoidMirrorToast(results);
       toast.push(msg, isError ? 'error' : 'success', {
         durationMs: voidMirrorToastDurationMs(targetCount || count, { isError }),

@@ -11,6 +11,9 @@ import {
   formatTikTokApiError,
   tiktokSkuDisplayLabel,
   mappingRowFromTiktokSku,
+  mappingNeedsProductId,
+  pickCatalogSkuForMapping,
+  formatMirrorSkipToast,
 } from '../src/lib/tiktok-mirror-helpers.js';
 
 describe('isTikTokLineReady', () => {
@@ -174,6 +177,52 @@ describe('mappingRowFromTiktokSku', () => {
   });
   it('returns null without sku', () => {
     expect(mappingRowFromTiktokSku(null, 1)).toBeNull();
+  });
+});
+
+describe('mappingNeedsProductId', () => {
+  it('true when sku id present but product id missing', () => {
+    expect(mappingNeedsProductId({ tiktok_sku_id: 'a', tiktok_product_id: null })).toBe(true);
+    expect(mappingNeedsProductId({ tiktok_sku_id: 'a' })).toBe(true);
+  });
+  it('false when product id present or no sku id', () => {
+    expect(mappingNeedsProductId({ tiktok_sku_id: 'a', tiktok_product_id: 'p' })).toBe(false);
+    expect(mappingNeedsProductId({ product_id: 1 })).toBe(false);
+  });
+});
+
+describe('pickCatalogSkuForMapping', () => {
+  const skus = [
+    { tiktok_sku_id: 'sku-1', tiktok_product_id: 'prod-1', seller_sku: 'GBD-300-9' },
+    { tiktok_sku_id: 'sku-2', tiktok_product_id: 'prod-2', seller_sku: 'GA-2100-1A' },
+  ];
+
+  it('matches by tiktok_sku_id first', () => {
+    const m = pickCatalogSkuForMapping({ tiktok_sku_id: 'sku-1', seller_sku: 'OTHER' }, skus);
+    expect(m?.tiktok_product_id).toBe('prod-1');
+  });
+
+  it('falls back to seller_sku', () => {
+    const m = pickCatalogSkuForMapping({ tiktok_sku_id: 'missing', seller_sku: 'GA-2100-1A' }, skus);
+    expect(m?.tiktok_product_id).toBe('prod-2');
+  });
+
+  it('returns null when no match', () => {
+    expect(pickCatalogSkuForMapping({ tiktok_sku_id: 'x', seller_sku: 'y' }, skus)).toBeNull();
+  });
+});
+
+describe('formatMirrorSkipToast', () => {
+  it('warns when not connected', () => {
+    const t = formatMirrorSkipToast({ reason: 'not_connected' });
+    expect(t.type).toBe('warning');
+    expect(t.msg).toContain('เชื่อมต่อ');
+  });
+
+  it('errors on incomplete mapping', () => {
+    const t = formatMirrorSkipToast({ reason: 'incomplete_mapping', incompleteCount: 2 });
+    expect(t.type).toBe('error');
+    expect(t.msg).toContain('2 รายการ');
   });
 });
 

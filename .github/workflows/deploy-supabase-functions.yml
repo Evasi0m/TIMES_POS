@@ -1,6 +1,7 @@
 # Deploy Supabase Edge Functions from GitHub Actions (Linux runner).
-# Use this when local `supabase` CLI fails — e.g. macOS beta where Homebrew
-# binaries are unsupported or get SIGKILL.
+# Use this when local `supabase` CLI fails — e.g. macOS 27 beta where Homebrew
+# binaries are unsupported or get SIGKILL (exit 137). Mapping backfill also
+# works from the app: ตั้งค่า → TikTok → ซ่อม mapping (client-side, no CLI).
 #
 # One-time setup:
 #   1. Create a Supabase access token: https://supabase.com/dashboard/account/tokens
@@ -27,6 +28,7 @@ on:
         type: choice
         options:
           - tiktok-inventory-update
+          - tiktok-mapping-backfill
           - tiktok-products-search
           - tiktok-auth
           - tiktok-connect
@@ -86,6 +88,7 @@ jobs:
             deploy_one tiktok-invoice-submit --no-verify-jwt
             deploy_one tiktok-products-search
             deploy_one tiktok-inventory-update
+            deploy_one tiktok-mapping-backfill
           else
             case "$FN" in
               tiktok-auth|tiktok-webhook|tiktok-invoice-submit)

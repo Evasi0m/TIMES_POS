@@ -183,7 +183,7 @@ export default function TikTokSettings({ toast, compact = false }) {
         </button>
       </div>
 
-      {connected && <TikTokHealthCard />}
+      {connected && <TikTokHealthCard toast={toast} />}
     </div>
   );
 }

@@ -125,6 +125,46 @@ export function normalizeSyncOperation(syncOperation) {
   return 'receive';
 }
 
+/** True when mapping has TikTok SKU but lacks product id (blocks sale mirror). */
+export function mappingNeedsProductId(m) {
+  return !!(m?.tiktok_sku_id && !m?.tiktok_product_id);
+}
+
+/** Pick catalog SKU row that completes an incomplete DB mapping. */
+export function pickCatalogSkuForMapping(m, skus) {
+  if (!m?.tiktok_sku_id && !m?.seller_sku) return null;
+  const skuId = String(m.tiktok_sku_id || '');
+  const seller = String(m.seller_sku || '').trim();
+  const list = skus || [];
+  if (skuId) {
+    const byId = list.find(s => String(s.tiktok_sku_id || s.id || '') === skuId);
+    if (byId?.tiktok_product_id) return byId;
+  }
+  if (seller) {
+    const bySeller = list.find(s => String(s.seller_sku || '').trim() === seller);
+    if (bySeller?.tiktok_product_id) return bySeller;
+  }
+  return null;
+}
+
+/** Toast when sale mirror is skipped (not connected / incomplete mapping). */
+export function formatMirrorSkipToast({ reason, incompleteCount = 0, healed = 0 } = {}) {
+  if (reason === 'not_connected') {
+    return { msg: 'TikTok sale mirror ข้าม: ยังไม่ได้เชื่อมต่อ TikTok Shop', type: 'warning' };
+  }
+  if (reason === 'incomplete_mapping') {
+    if (healed > 0 && incompleteCount === 0) {
+      return { msg: 'ซ่อม mapping TikTok อัตโนมัติแล้ว', type: 'info' };
+    }
+    const suffix = incompleteCount > 0 ? ` — ${incompleteCount} รายการ` : '';
+    return {
+      msg: `TikTok sale mirror ข้าม: mapping ไม่ครบ (ขาด product id)${suffix}`,
+      type: 'error',
+    };
+  }
+  return null;
+}
+
 /** Map common TikTok / connection errors to Thai hints. */
 export function formatTikTokApiError(msg) {
   const s = String(msg || '');

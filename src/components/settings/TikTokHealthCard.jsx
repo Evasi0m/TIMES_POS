@@ -4,6 +4,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { sb } from '../../lib/supabase-client.js';
 import { mapError } from '../../lib/error-map.js';
+import { formatTikTokApiError } from '../../lib/tiktok-mirror-helpers.js';
+import {
+  backfillMissingTikTokProductIds,
+  resyncSaleMirrorBill,
+} from '../../lib/tiktok-inventory-sync.js';
 import Icon from '../ui/Icon.jsx';
 
 function fmtDateTime(iso) {
@@ -41,9 +46,10 @@ function Row({ label, value, tone = 'muted', hint }) {
   );
 }
 
-export default function TikTokHealthCard() {
+export default function TikTokHealthCard({ toast }) {
   const [health, setHealth] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
   const [error, setError] = useState(null);
 
   const load = useCallback(async () => {
@@ -59,6 +65,31 @@ export default function TikTokHealthCard() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const runMappingBackfill = async () => {
+    setBackfilling(true);
+    try {
+      const { healed, failed } = await backfillMissingTikTokProductIds({ limit: 50 });
+      await load();
+      setError(null);
+      toast?.push(
+        `ซ่อม mapping TikTok แล้ว ${healed} รายการ${failed ? ` (ไม่พบ ${failed})` : ''}`,
+        healed > 0 ? 'success' : 'info',
+      );
+      // Bill #127254 (GBD-300-9DR) sold before mirror ran — re-sync after backfill.
+      if (healed > 0) {
+        await resyncSaleMirrorBill({
+          saleOrderId: 127254,
+          productIds: [11449],
+          toast,
+        }).catch(() => {});
+      }
+    } catch (e) {
+      setError('ซ่อม mapping ไม่สำเร็จ: ' + formatTikTokApiError(mapError(e)));
+    } finally {
+      setBackfilling(false);
+    }
+  };
 
   if (loading && !health) {
     return (
@@ -151,6 +182,18 @@ export default function TikTokHealthCard() {
         value={`${(health.mappings_total ?? 0) - (health.mappings_missing_product_id ?? 0)}/${health.mappings_total ?? 0}`}
         tone={health.mappings_missing_product_id > 0 ? 'warn' : 'ok'}
       />
+
+      {health.mappings_missing_product_id > 0 && (
+        <button
+          type="button"
+          className="btn-secondary w-full !py-2 !text-xs mt-2"
+          onClick={runMappingBackfill}
+          disabled={backfilling}
+        >
+          {backfilling ? <span className="spinner"/> : <Icon name="refresh" size={14}/>}
+          ซ่อม mapping ที่ขาด product id ({health.mappings_missing_product_id})
+        </button>
+      )}
 
       {lastErr && (
         <div className="text-xs text-error bg-error/10 rounded-lg px-3 py-2 mt-2">
