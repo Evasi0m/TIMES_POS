@@ -21,7 +21,8 @@ import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 // Workbox already revisions that). Use this to correlate client behavior
 // with a specific SW build: cashier reads the version from console and we
 // know exactly which code is running on their device.
-const SW_VERSION = __SW_BUILD_ID__;
+/* global __SW_BUILD_ID__ */
+const SW_VERSION = typeof __SW_BUILD_ID__ !== 'undefined' ? __SW_BUILD_ID__ : 'dev';
 
 self.addEventListener('install', () => {
   // eslint-disable-next-line no-console
