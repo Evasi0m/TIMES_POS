@@ -11,20 +11,20 @@
 // midnight PT. Migration 016 introduces `ai_api_keys` — admins can now
 // register N keys and we cascade through them in priority order.
 //
-// Cascade strategy is KEY-FIRST, MODEL-SECOND:
+// Cascade strategy is MODEL-FIRST, KEY-SECOND:
 //
-//    for each key (priority ASC):
-//      for each model (gemini-3-flash, gemini-2.5-flash):
+//    for each model (gemini-2.5-flash, gemini-3-flash-preview):
+//      for each key (priority ASC):
 //         try (key, model)
 //         on 429/5xx → mark key.last_error, try next combo
-//         on 401/403 → mark key bad, try next KEY (skip this key's 2.5)
+//         on 401/403 → mark key bad, try next KEY (skip this key's models)
 //         on success → stamp key.last_used_at, log + return
 //
-// Why key-first? If key 1's 3-flash quota is drained but 2.5-flash on
-// the same key still has headroom, we'd rather use (k1, 2.5) than
-// switch to k2's 3-flash — that way each admin's personal free tier is
-// exhausted before touching their backup keys. This also minimizes
-// latency for the common case ("first key still works").
+// Why model-first? The shop may register many API keys. If key 1's
+// primary-model request overloads or times out, we should try key 2 on
+// the same fast/cheap GA model before falling back to the preview model.
+// This uses the key pool as intended and keeps the slower fallback model
+// as a true last resort.
 //
 // Why this lives in an Edge Function:
 //   The Gemini API keys are admin-only sensitive material. If we let the
@@ -76,15 +76,25 @@ const ANON_KEY     = Deno.env.get('SUPABASE_ANON_KEY')!;
 const MAX_BILLS_PER_BATCH = 10;
 const MAX_BASE64_PER_IMAGE = 8 * 1024 * 1024; // ~6 MB after decode
 const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
+const REQUEST_BUDGET_MS = 130_000; // leave room before Supabase's 150s idle timeout
+const GEMINI_ATTEMPT_TIMEOUT_MS = 35_000;
+const MIN_ATTEMPT_REMAINING_MS = 8_000;
 
 // Model cascade. First entry is tried first within a given key; on 429
 // or 5xx we step to the next model. Per-model pricing is colocated so
-// the audit log records the rate that was actually charged — important
-// since Gemini 3 is ~7× more expensive than 2.5.
+// the audit log records the rate that was actually charged.
 // Source: https://ai.google.dev/gemini-api/docs/pricing (2026-05)
+//
+// Order rationale (changed 2026-06): the GA `gemini-2.5-flash` is tried
+// FIRST because the `gemini-3-flash-preview` capacity became unreliable —
+// it started returning 503 "overloaded" on nearly every call, which both
+// slowed every scan (wait for the preview 503, THEN fall back) and made
+// the whole request fail whenever 2.5 was momentarily busy too. 2.5-flash
+// is GA, faster to respond, ~7× cheaper, and accurate enough for this OCR
+// task. The preview model stays as a secondary fallback.
 const MODELS = [
-  { id: 'gemini-3-flash-preview', priceInUsdPerM: 0.50,  priceOutUsdPerM: 3.00 },
   { id: 'gemini-2.5-flash',       priceInUsdPerM: 0.075, priceOutUsdPerM: 0.30 },
+  { id: 'gemini-3-flash-preview', priceInUsdPerM: 0.50,  priceOutUsdPerM: 3.00 },
 ];
 const USD_TO_THB = 36;
 
@@ -165,7 +175,7 @@ function j(status: number, body: unknown) {
 //   `network`    → fetch threw — connectivity issue, won't help to retry
 //   `parseError` → envelope unreadable from Gemini
 type Attempt =
-  | { kind: 'ok'; rawText: string; promptTokens: number; outputTokens: number }
+  | { kind: 'ok'; rawText: string; promptTokens: number; outputTokens: number; elapsedMs: number }
   | { kind: 'transient'; status: number; detail: string }
   | { kind: 'badKey'; status: number; detail: string }
   | { kind: 'clientErr'; status: number; detail: string }
@@ -176,7 +186,9 @@ async function callGemini(
   modelId: string,
   apiKey: string,
   images: ImagePart[],
+  timeoutMs = GEMINI_ATTEMPT_TIMEOUT_MS,
 ): Promise<Attempt> {
+  const startedAt = Date.now();
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
   const parts: any[] = images.map((img) => ({
@@ -195,14 +207,26 @@ async function callGemini(
   };
 
   let res: Response;
+  const ctrl = new AbortController();
+  const timeout = setTimeout(() => ctrl.abort('gemini-timeout'), timeoutMs);
   try {
     res = await fetch(url, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify(body),
+      signal:  ctrl.signal,
     });
   } catch (e) {
+    if (ctrl.signal.aborted) {
+      return {
+        kind: 'transient',
+        status: 504,
+        detail: `Gemini request timeout after ${timeoutMs}ms`,
+      };
+    }
     return { kind: 'network', detail: String(e) };
+  } finally {
+    clearTimeout(timeout);
   }
 
   const text = await res.text();
@@ -227,7 +251,7 @@ async function callGemini(
   if (!rawText) {
     return { kind: 'parseError', detail: 'empty candidate text' };
   }
-  return { kind: 'ok', rawText, promptTokens, outputTokens };
+  return { kind: 'ok', rawText, promptTokens, outputTokens, elapsedMs: Date.now() - startedAt };
 }
 
 // Classify a transient / badKey status into a short Thai-friendly
@@ -237,13 +261,31 @@ function shortError(status: number, detail: string): string {
   if (status === 429) return 'quota exhausted (429)';
   if (status === 401) return 'unauthorized (401) — key invalid or revoked';
   if (status === 403) return 'forbidden (403) — key disabled or wrong scope';
+  if (status === 504 && /timeout/i.test(detail)) return 'Gemini timed out (504)';
   if (status === 503) return 'Gemini overloaded (503)';
   if (status >= 500)  return `Gemini server error (${status})`;
   const trimmed = detail.trim().slice(0, 120);
   return `${status}: ${trimmed}`;
 }
 
+function requestId() {
+  try { return crypto.randomUUID(); }
+  catch { return `${Date.now()}-${Math.random().toString(36).slice(2)}`; }
+}
+
+function imageStats(images: ImagePart[]) {
+  const sizes = images.map((img) => img.image_base64?.length || 0);
+  const total = sizes.reduce((sum, n) => sum + n, 0);
+  return {
+    total_base64_chars: total,
+    max_base64_chars: sizes.length ? Math.max(...sizes) : 0,
+  };
+}
+
 Deno.serve(async (req: Request) => {
+  const reqId = requestId();
+  const requestStartedAt = Date.now();
+  const deadlineAt = requestStartedAt + REQUEST_BUDGET_MS;
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST')    return j(405, { error: 'method not allowed' });
 
@@ -324,21 +366,57 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  // Key-first cascade. Every failure bumps ai_api_keys.last_error so
+  const stats = imageStats(images);
+  console.info('[cmg-bill-parse] start', {
+    req_id: reqId,
+    bills_count: images.length,
+    ...stats,
+  });
+
+  // Model-first cascade. Every failure bumps ai_api_keys.last_error so
   // the operator can see in the UI why a given key was skipped.
   let lastTransient: { status: number; detail: string } | null = null;
+  const badKeyIds = new Set<string>();
+  const trace: string[] = [];
 
-  for (const k of keys as ApiKeyRow[]) {
-    let keyIsBad = false; // flip on 401/403 — skips remaining models
+  for (const m of MODELS) {
+    for (const k of keys as ApiKeyRow[]) {
+      if (badKeyIds.has(k.id)) continue;
+      const remainingMs = deadlineAt - Date.now();
+      if (remainingMs < MIN_ATTEMPT_REMAINING_MS) {
+        console.warn('[cmg-bill-parse] request budget exhausted', {
+          req_id: reqId,
+          remaining_ms: remainingMs,
+          last_status: lastTransient?.status ?? null,
+        });
+        return j(504, {
+          error: 'AI ใช้เวลานานเกินไปก่อนลอง API key ครบทุกตัว',
+          detail: `request budget exhausted; req_id=${reqId}; last=${lastTransient?.detail ?? 'none'}`,
+          req_id: reqId,
+          trace,
+        });
+      }
 
-    for (const m of MODELS) {
-      if (keyIsBad) break;
-
-      const attempt = await callGemini(m.id, k.api_key, images);
+      const attemptTimeoutMs = Math.max(
+        MIN_ATTEMPT_REMAINING_MS,
+        Math.min(GEMINI_ATTEMPT_TIMEOUT_MS, remainingMs - 3_000),
+      );
+      const attemptStartedAt = Date.now();
+      const attempt = await callGemini(m.id, k.api_key, images, attemptTimeoutMs);
+      const attemptMs = Date.now() - attemptStartedAt;
+      const keyLabel = k.label || 'unlabeled';
 
       if (attempt.kind === 'transient') {
         lastTransient = { status: attempt.status, detail: attempt.detail };
         const shortMsg = shortError(attempt.status, attempt.detail);
+        console.warn('[cmg-bill-parse] transient attempt failed', {
+          req_id: reqId,
+          key_label: keyLabel,
+          model: m.id,
+          status: attempt.status,
+          attempt_ms: attemptMs,
+          detail: attempt.detail.slice(0, 180),
+        });
         // Stamp last_error — useful for "why was this key skipped"
         // diagnostics. We intentionally don't clear it on subsequent
         // successes with OTHER keys; only a success on this key itself
@@ -349,38 +427,47 @@ Deno.serve(async (req: Request) => {
         }).eq('id', k.id);
         await logUsage(
           adminClient, userId, k.id, m.id, images.length, 0, 0, false,
-          `${k.label || 'unlabeled'} · ${m.id} · ${shortMsg}`,
+          `${keyLabel} · ${m.id} · ${shortMsg} · attempt_ms=${attemptMs} · req_id=${reqId}`,
         );
-        continue; // try next model on same key
+        trace.push(`ลอง ${keyLabel} · ${m.id} ไม่ได้ (${shortMsg}) → สลับ key`);
+        continue; // try next key on the same model first
       }
 
       if (attempt.kind === 'badKey') {
         const shortMsg = shortError(attempt.status, attempt.detail);
+        console.warn('[cmg-bill-parse] bad key attempt failed', {
+          req_id: reqId,
+          key_label: keyLabel,
+          model: m.id,
+          status: attempt.status,
+          attempt_ms: attemptMs,
+        });
         await adminClient.from('ai_api_keys').update({
           last_error: shortMsg,
           last_error_at: new Date().toISOString(),
         }).eq('id', k.id);
         await logUsage(
           adminClient, userId, k.id, m.id, images.length, 0, 0, false,
-          `${k.label || 'unlabeled'} · ${m.id} · ${shortMsg}`,
+          `${keyLabel} · ${m.id} · ${shortMsg} · attempt_ms=${attemptMs} · req_id=${reqId}`,
         );
-        keyIsBad = true;
-        continue; // breaks inner loop via guard at top of next iteration
+        trace.push(`${keyLabel} ใช้ไม่ได้ (${shortMsg}) → ข้าม key นี้`);
+        badKeyIds.add(k.id);
+        continue;
       }
 
       // These are terminal for the WHOLE request — no point burning
       // the rest of the pool on the same bad user input.
       if (attempt.kind === 'network') {
-        await logUsage(adminClient, userId, k.id, m.id, images.length, 0, 0, false, 'network: ' + attempt.detail);
-        return j(502, { error: 'cannot reach Gemini: ' + attempt.detail });
+        await logUsage(adminClient, userId, k.id, m.id, images.length, 0, 0, false, `network: ${attempt.detail} · attempt_ms=${attemptMs} · req_id=${reqId}`);
+        return j(502, { error: 'cannot reach Gemini: ' + attempt.detail, req_id: reqId, trace });
       }
       if (attempt.kind === 'clientErr') {
-        await logUsage(adminClient, userId, k.id, m.id, images.length, 0, 0, false, `client ${attempt.status}: ${attempt.detail.slice(0, 200)}`);
-        return j(attempt.status, { error: `Gemini rejected request (${attempt.status})`, detail: attempt.detail });
+        await logUsage(adminClient, userId, k.id, m.id, images.length, 0, 0, false, `client ${attempt.status}: ${attempt.detail.slice(0, 200)} · attempt_ms=${attemptMs} · req_id=${reqId}`);
+        return j(attempt.status, { error: `Gemini rejected request (${attempt.status})`, detail: attempt.detail, req_id: reqId, trace });
       }
       if (attempt.kind === 'parseError') {
-        await logUsage(adminClient, userId, k.id, m.id, images.length, 0, 0, false, 'envelope: ' + attempt.detail);
-        return j(502, { error: 'Gemini returned non-JSON envelope', detail: attempt.detail });
+        await logUsage(adminClient, userId, k.id, m.id, images.length, 0, 0, false, `envelope: ${attempt.detail} · attempt_ms=${attemptMs} · req_id=${reqId}`);
+        return j(502, { error: 'Gemini returned non-JSON envelope', detail: attempt.detail, req_id: reqId, trace });
       }
 
       // attempt.kind === 'ok' — parse inner JSON and return.
@@ -388,14 +475,14 @@ Deno.serve(async (req: Request) => {
       let result: { bills?: any[] };
       try { result = JSON.parse(rawText); }
       catch (e) {
-        await logUsage(adminClient, userId, k.id, m.id, images.length, promptTokens, outputTokens, false, 'bad inner JSON: ' + rawText.slice(0, 200));
-        return j(502, { error: 'Gemini returned malformed JSON', detail: rawText.slice(0, 500) });
+        await logUsage(adminClient, userId, k.id, m.id, images.length, promptTokens, outputTokens, false, `bad inner JSON: ${rawText.slice(0, 200)} · attempt_ms=${attemptMs} · req_id=${reqId}`);
+        return j(502, { error: 'Gemini returned malformed JSON', detail: rawText.slice(0, 500), req_id: reqId });
       }
 
       const billsRaw = Array.isArray(result?.bills) ? result.bills : [];
       if (billsRaw.length === 0) {
-        await logUsage(adminClient, userId, k.id, m.id, images.length, promptTokens, outputTokens, false, 'empty bills array');
-        return j(502, { error: 'Gemini ไม่ได้รีเทิร์นบิลใดเลย — ลองถ่ายรูปใหม่' });
+        await logUsage(adminClient, userId, k.id, m.id, images.length, promptTokens, outputTokens, false, `empty bills array · attempt_ms=${attemptMs} · req_id=${reqId}`);
+        return j(502, { error: 'Gemini ไม่ได้รีเทิร์นบิลใดเลย — ลองถ่ายรูปใหม่', req_id: reqId });
       }
 
       const bills = images.map((_, idx) => {
@@ -427,10 +514,24 @@ Deno.serve(async (req: Request) => {
         last_error_at: null,
       }).eq('id', k.id);
 
-      await logUsage(adminClient, userId, k.id, m.id, images.length, promptTokens, outputTokens, true, null, estUsd, estThb);
+      console.info('[cmg-bill-parse] success', {
+        req_id: reqId,
+        key_label: keyLabel,
+        model: m.id,
+        attempt_ms: attemptMs,
+        total_ms: Date.now() - requestStartedAt,
+        bills_count: images.length,
+      });
+
+      await logUsage(adminClient, userId, k.id, m.id, images.length, promptTokens, outputTokens, true, `attempt_ms=${attemptMs} · req_id=${reqId}`, estUsd, estThb);
+
+      const attemptSecs = Math.max(1, Math.round(attemptMs / 1000));
+      trace.push(`${keyLabel} · ${m.id} อ่านสำเร็จ (${attemptSecs} วิ)`);
 
       return j(200, {
         bills,
+        req_id: reqId,
+        trace,
         usage: {
           prompt_tokens: promptTokens,
           output_tokens: outputTokens,
@@ -450,7 +551,9 @@ Deno.serve(async (req: Request) => {
   const status = lastTransient?.status ?? 503;
   return j(status, {
     error: `Gemini ${status} — ทุก key / model ไม่พร้อมใช้งาน`,
-    detail: lastTransient?.detail ?? 'unknown',
+    detail: `${lastTransient?.detail ?? 'unknown'}; req_id=${reqId}`,
+    req_id: reqId,
+    trace,
     hint: 'ตรวจสอบว่า API key ทุกตัวใน Settings → AI ยังใช้งานได้ หรือรอจนโควต้ารีเซ็ต (เที่ยงคืน Pacific Time)',
   });
 });

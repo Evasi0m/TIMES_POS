@@ -4,9 +4,9 @@
 //
 //   1. EMPTY  — landing state. User taps the upload button which opens
 //               BulkBillUploadModal to pick 1–10 bill images.
-//   2. PARSING — single fetch to cmg-bill-parse with all images packed
-//               into one Gemini request (the whole point of this view:
-//               cuts RPD usage 5–10×).
+//   2. PARSING — chunked fetches to cmg-bill-parse. Keeping chunks small
+//               prevents one slow Gemini request from hitting the Edge
+//               Function 150s gateway timeout.
 //   3. REVIEW — wizard with stepper. One bill visible at a time; user
 //               resolves any unmatched rows in the BillReviewPanel,
 //               navigates with ← / → between bills, then taps "บันทึก
@@ -36,9 +36,27 @@ import BillReviewPanel, { buildRowFromAi, makeRowUid } from './BillReviewPanel.j
 import BulkBillUploadModal from './BulkBillUploadModal.jsx';
 import BillImageLightbox from './BillImageLightbox.jsx';
 import AIErrorCard, { parseAIError } from './AIErrorCard.jsx';
+import MacTerminal from '../ui/MacTerminal.jsx';
+import {
+  makeLogLine,
+  msgAllDone,
+  msgBillSuccess,
+  msgCatalogLoaded,
+  msgCatalogWarn,
+  msgChunkHeader,
+  msgChunkMeta,
+  msgImagesReady,
+  msgLoadingCatalog,
+  msgParseError,
+  msgRetryScan,
+  msgSendBills,
+  msgStartScan,
+  msgTraceLines,
+  msgWaitingSeconds,
+} from './parse-activity-log.js';
+import { enrichTiktokMappingFromCatalog } from './bill-review-shared.js';
 import { useRecentReceivesMap, findExistingCmgInvoices } from '../../lib/recent-receives.js';
 import { saveDraft, loadDraft, clearDraft, base64ToBlob } from '../../lib/ai-draft.js';
-import TikTokMirrorToolbar from '../ecommerce/TikTokMirrorToolbar.jsx';
 import { useTikTokMirrorCatalog } from '../../hooks/useTikTokMirrorCatalog.js';
 import {
   buildSyncLine,
@@ -49,6 +67,41 @@ import {
   mirrorStockToTikTok,
   persistTiktokMatchMapping,
 } from '../../lib/tiktok-inventory-sync.js';
+
+const AI_PARSE_CHUNK_SIZE = 2;
+
+function aggregateAiUsage(usages) {
+  const valid = (usages || []).filter(Boolean);
+  if (!valid.length) return null;
+  const out = valid.reduce((acc, u) => ({
+    prompt_tokens: acc.prompt_tokens + (Number(u.prompt_tokens) || 0),
+    output_tokens: acc.output_tokens + (Number(u.output_tokens) || 0),
+    total_tokens: acc.total_tokens + (Number(u.total_tokens) || 0),
+    estimated_usd: acc.estimated_usd + (Number(u.estimated_usd) || 0),
+    estimated_thb: acc.estimated_thb + (Number(u.estimated_thb) || 0),
+    bills_count: acc.bills_count + (Number(u.bills_count) || 0),
+    model: acc.model || u.model || '',
+    key_label: acc.key_label || u.key_label || '',
+  }), {
+    prompt_tokens: 0,
+    output_tokens: 0,
+    total_tokens: 0,
+    estimated_usd: 0,
+    estimated_thb: 0,
+    bills_count: 0,
+    model: '',
+    key_label: '',
+  });
+  const models = [...new Set(valid.map((u) => u.model).filter(Boolean))];
+  const keys = [...new Set(valid.map((u) => u.key_label).filter(Boolean))];
+  return {
+    ...out,
+    estimated_usd: Number(out.estimated_usd.toFixed(6)),
+    estimated_thb: Number(out.estimated_thb.toFixed(4)),
+    model: models.join(', '),
+    key_label: keys.join(', '),
+  };
+}
 
 // ─── Auto invoice number generator ────────────────────────────────────
 // Mirror StockMovementForm's autoInvoiceNo so users get the same shape
@@ -129,6 +182,11 @@ export default function BulkReceiveView({ toast }) {
   const [bills, setBills] = useState([]); // per-image state
   const [currentIdx, setCurrentIdx] = useState(0);
   const [usage, setUsage] = useState(null);
+  const [parsingProgress, setParsingProgress] = useState(null); // {done,total,currentFrom,currentTo}
+  const [parseLogs, setParseLogs] = useState([]); // { id, text, tone }
+  const [parseActiveLine, setParseActiveLine] = useState(null);
+  const [parseIsActive, setParseIsActive] = useState(false);
+  const [productImagesById, setProductImagesById] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [submitSummary, setSubmitSummary] = useState(null); // {savedIds:[], failed:[]}
   const [syncTikTokAfterReceive, setSyncTikTokAfterReceive] = useState(true);
@@ -146,6 +204,52 @@ export default function BulkReceiveView({ toast }) {
   const [supplier, setSupplier] = useState(null);
   const undoTimer = useRef(null);
   const draftTimer = useRef(null);
+  const parseWaitTimer = useRef(null);
+  const parseWaitStartedAt = useRef(0);
+
+  const stopWaitTicker = useCallback(() => {
+    if (parseWaitTimer.current) {
+      clearInterval(parseWaitTimer.current);
+      parseWaitTimer.current = null;
+    }
+  }, []);
+
+  const clearParseActive = useCallback(() => {
+    stopWaitTicker();
+    setParseActiveLine(null);
+    setParseIsActive(false);
+  }, [stopWaitTicker]);
+
+  const clearParseLogs = useCallback(() => {
+    clearParseActive();
+    setParseLogs([]);
+  }, [clearParseActive]);
+
+  const appendParseLog = useCallback((lineOrText, tone = 'info') => {
+    const line = typeof lineOrText === 'string' ? makeLogLine(lineOrText, tone) : lineOrText;
+    if (!line) return;
+    setParseLogs((prev) => [...prev, line]);
+  }, []);
+
+  const pushParseLogs = useCallback((lines) => {
+    const arr = (Array.isArray(lines) ? lines : [lines]).filter(Boolean);
+    if (!arr.length) return;
+    setParseLogs((prev) => [...prev, ...arr]);
+  }, []);
+
+  const startWaitTicker = useCallback(() => {
+    stopWaitTicker();
+    parseWaitStartedAt.current = Date.now();
+    setParseIsActive(true);
+    const tick = () => {
+      const secs = Math.floor((Date.now() - parseWaitStartedAt.current) / 1000);
+      setParseActiveLine(msgWaitingSeconds(secs));
+    };
+    tick();
+    parseWaitTimer.current = setInterval(tick, 1000);
+  }, [stopWaitTicker]);
+
+  useEffect(() => () => stopWaitTicker(), [stopWaitTicker]);
 
   useEffect(() => {
     let cancelled = false;
@@ -195,7 +299,46 @@ export default function BulkReceiveView({ toast }) {
     searchCatalog: searchTiktokCatalog,
     reloadCatalog: reloadTiktokCatalog,
     refreshMappings,
-  } = useTikTokMirrorCatalog({ enabled: tiktokMirrorOn && phase === 'review', lines: tiktokCatalogLines });
+  } = useTikTokMirrorCatalog({
+    enabled: phase === 'review',
+    mirrorEnabled: tiktokMirrorOn && phase === 'review',
+    lines: tiktokCatalogLines,
+  });
+
+  const reviewProductIds = useMemo(() => {
+    if (phase !== 'review') return '';
+    const ids = new Set();
+    for (const bill of bills) {
+      for (const row of bill.rows) {
+        if (row.product?.id) ids.add(row.product.id);
+      }
+    }
+    return [...ids].sort((a, b) => a - b).join(',');
+  }, [phase, bills]);
+
+  useEffect(() => {
+    if (phase !== 'review' || !reviewProductIds) {
+      setProductImagesById({});
+      return undefined;
+    }
+    const ids = reviewProductIds.split(',').map(Number).filter(Boolean);
+    if (!ids.length) return undefined;
+    let cancelled = false;
+    (async () => {
+      const { data } = await sb
+        .from('product_images')
+        .select('product_id, image_url, status')
+        .in('product_id', ids)
+        .eq('status', 'found');
+      if (cancelled) return;
+      const map = {};
+      for (const row of data || []) {
+        if (row.image_url) map[row.product_id] = row;
+      }
+      setProductImagesById(map);
+    })();
+    return () => { cancelled = true; };
+  }, [phase, reviewProductIds]);
 
   useEffect(() => {
     if (!tiktokMirrorOn) return;
@@ -205,16 +348,37 @@ export default function BulkReceiveView({ toast }) {
         let billChanged = false;
         const rows = bill.rows.map(r => {
           if (!r.product?.id || r.tiktok_manual || r.tiktok_skip || r.tiktok_sku || r.tiktok_mapping) return r;
-          const m = mappingsByProductId[r.product.id];
-          if (m) { billChanged = true; return { ...r, tiktok_mapping: m }; }
-          return r;
+          const raw = mappingsByProductId[r.product.id];
+          if (!raw) return r;
+          billChanged = true;
+          return { ...r, tiktok_mapping: enrichTiktokMappingFromCatalog(raw, tiktokCatalog) };
         });
         if (billChanged) { changed = true; return { ...bill, rows }; }
         return bill;
       });
       return changed ? next : prev;
     });
-  }, [tiktokMirrorOn, mappingsByProductId]);
+  }, [tiktokMirrorOn, mappingsByProductId, tiktokCatalog]);
+
+  useEffect(() => {
+    if (!tiktokCatalog.length) return;
+    setBills(prev => {
+      let changed = false;
+      const next = prev.map(bill => {
+        let billChanged = false;
+        const rows = bill.rows.map(r => {
+          if (r.tiktok_skip || r.tiktok_sku || !r.tiktok_mapping) return r;
+          const enriched = enrichTiktokMappingFromCatalog(r.tiktok_mapping, tiktokCatalog);
+          if (enriched === r.tiktok_mapping || enriched.image_url === r.tiktok_mapping.image_url) return r;
+          billChanged = true;
+          return { ...r, tiktok_mapping: enriched };
+        });
+        if (billChanged) { changed = true; return { ...bill, rows }; }
+        return bill;
+      });
+      return changed ? next : prev;
+    });
+  }, [tiktokCatalog]);
 
   // A3: stash a just-deleted thing with a 6s "เลิกทำ" snackbar instead of
   // removing it irreversibly. `restore` re-applies the captured state;
@@ -327,6 +491,7 @@ export default function BulkReceiveView({ toast }) {
       bills.forEach((b) => b.previewUrl && URL.revokeObjectURL(b.previewUrl));
       setBills([]);
       setUsage(null);
+      setParsingProgress(null);
       setSubmitSummary(null);
       setError(null);
       setCurrentIdx(0);
@@ -334,106 +499,174 @@ export default function BulkReceiveView({ toast }) {
     setUploadOpen(true);
   };
 
-  // ─── Upload commit → kick off the single batch AI call ─────────────
-  const handleUploadConfirm = useCallback(async ({ images }) => {
+  // ─── Upload commit → kick off chunked AI parsing ───────────────────
+  const handleUploadConfirm = useCallback(async ({ images, retryOnly = false } = {}) => {
+    if (!images?.length) return;
     setUploadOpen(false);
     setPhase('parsing');
     setError(null);
-    // Seed bills with the image data so the wizard can show thumbnails
-    // even while we're waiting for the AI.
-    const seedBills = images.map((img) => ({
-      uid: makeRowUid(),
-      name: img.name,
-      previewUrl: img.previewUrl,
-      base64: img.base64,
-      mime: img.mime,
-      width: img.width,
-      height: img.height,
-      sizeBytes: img.sizeBytes,
-      // Filled in after AI returns:
-      is_cmg_bill: false,
-      supplier_invoice_no: '',
-      has_vat: true,
-      rows: [],
-      // Lifecycle:
-      saveState: 'pending', // pending | saving | saved | failed
-      savedOrderId: null,
-      saveError: null,
-    }));
-    setBills(seedBills);
+    if (!retryOnly) clearParseLogs();
+    pushParseLogs(retryOnly ? msgRetryScan(images.length) : msgStartScan(images.length));
+    if (!retryOnly) pushParseLogs(msgImagesReady(images.length));
+    setParsingProgress({ done: 0, total: images.length, currentFrom: 1, currentTo: Math.min(AI_PARSE_CHUNK_SIZE, images.length), failed: 0 });
+    let seedBills = bills;
+    if (!retryOnly) {
+      // Seed bills with the image data so the wizard can show thumbnails
+      // even while we're waiting for the AI.
+      seedBills = images.map((img) => ({
+        uid: makeRowUid(),
+        name: img.name,
+        previewUrl: img.previewUrl,
+        base64: img.base64,
+        mime: img.mime,
+        width: img.width,
+        height: img.height,
+        sizeBytes: img.sizeBytes,
+        // Filled in after AI returns:
+        is_cmg_bill: false,
+        supplier_invoice_no: '',
+        has_vat: true,
+        rows: [],
+        parseState: 'pending', // pending | parsing | parsed | failed
+        parseError: null,
+        // Lifecycle:
+        saveState: 'pending', // pending | saving | saved | failed
+        savedOrderId: null,
+        saveError: null,
+      }));
+      setBills(seedBills);
+      setUsage(null);
+    }
     setCurrentIdx(0);
 
     try {
-      // Parallel: AI parse + products catalog. Catalog fetch is needed
-      // for the fuzzy-match in buildRowFromAi.
-      const [parseRes, catalogRes] = await Promise.all([
-        sb.functions.invoke('cmg-bill-parse', {
+      // Catalog is needed to materialize parsed rows. Load it before the
+      // loop so each successful chunk can be committed immediately; if a
+      // later chunk fails, earlier parsed bills remain available.
+      pushParseLogs(msgLoadingCatalog());
+      const catalogRes = await fetchAllFromTable(sb, 'products', {
+        select: 'id, name, barcode, retail_price, cost_price, current_stock',
+        orderColumn: 'id',
+      });
+      const catalog = catalogRes?.data || [];
+      if (catalogRes?.error) {
+        console.warn('[BulkReceiveView] catalog load issue:', catalogRes.error);
+        pushParseLogs(msgCatalogWarn());
+      } else {
+        pushParseLogs(msgCatalogLoaded(catalog.length));
+      }
+      setProducts(catalog);
+      const parsedByIndex = new Map();
+      const totalChunks = Math.ceil(images.length / AI_PARSE_CHUNK_SIZE);
+      for (let start = 0; start < images.length; start += AI_PARSE_CHUNK_SIZE) {
+        const chunk = images.slice(start, start + AI_PARSE_CHUNK_SIZE);
+        const currentFrom = start + 1;
+        const currentTo = start + chunk.length;
+        const chunkIndex = Math.floor(start / AI_PARSE_CHUNK_SIZE) + 1;
+        pushParseLogs(msgChunkHeader(chunkIndex, totalChunks));
+        pushParseLogs(msgSendBills(currentFrom, currentTo));
+        setParsingProgress((prev) => ({
+          ...(prev || {}),
+          done: start,
+          total: images.length,
+          currentFrom,
+          currentTo,
+        }));
+        setBills((prev) => prev.map((b) => {
+          const retryIndex = chunk.findIndex((img) => img.uid && img.uid === b.uid);
+          const absoluteIndex = retryOnly
+            ? (retryIndex >= 0 ? prev.findIndex((x) => x.uid === b.uid) : -1)
+            : prev.indexOf(b);
+          const inChunk = retryOnly ? retryIndex >= 0 : absoluteIndex >= start && absoluteIndex < currentTo;
+          return inChunk ? { ...b, parseState: 'parsing', parseError: null } : b;
+        }));
+
+        startWaitTicker();
+        const parseRes = await sb.functions.invoke('cmg-bill-parse', {
           body: {
-            images: images.map((img) => ({
+            images: chunk.map((img) => ({
               image_base64: img.base64,
               mime: img.mime,
             })),
           },
-        }),
-        fetchAllFromTable(sb, 'products', {
-          select: 'id, name, barcode, retail_price, cost_price, current_stock',
-          orderColumn: 'id',
-        }),
-      ]);
-
-      const catalog = catalogRes?.data || [];
-      if (catalogRes?.error) {
-        console.warn('[BulkReceiveView] catalog load issue:', catalogRes.error);
+        });
+        clearParseActive();
+        if (parseRes.error) throw parseRes.error;
+        const data = parseRes.data;
+        if (!data) throw new Error('ไม่ได้รับข้อมูลจากเซิร์ฟเวอร์ — ลองอีกครั้ง');
+        if (data.error) {
+          if (Array.isArray(data.trace) && data.trace.length) {
+            pushParseLogs(msgTraceLines(data.trace));
+          }
+          throw new Error(data.error);
+        }
+        if (!Array.isArray(data.bills) || data.bills.length === 0) {
+          throw new Error('AI ไม่ได้รีเทิร์นบิลใดเลย — ลองถ่ายรูปใหม่');
+        }
+        if (Array.isArray(data.trace) && data.trace.length) {
+          pushParseLogs(msgTraceLines(data.trace));
+        }
+        data.bills.forEach((bill, i) => {
+          const originalIndex = retryOnly
+            ? seedBills.findIndex((b) => b.uid === chunk[i]?.uid)
+            : start + i;
+          const billNo = originalIndex >= 0 ? originalIndex + 1 : start + i + 1;
+          const itemsRaw = Array.isArray(bill?.items) ? bill.items : [];
+          const invoiceNo = String(bill?.supplier_invoice_no || '').trim();
+          appendParseLog(msgBillSuccess(billNo, itemsRaw.length, invoiceNo));
+          if (originalIndex >= 0) parsedByIndex.set(originalIndex, bill || {});
+        });
+        const metaLine = msgChunkMeta(data.usage);
+        if (metaLine) appendParseLog(metaLine);
+        setUsage((prev) => aggregateAiUsage([prev, data.usage]));
+        setBills((prev) =>
+          prev.map((b, i) => {
+            const parsed = parsedByIndex.get(i);
+            if (!parsed) return b;
+            const itemsRaw = Array.isArray(parsed.items) ? parsed.items : [];
+            const rows = itemsRaw.map((it) => buildRowFromAi(it, catalog));
+            return {
+              ...b,
+              is_cmg_bill: Boolean(parsed.is_cmg_bill),
+              supplier_invoice_no: String(parsed.supplier_invoice_no || '').trim(),
+              rows,
+              parseState: 'parsed',
+              parseError: null,
+            };
+          })
+        );
+        setParsingProgress((prev) => ({
+          ...(prev || {}),
+          done: Math.min(currentTo, images.length),
+          total: images.length,
+          currentFrom,
+          currentTo,
+        }));
       }
-
-      if (parseRes.error) {
-        // Hand the raw error to parseAIError so we keep the full
-        // FunctionsHttpError context for status + body extraction.
-        throw parseRes.error;
-      }
-      const data = parseRes.data;
-      if (!data) throw new Error('ไม่ได้รับข้อมูลจากเซิร์ฟเวอร์ — ลองอีกครั้ง');
-      if (data.error) throw new Error(data.error);
-      if (!Array.isArray(data.bills) || data.bills.length === 0) {
-        throw new Error('AI ไม่ได้รีเทิร์นบิลใดเลย — ลองถ่ายรูปใหม่');
-      }
-
-      setUsage(data.usage || null);
-      setProducts(catalog);
-
-      // Merge parsed bills back into our seeded bills (preserving
-      // thumbnail + base64). Edge function guarantees order matches
-      // the input images, but we defensively pad if it ever returns
-      // fewer entries than we sent.
-      setBills((prev) =>
-        prev.map((b, i) => {
-          const parsed = data.bills[i] || {};
-          const itemsRaw = Array.isArray(parsed.items) ? parsed.items : [];
-          const rows = itemsRaw.map((it) => buildRowFromAi(it, catalog));
-          return {
-            ...b,
-            is_cmg_bill: Boolean(parsed.is_cmg_bill),
-            supplier_invoice_no: String(parsed.supplier_invoice_no || '').trim(),
-            rows,
-          };
-        })
-      );
       // B2: flag bills whose invoice number was already received from CMG
       // (the "I scanned the same paper bill twice" case). Non-blocking.
-      const invoiceNos = data.bills
+      const invoiceNos = [...parsedByIndex.values()]
         .map((pb) => String(pb?.supplier_invoice_no || '').trim())
         .filter(Boolean);
       findExistingCmgInvoices(invoiceNos).then(setDupInvoices).catch(() => {});
+      pushParseLogs(msgAllDone(images.length, images.length));
+      setParsingProgress(null);
       setPhase('review');
     } catch (e) {
+      clearParseActive();
       // Convert raw error → structured AIError object that the
       // AIErrorCard knows how to render. Keep the seeded bills around
       // so the user can retry on the SAME images without re-uploading.
       const parsed = await parseAIError(e);
+      pushParseLogs(msgParseError(parsed.title, parsed.hint));
       setError(parsed);
+      setParsingProgress((prev) => ({ ...(prev || {}), failed: (prev?.failed || 0) + 1 }));
+      setBills((prev) => prev.map((b) => (
+        b.parseState === 'parsing' ? { ...b, parseState: 'failed', parseError: parsed.title } : b
+      )));
       setPhase('error');
     }
-  }, []);
+  }, [bills, appendParseLog, clearParseActive, clearParseLogs, pushParseLogs, startWaitTicker]);
 
   // ─── Retry AI on the same images (no re-upload required) ───────────
   // When AI errored after we had already loaded images, the seedBills
@@ -442,7 +675,9 @@ export default function BulkReceiveView({ toast }) {
     if (bills.length === 0) return;
     setError(null);
     setPhase('parsing');
-    const images = bills.map((b) => ({
+    const retryBills = bills.filter((b) => b.parseState !== 'parsed');
+    const images = (retryBills.length ? retryBills : bills).map((b) => ({
+      uid: b.uid,
       base64: b.base64,
       mime: b.mime,
       name: b.name,
@@ -451,9 +686,7 @@ export default function BulkReceiveView({ toast }) {
       height: b.height,
       sizeBytes: b.sizeBytes,
     }));
-    // Reuse the same path — handleUploadConfirm reseeds bills which is
-    // fine because the new seeds carry the same base64 / previewUrl.
-    await handleUploadConfirm({ images });
+    await handleUploadConfirm({ images, retryOnly: true });
   }, [bills, handleUploadConfirm]);
 
   // ─── Dismiss the error and go back to landing ──────────────────
@@ -463,10 +696,13 @@ export default function BulkReceiveView({ toast }) {
   // every time the user dismisses an error. Wipe explicitly.
   const dismissError = () => {
     setError(null);
+    setParsingProgress(null);
+    clearParseLogs();
     if (bills.length > 0) {
       bills.forEach((b) => b.previewUrl && URL.revokeObjectURL(b.previewUrl));
       setBills([]);
       setUsage(null);
+      setParsingProgress(null);
       setCurrentIdx(0);
     }
     setPhase('empty');
@@ -509,7 +745,7 @@ export default function BulkReceiveView({ toast }) {
       newProduct: null,
       tiktok_skip: false,
       tiktok_sku: null,
-      tiktok_mapping: mappingsByProductId[product?.id] || null,
+      tiktok_mapping: enrichTiktokMappingFromCatalog(mappingsByProductId[product?.id] || null, tiktokCatalog),
       tiktok_manual: false,
     });
   const setNewProduct = (uid, np) =>
@@ -937,19 +1173,36 @@ export default function BulkReceiveView({ toast }) {
             onRetry={error.retryable ? retryParse : undefined}
             onDismiss={dismissError}
           />
+          {parseLogs.length > 0 && (
+            <div className="brv-error-terminal-wrap">
+              <MacTerminal lines={parseLogs} isActive={false} />
+            </div>
+          )}
           {/* If we still have image thumbs from the failed attempt,
               show them so the user knows their picks aren't lost. */}
           {bills.length > 0 && (
             <div className="card-canvas p-4">
               <div className="text-xs text-muted-soft mb-2 flex items-center gap-1.5">
                 <Icon name="file" size={12}/>
-                <span>{bills.length} รูปยังรออยู่ — ไม่ต้องอัปไหลดใหม่</span>
+                <span>
+                  {bills.filter((b) => b.parseState !== 'parsed').length || bills.length} รูปยังรอ retry — รูปที่อ่านสำเร็จแล้วไม่ต้องอ่านซ้ำ
+                </span>
               </div>
               <div className="flex gap-2 flex-wrap">
                 {bills.map((b, i) => (
                   <div key={b.uid} className="relative w-14 h-18 rounded-md overflow-hidden border hairline bg-surface-soft">
                     <img src={b.previewUrl} alt={`bill ${i+1}`} className="w-full h-full object-cover"/>
                     <div className="absolute top-0.5 left-0.5 ai-row-badge !w-5 !h-5 !text-[10px]">{i+1}</div>
+                    {b.parseState === 'parsed' && (
+                      <div className="absolute bottom-0.5 right-0.5 rounded-full bg-success text-white w-5 h-5 flex items-center justify-center">
+                        <Icon name="check" size={11}/>
+                      </div>
+                    )}
+                    {b.parseState === 'failed' && (
+                      <div className="absolute bottom-0.5 right-0.5 rounded-full bg-error text-white w-5 h-5 flex items-center justify-center">
+                        <Icon name="x" size={11}/>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -970,7 +1223,13 @@ export default function BulkReceiveView({ toast }) {
 
       {/* PHASE: PARSING — full-bleed spinner with thumbnail strip */}
       {phase === 'parsing' && (
-        <ParsingScreen bills={bills} />
+        <ParsingScreen
+          bills={bills}
+          progress={parsingProgress}
+          logs={parseLogs}
+          activeLine={parseActiveLine}
+          isActive={parseIsActive}
+        />
       )}
 
       {/* PHASE: REVIEW — wizard with stepper + per-bill panel */}
@@ -1011,6 +1270,7 @@ export default function BulkReceiveView({ toast }) {
           onTiktokSearchCatalog={searchTiktokCatalog}
           stocksByProductId={stocksByProductId}
           onTiktokRowMatch={handleTiktokRowMatch}
+          productImagesById={productImagesById}
         />
       )}
 
@@ -1106,16 +1366,21 @@ function EmptyLanding({ onStart, draft, onRestore, onDiscard }) {
 }
 
 // ─── Sub: parsing screen ──────────────────────────────────────────────
-function ParsingScreen({ bills }) {
+function ParsingScreen({ bills, progress, logs, activeLine, isActive }) {
+  const done = progress?.done ?? bills.filter((b) => b.parseState === 'parsed').length;
+  const total = progress?.total ?? bills.length;
+  const currentLabel = progress?.currentFrom
+    ? `กำลังอ่านบิล ${progress.currentFrom}${progress.currentTo !== progress.currentFrom ? `-${progress.currentTo}` : ''} / ${total}`
+    : `${total} บิล`;
   return (
     <div className="card-canvas overflow-hidden">
-      <div className="p-8 flex flex-col items-center text-center gap-5">
+      <div className="p-6 pb-4 flex flex-col items-center text-center gap-4">
         <div className="flex items-center gap-3">
           <span className="spinner lg"/>
           <div>
             <div className="font-display text-xl">กำลังให้ AI อ่านบิล…</div>
             <div className="text-xs text-muted-soft mt-0.5">
-              {bills.length} บิล · ใช้เวลา 10-30 วินาที
+              {currentLabel} · สำเร็จแล้ว {done}/{total}
             </div>
           </div>
         </div>
@@ -1124,15 +1389,35 @@ function ParsingScreen({ bills }) {
           {bills.map((b, i) => (
             <div
               key={b.uid}
-              className="relative w-16 h-20 rounded-md overflow-hidden border hairline bg-surface-soft animate-pulse"
+              className={
+                'relative w-16 h-20 rounded-md overflow-hidden border hairline bg-surface-soft ' +
+                (b.parseState === 'parsed' ? 'border-success/50' : b.parseState === 'failed' ? 'border-error/60' : 'animate-pulse')
+              }
             >
               <img src={b.previewUrl} alt={`bill ${i+1}`} className="w-full h-full object-cover opacity-60"/>
               <div className="absolute top-0.5 left-0.5 ai-row-badge !w-5 !h-5 !text-[10px]">
                 {i + 1}
               </div>
+              {b.parseState === 'parsed' && (
+                <div className="absolute bottom-0.5 right-0.5 rounded-full bg-success text-white w-5 h-5 flex items-center justify-center">
+                  <Icon name="check" size={11}/>
+                </div>
+              )}
+              {b.parseState === 'failed' && (
+                <div className="absolute bottom-0.5 right-0.5 rounded-full bg-error text-white w-5 h-5 flex items-center justify-center">
+                  <Icon name="x" size={11}/>
+                </div>
+              )}
             </div>
           ))}
         </div>
+      </div>
+      <div className="brv-parsing-terminal-wrap">
+        <MacTerminal
+          lines={logs}
+          activeLine={activeLine}
+          isActive={isActive}
+        />
       </div>
     </div>
   );
@@ -1147,7 +1432,7 @@ function ReviewWizard({
   tiktokConnected, syncTikTokAfterReceive, onSyncTikTokChange,
   tiktokMirrorOn, tiktokCatalog, tiktokCatalogLoading, tiktokCatalogError,
   onTiktokRetryCatalog, tiktokMinPct, onTiktokMinPctChange, onTiktokSearchCatalog,
-  stocksByProductId, onTiktokRowMatch,
+  stocksByProductId, onTiktokRowMatch, productImagesById = {},
 }) {
   const current = bills[currentIdx];
   const canPrev = currentIdx > 0;
@@ -1192,17 +1477,6 @@ function ReviewWizard({
         </div>
       </div>
 
-      {tiktokMirrorOn && (
-        <TikTokMirrorToolbar
-          minPct={tiktokMinPct}
-          onMinPctChange={onTiktokMinPctChange}
-          onSearchCatalog={onTiktokSearchCatalog}
-          onRetryCatalog={onTiktokRetryCatalog}
-          catalogLoading={tiktokCatalogLoading}
-          catalogError={tiktokCatalogError}
-        />
-      )}
-
       {/* Stepper — click any bill to jump to it */}
       <Stepper
         bills={bills}
@@ -1236,9 +1510,11 @@ function ReviewWizard({
           tiktokCatalogError={tiktokCatalogError}
           onTiktokRetryCatalog={onTiktokRetryCatalog}
           tiktokMinPct={tiktokMinPct}
+          onTiktokMinPctChange={onTiktokMinPctChange}
           onTiktokSearchCatalog={onTiktokSearchCatalog}
           stocksByProductId={stocksByProductId}
           onTiktokRowMatch={onTiktokRowMatch}
+          productImagesById={productImagesById}
         />
       )}
 
@@ -1327,9 +1603,11 @@ function BillCard({
   tiktokCatalogError = null,
   onTiktokRetryCatalog,
   tiktokMinPct = 60,
+  onTiktokMinPctChange,
   onTiktokSearchCatalog,
   stocksByProductId = {},
   onTiktokRowMatch,
+  productImagesById = {},
 }) {
   const itemCount = bill.rows.length;
   const unresolved = bill.rows.filter((r) => r.status === 'suggestions' || r.status === 'none').length;
@@ -1348,70 +1626,92 @@ function BillCard({
     : 0;
 
   return (
-    <div className="card-canvas overflow-hidden">
-      {/* Bill header — thumbnail + meta + delete */}
-      <div className="p-4 border-b hairline flex items-start gap-3">
+    <div className="brv-bill-card ttc-bento rounded-2xl border overflow-hidden">
+      <header className="brv-bill-head">
         <button
           type="button"
           onClick={() => bill.previewUrl && onZoom?.(bill.previewUrl)}
-          className="group flex-shrink-0 w-16 h-20 lg:w-20 lg:h-24 rounded-md overflow-hidden border hairline bg-surface-soft relative cursor-zoom-in"
+          className="brv-bill-head__thumb group"
           aria-label="ดูรูปบิลแบบขยาย"
         >
           <img
             src={bill.previewUrl}
             alt={`bill ${billNumber}`}
-            className="w-full h-full object-cover transition-transform group-hover:scale-105"
+            className="brv-bill-head__thumb-img"
           />
-          <div className="absolute top-0.5 left-0.5 ai-row-badge !w-6 !h-6 !text-[11px]">
-            {billNumber}
-          </div>
-          <div className="absolute inset-0 flex items-end justify-center pb-1 opacity-0 group-hover:opacity-100 transition-opacity"
-               style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.45), transparent 55%)' }}>
-            <Icon name="search" size={14} className="text-white"/>
-          </div>
+          <span className="brv-bill-head__thumb-badge ai-row-badge">{billNumber}</span>
+          <span className="brv-bill-head__thumb-zoom" aria-hidden="true">
+            <Icon name="search" size={14}/>
+          </span>
         </button>
-        <div className="min-w-0 flex-1 space-y-1.5">
-          <div className="flex items-center justify-between gap-2">
-            <div className="font-display text-lg">บิลที่ {billNumber} / {totalBills}</div>
-            {bill.saveState === 'saved' && (
-              <span className="inline-flex items-center gap-1 text-xs text-success bg-success/10 px-2 py-0.5 rounded-md border border-success/30">
-                <Icon name="check" size={12}/> บันทึกแล้ว #{bill.savedOrderId}
-              </span>
-            )}
-            {bill.saveState === 'failed' && (
-              <span className="inline-flex items-center gap-1 text-xs text-error bg-error/10 px-2 py-0.5 rounded-md border border-error/30">
-                <Icon name="alert" size={12}/> บันทึกไม่สำเร็จ
-              </span>
-            )}
+
+        <div className="brv-bill-head__top">
+          <h2 className="brv-bill-head__title">บิลที่ {billNumber} / {totalBills}</h2>
+          {itemCount > 0 && (
+            <span className="brv-bill-head__count tabular-nums">{itemCount} รายการ</span>
+          )}
+          {bill.saveState === 'saved' && (
+            <span className="air-list-row__status-pill air-list-row__status-pill--done">
+              <Icon name="check" size={12}/> บันทึกแล้ว #{bill.savedOrderId}
+            </span>
+          )}
+          {bill.saveState === 'failed' && (
+            <span className="air-list-row__status-pill air-list-row__status-pill--missing">
+              <Icon name="alert" size={12}/> บันทึกไม่สำเร็จ
+            </span>
+          )}
+        </div>
+
+        <div className="brv-bill-head__actions">
+          <button
+            type="button"
+            className="brv-bill-head__delete"
+            onClick={onRemoveBill}
+            aria-label={`ลบบิลที่ ${billNumber}`}
+            disabled={disabled}
+          >
+            <Icon name="trash" size={15}/>
+          </button>
+        </div>
+
+        <div className="brv-bill-head__meta">
+          <label className="brv-bill-field">
+            <span className="brv-bill-field__label">เลขบิล</span>
+            <input
+              type="text"
+              className="input brv-bill-field__input font-mono"
+              value={bill.supplier_invoice_no}
+              onChange={(e) => onInvoiceNoChange(e.target.value)}
+              placeholder="เว้นว่างเพื่อสร้างอัตโนมัติ"
+              disabled={disabled}
+            />
+          </label>
+
+          <div className="brv-bill-field">
+            <span className="brv-bill-field__label">ผู้ขาย</span>
+            <div className="brv-bill-field__static">{supplierName || 'CMG'}</div>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <label className="flex items-center gap-1.5 text-xs">
-              <span className="text-muted-soft">เลขบิล:</span>
-              <input
-                type="text"
-                className="input !py-1 !px-2 !text-xs font-mono !min-h-0 w-44"
-                value={bill.supplier_invoice_no}
-                onChange={(e) => onInvoiceNoChange(e.target.value)}
-                placeholder="เว้นว่างเพื่อสร้างอัตโนมัติ"
-                disabled={disabled}
-              />
-            </label>
-            <span className="text-[11px] text-muted-soft">ผู้ขาย {supplierName || 'CMG'}</span>
-            <span className="text-[11px] text-muted-soft">·</span>
-            <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs">
+
+          <label className="brv-bill-field brv-bill-field--vat">
+            <span className="brv-bill-field__label">VAT</span>
+            <div className="brv-bill-field__vat">
               <input
                 type="checkbox"
-                className="rounded border-hairline text-primary focus:ring-primary/30 w-3.5 h-3.5 cursor-pointer"
+                className="rounded border-hairline text-primary focus:ring-primary/30 w-3.5 h-3.5 cursor-pointer shrink-0"
                 checked={bill.has_vat !== false}
                 onChange={(e) => onHasVatChange?.(e.target.checked)}
                 disabled={disabled}
               />
-              <span className="text-muted-soft font-medium">สแกนราคาก่อน VAT (บวก VAT 7% อัตโนมัติ)</span>
-            </label>
-          </div>
-          {/* B2: invoice already received from CMG — strong warning */}
+              <span className="vat-chip shrink-0">+7%</span>
+              <span className="brv-bill-field__vat-hint">สแกนราคาก่อน VAT</span>
+            </div>
+          </label>
+        </div>
+
+          {(dup || isNonCmg || isEmpty || unresolved > 0 || incompleteRows > 0 || reviewRows > 0 || bill.saveState === 'failed') && (
+            <div className="brv-bill-head__alerts">
           {dup && (
-            <div className="text-xs text-error bg-error/10 border border-error/40 rounded-md px-2 py-1 inline-flex items-center gap-1.5">
+            <div className="brv-bill-alert brv-bill-alert--error">
               <Icon name="alert" size={12}/>
               เลขบิลนี้เคยรับเข้าแล้ว (#{dup.id}
               {dup.date ? ` · ${new Date(dup.date).toLocaleDateString('th-TH', { day: '2-digit', month: 'short' })}` : ''})
@@ -1420,28 +1720,25 @@ function BillCard({
           )}
           {/* Per-bill status banner */}
           {isNonCmg && (
-            <div className="text-xs text-error bg-error/10 border border-error/30 rounded-md px-2 py-1 inline-flex items-center gap-1.5">
+            <div className="brv-bill-alert brv-bill-alert--error">
               <Icon name="alert" size={12}/>
               AI บอกว่ารูปนี้ไม่ใช่บิล CMG — บิลนี้จะถูกข้ามตอนบันทึก
             </div>
           )}
           {!isNonCmg && isEmpty && (
-            <div className="text-xs text-warning bg-warning/10 border border-warning/30 rounded-md px-2 py-1 inline-flex items-center gap-1.5">
+            <div className="brv-bill-alert brv-bill-alert--warn">
               <Icon name="alert" size={12}/>
               อ่านรายการไม่ได้ — ลบบิลนี้แล้วถ่ายใหม่
             </div>
           )}
           {!isNonCmg && !isEmpty && unresolved > 0 && (
-            <div className="text-xs text-warning bg-warning/10 border border-warning/30 rounded-md px-2 py-1 inline-flex items-center gap-1.5">
+            <div className="brv-bill-alert brv-bill-alert--warn">
               <Icon name="alert" size={12}/>
               เหลือ {unresolved} รายการที่ต้อง resolve
             </div>
           )}
           {incompleteRows > 0 && (
-            // H3: surfaces rows where AI read 0 for qty/cost. Without
-            // this banner the user might submit a bill where one row
-            // has unit_price=0, silently breaking profit reports.
-            <div className="text-xs text-warning bg-warning/10 border border-warning/30 rounded-md px-2 py-1 inline-flex items-center gap-1.5">
+            <div className="brv-bill-alert brv-bill-alert--warn">
               <Icon name="alert" size={12}/>
               เหลือ {incompleteRows} รายการที่ AI อ่าน ทุน/จำนวน ไม่ออก — กรอกให้ครบก่อนบันทึก
             </div>
@@ -1451,8 +1748,8 @@ function BillCard({
               const hasPos = r.product || (r.status === 'new' && r.newProduct);
               return hasPos && !r.tiktok_skip && !isTikTokLineReady(r);
             }).length;
-            return tiktokLeft > 0 ? (
-              <div className="text-xs text-warning bg-warning/10 border border-warning/30 rounded-md px-2 py-1 inline-flex items-center gap-1.5">
+                return tiktokLeft > 0 ? (
+                  <div className="brv-bill-alert brv-bill-alert--warn">
                 <Icon name="store" size={12}/>
                 เหลือ {tiktokLeft} รายการที่ต้องจับคู่ TikTok
               </div>
@@ -1462,7 +1759,7 @@ function BillCard({
             <button
               type="button"
               onClick={() => bill.previewUrl && onZoom?.(bill.previewUrl)}
-              className="text-xs text-warning bg-warning/10 border border-warning/30 rounded-md px-2 py-1 inline-flex items-center gap-1.5 hover:bg-warning/15 transition"
+              className="brv-bill-alert brv-bill-alert--warn brv-bill-alert--click"
             >
               <Icon name="alert" size={12}/>
               AI ไม่มั่นใจ {reviewRows} รายการ — แตะดูรูปเทียบให้ชัวร์
@@ -1480,26 +1777,19 @@ function BillCard({
               }}
             />
           )}
-        </div>
-        <button
-          type="button"
-          className="btn-ghost !p-2 text-muted-soft hover:text-error flex-shrink-0"
-          onClick={onRemoveBill}
-          aria-label={`ลบบิลที่ ${billNumber}`}
-          disabled={disabled}
-        >
-          <Icon name="trash" size={16}/>
-        </button>
-      </div>
+            </div>
+          )}
+      </header>
 
-      {/* Review panel */}
-      <div className="p-4">
+      <div className="brv-bill-card__body">
         <BillReviewPanel
           rows={bill.rows}
           products={products}
           recentReceivesMap={recentReceivesMap}
           billKey={bill.uid}
           hasVat={bill.has_vat !== false}
+          billImageUrl={bill.previewUrl}
+          onZoomImage={onZoom}
           onUpdateRow={onUpdateRow}
           onRemoveRow={onRemoveRow}
           onPickCandidate={onPickCandidate}
@@ -1510,9 +1800,11 @@ function BillCard({
           tiktokCatalogError={tiktokCatalogError}
           onTiktokRetryCatalog={onTiktokRetryCatalog}
           tiktokMinPct={tiktokMinPct}
+          onTiktokMinPctChange={onTiktokMinPctChange}
           onTiktokSearchCatalog={onTiktokSearchCatalog}
           stocksByProductId={stocksByProductId}
           onTiktokRowMatch={onTiktokRowMatch}
+          productImagesById={productImagesById}
         />
       </div>
     </div>

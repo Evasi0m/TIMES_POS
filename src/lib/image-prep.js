@@ -23,8 +23,9 @@
 // (Gemini Flash reads 8-pt fonts at 1024 reliably; we leave headroom for
 // crumpled/skewed bills).
 const TARGET_LONGER_EDGE = 1600;
+const BATCH_LONGER_EDGE = 1400;
 // Fallback if the first pass still produces too much data.
-const FALLBACK_LONGER_EDGE = 1280;
+const FALLBACK_LONGER_EDGE = 1200;
 // Below this raw byte count + already JPEG/WebP at sensible dimensions
 // we skip the canvas pass entirely (preserves original quality).
 const SKIP_RESIZE_BYTE_THRESHOLD = 1_500_000;
@@ -107,7 +108,7 @@ function blobToBase64(blob) {
 }
 
 /** Main entry point — see file header for behavior. */
-export async function prepareBillImage(file) {
+export async function prepareBillImage(file, opts = {}) {
   if (!isImageType(file)) {
     throw new Error('ต้องเป็นไฟล์รูปภาพ (jpg/png/webp)');
   }
@@ -118,6 +119,7 @@ export async function prepareBillImage(file) {
 
   const bitmap = await decodeImage(file);
   const longerEdge = Math.max(bitmap.width, bitmap.height);
+  const targetLongerEdge = opts.batchOptimized ? BATCH_LONGER_EDGE : TARGET_LONGER_EDGE;
 
   // Fast path: small enough already, and a format we know the edge fn
   // accepts. Skip the canvas round-trip to preserve original quality.
@@ -130,12 +132,12 @@ export async function prepareBillImage(file) {
   if (fastPathOk) {
     blob = file;
   } else {
-    blob = await canvasEncode(bitmap, TARGET_LONGER_EDGE, 0.85);
+    blob = await canvasEncode(bitmap, targetLongerEdge, opts.batchOptimized ? 0.82 : 0.85);
     // Safety net: if the encoded blob is still too big (very rare with
     // 1600px + q=0.85, but possible on extremely noisy photos), shrink
     // further at the same quality.
     if (blob.size > MAX_FINAL_BYTES) {
-      blob = await canvasEncode(bitmap, FALLBACK_LONGER_EDGE, 0.82);
+      blob = await canvasEncode(bitmap, FALLBACK_LONGER_EDGE, 0.8);
     }
   }
   bitmap.close?.();
@@ -147,8 +149,8 @@ export async function prepareBillImage(file) {
     mime: /^image\/(jpeg|png|webp)$/i.test(mime) ? mime : 'image/jpeg',
     originalSize,
     finalSize: blob.size,
-    width:  fastPathOk ? bitmap.width  : Math.round(bitmap.width  * Math.min(1, TARGET_LONGER_EDGE / longerEdge)),
-    height: fastPathOk ? bitmap.height : Math.round(bitmap.height * Math.min(1, TARGET_LONGER_EDGE / longerEdge)),
+    width:  fastPathOk ? bitmap.width  : Math.round(bitmap.width  * Math.min(1, targetLongerEdge / longerEdge)),
+    height: fastPathOk ? bitmap.height : Math.round(bitmap.height * Math.min(1, targetLongerEdge / longerEdge)),
   };
 }
 

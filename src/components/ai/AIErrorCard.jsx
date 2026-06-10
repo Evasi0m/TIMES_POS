@@ -90,16 +90,23 @@ export async function parseAIError(err) {
     };
   }
   if (status === 504) {
+    const detail = geminiStatus || body?.detail || null;
+    const controlledTimeout = /Gemini request timeout|request budget exhausted/i.test(String(detail || body?.error || ''));
     return {
       kind: 'timeout',
       severity: 'warning',
       icon: 'refresh',
       title: 'AI ใช้เวลาประมวลผลนานเกิน',
-      body: 'รูปอาจจะใหญ่หรือซับซ้อนเกินไป จนเซิร์ฟเวอร์ตัดการเชื่อมต่อก่อนได้คำตอบ',
-      hint: 'ลองลดจำนวนบิลต่อรอบ (5 บิลแทน 10) หรือถ่ายรูปใหม่ให้ชัดขึ้น',
+      body: controlledTimeout
+        ? 'ระบบลองสลับ API key แล้ว แต่คำขอไป Gemini บางช่วงใช้เวลานานเกินกำหนด จึงหยุดก่อนชน timeout ใหญ่'
+        : 'รูปอาจจะใหญ่หรือซับซ้อนเกินไป จนเซิร์ฟเวอร์ตัดการเชื่อมต่อก่อนได้คำตอบ',
+      hint: controlledTimeout
+        ? 'กดลองอีกครั้งได้เลย ระบบจะ retry เฉพาะรูปที่ยังอ่านไม่สำเร็จ และจะลอง API key ถัดไปให้อัตโนมัติ'
+        : 'ลองลดจำนวนบิลต่อรอบ หรือถ่ายรูปใหม่ให้ชัดขึ้น',
       retryable: true,
-      detail: geminiStatus || null,
+      detail,
       rawStatus: status,
+      requestId: body?.req_id || extractReqId(detail),
     };
   }
   if (status === 500) {
@@ -234,6 +241,12 @@ function extractGeminiStatus(body) {
   return m ? m[1] : null;
 }
 
+function extractReqId(detail) {
+  if (!detail) return null;
+  const m = String(detail).match(/req_id=([a-z0-9-]+)/i);
+  return m ? m[1] : null;
+}
+
 // ─── Severity → visual tokens ─────────────────────────────────────────
 // Two-level palette plus a halo on the icon — danger gets a stronger
 // accent because the user can't proceed (auth/quota), warning is yellow
@@ -360,7 +373,7 @@ export default function AIErrorCard({ error, onRetry, onDismiss, onOpenSettings,
         {/* Collapsible technical detail — only renders if we have any.
             Keeps the card uncluttered for cashiers but lets the admin
             grab the Gemini status code when filing a bug. */}
-        {(error.detail || error.rawStatus > 0) && (
+        {(error.detail || error.rawStatus > 0 || error.requestId) && (
           <div className="mt-3 pt-3 border-t border-current/15 text-[11px]">
             <button
               type="button"
@@ -373,6 +386,7 @@ export default function AIErrorCard({ error, onRetry, onDismiss, onOpenSettings,
             {showDetail && (
               <div className="mt-1.5 font-mono text-muted-soft space-y-0.5">
                 {error.rawStatus > 0 && <div>HTTP {error.rawStatus}</div>}
+                {error.requestId && <div>req_id {error.requestId}</div>}
                 {error.detail && (
                   <div className="break-all">{String(error.detail).slice(0, 280)}</div>
                 )}

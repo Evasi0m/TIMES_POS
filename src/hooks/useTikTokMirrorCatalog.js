@@ -28,7 +28,7 @@ function lineProductSignature(lines) {
   return productIdsFromLines(lines).sort().join('|');
 }
 
-export function useTikTokMirrorCatalog({ enabled, lines }) {
+export function useTikTokMirrorCatalog({ enabled, mirrorEnabled = enabled, lines }) {
   const [catalog, setCatalog] = useState([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [mappingsByProductId, setMappingsByProductId] = useState({});
@@ -77,7 +77,7 @@ export function useTikTokMirrorCatalog({ enabled, lines }) {
 
   // ── Load mappings + POS stocks for the current receive lines ─────────────
   useEffect(() => {
-    if (!enabled) {
+    if (!mirrorEnabled) {
       setMappingsByProductId({});
       setStocksByProductId({});
       return;
@@ -108,7 +108,7 @@ export function useTikTokMirrorCatalog({ enabled, lines }) {
         }
       }
     })();
-  }, [enabled, productSig]);
+  }, [mirrorEnabled, productSig]);
 
   // Local search over the preloaded catalog (no API round-trip per keystroke).
   const searchCatalog = useCallback(async (query, opts = {}) => {

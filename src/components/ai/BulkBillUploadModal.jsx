@@ -90,7 +90,9 @@ function Impl({ onClose, onConfirm, closing }) {
           break;
         }
         try {
-          const result = await prepareBillImage(file);
+          const result = await prepareBillImage(file, {
+            batchOptimized: thumbs.length + files.length > 3,
+          });
           const previewBlob = base64ToBlob(result.base64, result.mime);
           const previewUrl = URL.createObjectURL(previewBlob);
           accepted.push({

@@ -23,7 +23,7 @@ function PatchCard({ patch, isLatest = false }) {
   return (
     <article
       className={
-        'ul-card ttc-bento rounded-2xl border p-3 min-w-0 flex flex-col gap-2 ' +
+        'ul-card ttc-bento rounded-2xl border p-3 min-w-0 h-auto flex-none flex flex-col gap-2 ' +
         (isLatest ? 'ul-card--hero ul-mesh-card' : 'ul-card--' + tint + ' ul-mesh-card--soft')
       }
     >
@@ -107,10 +107,18 @@ function UpdateLogPager({ page, totalPages, total, onPageChange }) {
 
 function LoadingSkeleton() {
   return (
-    <div className="space-y-2 animate-pulse">
-      <div className="ul-card ul-mesh-card rounded-2xl border h-28"/>
-      <div className="ul-card rounded-2xl border h-24"/>
-      <div className="ul-card rounded-2xl border h-24"/>
+    <div className="ul-card-list animate-pulse">
+      <div className="ul-card ul-mesh-card rounded-2xl border p-3 space-y-2">
+        <div className="h-4 w-2/3 rounded bg-black/5"/>
+        <div className="h-3 w-1/4 rounded bg-black/5"/>
+        <div className="h-3 w-full rounded bg-black/5"/>
+        <div className="h-3 w-5/6 rounded bg-black/5"/>
+      </div>
+      <div className="ul-card rounded-2xl border p-3 space-y-2">
+        <div className="h-4 w-1/2 rounded bg-black/5"/>
+        <div className="h-3 w-full rounded bg-black/5"/>
+        <div className="h-3 w-4/5 rounded bg-black/5"/>
+      </div>
     </div>
   );
 }
@@ -148,13 +156,13 @@ export default function UpdateLogModal({ open, closing, onClose }) {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[130] flex items-center justify-center p-3 sm:p-4"
+      className="fixed inset-0 z-[130] flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto overscroll-contain"
       onClick={onClose}
     >
       <div className={'absolute inset-0 modal-overlay ' + (closing ? 'holo-backdrop-out' : 'holo-backdrop-in')}/>
       <div
         className={
-          'ul-modal relative w-full max-w-[min(96vw,640px)] max-h-[min(85vh,720px)] ' +
+          'ul-modal relative w-full max-w-[min(96vw,640px)] my-auto ' +
           'glass-strong rounded-3xl border hairline overflow-hidden flex flex-col ' +
           (closing ? 'holo-card-out' : 'holo-card-in')
         }
@@ -180,38 +188,36 @@ export default function UpdateLogModal({ open, closing, onClose }) {
           </button>
         </div>
 
-        <div className="flex-1 min-h-0 flex flex-col px-4 py-3 bg-surface-cream-strong">
-          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
-            {loading && !log && <LoadingSkeleton/>}
+        <div className="ul-modal-body px-4 py-3 bg-surface-cream-strong">
+          {loading && !log && <LoadingSkeleton/>}
 
-            {error && (
-              <div className="ul-empty text-center py-8">
-                <Icon name="alert" size={28} className="text-muted mx-auto mb-2"/>
-                <p className="text-sm text-muted mb-3">โหลดบันทึกไม่ได้ — ลองใหม่</p>
-                <button type="button" className="btn-secondary !text-xs" onClick={load}>
-                  <Icon name="refresh" size={14}/> ลองอีกครั้ง
-                </button>
-              </div>
-            )}
+          {error && (
+            <div className="ul-empty text-center py-8">
+              <Icon name="alert" size={28} className="text-muted mx-auto mb-2"/>
+              <p className="text-sm text-muted mb-3">โหลดบันทึกไม่ได้ — ลองใหม่</p>
+              <button type="button" className="btn-secondary !text-xs" onClick={load}>
+                <Icon name="refresh" size={14}/> ลองอีกครั้ง
+              </button>
+            </div>
+          )}
 
-            {!loading && !error && patches.length === 0 && (
-              <div className="ul-empty text-center py-10 text-muted text-sm">
-                ยังไม่มีบันทึกอัปเดต
-              </div>
-            )}
+          {!loading && !error && patches.length === 0 && (
+            <div className="ul-empty text-center py-10 text-muted text-sm">
+              ยังไม่มีบันทึกอัปเดต
+            </div>
+          )}
 
-            {!error && items.length > 0 && (
-              <div className="flex flex-col gap-2">
-                {items.map(p => (
-                  <PatchCard
-                    key={p.id}
-                    patch={p}
-                    isLatest={safePage === 1 && p.id === globalLatestId}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+          {!error && items.length > 0 && (
+            <div className="ul-card-list">
+              {items.map(p => (
+                <PatchCard
+                  key={p.id}
+                  patch={p}
+                  isLatest={safePage === 1 && p.id === globalLatestId}
+                />
+              ))}
+            </div>
+          )}
 
           {!error && patches.length > 0 && (
             <UpdateLogPager
