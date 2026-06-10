@@ -7,18 +7,31 @@ const BillItemsListCard = forwardRef(function BillItemsListCard({
   activeUid,
   tiktokMirrorEnabled = false,
   onSelect,
+  style,
 }, ref) {
-  const scrollRef = useRef(null);
+  const listRef = useRef(null);
 
   useEffect(() => {
-    const el = scrollRef.current?.querySelector(`[data-bill-row="${activeUid}"]`);
-    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (!activeUid) return;
+    const el = listRef.current?.querySelector(`[data-bill-row="${activeUid}"]`);
+    if (!el) return;
+    const scrollParent = listRef.current;
+    if (scrollParent && scrollParent.scrollHeight > scrollParent.clientHeight + 1) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
   }, [activeUid]);
 
   return (
-    <div ref={ref} className="air-bill-list-card ttc-bento rounded-2xl border">
+    <div
+      ref={ref}
+      className={
+        'air-bill-list-card ttc-bento rounded-2xl border' +
+        (style?.height != null ? ' air-bill-list-card--synced' : '')
+      }
+      style={style}
+    >
       <div className="air-bill-list-card__head">รายการในบิล</div>
-      <div ref={scrollRef} className="air-bill-list-card__scroll">
+      <div ref={listRef} className="air-bill-list-card__scroll">
         {rows.map((row, idx) => {
           const ds = getRowDisplayState(row, tiktokMirrorEnabled);
           const sku = getRowStepperSku(row);

@@ -295,6 +295,42 @@ export function getWorkspaceMode(row, rematch = false) {
 }
 
 /**
+ * Card height layout: expand when match/search/TikTok lists are shown;
+ * compact when matched, qty/cost, create form, or TikTok done.
+ */
+export function getWorkspaceLayoutMode({
+  row,
+  activeStep = 'match',
+  rematch = false,
+  showCreate = false,
+  searchQuery = '',
+} = {}) {
+  if (!row) return 'compact';
+
+  const resolveMode =
+    row.status === 'suggestions' || row.status === 'none' || rematch;
+
+  if (
+    activeStep === 'match' &&
+    resolveMode &&
+    !showCreate &&
+    ((row.candidates?.length ?? 0) > 0 || String(searchQuery).trim())
+  ) {
+    return 'expand';
+  }
+
+  if (
+    activeStep === 'tiktok' &&
+    !row.tiktok_skip &&
+    !isRowTiktokMatched(row)
+  ) {
+    return 'expand';
+  }
+
+  return 'compact';
+}
+
+/**
  * Sub-steps for the per-item wizard flow.
  * Returns ordered steps with done/disabled flags.
  */

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { forwardRef, useEffect, useMemo, useState } from 'react';
 import Icon from '../ui/Icon.jsx';
 import ExpandableImageThumb from '../ui/ExpandableImageThumb.jsx';
 import ProductThumb from '../ui/ProductThumb.jsx';
@@ -14,6 +14,7 @@ import {
   getItemSteps,
   firstIncompleteStep,
   getRowAsideImageUrl,
+  getWorkspaceLayoutMode,
 } from './bill-review-shared.js';
 
 function CandidateCell({ c, onPick, highlight, dataFirst }) {
@@ -243,7 +244,7 @@ function WorkspaceFooter({
   );
 }
 
-export default function ReceiveMatchPanel({
+const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
   row,
   rowIndex = 0,
   totalRows = 0,
@@ -270,8 +271,8 @@ export default function ReceiveMatchPanel({
   onTiktokMinPctChange,
   onTiktokRowMatch,
   productImagesById = {},
-  panelHeight = null,
-}) {
+  onLayoutModeChange,
+}, ref) {
   const [rematch, setRematch] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [activeStep, setActiveStep] = useState('match');
@@ -324,6 +325,21 @@ export default function ReceiveMatchPanel({
   const isMatched = row && (row.status === 'auto' || row.status === 'new');
   const resolveMode = !isMatched || rematch;
 
+  const layoutMode = useMemo(
+    () => getWorkspaceLayoutMode({
+      row,
+      activeStep,
+      rematch,
+      showCreate,
+      searchQuery,
+    }),
+    [row, activeStep, rematch, showCreate, searchQuery],
+  );
+
+  useEffect(() => {
+    onLayoutModeChange?.(layoutMode);
+  }, [layoutMode, onLayoutModeChange]);
+
   // Enter picks first candidate when resolving (match step, not typing).
   useEffect(() => {
     if (!row || activeStep !== 'match' || !resolveMode || showCreate) return;
@@ -343,7 +359,10 @@ export default function ReceiveMatchPanel({
 
   if (!row) {
     return (
-      <div className="receive-match-panel receive-match-panel--empty ttc-rl ttc-bento rounded-2xl border p-6 flex items-center justify-center min-h-[200px]">
+      <div
+        ref={ref}
+        className="receive-match-panel receive-match-panel--empty air-stage--compact ttc-rl ttc-bento rounded-2xl border p-6 flex items-center justify-center min-h-[200px]"
+      >
         <div className="text-center text-sm text-muted-soft">
           <Icon name="check" size={24} className="mx-auto mb-2 opacity-40"/>
           ไม่มีรายการให้แก้ไข
@@ -390,9 +409,13 @@ export default function ReceiveMatchPanel({
 
   return (
     <div
-      className={'air-stage ttc-rl ttc-bento rounded-2xl border min-h-0 w-full ' + displayState.cardCls}
+      ref={ref}
+      className={
+        'air-stage air-stage--' + layoutMode +
+        ' ttc-rl ttc-bento rounded-2xl border w-full ' +
+        displayState.cardCls
+      }
       id="receive-match-workspace"
-      style={panelHeight != null && panelHeight > 0 ? { height: panelHeight, maxHeight: panelHeight } : undefined}
     >
       <div className="air-stage__grid">
         <StageAside
@@ -509,14 +532,19 @@ export default function ReceiveMatchPanel({
                             onChange={(e) => setSearchQuery(e.target.value)}
                           />
                           {searchQuery && (
-                            <div className="mt-2 flex flex-col gap-1.5 max-h-56 overflow-y-auto">
-                              {searchResults.length === 0 && (
-                                <div className="text-xs text-muted-soft text-center py-3">ไม่พบ</div>
-                              )}
-                              {searchResults.map((c) => (
-                                <CandidateCell key={c.product.id} c={c} onPick={handlePick}/>
-                              ))}
-                            </div>
+                            <section className="ttc-match-panel mt-2">
+                              <div className="ttc-match-panel__head">
+                                ผลการค้นหา ({searchResults.length})
+                              </div>
+                              <div className="ttc-match-panel__body ttc-match-panel__body--focus ttc-match-search-results flex flex-col gap-1.5">
+                                {searchResults.length === 0 && (
+                                  <div className="ttc-picker-dropdown__empty ttc-match-panel__empty text-xs py-3">ไม่พบ</div>
+                                )}
+                                {searchResults.map((c) => (
+                                  <CandidateCell key={c.product.id} c={c} onPick={handlePick}/>
+                                ))}
+                              </div>
+                            </section>
                           )}
                         </section>
 
@@ -745,4 +773,6 @@ export default function ReceiveMatchPanel({
       />
     </div>
   );
-}
+});
+
+export default ReceiveMatchPanel;

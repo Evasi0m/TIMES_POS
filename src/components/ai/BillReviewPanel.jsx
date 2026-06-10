@@ -1,7 +1,7 @@
 // BillReviewPanel — focused wizard for AI bulk receive review.
 // Top: item stepper (colored chips). Below: bill list card + ReceiveMatchPanel side by side.
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../ui/Icon.jsx';
 import { classifyMatch, normalizeCode } from '../../lib/fuzzy-match.js';
 import ReceiveMatchPanel from './ReceiveMatchPanel.jsx';
@@ -135,7 +135,9 @@ export default function BillReviewPanel({
 }) {
   const wizardRef = useRef(null);
   const listCardRef = useRef(null);
-  const [listCardHeight, setListCardHeight] = useState(null);
+  const stageRef = useRef(null);
+  const [syncedCardHeight, setSyncedCardHeight] = useState(null);
+  const [layoutMode, setLayoutMode] = useState('compact');
 
   const summary = useMemo(
     () => computeRowSummary(rows, tiktokMirrorEnabled),
@@ -187,19 +189,27 @@ export default function BillReviewPanel({
   const activeRow = rows.find((r) => r.uid === activeUid) || null;
   const activeIndex = activeRow ? rows.indexOf(activeRow) : 0;
 
-  // CARD B height always follows CARD A (list card is the master).
-  useEffect(() => {
-    const el = listCardRef.current;
+  const handleLayoutModeChange = useCallback((mode) => {
+    setLayoutMode(mode);
+  }, []);
+
+  // CARD A height follows CARD B (master). B must stay content-sized (flex-start).
+  useLayoutEffect(() => {
+    const el = stageRef.current;
     if (!el) return;
     const sync = () => {
-      const h = el.getBoundingClientRect().height;
-      if (h > 0) setListCardHeight(h);
+      const h = Math.round(el.offsetHeight);
+      if (h > 0) setSyncedCardHeight(h);
     };
     sync();
     const ro = new ResizeObserver(sync);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [rows.length, activeUid, tiktokMirrorEnabled]);
+  }, [rows.length, activeUid, layoutMode, tiktokMirrorEnabled]);
+
+  const listCardStyle = syncedCardHeight > 0
+    ? { height: syncedCardHeight, maxHeight: syncedCardHeight, minHeight: syncedCardHeight }
+    : { maxHeight: 'min(28rem, calc(100vh - 14rem))' };
 
   const selectUid = useCallback((uid) => setActiveUid(uid), []);
 
@@ -284,6 +294,7 @@ export default function BillReviewPanel({
       <div className="air-wizard__workspace">
         <BillItemsListCard
           ref={listCardRef}
+          style={listCardStyle}
           rows={rows}
           activeUid={activeUid}
           tiktokMirrorEnabled={tiktokMirrorEnabled}
@@ -291,7 +302,8 @@ export default function BillReviewPanel({
         />
 
         <ReceiveMatchPanel
-          panelHeight={listCardHeight}
+          ref={stageRef}
+          onLayoutModeChange={handleLayoutModeChange}
           row={activeRow}
           rowIndex={activeIndex}
           totalRows={rows.length}

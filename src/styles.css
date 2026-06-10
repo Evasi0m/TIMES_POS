@@ -826,6 +826,7 @@
   border-radius: 12px;
   border: 1px solid var(--hairline, rgba(0, 0, 0, 0.08));
   background: var(--surface-strong, #fff);
+  background-clip: padding-box;
   overflow: hidden;
 }
 .ttc-match-panel__head {
@@ -837,6 +838,7 @@
   color: var(--muted, #666);
   border-bottom: 1px solid var(--hairline, rgba(0, 0, 0, 0.08));
   background: var(--surface-soft, #f8f6f2);
+  background-clip: padding-box;
 }
 .ttc-match-panel__body {
   max-height: min(240px, 40vh);
@@ -1382,14 +1384,12 @@
   min-width: 0;
 }
 
-/* Side-by-side: bill list card (A) + receive match card (B) — B height follows A */
+/* Side-by-side: bill list card (A) + receive match card (B) — adaptive height */
 .air-wizard__workspace {
-  --air-workspace-card-max: min(28rem, calc(100vh - 14rem));
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
   align-items: stretch;
-  min-height: 0;
   min-width: 0;
 }
 @media (min-width: 1024px) {
@@ -1405,26 +1405,23 @@
   .air-wizard__workspace > .air-stage {
     flex: 1 1 auto;
     min-width: 0;
-    min-height: 0;
-    overflow: hidden;
-  }
-}
-@media (max-width: 1023px) {
-  .air-bill-list-card {
-    max-height: min(220px, var(--air-workspace-card-max, 28rem));
+    align-self: flex-start;
   }
 }
 
-/* CARD A — bill item list (capped height, scroll inside) */
+/* CARD A — bill item list (height follows CARD B, scroll inside) */
 .air-bill-list-card {
   display: flex;
   flex-direction: column;
-  max-height: var(--air-workspace-card-max, min(28rem, calc(100vh - 14rem)));
+  min-height: 0;
   overflow: hidden;
   box-shadow: var(--shadow-low);
   background:
     linear-gradient(135deg, rgba(239, 233, 222, 0.92), rgba(232, 224, 210, 0.78));
   border-color: rgb(var(--c-hairline) / 0.65);
+}
+.air-bill-list-card--synced {
+  flex-shrink: 0;
 }
 :root[data-theme='dark'] .air-bill-list-card {
   background:
@@ -1446,6 +1443,8 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
   padding: 0.375rem;
 }
 .air-bill-list-card__row {
@@ -1639,39 +1638,41 @@
   cursor: not-allowed;
 }
 
-/* Stage — receive match card (B): height follows CARD A; scroll inside */
+/* Stage — receive match card (B): compact or expand by content */
 .air-stage {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   min-height: 0;
-  overflow: hidden;
   box-shadow: var(--shadow-low);
+}
+.air-stage--compact,
+.air-stage--expand {
+  min-height: 0;
+  grid-template-rows: auto auto;
+  align-self: flex-start;
+  width: 100%;
 }
 .air-stage__grid {
   display: grid;
   grid-template-columns: 1fr;
   min-height: 0;
-  overflow: hidden;
 }
 @media (min-width: 1024px) {
   .air-stage__grid {
     grid-template-columns: 248px minmax(0, 1fr);
+    align-items: stretch;
   }
 }
-
 .air-stage__aside {
   display: flex;
   flex-direction: column;
   gap: 0.625rem;
   padding: 0.875rem;
   min-width: 0;
-  min-height: 0;
 }
 @media (min-width: 1024px) {
   .air-stage__aside {
     border-right: 1px solid rgb(var(--c-hairline) / 0.5);
-    overflow-y: auto;
-    overscroll-behavior: contain;
   }
 }
 .air-stage__visual,
@@ -1769,7 +1770,6 @@
   flex-direction: column;
   min-height: 0;
   min-width: 0;
-  overflow: hidden;
 }
 .air-stage__main-top {
   display: flex;
@@ -1780,12 +1780,29 @@
 .air-stage__main-body {
   flex: 1 1 auto;
   min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow: visible;
   padding: 0.875rem;
   display: flex;
   flex-direction: column;
   gap: 0.875rem;
+}
+
+/* Match/search panels inside receive wizard — grow with content, no inner scroll */
+.air-stage .ttc-match-panel__body,
+.air-stage .ttc-match-panel__body--focus {
+  max-height: none;
+  overflow: visible;
+  flex: none;
+  min-height: 0;
+}
+
+/* Search hits panel — same card as nearby list; cap at 5 rows then scroll */
+.air-stage .ttc-match-panel__body.ttc-match-search-results {
+  max-height: calc(5 * 3.625rem + 1.5rem + 1rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
 }
 
 /* Step indicator — 1 จับคู่ → 2 จำนวน/ทุน → 3 TikTok */
@@ -2096,19 +2113,12 @@
   min-width: 0;
 }
 
-/* Candidate list — full-width vertical rows, fills remaining height
-   (override the base .ttc-match-panel__body 240px cap so empty space is used) */
+/* Candidate list — full-width vertical rows (adaptive in .air-stage) */
 .ttc-match-panel__body--focus {
   display: flex;
   flex-direction: column;
   gap: 6px;
   padding: 8px;
-  flex: 1;
-  min-height: 0;
-  max-height: none;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
 }
 .ttc-match-cell {
   display: flex;
