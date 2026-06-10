@@ -1,4 +1,5 @@
 import React from 'react';
+import { TikTokGlassBtn, TikTokGlassTabs } from './glass/index.js';
 
 export default function TikTokStatusTabs({
   tabs,
@@ -8,38 +9,29 @@ export default function TikTokStatusTabs({
   onSelectAll,
   selectableCount,
 }) {
+  const glassTabs = tabs.map((f) => ({
+    key: f.k,
+    label: f.label,
+    count: tabCounts[f.k] ?? 0,
+  }));
+
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-      <div className="inline-flex glass-soft rounded-xl p-1 shadow-sm overflow-x-auto max-w-full">
-        {tabs.map((f) => {
-          const active = activeKey === f.k;
-          return (
-            <button
-              key={f.k}
-              type="button"
-              onClick={() => onSelect(f.k)}
-              className={
-                'px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap shrink-0 ' +
-                (active
-                  ? 'bg-surface-strong text-ink shadow-md ring-1 ring-hairline'
-                  : 'text-muted hover:text-ink hover:bg-surface-strong/40')
-              }
-            >
-              {f.label}
-              <span className={'ml-1.5 tabular-nums text-xs ' + (active ? 'text-ink' : 'text-muted-soft')}>
-                {tabCounts[f.k] ?? 0}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-      <button
+    <div className="flex flex-col sm:flex-row sm:items-center gap-3 min-w-0">
+      <TikTokGlassTabs
+        variant="status"
+        tabs={glassTabs}
+        activeKey={activeKey}
+        onSelect={onSelect}
+        className="flex-1 min-w-0"
+      />
+      <TikTokGlassBtn
         type="button"
-        className="text-xs text-muted hover:text-ink sm:ml-auto shrink-0 min-h-[44px] px-2"
+        variant="outline"
+        className="tt-glass__btn--lg shrink-0 sm:ml-auto"
         onClick={onSelectAll}
       >
         เลือกทั้งหมด ({selectableCount})
-      </button>
+      </TikTokGlassBtn>
     </div>
   );
 }

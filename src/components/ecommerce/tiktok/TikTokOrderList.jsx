@@ -2,31 +2,34 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Icon from '../../ui/Icon.jsx';
 import TikTokOrderCard from './TikTokOrderCard.jsx';
 import TikTokListPagination from './TikTokListPagination.jsx';
+import { TikTokGlassSection, TikTokGlassBtn, TikTokGlassShell } from './glass/index.js';
 
 function OrderSkeleton({ n = 5 }) {
   return (
-    <div className="card-canvas overflow-hidden rounded-xl">
-      <div className="p-4 space-y-3" role="status" aria-live="polite" aria-label="กำลังโหลดออเดอร์">
+    <TikTokGlassShell loading={false}>
+      <div className="tt-glass__body-inner" role="status" aria-live="polite" aria-label="กำลังโหลดออเดอร์">
         {Array.from({ length: n }).map((_, i) => (
-          <div key={i} className="space-y-3 py-3 border-b hairline last:border-0">
-            <div className="skeleton h-4 w-48 rounded"/>
+          <div key={i} className="tt-glass__pane mb-2 space-y-3 !p-4">
+            <div className="skeleton h-4 w-48 tt-r-control"/>
             <div className="flex gap-3">
-              <div className="skeleton w-14 h-14 rounded-lg shrink-0"/>
+              <div className="skeleton w-14 h-14 tt-r-card shrink-0"/>
               <div className="flex-1 space-y-2">
-                <div className="skeleton h-4 w-full rounded"/>
-                <div className="skeleton h-3 w-24 rounded"/>
+                <div className="skeleton h-4 w-full tt-r-control"/>
+                <div className="skeleton h-3 w-24 tt-r-control"/>
               </div>
             </div>
           </div>
         ))}
       </div>
-    </div>
+    </TikTokGlassShell>
   );
 }
 
 export default function TikTokOrderList({
   loading,
   orders,
+  ordersTruncated = false,
+  ordersCap,
   itemsByOrder,
   imageByProduct,
   selected,
@@ -73,9 +76,9 @@ export default function TikTokOrderList({
 
   if (!orders.length) {
     return (
-      <div className="card-canvas overflow-hidden rounded-xl">
-        <div className="p-10 text-center">
-          <div className="w-12 h-12 rounded-xl bg-surface-soft border hairline flex items-center justify-center mx-auto mb-4 text-muted">
+      <TikTokGlassSection title="รายการออเดอร์">
+        <div className="tt-glass__empty">
+          <div className="tt-glass__empty-icon">
             <Icon name="package" size={24}/>
           </div>
           <div className="text-muted text-sm mb-4 max-w-md mx-auto">
@@ -83,29 +86,34 @@ export default function TikTokOrderList({
               ? 'ยังไม่มีออเดอร์ "ที่จะจัดส่ง" — ระบบกำลังดึงจาก TikTok อัตโนมัติ'
               : 'ยังไม่มีออเดอร์ในแท็บนี้ — รอซิงค์จาก TikTok หรือกดปุ่มด้านล่าง'}
           </div>
-          <button type="button" className="btn-primary !h-11 !text-sm min-h-[44px]" onClick={onSyncOrders} disabled={syncing}>
+          <TikTokGlassBtn variant="coral" className="tt-glass__btn--lg" onClick={onSyncOrders} disabled={syncing}>
             {syncing
               ? <span className="text-sm font-semibold tabular-nums">{syncPct}%</span>
               : pullBusy
                 ? <span className="spinner"/>
                 : <Icon name="refresh" size={16}/>}
             อัปเดตข้อมูลจาก TikTok
-          </button>
+          </TikTokGlassBtn>
           <p className="text-xs text-muted-soft mt-4 max-w-md mx-auto leading-relaxed">
             ซิงค์อัตโนมัติทุก {livePollSec} วินาที + cron ทุก 5 นาที —
             ครั้งแรกอาจใช้เวลาสักครู่ถ้ามีออเดอร์จำนวนมาก (ดึงทีละ ~60 รายการ)
           </p>
         </div>
-      </div>
+      </TikTokGlassSection>
     );
   }
 
   return (
-    <div className="card-canvas overflow-hidden rounded-xl flex flex-col min-h-0">
-      <div className="px-4 py-2.5 border-b hairline bg-surface-soft/50 flex flex-wrap items-center gap-2 text-xs text-muted">
+    <TikTokGlassSection title="รายการออเดอร์" bodyClassName="!pt-2">
+      <div className="tt-glass__order-list-meta">
         <span>
           พบ <span className="font-medium text-ink tabular-nums">{orders.length.toLocaleString('th-TH')}</span> รายการ
         </span>
+        {ordersTruncated && ordersCap && (
+          <span className="text-warning">
+            · แสดง {ordersCap.toLocaleString('th-TH')} ออเดอร์ล่าสุด
+          </span>
+        )}
         {orders.length > pageSize && (
           <span className="text-muted-soft tabular-nums">
             · หน้า {safePage}/{totalPages}
@@ -113,7 +121,7 @@ export default function TikTokOrderList({
         )}
       </div>
 
-      <div className="hidden lg:grid grid-cols-[minmax(0,2.2fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1.1fr)] gap-3 px-4 py-2 bg-surface-soft border-b hairline text-xs text-muted font-medium uppercase tracking-wider">
+      <div className="tt-glass__order-list-head">
         <div>สินค้า</div>
         <div>สถานะ</div>
         <div>การจัดส่ง</div>
@@ -121,7 +129,7 @@ export default function TikTokOrderList({
         <div className="text-right">การดำเนินการ</div>
       </div>
 
-      <div className="divide-y hairline">
+      <div className="tt-glass__order-list-body">
         {pageOrders.map((o, idx) => {
           const lines = itemsByOrder[o.id] || [];
           return (
@@ -156,6 +164,6 @@ export default function TikTokOrderList({
         onPageChange={setPage}
         onPageSizeChange={setPageSize}
       />
-    </div>
+    </TikTokGlassSection>
   );
 }

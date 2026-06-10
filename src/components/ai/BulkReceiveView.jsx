@@ -38,21 +38,27 @@ import BillImageLightbox from './BillImageLightbox.jsx';
 import AIErrorCard, { parseAIError } from './AIErrorCard.jsx';
 import MacTerminal from '../ui/MacTerminal.jsx';
 import {
+  deriveParsingSteps,
   makeLogLine,
   msgAllDone,
   msgBillSuccess,
-  msgCatalogLoaded,
+  msgCatalogDone,
+  msgCatalogStart,
   msgCatalogWarn,
   msgChunkHeader,
   msgChunkMeta,
-  msgImagesReady,
-  msgLoadingCatalog,
+  msgDupCheckStart,
+  msgEdgeConnect,
+  msgMatchSummary,
   msgParseError,
+  msgPrepImages,
+  msgResponseOk,
   msgRetryScan,
   msgSendBills,
   msgStartScan,
+  msgTokenUsage,
   msgTraceLines,
-  msgWaitingSeconds,
+  msgWaitingDetail,
 } from './parse-activity-log.js';
 import { enrichTiktokMappingFromCatalog } from './bill-review-shared.js';
 import { useRecentReceivesMap, findExistingCmgInvoices } from '../../lib/recent-receives.js';
@@ -206,6 +212,7 @@ export default function BulkReceiveView({ toast }) {
   const draftTimer = useRef(null);
   const parseWaitTimer = useRef(null);
   const parseWaitStartedAt = useRef(0);
+  const parseWaitContext = useRef({ from: 1, to: 1 });
 
   const stopWaitTicker = useCallback(() => {
     if (parseWaitTimer.current) {
@@ -237,13 +244,15 @@ export default function BulkReceiveView({ toast }) {
     setParseLogs((prev) => [...prev, ...arr]);
   }, []);
 
-  const startWaitTicker = useCallback(() => {
+  const startWaitTicker = useCallback((from = 1, to = 1) => {
     stopWaitTicker();
+    parseWaitContext.current = { from, to };
     parseWaitStartedAt.current = Date.now();
     setParseIsActive(true);
     const tick = () => {
       const secs = Math.floor((Date.now() - parseWaitStartedAt.current) / 1000);
-      setParseActiveLine(msgWaitingSeconds(secs));
+      const { from: f, to: t } = parseWaitContext.current;
+      setParseActiveLine(msgWaitingDetail(f, t, secs));
     };
     tick();
     parseWaitTimer.current = setInterval(tick, 1000);
@@ -507,7 +516,12 @@ export default function BulkReceiveView({ toast }) {
     setError(null);
     if (!retryOnly) clearParseLogs();
     pushParseLogs(retryOnly ? msgRetryScan(images.length) : msgStartScan(images.length));
-    if (!retryOnly) pushParseLogs(msgImagesReady(images.length));
+    if (!retryOnly) {
+      const totalKb = Math.round(
+        images.reduce((s, img) => s + (Number(img.sizeBytes) || 0), 0) / 1024,
+      );
+      pushParseLogs(msgPrepImages(images.length, totalKb));
+    }
     setParsingProgress({ done: 0, total: images.length, currentFrom: 1, currentTo: Math.min(AI_PARSE_CHUNK_SIZE, images.length), failed: 0 });
     let seedBills = bills;
     if (!retryOnly) {
@@ -543,17 +557,19 @@ export default function BulkReceiveView({ toast }) {
       // Catalog is needed to materialize parsed rows. Load it before the
       // loop so each successful chunk can be committed immediately; if a
       // later chunk fails, earlier parsed bills remain available.
-      pushParseLogs(msgLoadingCatalog());
+      pushParseLogs(msgCatalogStart());
+      const catalogStartedAt = Date.now();
       const catalogRes = await fetchAllFromTable(sb, 'products', {
         select: 'id, name, barcode, retail_price, cost_price, current_stock',
         orderColumn: 'id',
       });
       const catalog = catalogRes?.data || [];
+      const catalogMs = Date.now() - catalogStartedAt;
       if (catalogRes?.error) {
         console.warn('[BulkReceiveView] catalog load issue:', catalogRes.error);
         pushParseLogs(msgCatalogWarn());
       } else {
-        pushParseLogs(msgCatalogLoaded(catalog.length));
+        pushParseLogs(msgCatalogDone(catalog.length, catalogMs));
       }
       setProducts(catalog);
       const parsedByIndex = new Map();
@@ -565,6 +581,7 @@ export default function BulkReceiveView({ toast }) {
         const chunkIndex = Math.floor(start / AI_PARSE_CHUNK_SIZE) + 1;
         pushParseLogs(msgChunkHeader(chunkIndex, totalChunks));
         pushParseLogs(msgSendBills(currentFrom, currentTo));
+        pushParseLogs(msgEdgeConnect(currentFrom, currentTo));
         setParsingProgress((prev) => ({
           ...(prev || {}),
           done: start,
@@ -581,7 +598,8 @@ export default function BulkReceiveView({ toast }) {
           return inChunk ? { ...b, parseState: 'parsing', parseError: null } : b;
         }));
 
-        startWaitTicker();
+        startWaitTicker(currentFrom, currentTo);
+        const invokeStartedAt = Date.now();
         const parseRes = await sb.functions.invoke('cmg-bill-parse', {
           body: {
             images: chunk.map((img) => ({
@@ -603,6 +621,7 @@ export default function BulkReceiveView({ toast }) {
         if (!Array.isArray(data.bills) || data.bills.length === 0) {
           throw new Error('AI ไม่ได้รีเทิร์นบิลใดเลย — ลองถ่ายรูปใหม่');
         }
+        pushParseLogs(msgResponseOk(data.bills.length, Date.now() - invokeStartedAt));
         if (Array.isArray(data.trace) && data.trace.length) {
           pushParseLogs(msgTraceLines(data.trace));
         }
@@ -614,10 +633,18 @@ export default function BulkReceiveView({ toast }) {
           const itemsRaw = Array.isArray(bill?.items) ? bill.items : [];
           const invoiceNo = String(bill?.supplier_invoice_no || '').trim();
           appendParseLog(msgBillSuccess(billNo, itemsRaw.length, invoiceNo));
+          const rows = itemsRaw.map((it) => buildRowFromAi(it, catalog));
+          const auto = rows.filter((r) => r.status === 'auto' || r.status === 'new').length;
+          const pick = rows.filter((r) => r.status === 'suggestions').length;
+          const none = rows.filter((r) => r.status === 'none').length;
+          appendParseLog(msgMatchSummary(billNo, auto, pick, none));
           if (originalIndex >= 0) parsedByIndex.set(originalIndex, bill || {});
         });
         const metaLine = msgChunkMeta(data.usage);
         if (metaLine) appendParseLog(metaLine);
+        if (data.usage?.total_tokens) {
+          appendParseLog(msgTokenUsage(data.usage.total_tokens, data.usage.estimated_thb));
+        }
         setUsage((prev) => aggregateAiUsage([prev, data.usage]));
         setBills((prev) =>
           prev.map((b, i) => {
@@ -648,6 +675,7 @@ export default function BulkReceiveView({ toast }) {
       const invoiceNos = [...parsedByIndex.values()]
         .map((pb) => String(pb?.supplier_invoice_no || '').trim())
         .filter(Boolean);
+      if (invoiceNos.length) pushParseLogs(msgDupCheckStart(invoiceNos.length));
       findExistingCmgInvoices(invoiceNos).then(setDupInvoices).catch(() => {});
       pushParseLogs(msgAllDone(images.length, images.length));
       setParsingProgress(null);
@@ -1366,54 +1394,125 @@ function EmptyLanding({ onStart, draft, onRestore, onDiscard }) {
 }
 
 // ─── Sub: parsing screen ──────────────────────────────────────────────
-function ParsingScreen({ bills, progress, logs, activeLine, isActive }) {
+function billParseStatusLabel(state) {
+  if (state === 'parsed') return { label: 'อ่านแล้ว', chip: 'air-status-chip--done', icon: 'check' };
+  if (state === 'failed') return { label: 'ล้มเหลว', chip: 'air-status-chip--missing', icon: 'x' };
+  if (state === 'parsing') return { label: 'กำลังอ่าน', chip: 'air-status-chip--soft', icon: null };
+  return { label: 'รอคิว', chip: 'air-status-chip--incomplete', icon: null };
+}
+
+function ParsingStatusPanel({ bills, progress, parseIsActive, logs }) {
   const done = progress?.done ?? bills.filter((b) => b.parseState === 'parsed').length;
   const total = progress?.total ?? bills.length;
+  const pct = total ? Math.round((done / total) * 100) : 0;
   const currentLabel = progress?.currentFrom
-    ? `กำลังอ่านบิล ${progress.currentFrom}${progress.currentTo !== progress.currentFrom ? `-${progress.currentTo}` : ''} / ${total}`
+    ? `บิลที่ ${progress.currentFrom}${progress.currentTo !== progress.currentFrom ? `–${progress.currentTo}` : ''} / ${total}`
     : `${total} บิล`;
+  const steps = deriveParsingSteps({ bills, progress, parseIsActive, logs });
+
   return (
-    <div className="card-canvas overflow-hidden">
-      <div className="p-6 pb-4 flex flex-col items-center text-center gap-4">
-        <div className="flex items-center gap-3">
-          <span className="spinner lg"/>
-          <div>
-            <div className="font-display text-xl">กำลังให้ AI อ่านบิล…</div>
-            <div className="text-xs text-muted-soft mt-0.5">
+    <div className="brv-parsing-status">
+      <div className="brv-parsing-status__head">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="ai-chip shrink-0">AI</span>
+          <div className="min-w-0">
+            <div className="font-display text-lg leading-tight">กำลังให้ AI อ่านบิล…</div>
+            <div className="text-[11px] text-muted-soft mt-0.5 tabular-nums truncate">
               {currentLabel} · สำเร็จแล้ว {done}/{total}
             </div>
           </div>
         </div>
-        {/* Thumbnail strip — so the user sees what's being processed */}
-        <div className="flex gap-2 flex-wrap justify-center max-w-xl">
-          {bills.map((b, i) => (
-            <div
+        {done < total && (
+          <span className="spinner shrink-0" aria-hidden="true"/>
+        )}
+      </div>
+
+      <div className="brv-parsing-status__progress">
+        <span className="text-xs font-semibold tabular-nums text-ink">{pct}%</span>
+        <span className="brv-parsing-status__bar glass-tube overflow-hidden">
+          <span
+            className="block h-full rounded-full bg-[#0fa39a] transition-all duration-300"
+            style={{ width: `${pct}%` }}
+          />
+        </span>
+      </div>
+
+      <ol className="brv-parsing-status__steps" aria-label="ขั้นตอนการอ่านบิล">
+        {steps.map((step) => (
+          <li
+            key={step.key}
+            className={
+              'brv-parsing-status__step' +
+              (step.done ? ' is-done' : '') +
+              (step.active ? ' is-active' : '')
+            }
+          >
+            <span className="brv-parsing-status__step-icon" aria-hidden="true">
+              {step.done ? (
+                <Icon name="check" size={11}/>
+              ) : step.spinning ? (
+                <span className="spinner shrink-0 !w-3 !h-3 !border-[1.5px]"/>
+              ) : (
+                <span className="brv-parsing-status__step-dot"/>
+              )}
+            </span>
+            <span>{step.label}</span>
+          </li>
+        ))}
+      </ol>
+
+      <div className="brv-parsing-status__bills-label">รายการบิล</div>
+      <ul className="brv-parsing-status__bills">
+        {bills.map((b, i) => {
+          const st = billParseStatusLabel(b.parseState);
+          const sub = b.supplier_invoice_no || b.name || `บิล ${i + 1}`;
+          return (
+            <li
               key={b.uid}
               className={
-                'relative w-16 h-20 rounded-md overflow-hidden border hairline bg-surface-soft ' +
-                (b.parseState === 'parsed' ? 'border-success/50' : b.parseState === 'failed' ? 'border-error/60' : 'animate-pulse')
+                'brv-parsing-status__bill' +
+                (b.parseState === 'parsing' ? ' is-parsing' : '') +
+                (b.parseState === 'parsed' ? ' is-done' : '') +
+                (b.parseState === 'failed' ? ' is-failed' : '')
               }
             >
-              <img src={b.previewUrl} alt={`bill ${i+1}`} className="w-full h-full object-cover opacity-60"/>
-              <div className="absolute top-0.5 left-0.5 ai-row-badge !w-5 !h-5 !text-[10px]">
-                {i + 1}
+              <span className="brv-parsing-status__bill-idx">{i + 1}</span>
+              <div className="brv-parsing-status__bill-thumb">
+                <img src={b.previewUrl} alt="" className="w-full h-full object-cover"/>
               </div>
-              {b.parseState === 'parsed' && (
-                <div className="absolute bottom-0.5 right-0.5 rounded-full bg-success text-white w-5 h-5 flex items-center justify-center">
-                  <Icon name="check" size={11}/>
-                </div>
-              )}
-              {b.parseState === 'failed' && (
-                <div className="absolute bottom-0.5 right-0.5 rounded-full bg-error text-white w-5 h-5 flex items-center justify-center">
-                  <Icon name="x" size={11}/>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+              <div className="brv-parsing-status__bill-meta min-w-0">
+                <div className="brv-parsing-status__bill-name truncate">{sub}</div>
+                {b.rows?.length > 0 && (
+                  <div className="text-[10px] text-muted-soft tabular-nums">{b.rows.length} รายการ</div>
+                )}
+              </div>
+              <span className={'air-status-chip shrink-0 ' + st.chip}>
+                {st.icon && <Icon name={st.icon} size={9}/>}
+                <span>{st.label}</span>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function ParsingScreen({ bills, progress, logs, activeLine, isActive }) {
+  return (
+    <div className="brv-parsing-split card-canvas overflow-hidden">
+      <div className="brv-parsing-split__left">
+        <ParsingStatusPanel
+          bills={bills}
+          progress={progress}
+          parseIsActive={isActive}
+          logs={logs}
+        />
       </div>
-      <div className="brv-parsing-terminal-wrap">
+      <div className="brv-parsing-split__divider" aria-hidden="true"/>
+      <div className="brv-parsing-split__right">
         <MacTerminal
+          className="mac-terminal--embedded"
           lines={logs}
           activeLine={activeLine}
           isActive={isActive}

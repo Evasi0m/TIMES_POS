@@ -51,7 +51,7 @@ export default function FullTaxInvoiceA4({ order, items, shop, copyLabel = 'ต�
   const displayedDiscount = Math.max(0, displayedSubtotal - Number(order.grand_total || 0));
 
   return (
-    <div className="fulltax-a4">
+    <div className={'fulltax-a4' + (copyLabel === 'สำเนา' ? ' is-copy' : '')}>
       <div className="ft-head">
         <div className="ft-seller">
           <div className="ft-shop">{shop?.shop_name || 'TIMES'}</div>

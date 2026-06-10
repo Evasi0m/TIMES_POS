@@ -13,6 +13,7 @@ import { logMirrorBackgroundError } from '../../lib/tiktok-mirror-helpers.js';
 import Icon from '../ui/Icon.jsx';
 import ExpandableImageThumb from '../ui/ExpandableImageThumb.jsx';
 import TikTokSection from './tiktok/TikTokSection.jsx';
+import { TikTokGlassBtn, TikTokGlassBadge, TikTokGlassPane } from './tiktok/glass/index.js';
 
 const TIER_LABEL = {
   exact: 'ตรงกัน',
@@ -52,16 +53,16 @@ function ProductPicker({ onPick, disabled }) {
         disabled={disabled}
         onChange={e => search(e.target.value)}
         placeholder="ค้นชื่อ / บาร์โค้ด สินค้า POS"
-        className="input !h-9 !rounded-lg !py-0 !px-3 !text-xs w-full"
+        className="tt-glass__input !h-9 !text-xs w-full"
       />
       {searching && <span className="spinner absolute right-2 top-2"/>}
       {results.length > 0 && (
-        <div className="absolute z-20 mt-1 w-full max-h-60 overflow-y-auto card-canvas rounded-lg border hairline shadow-lg">
+        <div className="tt-glass__popover">
           {results.map(p => (
             <button
               key={p.id}
               type="button"
-              className="block w-full text-left px-3 py-2 text-xs hover:bg-primary/5 border-b hairline last:border-0"
+              className="tt-glass__popover-item"
               onClick={() => { onPick(p); setQ(''); setResults([]); }}
             >
               <div className="font-medium truncate">{p.name}</div>
@@ -219,28 +220,28 @@ export default function TikTokMatching({ toast }) {
             <input type="checkbox" checked={applyStock} onChange={e => setApplyStock(e.target.checked)}/>
             ตัดสต็อกย้อนหลัง
           </label>
-          <button type="button" className="btn-secondary !h-11 !py-0 !px-4 !text-sm" onClick={load} disabled={loading}>
+          <TikTokGlassBtn variant="hero" className="tt-glass__btn--lg" onClick={load} disabled={loading}>
             {loading ? <span className="spinner"/> : <Icon name="refresh" size={16}/>} รีเฟรช
-          </button>
-          <button
-            type="button"
-            className="btn-primary !h-11 !py-0 !px-4 !text-sm"
+          </TikTokGlassBtn>
+          <TikTokGlassBtn
+            variant="coral"
+            className="tt-glass__btn--lg"
             onClick={autoMatchBySku}
             disabled={skuBusy || autoMatchCount === 0}
             title="จับคู่อัตโนมัติเฉพาะคู่ที่ SKU ตรงรุ่น (suffix อยู่ใน whitelist)"
           >
             {skuBusy ? <span className="spinner"/> : <Icon name="zap" size={16}/>}
             จับคู่ด้วย SKU{autoMatchCount > 0 ? ` (${autoMatchCount})` : ''}
-          </button>
-          <button type="button" className="btn-secondary !h-11 !py-0 !px-4 !text-sm" onClick={autoRelink} disabled={autoBusy}>
+          </TikTokGlassBtn>
+          <TikTokGlassBtn variant="hero" className="tt-glass__btn--lg" onClick={autoRelink} disabled={autoBusy}>
             {autoBusy ? <span className="spinner"/> : <Icon name="link" size={16}/>} จับคู่อัตโนมัติใหม่
-          </button>
+          </TikTokGlassBtn>
         </>
       )}
     >
-      <div className="divide-y hairline">
+      <div className="space-y-2">
         {items.length === 0 && (
-          <div className="py-6 text-center text-muted text-sm">ไม่มีรายการที่ต้องจับคู่</div>
+          <div className="tt-glass__table-empty">ไม่มีรายการที่ต้องจับคู่</div>
         )}
         {items.map(it => {
           const match = matchByItem[it.id];
@@ -248,14 +249,14 @@ export default function TikTokMatching({ toast }) {
             ? { product: match.product, tier: match.tier, score: match.score }
             : match?.candidates?.[0];
           return (
-            <div key={it.id} className="p-3 flex flex-wrap items-center gap-3">
+            <TikTokGlassPane key={it.id} className="flex flex-wrap items-center gap-3 !p-3">
               <ExpandableImageThumb
                 src={it.sku_image_url}
                 alt={it.product_name || it.sku_name || ''}
-                className="w-10 h-10 rounded border hairline shrink-0"
-                imgClassName="w-full h-full object-cover rounded"
+                className="w-10 h-10 tt-r-card border hairline shrink-0"
+                imgClassName="w-full h-full object-cover tt-r-card"
                 placeholder={(
-                  <div className="w-10 h-10 rounded bg-surface-soft border hairline flex items-center justify-center text-muted shrink-0 product-img-shadow">
+                  <div className="w-10 h-10 tt-r-card bg-surface-soft border hairline flex items-center justify-center text-muted shrink-0 product-img-shadow">
                     <Icon name="image" size={14}/>
                   </div>
                 )}
@@ -274,37 +275,31 @@ export default function TikTokMatching({ toast }) {
                 ) : (
                   <>
                     {suggestion && (
-                      <div className="flex items-center gap-2 rounded-lg border hairline bg-surface-soft px-2.5 py-1.5">
+                      <div className="tt-glass__pane flex items-center gap-2 !p-2">
                         <div className="min-w-0 flex-1">
                           <div className="text-xs font-medium truncate">{suggestion.product.name}</div>
                           <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className={
-                              'text-[10px] px-1.5 py-0.5 rounded font-medium ' +
-                              (match.status === 'auto'
-                                ? 'bg-[#e6f7ed] text-[#0a7a43]'
-                                : 'bg-[#fff7e6] text-[#8a6500]')
-                            }>
+                            <TikTokGlassBadge tone={match.status === 'auto' ? 'ok' : 'warn'}>
                               {match.status === 'auto' ? 'จับคู่อัตโนมัติได้' : 'ข้อเสนอ'}
                               {' · '}{TIER_LABEL[suggestion.tier] || suggestion.tier}
                               {' '}{Math.round(suggestion.score * 100)}%
-                            </span>
+                            </TikTokGlassBadge>
                           </div>
                         </div>
-                        <button
-                          type="button"
-                          className="btn-primary !py-1 !px-2.5 !text-xs shrink-0"
+                        <TikTokGlassBtn
+                          variant="coral"
                           disabled={!!busy}
                           onClick={() => link(it, suggestion.product)}
                         >
                           ยืนยัน
-                        </button>
+                        </TikTokGlassBtn>
                       </div>
                     )}
                     <ProductPicker onPick={(p) => link(it, p)} disabled={!!busy}/>
                   </>
                 )}
               </div>
-            </div>
+            </TikTokGlassPane>
           );
         })}
       </div>

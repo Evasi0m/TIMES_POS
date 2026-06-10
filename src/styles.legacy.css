@@ -3863,6 +3863,33 @@
   .fulltax-a4 .ft-sign { text-align: center; font-size: 11px; color: #444; flex: 1; }
   .fulltax-a4 .ft-sign-line { border-top: 1px dotted #000; margin: 0 6mm 4px; }
 
+  /* Print robustness + polish — repeat the table header on every page,
+     never split a single line-item row or the totals/signature block
+     across a page break, and add subtle zebra striping for readability. */
+  .fulltax-a4 .ft-table thead { display: table-header-group; }
+  .fulltax-a4 .ft-table tfoot { display: table-footer-group; }
+  .fulltax-a4 .ft-table tr { break-inside: avoid; page-break-inside: avoid; }
+  .fulltax-a4 .ft-table tbody tr:nth-child(even) td { background: #fafafa; }
+  .fulltax-a4 .ft-bottom,
+  .fulltax-a4 .ft-signs { break-inside: avoid; page-break-inside: avoid; }
+  .fulltax-a4 .ft-summary .ft-grand {
+    background: #f4f4f4; border-radius: 0 0 4px 4px;
+    padding-left: 6px; padding-right: 6px;
+  }
+  /* สำเนา / copy watermark — faint diagonal text behind the document so a
+     duplicate is unmistakable at a glance without obscuring the content. */
+  .fulltax-a4 { isolation: isolate; }
+  .fulltax-a4.is-copy::before {
+    content: 'สำเนา';
+    position: absolute; inset: 0; z-index: 0;
+    display: flex; align-items: center; justify-content: center;
+    transform: rotate(-24deg);
+    font-size: 96px; font-weight: 800; letter-spacing: 0.1em;
+    color: rgba(0, 0, 0, 0.05);
+    pointer-events: none;
+  }
+  .fulltax-a4 > * { position: relative; z-index: 1; }
+
   @media print {
     /* Reset every theme token to its light value during print so even
        a dark-mode app prints black-on-white. */

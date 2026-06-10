@@ -28,6 +28,8 @@ on:
         type: choice
         options:
           - tiktok-inventory-update
+          - tiktok-stock-compare
+          - tiktok-stock-reconcile-apply
           - tiktok-mapping-backfill
           - tiktok-product-image-backfill
           - tiktok-products-search
@@ -89,6 +91,8 @@ jobs:
             deploy_one tiktok-invoice-submit --no-verify-jwt
             deploy_one tiktok-products-search
             deploy_one tiktok-inventory-update
+            deploy_one tiktok-stock-compare
+            deploy_one tiktok-stock-reconcile-apply
             deploy_one tiktok-mapping-backfill
             deploy_one tiktok-product-image-backfill
           else

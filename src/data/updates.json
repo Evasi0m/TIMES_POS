@@ -2,6 +2,53 @@
   "schemaVersion": 1,
   "patches": [
     {
+      "id": "2026-06-10-tiktok-glass-ui",
+      "date": "2026-06-10",
+      "title": "TikTok Shop — UI liquid glass ใหม่",
+      "tags": ["ปรับปรุง", "TikTok"],
+      "items": [
+        "หน้า TikTok ทั้งหมดปรับเป็นธีม liquid glass — แท็บ nav ดำ glass, สถานะ active สี coral",
+        "แท็บสถานะออเดอร์ (ทั้งหมด/ที่จะจัดส่ง/…) ใหญ่ขึ้น กดง่าย 44px เลื่อนซ้าย-ขวาได้",
+        "การ์ดออเดอร์, KPI strip, health card, sticky bar และ toolbar ปรับ contrast/radius ให้สม่ำเสมอ",
+        "แก้โหลดออเดอร์ timeout — จำกัด batch + index DB ให้โหลดเร็วและเสถียรขึ้น"
+      ]
+    },
+    {
+      "id": "2026-06-10-tiktok-stock-reconcile",
+      "date": "2026-06-10",
+      "title": "TikTok Shop — เช็คสต็อก POS ↔ TikTok",
+      "tags": ["ใหม่", "TikTok"],
+      "items": [
+        "หน้า E-Commerce → เช็คสต็อก สำหรับ Super Admin — เปรียบเทียบ SKU ที่จับคู่แล้ว",
+        "แสดง POS vs TikTok stock, กรองไม่ตรงกัน/มีปัญหา, เลือกรายการแล้ว Apply",
+        "เลือกแหล่งอ้างอิงได้: POS → TikTok หรือ TikTok → POS",
+        "บันทึก audit ใน stock_movements (stock_reconcile) และ tiktok_inventory_sync_log"
+      ]
+    },
+    {
+      "id": "2026-06-10-tax-docs-print-polish",
+      "date": "2026-06-10",
+      "title": "เอกสารภาษี — พิมพ์สวยขึ้น + เอกสารส่งคืน",
+      "tags": ["ปรับปรุง", "ภาษี"],
+      "items": [
+        "พิมพ์หลายหน้า: หัวตารางซ้ำทุกหน้า · ไม่ตัดบรรทัด/บล็อกรวมยอด/ลายเซ็นข้ามหน้า",
+        "ใบลดหนี้ และ เอกสารซื้อ พิมพ์ ต้นฉบับ + สำเนา · มีลายน้ำ \"สำเนา\"",
+        "เพิ่มเอกสาร ใบส่งคืนสินค้า (A4) สำหรับส่งเคลม/คืนบริษัท พร้อมเลขที่รันอัตโนมัติ",
+        "ปรับหน้าตาเอกสาร A4 ให้อ่านง่ายขึ้น (แถบสลับสี, แถวรวมยอดเด่นขึ้น)"
+      ]
+    },
+    {
+      "id": "2026-06-10-ai-parsing-split-ui",
+      "date": "2026-06-10",
+      "title": "รับเข้า ×10 — หน้ารอ AI อ่านบิลใหม่",
+      "tags": ["ปรับปรุง", "AI"],
+      "items": [
+        "หน้ารอ AI อ่านบิล — status panel ซ้าย + terminal ขวา คั่นด้วยเส้นแบ่ง",
+        "แสดง progress bar, checklist 4 ขั้น และรายการบิลพร้อมสถานะ",
+        "CMD log ละเอียดขึ้น: โหลดสินค้า, ส่ง API, จับคู่รุ่น, token"
+      ]
+    },
+    {
       "id": "2026-06-10-ai-bill-list-status-chips",
       "date": "2026-06-10",
       "title": "รับเข้า ×10 — badge สถานะรายการใหม่",

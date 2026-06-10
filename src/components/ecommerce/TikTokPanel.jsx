@@ -1,16 +1,21 @@
 // TikTok Shop — orders, SKU images, shipping labels, tax invoices.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { sb } from '../../lib/supabase-client.js';
-import { fetchAll } from '../../lib/sb-paginate.js';
 import { mapError } from '../../lib/error-map.js';
 import { fullBuyerValid } from '../../lib/tax-buyer.js';
 import { formatPollToast } from '../../lib/tiktok-poll-sync.js';
+import {
+  fetchRecentTikTokOrders,
+  fetchItemsByOrderIds,
+  fetchProductImageMap,
+  TIKTOK_ORDERS_LOAD_CAP,
+} from '../../lib/tiktok-orders-load.js';
 import { TIKTOK_LIVE_POLL_MS, useTikTokLiveSync } from '../../lib/use-tiktok-live-sync.js';
 import { useSimulatedSyncProgress } from '../../lib/use-simulated-sync-progress.js';
-import TikTokSettings from '../settings/TikTokSettings.jsx';
 import TikTokInvoiceSection, { buyerReady } from './TikTokInvoiceBulk.jsx';
 import TikTokReturns from './TikTokReturns.jsx';
 import TikTokMatching from './TikTokMatching.jsx';
+import TikTokStockReconcile from './TikTokStockReconcile.jsx';
 import { fetchShippingLabels, printLabelUrl, printMergedLabels } from './TikTokLabelPrint.js';
 import TikTokConnectionStrip from './tiktok/TikTokConnectionStrip.jsx';
 import TikTokStatStrip from './tiktok/TikTokStatStrip.jsx';
@@ -105,7 +110,7 @@ function canShipOrder(o) {
   return NEEDS_RTS.has(normStatus(o.tiktok_order_status));
 }
 
-export default function TikTokPanel({ toast, section = 'orders', onSyncChange, isSuperAdmin = false }) {
+export default function TikTokPanel({ toast, section = 'orders', onSyncChange, isSuperAdmin = false, setView }) {
   const [orders, setOrders] = useState([]);
   const [itemsByOrder, setItemsByOrder] = useState({});
   const [imageByProduct, setImageByProduct] = useState({});
@@ -118,58 +123,29 @@ export default function TikTokPanel({ toast, section = 'orders', onSyncChange, i
   const [selected, setSelected] = useState(new Set());
   const [singleId, setSingleId] = useState('');
   const [singleBusy, setSingleBusy] = useState(false);
+  const [ordersTruncated, setOrdersTruncated] = useState(false);
   const syncProgress = useSimulatedSyncProgress();
   const wasSyncingRef = useRef(false);
 
   const load = useCallback(async ({ quiet = false } = {}) => {
     if (!quiet) setLoading(true);
     try {
-      const { data: orderRows, error: ordersErr } = await fetchAll((fromIdx, toIdx) =>
-        sb.from('sale_orders')
-          .select('*')
-          .eq('channel', 'tiktok')
-          .not('tiktok_order_id', 'is', null)
-          .order('sale_date', { ascending: false })
-          .range(fromIdx, toIdx),
-      );
+      const { data: orderRows, error: ordersErr } = await fetchRecentTikTokOrders(sb);
       if (ordersErr) throw ordersErr;
       const list = orderRows || [];
       setOrders(list);
+      setOrdersTruncated(list.length >= TIKTOK_ORDERS_LOAD_CAP);
       setSelected(new Set());
 
       if (list.length) {
-        // Inner join avoids .in(sale_order_id, ~4000 ids) which blows PostgREST URL limits.
-        const { data: items, error: itemsErr } = await fetchAll((fromIdx, toIdx) =>
-          sb.from('sale_order_items')
-            .select('*, sale_orders!inner(channel)')
-            .eq('sale_orders.channel', 'tiktok')
-            .order('id', { ascending: false })
-            .range(fromIdx, toIdx),
-        );
-        if (itemsErr) throw itemsErr;
-        const map = {};
-        (items || []).forEach(it => {
-          (map[it.sale_order_id] ||= []).push(it);
-        });
+        const orderIds = list.map(o => o.id);
+        const map = await fetchItemsByOrderIds(sb, orderIds);
         setItemsByOrder(map);
 
-        const productIds = [...new Set((items || [])
-          .map(it => it.product_id).filter(Boolean))];
-        if (productIds.length) {
-          const imgMap = {};
-          for (let i = 0; i < productIds.length; i += 500) {
-            const chunk = productIds.slice(i, i + 500);
-            const { data: imgs, error: imgsErr } = await sb.from('product_images')
-              .select('product_id, image_url')
-              .in('product_id', chunk)
-              .not('image_url', 'is', null);
-            if (imgsErr) throw imgsErr;
-            (imgs || []).forEach(r => { if (r.image_url) imgMap[r.product_id] = r.image_url; });
-          }
-          setImageByProduct(imgMap);
-        } else {
-          setImageByProduct({});
-        }
+        const productIds = [...new Set(
+          Object.values(map).flat().map(it => it.product_id).filter(Boolean),
+        )];
+        setImageByProduct(await fetchProductImageMap(sb, productIds));
       } else {
         setItemsByOrder({});
         setImageByProduct({});
@@ -430,6 +406,8 @@ export default function TikTokPanel({ toast, section = 'orders', onSyncChange, i
           <TikTokOrderList
             loading={loading}
             orders={filteredOrders}
+            ordersTruncated={ordersTruncated}
+            ordersCap={TIKTOK_ORDERS_LOAD_CAP}
             itemsByOrder={itemsByOrder}
             imageByProduct={imageByProduct}
             selected={selected}
@@ -454,10 +432,6 @@ export default function TikTokPanel({ toast, section = 'orders', onSyncChange, i
         </>
       )}
 
-      {section !== 'orders' && (
-        <TikTokSettings toast={toast} />
-      )}
-
       {section === 'invoices' && (
         <TikTokInvoiceSection
           orders={orders}
@@ -473,6 +447,10 @@ export default function TikTokPanel({ toast, section = 'orders', onSyncChange, i
 
       {section === 'matching' && isSuperAdmin && (
         <TikTokMatching toast={toast} />
+      )}
+
+      {section === 'stock' && isSuperAdmin && (
+        <TikTokStockReconcile toast={toast} setView={setView} />
       )}
     </div>
   );

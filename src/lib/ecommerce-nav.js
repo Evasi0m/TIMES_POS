@@ -11,6 +11,7 @@ export const TIKTOK_SECTIONS = [
   { k: 'invoices', label: 'ใบกำกับภาษี',         view: 'ecommerce-tiktok-invoices' },
   { k: 'returns',  label: 'คืนเงิน/คืนสินค้า',   view: 'ecommerce-tiktok-returns' },
   { k: 'matching', label: 'จับคู่สินค้า',        view: 'ecommerce-tiktok-matching', superAdminOnly: true },
+  { k: 'stock',    label: 'เช็คสต็อก',          view: 'ecommerce-tiktok-stock', superAdminOnly: true },
 ];
 
 /** TikTok sub-tabs visible for the current role. */

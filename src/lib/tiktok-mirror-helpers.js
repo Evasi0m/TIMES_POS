@@ -223,6 +223,9 @@ export function formatTikTokApiError(msg) {
   if (/permission|scope|authorized|access denied|10500|120527/i.test(s)) {
     return `${s} — ลองเชื่อมต่อ TikTok Shop ใหม่ (ต้องมี scope Product read/write)`;
   }
+  if (/Failed to send a request to the Edge Function/i.test(s)) {
+    return 'Edge Function ยังไม่ deploy — รัน deploy tiktok-stock-compare และ tiktok-stock-reconcile-apply';
+  }
   if (/non-2xx status code/i.test(s)) {
     return 'เรียก tiktok-products-search ไม่สำเร็จ — ตรวจว่า deploy function แล้วและ TikTok เชื่อมต่ออยู่';
   }

@@ -2476,7 +2476,7 @@ function Receipt({ order, items, shop, variant = 'receipt' }) {
    shop's purchase record for ภ.พ.30 (ภาษีซื้อ). Reuses the .fulltax-a4
    layout + named @page so it shares the tax-invoice print pipeline.
 ========================================================= */
-function PurchaseDocA4({ order, items, supplier, shop }) {
+function PurchaseDocA4({ order, items, supplier, shop, copyLabel = 'ต้นฉบับ' }) {
   const grand = Number(order.total_value || 0);
   const vat = Number(order.vat_amount || 0);
   const exVat = grand - vat;
@@ -2492,7 +2492,7 @@ function PurchaseDocA4({ order, items, supplier, shop }) {
   const supAddr   = supplier ? `${supplier.address || ''}${supplier.postal_code ? ' ' + supplier.postal_code : ''}` : '';
   const supBranch = supplier ? (supplier.branch_type === 'branch' ? `สาขา ${supplier.branch_code || ''}` : 'สำนักงานใหญ่') : '';
   return (
-    <div className="fulltax-a4 purchasedoc-a4">
+    <div className={'fulltax-a4 purchasedoc-a4' + (copyLabel === 'สำเนา' ? ' is-copy' : '')}>
       <div className="ft-head">
         <div className="ft-seller">
           <div className="ft-shop">{shop?.shop_name || 'TIMES'}</div>
@@ -2504,6 +2504,7 @@ function PurchaseDocA4({ order, items, supplier, shop }) {
         <div className="ft-title">
           <div className="ft-title-main">เอกสารซื้อ</div>
           <div className="ft-title-sub">ใบรับสินค้า / PURCHASE</div>
+          <div className="ft-copy-mark">({copyLabel})</div>
         </div>
       </div>
 
@@ -2619,7 +2620,9 @@ function PurchaseDocModal({ open, onClose, receiveId }) {
       )}
       {!loading && order && createPortal(
         <div className="fulltax-print-portal">
-          <PurchaseDocA4 order={order} items={items} supplier={supplier} shop={shop}/>
+          {['ต้นฉบับ', 'สำเนา'].map((label) => (
+            <PurchaseDocA4 key={label} order={order} items={items} supplier={supplier} shop={shop} copyLabel={label}/>
+          ))}
         </div>,
         document.body
       )}
@@ -2633,7 +2636,7 @@ function PurchaseDocModal({ open, onClose, receiveId }) {
    reference the ORIGINAL tax invoice (number + date) and show the
    reduced value + VAT on the reduction separately.
 ========================================================= */
-function CreditNoteA4({ order, items, origOrder, shop }) {
+function CreditNoteA4({ order, items, origOrder, shop, copyLabel = 'ต้นฉบับ' }) {
   const rows = items.map(it => ({
     ...it,
     shownTotal: applyDiscounts(it.unit_price, it.quantity, it.discount1_value, it.discount1_type, it.discount2_value, it.discount2_type),
@@ -2644,7 +2647,7 @@ function CreditNoteA4({ order, items, origOrder, shop }) {
   const origGrand = Number(origOrder?.grand_total || 0);
   const correctGrand = Math.max(0, origGrand - grand);
   return (
-    <div className="fulltax-a4 creditnote-a4">
+    <div className={'fulltax-a4 creditnote-a4' + (copyLabel === 'สำเนา' ? ' is-copy' : '')}>
       <div className="ft-head">
         <div className="ft-seller">
           <div className="ft-shop">{shop?.shop_name || 'TIMES'}</div>
@@ -2656,6 +2659,7 @@ function CreditNoteA4({ order, items, origOrder, shop }) {
         <div className="ft-title">
           <div className="ft-title-main">ใบลดหนี้</div>
           <div className="ft-title-sub">CREDIT NOTE</div>
+          <div className="ft-copy-mark">({copyLabel})</div>
         </div>
       </div>
 
@@ -2777,7 +2781,159 @@ function CreditNoteModal({ open, onClose, returnId }) {
       )}
       {!loading && order && createPortal(
         <div className="fulltax-print-portal">
-          <CreditNoteA4 order={order} items={items} origOrder={origOrder} shop={shop}/>
+          {['ต้นฉบับ', 'สำเนา'].map((label) => (
+            <CreditNoteA4 key={label} order={order} items={items} origOrder={origOrder} shop={shop} copyLabel={label}/>
+          ))}
+        </div>,
+        document.body
+      )}
+    </Modal>
+  );
+}
+
+/* =========================================================
+   SUPPLIER CLAIM / RETURN-TO-SUPPLIER — A4 (ใบส่งคืนสินค้า / ใบลดหนี้ซื้อ)
+   Issued by the shop (buyer) to a supplier (seller) when sending goods back.
+   Reduces the shop's input VAT (ภาษีซื้อ) — shows up as a negative line in
+   the ภ.พ.30 purchase report. Reuses the .fulltax-a4 print pipeline.
+========================================================= */
+function SupplierClaimA4({ order, items, shop, copyLabel = 'ต้นฉบับ' }) {
+  const rows = items.map(it => ({
+    ...it,
+    shownTotal: applyDiscounts(it.unit_price, it.quantity, it.discount1_value, it.discount1_type, it.discount2_value, it.discount2_type),
+  }));
+  const grand = Number(order.total_value || 0);
+  const vat = Number(order.vat_amount || 0);
+  const exVat = grand - vat;
+  const subtotal = rows.reduce((s, r) => s + r.shownTotal, 0);
+  return (
+    <div className={'fulltax-a4 supplierclaim-a4' + (copyLabel === 'สำเนา' ? ' is-copy' : '')}>
+      <div className="ft-head">
+        <div className="ft-seller">
+          <div className="ft-shop">{shop?.shop_name || 'TIMES'}</div>
+          {shop?.shop_branch && <div className="ft-line">({shop.shop_branch})</div>}
+          {shop?.shop_address && <div className="ft-line">{shop.shop_address}</div>}
+          <div className="ft-line">เลขประจำตัวผู้เสียภาษี {shop?.shop_tax_id || '-'}</div>
+          {shop?.shop_phone && <div className="ft-line">โทร {shop.shop_phone}</div>}
+        </div>
+        <div className="ft-title">
+          <div className="ft-title-main">ใบส่งคืนสินค้า</div>
+          <div className="ft-title-sub">RETURN TO SUPPLIER</div>
+          <div className="ft-copy-mark">({copyLabel})</div>
+        </div>
+      </div>
+
+      <div className="ft-meta">
+        <div className="ft-buyer">
+          <div className="ft-meta-label">ผู้ขาย / ผู้รับคืน</div>
+          <div className="ft-buyer-name">{order.supplier_name || '—'}</div>
+          {order.supplier_invoice_no && (
+            <div className="ft-line">อ้างอิงใบกำกับผู้ขาย {order.supplier_invoice_no}</div>
+          )}
+        </div>
+        <div className="ft-docinfo">
+          <div className="ft-row"><span>เลขที่เอกสาร</span><b>{order.claim_doc_no || '-'}</b></div>
+          <div className="ft-row"><span>วันที่</span><span>{fmtDate(order.claim_date)}</span></div>
+          <div className="ft-row"><span>อ้างอิงรายการ</span><span>#{order.id}</span></div>
+        </div>
+      </div>
+
+      <div className="ft-line" style={{margin:'2px 0 6px'}}>
+        <b>เหตุผลการส่งคืน:</b> {order.claim_reason || 'ส่งคืน/เคลมสินค้า'}
+      </div>
+
+      <table className="ft-table">
+        <thead>
+          <tr>
+            <th className="ft-c-no">ลำดับ</th>
+            <th className="ft-c-desc">รายการที่ส่งคืน</th>
+            <th className="ft-c-qty">จำนวน</th>
+            <th className="ft-c-price">ราคา/หน่วย</th>
+            <th className="ft-c-amt">จำนวนเงิน</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={r.id}>
+              <td className="ft-c-no">{i+1}</td>
+              <td className="ft-c-desc">{r.product_name}</td>
+              <td className="ft-c-qty">{r.quantity} {r.unit || ''}</td>
+              <td className="ft-c-price">{fmtTHB(r.unit_price)}</td>
+              <td className="ft-c-amt">{fmtTHB(r.shownTotal)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div className="ft-bottom">
+        <div className="ft-words">
+          <div className="ft-meta-label">จำนวนเงิน (ตัวอักษร)</div>
+          <div className="ft-words-val">{bahtText(grand)}</div>
+          {order.notes && <div className="ft-note">หมายเหตุ: {order.notes}</div>}
+        </div>
+        <div className="ft-summary">
+          <div className="ft-row"><span>รวมเป็นเงิน</span><span>{fmtTHB(subtotal)}</span></div>
+          <div className="ft-row"><span>มูลค่าก่อนภาษี</span><span>{fmtTHB(exVat)}</span></div>
+          <div className="ft-row"><span>ภาษีมูลค่าเพิ่ม {order.vat_rate || 0}%</span><span>{fmtTHB(vat)}</span></div>
+          <div className="ft-row ft-grand"><span>จำนวนเงินรวมทั้งสิ้น</span><span>{fmtTHB(grand)}</span></div>
+        </div>
+      </div>
+
+      <div className="ft-signs">
+        <div className="ft-sign"><div className="ft-sign-line"/>ผู้ส่งคืน / ผู้ซื้อ</div>
+        <div className="ft-sign"><div className="ft-sign-line"/>ผู้รับคืน / ผู้ขาย</div>
+      </div>
+    </div>
+  );
+}
+
+function SupplierClaimModal({ open, onClose, claimId }) {
+  const { shop } = useShop();
+  const [order, setOrder] = useState(null);
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open || !claimId) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const [oRes, iRes] = await Promise.all([
+        sb.from('supplier_claim_orders').select('*').eq('id', claimId).single(),
+        sb.from('supplier_claim_order_items').select('*').eq('supplier_claim_order_id', claimId).order('id'),
+      ]);
+      if (!cancelled) {
+        setOrder(oRes.data); setItems(iRes.data || []);
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, claimId]);
+
+  return (
+    <Modal open={open} onClose={onClose} title="ใบส่งคืนสินค้า (A4)"
+      footer={<>
+        <button className="btn-secondary" onClick={onClose}>ปิด</button>
+        <button className="btn-primary" onClick={()=>window.print()} disabled={!order}>
+          <Icon name="receipt" size={16}/> พิมพ์
+        </button>
+      </>}>
+      {loading && <div className="p-6 text-muted text-sm flex items-center gap-2"><span className="spinner"/>กำลังโหลด...</div>}
+      {!loading && order && (
+        <div>
+          <div className="bg-surface-soft p-3 rounded-lg overflow-auto no-print">
+            <div className="mx-auto bg-white shadow-sm" style={{width:'190mm', maxWidth:'100%'}}>
+              <SupplierClaimA4 order={order} items={items} shop={shop}/>
+            </div>
+          </div>
+          <div className="text-xs text-muted-soft mt-2 text-center no-print">ตัวอย่าง — กด "พิมพ์" เพื่อพิมพ์ลงกระดาษ A4</div>
+        </div>
+      )}
+      {!loading && order && createPortal(
+        <div className="fulltax-print-portal">
+          {['ต้นฉบับ', 'สำเนา'].map((label) => (
+            <SupplierClaimA4 key={label} order={order} items={items} shop={shop} copyLabel={label}/>
+          ))}
         </div>,
         document.body
       )}
@@ -3418,6 +3574,8 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
   const [issuingDoc, setIssuingDoc] = useState(false);
   const [creditNoteOpen, setCreditNoteOpen] = useState(false);
   const [issuingCN, setIssuingCN] = useState(false);
+  const [claimDocOpen, setClaimDocOpen] = useState(false);
+  const [issuingClaimDoc, setIssuingClaimDoc] = useState(false);
   const [deletingLineId, setDeletingLineId] = useState(null);
   const voidLockRef = useRef(false);
 
@@ -3545,6 +3703,20 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
     setCreditNoteOpen(true);
   };
 
+  // เปิดใบส่งคืนสินค้า A4 (claim) — ออกเลขเอกสารก่อนถ้ายังไม่มี (admin)
+  const openClaimDoc = async () => {
+    if (!order) return;
+    if (!order.claim_doc_no && isAdmin) {
+      setIssuingClaimDoc(true);
+      const { data, error } = await sb.rpc('issue_claim_doc_for_claim', { p_claim_id: order.id });
+      setIssuingClaimDoc(false);
+      if (error) { toast.push('ออกเลขเอกสารไม่ได้: ' + mapError(error), 'error'); return; }
+      setOrder(o => ({ ...o, ...data }));
+      onChanged?.();
+    }
+    setClaimDocOpen(true);
+  };
+
   // ลบรายการรับเข้าทีละบรรทัด (super admin) — ปรับสต็อก + ยอดบิลอัตโนมัติ
   const deleteReceiveLine = async (line) => {
     const reason = await askPrompt({
@@ -3599,6 +3771,11 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
         {order && kind==='return' && !isVoided && !editing && (
           <button className="btn-print-receipt" onClick={openCreditNote} disabled={issuingCN}>
             {issuingCN ? <span className="spinner"/> : <Icon name="receipt" size={16}/>} พิมพ์ใบลดหนี้
+          </button>
+        )}
+        {order && kind==='claim' && !isVoided && !editing && (
+          <button className="btn-print-receipt" onClick={openClaimDoc} disabled={issuingClaimDoc}>
+            {issuingClaimDoc ? <span className="spinner"/> : <Icon name="receipt" size={16}/>} พิมพ์ใบส่งคืน
           </button>
         )}
         {order && !isVoided && !editing && isAdmin && (<>
@@ -3817,6 +3994,9 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
     )}
     {kind==='return' && (
       <CreditNoteModal open={creditNoteOpen} onClose={()=>setCreditNoteOpen(false)} returnId={order?.id}/>
+    )}
+    {kind==='claim' && (
+      <SupplierClaimModal open={claimDocOpen} onClose={()=>setClaimDocOpen(false)} claimId={order?.id}/>
     )}
     </>
   );
@@ -6730,6 +6910,7 @@ const STOCK_REASON_LABELS = {
   return_in:           { label: "คืนเข้า",           tone: "green" },
   return_void:         { label: "ยกเลิกรับคืน",      tone: "red"   },
   manual_adjust:       { label: "แก้ไขเอง",          tone: "gray"  },
+  stock_reconcile:     { label: "ปรับสต็อก TikTok", tone: "gray"  },
   initial:             { label: "ตั้งต้น",            tone: "gray"  },
   supplier_claim:      { label: "ส่งเคลม/คืนบริษัท", tone: "red"   },
   supplier_claim_void: { label: "ยกเลิกส่งเคลม",     tone: "green" },
@@ -13031,7 +13212,7 @@ function VatView({ embedded = false, dateRange: dateRangeProp, onDateRangeChange
     sale: 'ขายออก', sale_void: 'ยกเลิกการขาย', sale_edit: 'แก้ไขการขาย',
     receive: 'รับเข้า', receive_void: 'ยกเลิกรับเข้า',
     return_in: 'รับคืนจากลูกค้า', return_void: 'ยกเลิกรับคืน',
-    manual_adjust: 'ปรับปรุงยอด', initial: 'ยอดยกมา',
+    manual_adjust: 'ปรับปรุงยอด', stock_reconcile: 'ปรับสต็อก TikTok', initial: 'ยอดยกมา',
     supplier_claim: 'ส่งคืนผู้ขาย', supplier_claim_void: 'ยกเลิกส่งคืน',
   };
   const exportGoodsCsv = () => {

@@ -7,6 +7,7 @@
  * NOTE: @import MUST come before @tailwind (CSS spec rule).
  */
 @import './styles.legacy.css';
+@import './styles/tiktok-glass.css';
 
 /* Tailwind layers — purges unused classes at build time (vs the JIT runtime
  * the legacy CDN setup loaded on every page view). */
@@ -2382,9 +2383,9 @@
   }
 }
 
-/* TikTok confirm panel — sync ring (liquid glass, brand tokens) */
+/* Sync overlay — align blur with shell token (see tiktok-glass.css) */
 .ttc-sync-overlay {
-  --ttc-sync-blur: 10px;
+  --ttc-sync-blur: var(--tt-blur-shell, 36px);
   backdrop-filter: blur(var(--ttc-sync-blur)) saturate(118%);
   -webkit-backdrop-filter: blur(var(--ttc-sync-blur)) saturate(118%);
   background: rgba(42, 35, 28, 0.24);
@@ -4048,6 +4049,216 @@
   display: flex;
   justify-content: center;
   padding: 0 1.5rem 1.5rem;
+}
+
+/* Parsing split — status left, terminal right */
+.brv-parsing-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1.05fr);
+  min-height: 420px;
+}
+.brv-parsing-split__left {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.brv-parsing-split__divider {
+  background: rgb(var(--c-hairline) / 0.65);
+}
+.brv-parsing-split__right {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0.75rem;
+}
+.mac-terminal--embedded {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.35) inset,
+    0 8px 24px rgba(0, 0, 0, 0.18),
+    0 2px 6px rgba(0, 0, 0, 0.1);
+}
+.mac-terminal--embedded .mac-terminal__body {
+  flex: 1 1 auto;
+  min-height: 360px;
+  max-height: none;
+}
+.brv-parsing-status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  padding: 1rem 1.125rem;
+  min-height: 0;
+  height: 100%;
+  background:
+    linear-gradient(135deg, rgba(239, 233, 222, 0.92), rgba(232, 224, 210, 0.78));
+}
+:root[data-theme='dark'] .brv-parsing-status {
+  background:
+    linear-gradient(135deg, rgba(56, 50, 42, 0.94), rgba(48, 43, 37, 0.82));
+}
+.brv-parsing-status__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.brv-parsing-status__progress {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+.brv-parsing-status__bar {
+  flex: 1 1 auto;
+  height: 6px;
+  border-radius: 999px;
+}
+.brv-parsing-status__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+.brv-parsing-status__step {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgb(var(--c-muted, 100 100 100));
+  line-height: 1.35;
+}
+.brv-parsing-status__step.is-done {
+  color: rgb(var(--c-ink, 26 26 26));
+}
+.brv-parsing-status__step.is-active {
+  color: rgb(var(--c-ink, 26 26 26));
+  font-weight: 600;
+}
+.brv-parsing-status__step-icon {
+  width: 1rem;
+  height: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #0a7a43;
+}
+.brv-parsing-status__step-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgb(var(--c-hairline) / 0.9);
+}
+.brv-parsing-status__step.is-active .brv-parsing-status__step-dot {
+  background: #7c3aed;
+}
+.brv-parsing-status__bills-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgb(var(--c-muted-soft, 120 120 120));
+  margin-top: 0.125rem;
+}
+.brv-parsing-status__bills {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  overscroll-behavior: contain;
+}
+.brv-parsing-status__bill {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4375rem 0.5rem;
+  border-radius: 10px;
+  border: 1px solid rgb(var(--c-hairline) / 0.65);
+  background: rgba(255, 255, 255, 0.42);
+}
+:root[data-theme='dark'] .brv-parsing-status__bill {
+  background: rgba(255, 255, 255, 0.04);
+}
+.brv-parsing-status__bill.is-parsing {
+  border-color: rgba(124, 58, 237, 0.45);
+  background: rgba(124, 58, 237, 0.06);
+}
+.brv-parsing-status__bill.is-done {
+  border-color: rgba(10, 122, 67, 0.35);
+}
+.brv-parsing-status__bill.is-failed {
+  border-color: rgba(179, 38, 30, 0.4);
+}
+.brv-parsing-status__bill-idx {
+  flex-shrink: 0;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  background: rgba(20, 20, 19, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.3);
+}
+.brv-parsing-status__bill-thumb {
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.75rem;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgb(var(--c-hairline) / 0.5);
+  background: rgb(var(--c-surface-soft, 245 245 245));
+}
+.brv-parsing-status__bill-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.brv-parsing-status__bill-name {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: ui-monospace, monospace;
+  line-height: 1.35;
+}
+
+@media (max-width: 1023px) {
+  .brv-parsing-split {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1px auto;
+    min-height: 0;
+  }
+  .brv-parsing-split__divider {
+    height: 1px;
+    width: 100%;
+  }
+  .brv-parsing-status__bills {
+    max-height: 220px;
+  }
+  .mac-terminal--embedded .mac-terminal__body {
+    min-height: 280px;
+  }
 }
 
 .brv-error-terminal-wrap {

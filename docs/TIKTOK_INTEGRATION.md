@@ -94,6 +94,8 @@ supabase functions deploy tiktok-returns-sync
 supabase functions deploy tiktok-invoice-submit --no-verify-jwt
 supabase functions deploy tiktok-products-search
 supabase functions deploy tiktok-inventory-update
+supabase functions deploy tiktok-stock-compare
+supabase functions deploy tiktok-stock-reconcile-apply
 ```
 
 ## เชื่อมต่อร้าน
@@ -233,6 +235,25 @@ flowchart LR
 - Idempotency: `(receive_order_id=sale_order_id, product_id, sync_operation)` — `sale_edit` ยกเว้น (แก้บิลซ้ำได้)
 - ต้องรัน migration **055** + redeploy `tiktok-inventory-update`
 
+### เช็คสต็อก POS ↔ TikTok (065) — super_admin เท่านั้น
+
+```mermaid
+flowchart LR
+  Scan[สแกนใหม่] --> Compare[tiktok-stock-compare]
+  Compare --> Table[ตาราง diff POS vs TikTok]
+  Table --> Apply{Apply แหล่งที่มา}
+  Apply -->|POS| PosEdge[tiktok-stock-reconcile-apply source=pos]
+  Apply -->|TikTok| TtEdge[tiktok-stock-reconcile-apply source=tiktok]
+  PosEdge --> Mirror["SET TikTok qty = POS"]
+  TtEdge --> RPC[reconcile_pos_stock_from_tiktok]
+  RPC --> PosAdjust["SET POS qty = TikTok"]
+```
+
+- แท็บ **เช็คสต็อก** (E-Commerce → TikTok) — สแกน mapping ทั้งหมดแล้วแสดง stat cards + ตาราง diff
+- **Apply POS→TikTok** — mirror สต็อก POS ไป TikTok (`sync_operation reconcile`)
+- **Apply TikTok→POS** — ปรับ POS ให้เท่า TikTok ผ่าน RPC `reconcile_pos_stock_from_tiktok` + `stock_reconcile` reason
+- ต้อง deploy **`tiktok-stock-compare`** + **`tiktok-stock-reconcile-apply`** + รัน migration **065**
+
 ### จับคู่สินค้า (Product Matching) — super_admin เท่านั้น (046)
 - แท็บ **จับคู่สินค้า** แสดงรายการที่ยังไม่ match (`get_tiktok_unmatched_items`)
 - เลือกสินค้า POS (ค้นชื่อ/บาร์โค้ด) → `link_tiktok_item_to_product` (มี option ตัด stock ย้อนหลัง)
@@ -242,7 +263,7 @@ flowchart LR
 
 | ปัญหา | แก้ |
 |-------|-----|
-| `Failed to send a request to the Edge Function` | function ยังไม่ deploy — รัน `supabase functions deploy …` |
+| `Failed to send a request to the Edge Function` | function ยังไม่ deploy — รัน `supabase functions deploy tiktok-stock-compare` และ `tiktok-stock-reconcile-apply` (ดู [Deploy Edge Functions](#deploy-edge-functions)) |
 | Label API 403 / scope error | เพิ่ม Fulfillment scope + re-authorize ร้านใน POS |
 | ไม่มี package_id | กด "เตรียมจัดส่ง" (RTS) ก่อน หรือ ship ใน Seller Center |
 | รูป SKU / seller_sku ว่าง | รัน migration 034 แล้วกด "อัปเดตข้อมูล TikTok" (resync) |

@@ -8,31 +8,20 @@ import {
   parseEcommerceView,
   tiktokSectionsForRole,
 } from '../lib/ecommerce-nav.js';
+import { TikTokGlassTabs } from '../components/ecommerce/tiktok/glass/index.js';
 
 function TikTokSectionNav({ view, setView, disabled, isSuperAdmin }) {
   const sections = tiktokSectionsForRole(isSuperAdmin);
+  const tabs = sections.map((s) => ({ key: s.view, label: s.label }));
   return (
-    <div className="inline-flex glass-soft rounded-xl p-1 shadow-sm flex-wrap">
-      {sections.map((s) => {
-        const active = view === s.view;
-        return (
-          <button
-            key={s.k}
-            type="button"
-            onClick={() => setView(s.view)}
-            disabled={disabled}
-            className={
-              'px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ' +
-              (active
-                ? 'bg-surface-strong text-ink shadow-md ring-1 ring-hairline'
-                : 'text-muted hover:text-ink hover:bg-surface-strong/40')
-            }
-          >
-            {s.label}
-          </button>
-        );
-      })}
-    </div>
+    <TikTokGlassTabs
+      tabs={tabs}
+      activeKey={view}
+      onSelect={setView}
+      disabled={disabled}
+      variant="nav"
+      className="flex-wrap"
+    />
   );
 }
 
@@ -98,7 +87,7 @@ export default function ECommerceView({ view, setView, toast, isSuperAdmin = fal
   }, [setView]);
 
   useEffect(() => {
-    if (platform === 'tiktok' && section === 'matching' && !isSuperAdmin) {
+    if (platform === 'tiktok' && (section === 'matching' || section === 'stock') && !isSuperAdmin) {
       setView('ecommerce-tiktok-orders');
     }
   }, [platform, section, isSuperAdmin, setView]);
@@ -126,7 +115,9 @@ export default function ECommerceView({ view, setView, toast, isSuperAdmin = fal
           )}
           <div className={pageBlocked ? 'pointer-events-none select-none' : ''}>
             <div className="px-4 lg:px-10 pt-5 lg:pt-6">
-              <TikTokSectionNav view={view} setView={setView} disabled={pageBlocked} isSuperAdmin={isSuperAdmin}/>
+              <div className="tt-glass">
+                <TikTokSectionNav view={view} setView={setView} disabled={pageBlocked} isSuperAdmin={isSuperAdmin}/>
+              </div>
             </div>
 
             <div className="px-4 lg:px-10 pt-4 lg:pt-5 pb-8">
@@ -134,6 +125,7 @@ export default function ECommerceView({ view, setView, toast, isSuperAdmin = fal
                 toast={toast}
                 section={section}
                 isSuperAdmin={isSuperAdmin}
+                setView={setView}
                 onSyncChange={handleSyncChange}
               />
             </div>

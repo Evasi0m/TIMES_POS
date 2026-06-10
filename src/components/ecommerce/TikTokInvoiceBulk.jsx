@@ -9,6 +9,9 @@ import { fullBuyerValid } from '../../lib/tax-buyer.js';
 import FullTaxInvoiceA4 from '../invoice/FullTaxInvoiceA4.jsx';
 import Icon from '../ui/Icon.jsx';
 import TikTokSection from './tiktok/TikTokSection.jsx';
+import { TikTokGlassBtn, TikTokGlassShell } from './tiktok/glass/index.js';
+
+const INVOICE_GRID = 'grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)_minmax(0,0.7fr)_minmax(0,0.9fr)_minmax(0,1fr)]';
 
 function buyerReady(order) {
   return fullBuyerValid({
@@ -141,88 +144,77 @@ export default function TikTokInvoiceSection({ orders, itemsByOrder, toast, onOr
       subtitle={`${activeOrders.length} ออเดอร์ TikTok`}
       actions={(
         <>
-          <button type="button" className="btn-secondary !h-11 !py-0 !px-4 !text-sm" onClick={exportCsv}>
+          <TikTokGlassBtn variant="hero" className="tt-glass__btn--lg" onClick={exportCsv}>
             <Icon name="download" size={16}/> Export CSV
-          </button>
-          <button type="button" className="btn-primary !h-11 !py-0 !px-4 !text-sm" onClick={printBulk}>
+          </TikTokGlassBtn>
+          <TikTokGlassBtn variant="coral" className="tt-glass__btn--lg" onClick={printBulk}>
             <Icon name="receipt" size={16}/> พิมพ์ใบกำกับทั้งหมด
-          </button>
+          </TikTokGlassBtn>
         </>
       )}
     >
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-muted border-b hairline">
-              <th className="py-2 px-3">TikTok Order</th>
-              <th className="py-2 px-3">ผู้ซื้อ</th>
-              <th className="py-2 px-3">Tax ID</th>
-              <th className="py-2 px-3">เลขใบกำกับ</th>
-              <th className="py-2 px-3">การกระทำ</th>
-            </tr>
-          </thead>
-          <tbody>
-            {activeOrders.length === 0 && (
-              <tr><td colSpan={5} className="py-6 text-center text-muted text-sm">ไม่มีออเดอร์</td></tr>
-            )}
-            {activeOrders.map(o => (
-              <tr key={o.id} className="border-b hairline last:border-0">
-                <td className="py-2 px-3 font-mono text-xs">{o.tiktok_order_id || `#${o.id}`}</td>
-                <td className="py-2 px-3">{o.buyer_name || o.shipping_recipient_name || '—'}</td>
-                <td className="py-2 px-3">
-                  {buyerReady(o)
-                    ? <span className="text-success text-xs">ครบ</span>
-                    : <span className="text-[#8a6500] text-xs">รอ Tax ID</span>}
-                </td>
-                <td className="py-2 px-3 font-mono text-xs">{o.tax_invoice_no || '—'}</td>
-                <td className="py-2 px-3">
-                  <div className="flex gap-1">
-                    <button type="button" className="btn-secondary !py-1 !text-xs" onClick={() => openEdit(o)}>
-                      แก้/ออกใบ
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-secondary !py-1 !text-xs"
-                      disabled={!buyerReady(o)}
-                      onClick={() => printOne(o)}
-                    >
-                      พิมพ์ A4
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="tt-glass__table">
+        <div className={'tt-glass__table-head grid ' + INVOICE_GRID}>
+          <span>TikTok Order</span>
+          <span>ผู้ซื้อ</span>
+          <span>Tax ID</span>
+          <span>เลขใบกำกับ</span>
+          <span>การกระทำ</span>
+        </div>
+        {activeOrders.length === 0 && (
+          <div className="tt-glass__table-empty">ไม่มีออเดอร์</div>
+        )}
+        <div className="tt-glass__table-body">
+        {activeOrders.map(o => (
+          <div key={o.id} className={'tt-glass__table-row grid ' + INVOICE_GRID}>
+            <span className="font-mono text-xs font-semibold">{o.tiktok_order_id || `#${o.id}`}</span>
+            <span>{o.buyer_name || o.shipping_recipient_name || '—'}</span>
+            <span>
+              {buyerReady(o)
+                ? <span className="text-success text-xs">ครบ</span>
+                : <span className="text-[#8a6500] text-xs">รอ Tax ID</span>}
+            </span>
+            <span className="font-mono text-xs">{o.tax_invoice_no || '—'}</span>
+            <span className="flex gap-1 flex-wrap">
+              <TikTokGlassBtn variant="outline" onClick={() => openEdit(o)}>แก้/ออกใบ</TikTokGlassBtn>
+              <TikTokGlassBtn variant="outline" disabled={!buyerReady(o)} onClick={() => printOne(o)}>
+                พิมพ์ A4
+              </TikTokGlassBtn>
+            </span>
+          </div>
+        ))}
+        </div>
       </div>
       {editOrder && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40" onClick={() => setEditOrder(null)}>
-          <div className="card-canvas rounded-xl p-5 w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()}>
-            <h3 className="font-medium mb-3">ข้อมูลผู้ซื้อ — {editOrder.tiktok_order_id}</h3>
-            <div className="space-y-3 text-sm">
+        <div className="tt-glass__modal-backdrop" onClick={() => setEditOrder(null)}>
+          <div onClick={e => e.stopPropagation()}>
+            <TikTokGlassShell className="tt-glass__modal">
+            <h3 className="font-medium mb-3 relative z-[1]">ข้อมูลผู้ซื้อ — {editOrder.tiktok_order_id}</h3>
+            <div className="space-y-3 text-sm relative z-[1]">
               <div>
                 <label className="text-xs text-muted block mb-1">ชื่อผู้ซื้อ *</label>
-                <input className="input w-full" value={buyer.name} onChange={e => setBuyer(b => ({ ...b, name: e.target.value }))}/>
+                <input className="tt-glass__input w-full" value={buyer.name} onChange={e => setBuyer(b => ({ ...b, name: e.target.value }))}/>
               </div>
               <div>
                 <label className="text-xs text-muted block mb-1">เลขประจำตัวผู้เสียภาษี *</label>
-                <input className="input w-full" value={buyer.taxId} onChange={e => setBuyer(b => ({ ...b, taxId: e.target.value }))}/>
+                <input className="tt-glass__input w-full" value={buyer.taxId} onChange={e => setBuyer(b => ({ ...b, taxId: e.target.value }))}/>
               </div>
               <div>
                 <label className="text-xs text-muted block mb-1">ที่อยู่ *</label>
-                <textarea className="input w-full min-h-[80px]" value={buyer.address} onChange={e => setBuyer(b => ({ ...b, address: e.target.value }))}/>
+                <textarea className="tt-glass__input w-full min-h-[80px]" value={buyer.address} onChange={e => setBuyer(b => ({ ...b, address: e.target.value }))}/>
               </div>
               <div>
                 <label className="text-xs text-muted block mb-1">สาขา</label>
-                <input className="input w-full" value={buyer.branch} onChange={e => setBuyer(b => ({ ...b, branch: e.target.value }))}/>
+                <input className="tt-glass__input w-full" value={buyer.branch} onChange={e => setBuyer(b => ({ ...b, branch: e.target.value }))}/>
               </div>
             </div>
-            <div className="flex gap-2 mt-4 justify-end">
-              <button type="button" className="btn-secondary" onClick={() => setEditOrder(null)}>ยกเลิก</button>
-              <button type="button" className="btn-primary" disabled={busy === editOrder.id} onClick={saveAndIssue}>
+            <div className="flex gap-2 mt-4 justify-end relative z-[1]">
+              <TikTokGlassBtn variant="outline" onClick={() => setEditOrder(null)}>ยกเลิก</TikTokGlassBtn>
+              <TikTokGlassBtn variant="coral" disabled={busy === editOrder.id} onClick={saveAndIssue}>
                 {busy === editOrder.id ? <span className="spinner"/> : 'ออกใบกำกับ'}
-              </button>
+              </TikTokGlassBtn>
             </div>
+          </TikTokGlassShell>
           </div>
         </div>
       )}

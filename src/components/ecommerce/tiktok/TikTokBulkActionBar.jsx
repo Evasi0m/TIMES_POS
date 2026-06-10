@@ -1,5 +1,6 @@
 import React from 'react';
 import Icon from '../../ui/Icon.jsx';
+import { TikTokGlassBtn } from './glass/index.js';
 
 export default function TikTokBulkActionBar({
   selectedCount,
@@ -10,29 +11,29 @@ export default function TikTokBulkActionBar({
 }) {
   if (!selectedCount) return null;
   return (
-    <div className="sticky top-0 z-10 glass-soft rounded-xl px-4 py-3 flex flex-wrap items-center gap-3 ring-1 ring-hairline shadow-sm">
-      <span className="text-sm font-medium text-ink tabular-nums">
+    <div className="tt-glass__sticky-bar flex flex-wrap items-center gap-3">
+      <span className="tt-glass__sticky-bar__label">
         เลือกแล้ว {selectedCount} ออเดอร์
       </span>
       <div className="flex flex-wrap gap-2 ml-auto">
-        <button
-          type="button"
-          className="btn-primary !h-11 !py-0 !px-4 !text-sm min-h-[44px]"
+        <TikTokGlassBtn
+          variant="coral"
+          className="tt-glass__btn--lg"
           disabled={labelBusy === 'bulk'}
           onClick={onPrint}
         >
           {labelBusy === 'bulk' ? <span className="spinner"/> : <Icon name="printer" size={16}/>}
           ปริ้น label
-        </button>
-        <button
-          type="button"
-          className="btn-secondary !h-11 !py-0 !px-4 !text-sm min-h-[44px]"
+        </TikTokGlassBtn>
+        <TikTokGlassBtn
+          variant="hero"
+          className="tt-glass__btn--lg"
           disabled={shipBusy === 'bulk'}
           onClick={onShip}
         >
           {shipBusy === 'bulk' ? <span className="spinner"/> : <Icon name="truck" size={16}/>}
           เตรียมจัดส่ง
-        </button>
+        </TikTokGlassBtn>
       </div>
     </div>
   );

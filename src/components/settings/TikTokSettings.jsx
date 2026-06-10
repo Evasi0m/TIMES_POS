@@ -1,9 +1,15 @@
-// TikTok Shop connection status + OAuth connect button (admin).
+// TikTok Shop OAuth strip — refined liquid glass (orders page).
 import React, { useCallback, useEffect, useState } from 'react';
 import { sb } from '../../lib/supabase-client.js';
 import { mapError } from '../../lib/error-map.js';
 import Icon from '../ui/Icon.jsx';
-import TikTokHealthCard from './TikTokHealthCard.jsx';
+import {
+  TikTokGlassShell,
+  TikTokGlassHero,
+  TikTokGlassStat,
+  TikTokGlassBadge,
+  TikTokGlassBtn,
+} from '../ecommerce/tiktok/glass/index.js';
 
 function fmtExpiry(iso) {
   if (!iso) return '—';
@@ -12,7 +18,18 @@ function fmtExpiry(iso) {
   return d.toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' });
 }
 
-export default function TikTokSettings({ toast, compact = false }) {
+function statusTone(connected, expired) {
+  if (!connected) return 'idle';
+  if (expired) return 'expired';
+  return 'live';
+}
+
+export default function TikTokSettings({
+  toast,
+  livePollSec,
+  liveLabel,
+  pullBusy,
+}) {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
@@ -72,118 +89,79 @@ export default function TikTokSettings({ toast, compact = false }) {
 
   const connected = status?.connected;
   const expired = status?.token_expired;
+  const tone = statusTone(connected, expired);
   const statusLabel = connected
-    ? (expired ? 'หมดอายุ — ต้องเชื่อมต่อใหม่' : 'เชื่อมต่อแล้ว')
+    ? (expired ? 'Token หมดอายุ' : 'เชื่อมต่อแล้ว')
     : 'ยังไม่เชื่อมต่อ';
+  const lastErr = status?.last_error || status?.last_refresh_error;
+  const showLiveFooter = livePollSec != null;
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-muted text-sm py-3 px-1">
+      <TikTokGlassShell loading className={'tt-glass--' + tone}>
         <span className="spinner"/> กำลังโหลดสถานะการเชื่อมต่อ…
-      </div>
-    );
-  }
-
-  if (compact) {
-    return (
-      <div className="rounded-xl border hairline overflow-hidden bg-surface-strong/50">
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-3 px-4 py-3.5 lg:py-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className={
-              'w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ' +
-              (connected && !expired ? 'bg-success/15' : 'bg-surface-soft')
-            }>
-              <Icon name="store" size={18} className={connected && !expired ? 'text-success' : 'text-muted'}/>
-            </div>
-            <div className="min-w-0">
-              <div className={'text-sm font-semibold ' + (expired ? 'text-error' : 'text-ink')}>{statusLabel}</div>
-              {status?.shop_name && (
-                <div className="text-xs text-muted truncate">{status.shop_name}</div>
-              )}
-            </div>
-          </div>
-
-          {connected && (
-            <>
-              <div className="hidden sm:block w-px h-9 bg-hairline shrink-0"/>
-              <div className="text-xs shrink-0">
-                <div className="text-muted-soft mb-0.5">เชื่อมต่อเมื่อ</div>
-                <div className="tabular-nums">{fmtExpiry(status.connected_at)}</div>
-              </div>
-              <div className="text-xs shrink-0">
-                <div className="text-muted-soft mb-0.5">{expired ? 'หมดอายุเมื่อ' : 'ใช้ได้ถึง'}</div>
-                <div className={'tabular-nums ' + (expired ? 'text-error font-medium' : '')}>
-                  {fmtExpiry(status.access_token_expires_at)}
-                </div>
-              </div>
-            </>
-          )}
-
-          <button
-            type="button"
-            className="btn-secondary !py-1.5 !text-xs ml-auto shrink-0"
-            onClick={connect}
-            disabled={connecting}
-          >
-            {connecting ? <span className="spinner"/> : <Icon name="refresh" size={14}/>}
-            {connected ? 'เชื่อมต่อใหม่' : 'เชื่อมต่อ TikTok Shop'}
-          </button>
-        </div>
-
-        {(status?.last_error || status?.last_refresh_error) && (
-          <div className="text-xs text-error bg-error/10 border-t hairline px-4 py-2">
-            {status.last_error || status.last_refresh_error}
-          </div>
-        )}
-      </div>
+      </TikTokGlassShell>
     );
   }
 
   return (
-    <div className="space-y-4 fade-in">
-      <div className="text-xs text-muted-soft bg-surface-soft rounded-lg px-3.5 py-2.5 border hairline">
-        เชื่อมต่อ TikTok Shop เพื่อดึงออเดอร์อัตโนมัติ — ต้องตั้งค่า Partner Center และ Supabase secrets ก่อน (ดู docs/TIKTOK_INTEGRATION.md)
-      </div>
+    <TikTokGlassShell className={'tt-glass--' + tone}>
+      <TikTokGlassHero
+        icon={<Icon name="shop-bag" size={20} color="#fff"/>}
+        eyebrow="TikTok Shop · OAuth"
+        title={status?.shop_name || 'เชื่อมต่อร้านค้า'}
+        actions={(
+          <>
+            <TikTokGlassBadge tone={tone}>{statusLabel}</TikTokGlassBadge>
+            <TikTokGlassBtn variant="coral" onClick={connect} disabled={connecting}>
+              {connecting ? <span className="spinner"/> : <Icon name="link" size={14}/>}
+              {connected ? 'เชื่อมต่อใหม่' : 'เชื่อมต่อ'}
+            </TikTokGlassBtn>
+          </>
+        )}
+      />
 
-      <div className="rounded-xl border hairline p-4 space-y-4">
-        <div className="flex items-center gap-3">
-          <div className={"w-10 h-10 rounded-xl flex items-center justify-center " + (connected && !expired ? 'bg-success/15' : 'bg-surface-soft')}>
-            <Icon name="store" size={20} className={connected && !expired ? 'text-success' : 'text-muted'}/>
-          </div>
-          <div>
-            <div className="font-semibold text-ink">{statusLabel}</div>
-            {status?.shop_name && (
-              <div className="text-sm text-muted">{status.shop_name}</div>
-            )}
-          </div>
+      {connected && (
+        <div className="tt-glass__stats">
+          <TikTokGlassStat
+            icon="calendar"
+            label="เชื่อมต่อเมื่อ"
+            value={fmtExpiry(status.connected_at)}
+          />
+          <TikTokGlassStat
+            icon="lock"
+            label={expired ? 'หมดอายุเมื่อ' : 'ใช้ได้ถึง'}
+            value={fmtExpiry(status.access_token_expires_at)}
+            warn={expired}
+          />
         </div>
+      )}
 
-        {connected && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-            <div>
-              <div className="text-xs text-muted-soft mb-0.5">เชื่อมต่อเมื่อ</div>
-              <div>{fmtExpiry(status.connected_at)}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-soft mb-0.5">{expired ? 'หมดอายุเมื่อ' : 'ใช้ได้ถึง'}</div>
-              <div className={expired ? 'text-error font-medium' : ''}>{fmtExpiry(status.access_token_expires_at)}</div>
-            </div>
+      {lastErr && (
+        <div className="tt-glass__alert" style={{ margin: '0.5rem 0.625rem 0' }}>
+          <Icon name="alert" size={14}/>
+          <span>{lastErr}</span>
+        </div>
+      )}
+
+      {showLiveFooter && (
+        <footer className="tt-glass__livebar">
+          <div className="tt-glass__livebar-track">
+            <span className="tt-glass__livebar-label">
+              Auto-sync · ทุก {livePollSec}s
+            </span>
+            {liveLabel && (
+              <span className="tt-glass__livebar-time tabular-nums">
+                {liveLabel}
+              </span>
+            )}
+            <span className={'tt-glass__live-chip' + (pullBusy ? ' tt-glass__live-chip--busy' : '')}>
+              <span className="tt-glass__live-chip-dot"/>
+              {pullBusy ? 'Syncing' : 'Live'}
+            </span>
           </div>
-        )}
-
-        {(status?.last_error || status?.last_refresh_error) && (
-          <div className="text-xs text-error bg-error/10 rounded-lg px-3 py-2">
-            {status.last_error || status.last_refresh_error}
-          </div>
-        )}
-
-        <button type="button" className="btn-primary w-full sm:w-auto" onClick={connect} disabled={connecting}>
-          {connecting ? <span className="spinner"/> : <Icon name="store" size={16}/>}
-          {connected ? 'เชื่อมต่อใหม่' : 'เชื่อมต่อ TikTok Shop'}
-        </button>
-      </div>
-
-      {connected && <TikTokHealthCard toast={toast} />}
-    </div>
+        </footer>
+      )}
+    </TikTokGlassShell>
   );
 }

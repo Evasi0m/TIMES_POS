@@ -5,6 +5,7 @@ import { mapError } from '../../lib/error-map.js';
 import { fmtTHB } from '../../lib/format.js';
 import Icon from '../ui/Icon.jsx';
 import TikTokSection from './tiktok/TikTokSection.jsx';
+import { TikTokGlassBtn } from './tiktok/glass/index.js';
 
 const RETURN_STATUS = {
   RETURN_OR_REFUND_REQUEST_PENDING: 'รอตรวจสอบ',
@@ -13,6 +14,8 @@ const RETURN_STATUS = {
   COMPLETED: 'เสร็จสิ้น',
   CANCELLED: 'ยกเลิก',
 };
+
+const RETURNS_GRID = 'grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.9fr)_minmax(0,0.7fr)_minmax(0,0.8fr)_minmax(0,0.9fr)]';
 
 export default function TikTokReturns({ toast }) {
   const [rows, setRows] = useState([]);
@@ -82,62 +85,57 @@ export default function TikTokReturns({ toast }) {
       subtitle={`${rows.length} รายการ`}
       actions={(
         <>
-          <button type="button" className="btn-secondary !h-11 !py-0 !px-4 !text-sm" onClick={load} disabled={loading}>
+          <TikTokGlassBtn variant="hero" className="tt-glass__btn--lg" onClick={load} disabled={loading}>
             {loading ? <span className="spinner"/> : <Icon name="refresh" size={16}/>} รีเฟรช
-          </button>
-          <button type="button" className="btn-primary !h-11 !py-0 !px-4 !text-sm" onClick={sync} disabled={syncing}>
+          </TikTokGlassBtn>
+          <TikTokGlassBtn variant="coral" className="tt-glass__btn--lg" onClick={sync} disabled={syncing}>
             {syncing ? <span className="spinner"/> : <Icon name="download" size={16}/>} ดึงรายการคืน
-          </button>
+          </TikTokGlassBtn>
         </>
       )}
     >
-      <div className="mb-4 rounded-xl border hairline bg-surface-soft px-4 py-3 text-sm text-muted leading-relaxed">
+      <div className="tt-glass__notice mb-4">
         <strong className="text-ink">แนะนำ:</strong> บันทึกรับคืนที่เมนู{' '}
         <strong className="text-ink">รับคืนจากลูกค้า</strong>{' '}
         เพื่อ sync สต็อก POS ↔ TikTok อัตโนมัติ — ปุ่ม &quot;ออกใบลดหนี้&quot; ด้านล่างออกเอกสารอย่างเดียว ไม่ mirror สต็อก
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-muted border-b hairline">
-              <th className="py-2 px-3">TikTok Order</th>
-              <th className="py-2 px-3">ประเภท</th>
-              <th className="py-2 px-3">สถานะ</th>
-              <th className="py-2 px-3 text-right">ยอดคืน</th>
-              <th className="py-2 px-3">ใบลดหนี้</th>
-              <th className="py-2 px-3">การกระทำ</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 && (
-              <tr><td colSpan={6} className="py-6 text-center text-muted text-sm">ไม่มีรายการคืน</td></tr>
-            )}
-            {rows.map(r => (
-              <tr key={r.id} className="border-b hairline last:border-0">
-                <td className="py-2 px-3 font-mono text-xs">{r.tiktok_order_id || '—'}</td>
-                <td className="py-2 px-3 text-xs">{r.return_type || '—'}</td>
-                <td className="py-2 px-3 text-xs">{RETURN_STATUS[r.return_status] || r.return_status || '—'}</td>
-                <td className="py-2 px-3 text-right tabular-nums">{r.refund_amount != null ? fmtTHB(r.refund_amount) : '—'}</td>
-                <td className="py-2 px-3 font-mono text-xs">
-                  {r.return_order_id
-                    ? <span className="text-success">ออกแล้ว</span>
-                    : <span className="text-muted">—</span>}
-                </td>
-                <td className="py-2 px-3">
-                  <button
-                    type="button"
-                    className="btn-secondary !py-1 !text-xs"
-                    disabled={!r.sale_order_id || !!r.return_order_id || busy === r.id}
-                    onClick={() => issueCreditNote(r)}
-                    title={!r.sale_order_id ? 'ยังไม่ผูกกับออเดอร์ POS' : ''}
-                  >
-                    {busy === r.id ? <span className="spinner"/> : 'ออกใบลดหนี้'}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="tt-glass__table overflow-x-auto">
+        <div className={'tt-glass__table-head grid ' + RETURNS_GRID + ' min-w-[720px]'}>
+          <span>TikTok Order</span>
+          <span>ประเภท</span>
+          <span>สถานะ</span>
+          <span className="text-right">ยอดคืน</span>
+          <span>ใบลดหนี้</span>
+          <span>การกระทำ</span>
+        </div>
+        {rows.length === 0 && (
+          <div className="tt-glass__table-empty">ไม่มีรายการคืน</div>
+        )}
+        <div className="tt-glass__table-body">
+        {rows.map(r => (
+          <div key={r.id} className={'tt-glass__table-row grid ' + RETURNS_GRID + ' min-w-[720px]'}>
+            <span className="font-mono text-xs font-semibold">{r.tiktok_order_id || '—'}</span>
+            <span className="text-xs">{r.return_type || '—'}</span>
+            <span className="text-xs">{RETURN_STATUS[r.return_status] || r.return_status || '—'}</span>
+            <span className="text-right tabular-nums">{r.refund_amount != null ? fmtTHB(r.refund_amount) : '—'}</span>
+            <span className="font-mono text-xs">
+              {r.return_order_id
+                ? <span className="text-success">ออกแล้ว</span>
+                : <span className="text-muted">—</span>}
+            </span>
+            <span>
+              <TikTokGlassBtn
+                variant="outline"
+                disabled={!r.sale_order_id || !!r.return_order_id || busy === r.id}
+                onClick={() => issueCreditNote(r)}
+                title={!r.sale_order_id ? 'ยังไม่ผูกกับออเดอร์ POS' : ''}
+              >
+                {busy === r.id ? <span className="spinner"/> : 'ออกใบลดหนี้'}
+              </TikTokGlassBtn>
+            </span>
+          </div>
+        ))}
+        </div>
       </div>
     </TikTokSection>
   );

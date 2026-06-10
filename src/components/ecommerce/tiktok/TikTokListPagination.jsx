@@ -3,7 +3,6 @@ import Icon from '../../ui/Icon.jsx';
 
 const PAGE_SIZES = [20, 50, 100];
 
-/** Page number buttons — show window around current page. */
 function pageNumbers(current, total) {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
   const pages = new Set([1, total, current, current - 1, current + 1]);
@@ -32,12 +31,12 @@ export default function TikTokListPagination({
   if (total === 0) return null;
 
   return (
-    <div className="px-4 py-3 border-t hairline bg-surface-soft/40 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+    <div className="tt-glass__pagination mt-3">
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
         <label className="inline-flex items-center gap-1.5">
           <span className="text-muted-soft shrink-0">แสดง</span>
           <select
-            className="input !h-9 !min-h-9 !py-0 !px-2 !text-xs !w-auto tabular-nums"
+            className="tt-glass__pagination-select tabular-nums"
             value={pageSize}
             onChange={(e) => onPageSizeChange(Number(e.target.value))}
             aria-label="จำนวนรายการต่อหน้า"
@@ -58,7 +57,7 @@ export default function TikTokListPagination({
         <div className="flex items-center gap-1 sm:ml-auto">
           <button
             type="button"
-            className="btn-ghost !py-1.5 !px-2.5 !min-h-[36px]"
+            className="tt-glass__pagination-btn"
             disabled={safePage <= 1}
             onClick={() => onPageChange(safePage - 1)}
             aria-label="หน้าก่อน"
@@ -71,10 +70,8 @@ export default function TikTokListPagination({
                 key={n}
                 type="button"
                 className={
-                  'min-w-[36px] h-9 px-2 rounded-lg text-xs font-medium tabular-nums transition ' +
-                  (n === safePage
-                    ? 'bg-surface-strong text-ink shadow-sm ring-1 ring-hairline'
-                    : 'text-muted hover:text-ink hover:bg-surface-strong/50')
+                  'tt-glass__pagination-btn' +
+                  (n === safePage ? ' tt-glass__pagination-btn--active' : '')
                 }
                 onClick={() => onPageChange(n)}
               >
@@ -86,7 +83,7 @@ export default function TikTokListPagination({
           ))}
           <button
             type="button"
-            className="btn-ghost !py-1.5 !px-2.5 !min-h-[36px]"
+            className="tt-glass__pagination-btn"
             disabled={safePage >= totalPages}
             onClick={() => onPageChange(safePage + 1)}
             aria-label="หน้าถัดไป"

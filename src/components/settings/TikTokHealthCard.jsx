@@ -1,12 +1,16 @@
-// TikTok integration health panel (admin) — surfaces token freshness, whether
-// background cron can run, the pending-confirm backlog, unmatched lines, and
-// mapping completeness in one glance. Reads get_tiktok_health (migration 050).
+// TikTok integration health panel — liquid glass UI (stock page only).
 import React, { useCallback, useEffect, useState } from 'react';
 import { sb } from '../../lib/supabase-client.js';
 import { mapError } from '../../lib/error-map.js';
 import { formatTikTokApiError } from '../../lib/tiktok-mirror-helpers.js';
 import { backfillMissingTikTokProductIds, backfillTikTokProductImages } from '../../lib/tiktok-inventory-sync.js';
 import Icon from '../ui/Icon.jsx';
+import {
+  TikTokGlassShell,
+  TikTokGlassHero,
+  TikTokGlassStat,
+  TikTokGlassBtn,
+} from '../ecommerce/tiktok/glass/index.js';
 
 function fmtDateTime(iso) {
   if (!iso) return '—';
@@ -22,24 +26,12 @@ function minutesSince(iso) {
   return Math.round((Date.now() - t) / 60000);
 }
 
-const TONE = {
-  ok: 'text-success',
-  warn: 'text-warning',
-  bad: 'text-error',
-  muted: 'text-muted',
-};
-
-function Row({ label, value, tone = 'muted', hint }) {
+function HealthSection({ title, children }) {
   return (
-    <div className="flex items-start justify-between gap-3 py-2 border-b hairline last:border-0">
-      <div className="min-w-0">
-        <div className="text-sm text-ink">{label}</div>
-        {hint && <div className="text-[11px] text-muted-soft mt-0.5">{hint}</div>}
-      </div>
-      <div className={'text-sm font-medium tabular-nums text-right shrink-0 ' + (TONE[tone] || TONE.muted)}>
-        {value}
-      </div>
-    </div>
+    <section className="tt-glass__health-section">
+      <h3 className="tt-glass__health-section-title">{title}</h3>
+      <div className="tt-glass__health-grid">{children}</div>
+    </section>
   );
 }
 
@@ -112,20 +104,25 @@ export default function TikTokHealthCard({ toast }) {
 
   if (loading && !health) {
     return (
-      <div className="flex items-center gap-2 text-muted text-sm py-3 px-1">
-        <span className="spinner"/> กำลังตรวจสถานะระบบ…
-      </div>
+      <TikTokGlassShell loading>
+        <div className="tt-glass__health-loading">
+          <span className="spinner"/>
+          <span>กำลังตรวจสถานะระบบ…</span>
+        </div>
+      </TikTokGlassShell>
     );
   }
 
-  if (error) {
+  if (error && !health) {
     return (
-      <div className="rounded-xl border hairline p-4 space-y-2">
-        <div className="text-sm text-error">ตรวจสถานะไม่สำเร็จ: {error}</div>
-        <button type="button" className="btn-secondary !py-1.5 !text-xs" onClick={load}>
-          <Icon name="refresh" size={14}/> ลองใหม่
-        </button>
-      </div>
+      <TikTokGlassShell>
+        <div className="tt-glass__body-inner">
+          <div className="tt-glass__alert">{error}</div>
+          <TikTokGlassBtn variant="outline" onClick={load}>
+            <Icon name="refresh" size={14}/> ลองใหม่
+          </TikTokGlassBtn>
+        </div>
+      </TikTokGlassShell>
     );
   }
 
@@ -148,99 +145,116 @@ export default function TikTokHealthCard({ toast }) {
     : (syncMin < 1 ? 'เมื่อสักครู่' : `${syncMin} นาทีก่อน`);
 
   const lastErr = health.last_error || health.last_refresh_error;
+  const mappingReady = (health.mappings_total ?? 0) - (health.mappings_missing_product_id ?? 0);
+  const metricCls = 'tt-glass__health-metric';
 
   return (
-    <div className="rounded-xl border hairline p-4 space-y-1">
-      <div className="flex items-center justify-between mb-1">
-        <div className="font-semibold text-ink flex items-center gap-2">
-          <Icon name="monitor" size={16}/> สถานะระบบ TikTok
+    <TikTokGlassShell>
+      <TikTokGlassHero
+        icon={<Icon name="monitor" size={20} color="#fff"/>}
+        eyebrow="TikTok Shop · Health"
+        title="สถานะระบบ TikTok"
+        actions={(
+          <TikTokGlassBtn variant="hero" onClick={load} disabled={loading}>
+            {loading ? <span className="spinner"/> : <Icon name="refresh" size={14}/>}
+            รีเฟรช
+          </TikTokGlassBtn>
+        )}
+      />
+
+      <div className="tt-glass__body-inner tt-glass__health-body">
+        <div className="tt-glass__health-panel">
+          <HealthSection title="ระบบ & การเชื่อมต่อ">
+            <TikTokGlassStat
+              tone={cronTone}
+              className={metricCls}
+              label="Cron อัตโนมัติ"
+              hint={health.cron_service_key_set === false
+                ? 'ตั้ง service_role_key ใน vault'
+                : 'poll / settlement / refresh'}
+              value={cronValue}
+            />
+            <TikTokGlassStat
+              tone={tokenTone}
+              className={metricCls}
+              label="Access token"
+              hint={`หมดอายุ ${fmtDateTime(health.access_token_expires_at)}`}
+              value={tokenValue}
+            />
+            <TikTokGlassStat
+              tone={syncTone}
+              className={metricCls}
+              label="Sync ล่าสุด"
+              hint={fmtDateTime(health.last_synced_at)}
+              value={syncValue}
+            />
+          </HealthSection>
+
+          <HealthSection title="คิวงาน & ข้อมูล">
+            <TikTokGlassStat
+              tone={health.pending_count > 0 ? 'warn' : 'ok'}
+              className={metricCls}
+              label="ออเดอร์รอยืนยัน"
+              value={health.pending_count ?? '—'}
+            />
+            <TikTokGlassStat
+              tone={health.unmatched_items > 0 ? 'warn' : 'ok'}
+              className={metricCls}
+              label="รอจับคู่ SKU"
+              hint={health.unmatched_items > 0 ? 'E-Commerce → จับคู่สินค้า' : undefined}
+              value={health.unmatched_items ?? '—'}
+            />
+            <TikTokGlassStat
+              tone={health.mappings_missing_product_id > 0 ? 'warn' : 'ok'}
+              className={metricCls}
+              label="Mapping mirror"
+              hint={health.mappings_missing_product_id > 0
+                ? `ขาด product link ${health.mappings_missing_product_id}`
+                : 'พร้อม mirror สต็อก'}
+              value={`${mappingReady}/${health.mappings_total ?? 0}`}
+            />
+          </HealthSection>
         </div>
-        <button
-          type="button"
-          className="btn-secondary !py-1 !px-2 !text-xs"
-          onClick={load}
-          disabled={loading}
-        >
-          {loading ? <span className="spinner"/> : <Icon name="refresh" size={13}/>}
-          รีเฟรช
-        </button>
+
+        {(health.mappings_missing_product_id > 0 || (health.mappings_total ?? 0) > 0) && (
+          <div className="tt-glass__health-toolbar">
+            <p className="tt-glass__health-meta">
+              Catalog mirror cap ~{health.catalog_mirror_max_skus ?? 500} SKU/ครั้ง
+            </p>
+            <div className="tt-glass__health-actions">
+              {health.mappings_missing_product_id > 0 && (
+                <TikTokGlassBtn
+                  variant="coral"
+                  className="tt-glass__btn--lg"
+                  onClick={runMappingBackfill}
+                  disabled={backfilling || imageBackfilling}
+                >
+                  {backfilling ? <span className="spinner"/> : <Icon name="refresh" size={14}/>}
+                  ซ่อม mapping ({health.mappings_missing_product_id})
+                </TikTokGlassBtn>
+              )}
+              {(health.mappings_total ?? 0) > 0 && (
+                <TikTokGlassBtn
+                  variant="outline"
+                  className="tt-glass__btn--lg"
+                  onClick={runImageBackfill}
+                  disabled={backfilling || imageBackfilling}
+                >
+                  {imageBackfilling ? <span className="spinner"/> : <Icon name="image" size={14}/>}
+                  ดึงรูป SKU
+                </TikTokGlassBtn>
+              )}
+            </div>
+          </div>
+        )}
+
+        {lastErr && <div className="tt-glass__alert">{lastErr}</div>}
+        {error && <div className="tt-glass__alert">{error}</div>}
+
+        <footer className="tt-glass__health-footer">
+          ตรวจเมื่อ {fmtDateTime(health.checked_at)}
+        </footer>
       </div>
-
-      <Row
-        label="Cron อัตโนมัติ (poll / settlement / refresh)"
-        hint={health.cron_service_key_set === false ? 'ตั้ง service_role_key ใน vault เพื่อเปิด' : 'ดึงออเดอร์เบื้องหลังทุก 5 นาที'}
-        value={cronValue}
-        tone={cronTone}
-      />
-      <Row
-        label="Access token เหลืออายุ"
-        hint={`หมดอายุ ${fmtDateTime(health.access_token_expires_at)}`}
-        value={tokenValue}
-        tone={tokenTone}
-      />
-      <Row
-        label="Sync ล่าสุด"
-        value={syncValue}
-        tone={syncTone}
-        hint={fmtDateTime(health.last_synced_at)}
-      />
-      <Row
-        label="ออเดอร์รอยืนยัน"
-        value={health.pending_count ?? '—'}
-        tone={health.pending_count > 0 ? 'warn' : 'ok'}
-      />
-      <Row
-        label="รายการรอจับคู่ SKU"
-        hint={health.unmatched_items > 0 ? 'ไปที่ E-Commerce → จับคู่สินค้า' : undefined}
-        value={health.unmatched_items ?? '—'}
-        tone={health.unmatched_items > 0 ? 'warn' : 'ok'}
-      />
-      <Row
-        label="Mapping พร้อม mirror สต็อก"
-        hint={health.mappings_missing_product_id > 0 ? `ขาด product link ${health.mappings_missing_product_id} รายการ` : undefined}
-        value={`${(health.mappings_total ?? 0) - (health.mappings_missing_product_id ?? 0)}/${health.mappings_total ?? 0}`}
-        tone={health.mappings_missing_product_id > 0 ? 'warn' : 'ok'}
-      />
-      <Row
-        label="Catalog mirror cap"
-        hint="โหลด catalog สูงสุด ~500 SKU ต่อครั้ง — ร้านใหญ่ขึ้นอาจต้องเพิ่ม cap"
-        value={health.catalog_mirror_max_skus ?? 500}
-        tone="muted"
-      />
-
-      {health.mappings_missing_product_id > 0 && (
-        <button
-          type="button"
-          className="btn-secondary w-full !py-2 !text-xs mt-2"
-          onClick={runMappingBackfill}
-          disabled={backfilling || imageBackfilling}
-        >
-          {backfilling ? <span className="spinner"/> : <Icon name="refresh" size={14}/>}
-          ซ่อม mapping ที่ขาด product id ({health.mappings_missing_product_id})
-        </button>
-      )}
-
-      {(health.mappings_total ?? 0) > 0 && (
-        <button
-          type="button"
-          className="btn-secondary w-full !py-2 !text-xs mt-2"
-          onClick={runImageBackfill}
-          disabled={backfilling || imageBackfilling}
-        >
-          {imageBackfilling ? <span className="spinner"/> : <Icon name="image" size={14}/>}
-          ดึงรูป SKU ที่จับคู่แล้ว
-        </button>
-      )}
-
-      {lastErr && (
-        <div className="text-xs text-error bg-error/10 rounded-lg px-3 py-2 mt-2">
-          {lastErr}
-        </div>
-      )}
-
-      <div className="text-[10px] text-muted-soft pt-2 text-right">
-        ตรวจเมื่อ {fmtDateTime(health.checked_at)}
-      </div>
-    </div>
+    </TikTokGlassShell>
   );
 }
