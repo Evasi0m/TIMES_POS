@@ -111,6 +111,7 @@ import PendingNetBell from './components/pos/PendingNetBell.jsx';
 import DeferNetButton from './components/pos/DeferNetButton.jsx';
 import TikTokConfirmPanel from './components/pos/TikTokConfirmPanel.jsx';
 import { useTikTokMirrorCatalog } from './hooks/useTikTokMirrorCatalog.js';
+import { useTikTokProductMappings } from './hooks/useTikTokProductMappings.js';
 import {
   buildSyncLine,
   fetchPosStocks,
@@ -4511,6 +4512,15 @@ function POSView() {
   const [taxInvoiceModalOpen, setTaxInvoiceModalOpen] = useState(false);
   // Warn when manual TikTok checkout overlaps pending API orders (double stock risk).
   const [tiktokOverlap, setTiktokOverlap] = useState(null);
+  const posTiktokProductIds = useMemo(
+    () => [...new Set([
+      ...results.map(p => p.id),
+      ...cart.map(l => l.product_id),
+    ].filter(Boolean))],
+    [results, cart],
+  );
+  const { connected: tiktokBadgeOn, mappingsByProductId: tiktokBadgeByProductId } =
+    useTikTokProductMappings(posTiktokProductIds);
   // Refs for the swipe-down-to-close gesture on the mobile cart sheet.
   const sheetRef = useRef(null);
   const sheetDragStartY = useRef(null);
@@ -4992,9 +5002,12 @@ function POSView() {
             onClick={oos ? undefined : ()=>addToCart(p)}>
             <ProductThumb product={p} size="md" />
             <div className="flex-1 min-w-0">
-              <div className="font-medium text-ink truncate text-base">
-                {p.name}
-                {isNewProduct(p) && <span className="new-product-badge ml-1.5 align-middle">ใหม่</span>}
+              <div className="font-medium text-ink truncate text-base flex items-center gap-1.5 min-w-0">
+                <span className="truncate">{p.name}</span>
+                {tiktokBadgeOn && tiktokBadgeByProductId[p.id] && (
+                  <TikTokLinkedBadge mapping={tiktokBadgeByProductId[p.id]} />
+                )}
+                {isNewProduct(p) && <span className="new-product-badge ml-1.5 align-middle shrink-0">ใหม่</span>}
               </div>
               <div className="text-xs text-muted mt-0.5 font-mono truncate">{p.barcode || '— ไม่มีบาร์โค้ด —'}</div>
             </div>
@@ -5043,7 +5056,12 @@ function POSView() {
             <div key={l.product_id} style={{ '--i': Math.min(idx, 8) }} className="glass-soft !bg-surface-strong/75 ring-1 ring-hairline shadow-sm rounded-lg p-3 mb-2.5 hover-lift fade-in stagger">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm truncate">{l.product_name}</div>
+                  <div className="font-medium text-sm truncate flex items-center gap-1.5 min-w-0">
+                    <span className="truncate">{l.product_name}</span>
+                    {tiktokBadgeOn && tiktokBadgeByProductId[l.product_id] && (
+                      <TikTokLinkedBadge mapping={tiktokBadgeByProductId[l.product_id]} />
+                    )}
+                  </div>
                   <div className="text-xs text-muted font-mono truncate">{l.barcode||''}</div>
                 </div>
                 {/* Demoted from labeled ruby button → icon-only 32×32, so
@@ -5570,7 +5588,12 @@ function POSView() {
                   <div key={l.product_id} style={{ '--i': Math.min(idx, 8) }} className="glass-soft rounded-lg p-3 mb-2 hover-lift fade-in stagger">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm truncate">{l.product_name}</div>
+                        <div className="font-medium text-sm truncate flex items-center gap-1.5 min-w-0">
+                    <span className="truncate">{l.product_name}</span>
+                    {tiktokBadgeOn && tiktokBadgeByProductId[l.product_id] && (
+                      <TikTokLinkedBadge mapping={tiktokBadgeByProductId[l.product_id]} />
+                    )}
+                  </div>
                         <div className="text-xs text-muted font-mono truncate">{l.barcode||''}</div>
                       </div>
                       <button className="btn-ruby-premium" onClick={()=>confirmRemoveLine(idx)} aria-label="ลบสินค้านี้">
@@ -6125,6 +6148,9 @@ function ProductsView() {
   }, [allRows, filter]);
 
   const visibleRows = useMemo(() => filtered.slice(0, pageSize), [filtered, pageSize]);
+  const productsTiktokIds = useMemo(() => visibleRows.map(p => p.id), [visibleRows]);
+  const { connected: tiktokBadgeOn, mappingsByProductId: tiktokBadgeByProductId } =
+    useTikTokProductMappings(productsTiktokIds);
 
   // Reset visible page whenever the filter changes — otherwise users would
   // see "200 of 200" and think the new filter has more matches than it does.
@@ -6444,8 +6470,11 @@ function ProductsView() {
                 onClick={canEdit ? (()=>openEditor(p)) : undefined}>
                 <div className="col-span-3 font-medium truncate flex items-center gap-2.5">
                   <ProductThumb product={p} size="sm" />
-                  <span className="truncate">
+                  <span className="truncate inline-flex items-center gap-1.5 min-w-0">
                     {p.name}
+                    {tiktokBadgeOn && tiktokBadgeByProductId[p.id] && (
+                      <TikTokLinkedBadge mapping={tiktokBadgeByProductId[p.id]} />
+                    )}
                     {isNewProduct(p) && <span className="new-product-badge ml-1.5 align-middle">ใหม่</span>}
                   </span>
                 </div>
@@ -6504,9 +6533,12 @@ function ProductsView() {
               <span className={"stock-dot self-start mt-1.5 " + (p.current_stock<=0 ? 'is-empty' : 'is-ok')} aria-hidden="true" />
               <ProductThumb product={p} size="md" />
               <div className="flex-1 min-w-0">
-                <div className="font-semibold truncate text-[15px]">
-                  {p.name}
-                  {isNewProduct(p) && <span className="new-product-badge ml-1.5 align-middle">ใหม่</span>}
+                <div className="font-semibold truncate text-[15px] flex items-center gap-1.5 min-w-0">
+                  <span className="truncate">{p.name}</span>
+                  {tiktokBadgeOn && tiktokBadgeByProductId[p.id] && (
+                    <TikTokLinkedBadge mapping={tiktokBadgeByProductId[p.id]} />
+                  )}
+                  {isNewProduct(p) && <span className="new-product-badge ml-1.5 align-middle shrink-0">ใหม่</span>}
                 </div>
                 <div className="flex items-baseline gap-2 mt-1.5 min-w-0 text-sm">
                   <span className="tabular-nums text-primary truncate">ป้าย {roundMoney(p.retail_price).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>

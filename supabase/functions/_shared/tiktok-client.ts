@@ -483,6 +483,11 @@ export const VOID_STATUSES = new Set(['CANCELLED']);
 
 // ── Product / inventory API (mirror POS stock → TikTok) ─────────────────────
 
+import {
+  extractProductImageUrl,
+  extractSkuImageUrl,
+} from './tiktok-catalog-images.ts';
+
 export interface TikTokSkuInventory {
   tiktok_product_id: string;
   tiktok_sku_id: string;
@@ -490,6 +495,7 @@ export interface TikTokSkuInventory {
   product_name: string;
   quantity: number;
   warehouse_id?: string;
+  image_url?: string;
 }
 
 /** Flatten product search results into SKU rows with current qty. */
@@ -498,6 +504,7 @@ export function flattenProductSkus(products: Record<string, unknown>[]): TikTokS
   for (const p of products) {
     const productId = String(p.id || p.product_id || '');
     const title = String(p.title || p.product_name || '');
+    const productImage = extractProductImageUrl(p);
     const skus = (p.skus as Record<string, unknown>[]) || [];
     for (const sku of skus) {
       const skuId = String(sku.id || sku.sku_id || '');
@@ -512,6 +519,7 @@ export function flattenProductSkus(products: Record<string, unknown>[]): TikTokS
         if (!warehouseId && wh) warehouseId = wh;
         qty += q;
       }
+      const imageUrl = extractSkuImageUrl(sku, productImage);
       out.push({
         tiktok_product_id: productId,
         tiktok_sku_id: skuId,
@@ -519,6 +527,7 @@ export function flattenProductSkus(products: Record<string, unknown>[]): TikTokS
         product_name: title,
         quantity: qty,
         warehouse_id: warehouseId,
+        ...(imageUrl ? { image_url: imageUrl } : {}),
       });
     }
   }

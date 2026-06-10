@@ -10,6 +10,9 @@ export function mappingRowFromTiktokSku(sku, productId) {
     seller_sku: sku.seller_sku || sku.name || sku.barcode,
     tiktok_product_name: sku.product_name || sku.name,
     warehouse_id: sku.warehouse_id || null,
+    ...(sku.image_url || sku.sku_image_url
+      ? { image_url: sku.image_url || sku.sku_image_url }
+      : {}),
   };
 }
 

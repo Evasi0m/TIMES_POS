@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { sb } from '../../lib/supabase-client.js';
 import { mapError } from '../../lib/error-map.js';
 import { formatTikTokApiError } from '../../lib/tiktok-mirror-helpers.js';
-import { backfillMissingTikTokProductIds } from '../../lib/tiktok-inventory-sync.js';
+import { backfillMissingTikTokProductIds, backfillTikTokProductImages } from '../../lib/tiktok-inventory-sync.js';
 import Icon from '../ui/Icon.jsx';
 
 function fmtDateTime(iso) {
@@ -47,6 +47,7 @@ export default function TikTokHealthCard({ toast }) {
   const [health, setHealth] = useState(null);
   const [loading, setLoading] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
+  const [imageBackfilling, setImageBackfilling] = useState(false);
   const [error, setError] = useState(null);
 
   const load = useCallback(async () => {
@@ -78,6 +79,24 @@ export default function TikTokHealthCard({ toast }) {
       setError('ซ่อม mapping ไม่สำเร็จ: ' + formatTikTokApiError(mapError(e)));
     } finally {
       setBackfilling(false);
+    }
+  };
+
+  const runImageBackfill = async () => {
+    setImageBackfilling(true);
+    try {
+      const { synced, skipped, no_image: noImage } = await backfillTikTokProductImages();
+      setError(null);
+      toast?.push(
+        `ดึงรูป TikTok แล้ว ${synced} รายการ` +
+        (skipped ? ` · ข้าม ${skipped}` : '') +
+        (noImage ? ` · ไม่มีรูป ${noImage}` : ''),
+        synced > 0 ? 'success' : 'info',
+      );
+    } catch (e) {
+      setError('ดึงรูป TikTok ไม่สำเร็จ: ' + formatTikTokApiError(mapError(e)));
+    } finally {
+      setImageBackfilling(false);
     }
   };
 
@@ -184,10 +203,22 @@ export default function TikTokHealthCard({ toast }) {
           type="button"
           className="btn-secondary w-full !py-2 !text-xs mt-2"
           onClick={runMappingBackfill}
-          disabled={backfilling}
+          disabled={backfilling || imageBackfilling}
         >
           {backfilling ? <span className="spinner"/> : <Icon name="refresh" size={14}/>}
           ซ่อม mapping ที่ขาด product id ({health.mappings_missing_product_id})
+        </button>
+      )}
+
+      {(health.mappings_total ?? 0) > 0 && (
+        <button
+          type="button"
+          className="btn-secondary w-full !py-2 !text-xs mt-2"
+          onClick={runImageBackfill}
+          disabled={backfilling || imageBackfilling}
+        >
+          {imageBackfilling ? <span className="spinner"/> : <Icon name="image" size={14}/>}
+          ดึงรูป SKU ที่จับคู่แล้ว
         </button>
       )}
 

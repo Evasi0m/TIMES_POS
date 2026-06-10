@@ -89,6 +89,7 @@ export async function upsertTiktokInventoryMapping({ productId, tiktokSku, tikto
     p_seller_sku: m.seller_sku || null,
     p_tiktok_product_name: m.tiktok_product_name || null,
     p_warehouse_id: m.warehouse_id || null,
+    p_image_url: m.image_url || m.sku_image_url || null,
   });
   if (error) throw error;
 }
@@ -338,6 +339,13 @@ export async function fetchIncompleteTikTokMappings(limit = 50) {
 export async function backfillMissingTikTokProductIds({ limit = 50 } = {}) {
   const rows = await fetchIncompleteTikTokMappings(limit);
   return ensureMappingsReady(rows);
+}
+
+/** Backfill product_images from TikTok order line sku_image_url for mapped products. */
+export async function backfillTikTokProductImages() {
+  const { data, error } = await sb.rpc('backfill_tiktok_product_images');
+  if (error) throw error;
+  return data || { synced: 0, skipped: 0, no_image: 0 };
 }
 
 /** Re-sync sale mirror for a bill after mapping backfill (e.g. bill #127254). */
