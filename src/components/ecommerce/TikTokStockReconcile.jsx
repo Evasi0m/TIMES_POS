@@ -83,11 +83,11 @@ export default function TikTokStockReconcile({ toast, setView }) {
 
   useEffect(() => {
     if (connected) runScan();
-  }, [connected]); // eslint-disable-line react-hooks/exhaustive-deps — scan once on connect
+  }, [connected]); // eslint-disable-line react-hooks/exhaustive-deps -- scan once on connect
 
   useEffect(() => {
     if (rows.length) setSelected(defaultSelectedIds(rows, source));
-  }, [source]); // eslint-disable-line react-hooks/exhaustive-deps — reset selection on source change
+  }, [source]); // eslint-disable-line react-hooks/exhaustive-deps -- reset selection on source change
 
   const filtered = useMemo(
     () => filterRows(rows, { tab: filterTab, query: searchQ }),
