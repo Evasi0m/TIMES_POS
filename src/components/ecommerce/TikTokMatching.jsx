@@ -7,6 +7,7 @@ import { classifySkuMatch } from '../../lib/fuzzy-match.js';
 import {
   resolveTikTokCatalogMatch,
   runSaleMirrorWithFeedback,
+  syncTikTokProductImages,
 } from '../../lib/tiktok-inventory-sync.js';
 import { logMirrorBackgroundError } from '../../lib/tiktok-mirror-helpers.js';
 import Icon from '../ui/Icon.jsx';
@@ -143,6 +144,11 @@ export default function TikTokMatching({ toast }) {
     setBusy(item.id);
     try {
       await linkItem(item, product);
+      if (!item.sku_image_url?.trim()) {
+        syncTikTokProductImages({ productIds: [product.id], limit: 1 }).catch((e) => {
+          console.warn('[TikTokMatching] catalog image sync failed:', e);
+        });
+      }
       toast?.push(`จับคู่ "${product.name}" แล้ว`, 'success');
       if (applyStock && item.sale_order_id) {
         runSaleMirrorWithFeedback({
