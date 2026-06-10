@@ -85,7 +85,7 @@ export default function TikTokHealthCard({ toast }) {
   const runImageBackfill = async () => {
     setImageBackfilling(true);
     try {
-      toast?.push('กำลังดึงรูปจาก TikTok Shop…', 'info', { durationMs: 12000 });
+      toast?.push('กำลังดึงรูปจาก TikTok Shop…', 'info', { durationMs: 60000 });
       const result = await backfillTikTokProductImages({ limit: 150 });
       setError(null);
       const parts = [
@@ -98,11 +98,13 @@ export default function TikTokHealthCard({ toast }) {
       ].filter(Boolean);
       toast?.push(
         `ดึงรูป TikTok แล้ว — ${parts.join(' · ')}`,
-        result.synced > 0 ? 'success' : 'info',
-        { durationMs: 10000 },
+        result.synced > 0 ? 'success' : 'warning',
+        { durationMs: 15000 },
       );
     } catch (e) {
-      setError('ดึงรูป TikTok ไม่สำเร็จ: ' + formatTikTokApiError(mapError(e)));
+      const msg = 'ดึงรูป TikTok ไม่สำเร็จ: ' + formatTikTokApiError(mapError(e));
+      setError(msg);
+      toast?.push(msg, 'error', { durationMs: 15000 });
     } finally {
       setImageBackfilling(false);
     }

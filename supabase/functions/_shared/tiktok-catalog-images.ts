@@ -17,9 +17,11 @@ export function pickFirstUrl(value: unknown): string | undefined {
     return pickFirstUrl(o.url)
       || pickFirstUrl(o.uri)
       || pickFirstUrl(o.urls)
+      || pickFirstUrl(o.url_list)
       || pickFirstUrl(o.thumb_url)
       || pickFirstUrl(o.thumb_urls)
-      || pickFirstUrl(o.image_url);
+      || pickFirstUrl(o.image_url)
+      || pickFirstUrl(o.image_urls);
   }
   return undefined;
 }
@@ -41,6 +43,7 @@ export function extractSkuImageUrl(
 ): string | undefined {
   const direct = pickFirstUrl(sku.sku_image)
     || pickFirstUrl(sku.sku_image_url)
+    || pickFirstUrl(sku.sku_img)
     || pickFirstUrl(sku.image)
     || pickFirstUrl(sku.thumb_url);
   if (direct) return direct;
@@ -48,6 +51,7 @@ export function extractSkuImageUrl(
   const attrs = (sku.sales_attributes as Record<string, unknown>[]) || [];
   for (const attr of attrs) {
     const u = pickFirstUrl(attr?.sku_image)
+      || pickFirstUrl(attr?.sku_img)
       || pickFirstUrl(attr?.image_url)
       || pickFirstUrl(attr?.image);
     if (u) return u;

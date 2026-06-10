@@ -19,6 +19,9 @@ describe('pickFirstUrl', () => {
   it('extracts from object with urls array', () => {
     expect(pickFirstUrl({ urls: ['https://cdn.example/d.jpg'] })).toBe('https://cdn.example/d.jpg');
   });
+  it('extracts thumb_urls from main_images item', () => {
+    expect(pickFirstUrl({ thumb_urls: ['https://cdn.example/e.jpg'] })).toBe('https://cdn.example/e.jpg');
+  });
 });
 
 describe('extractProductImageUrl', () => {

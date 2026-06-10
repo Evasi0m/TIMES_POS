@@ -1,6 +1,10 @@
 // TikTok Shop Open API client — signing, token management, API wrapper.
 
 import { createClient, SupabaseClient } from 'jsr:@supabase/supabase-js@2';
+import {
+  extractProductImageUrl,
+  extractSkuImageUrl,
+} from './tiktok-catalog-images.ts';
 
 export const AUTH_BASE = 'https://auth.tiktok-shops.com';
 export const API_BASE = 'https://open-api.tiktokglobalshop.com';
@@ -483,11 +487,6 @@ export const VOID_STATUSES = new Set(['CANCELLED']);
 
 // ── Product / inventory API (mirror POS stock → TikTok) ─────────────────────
 
-import {
-  extractProductImageUrl,
-  extractSkuImageUrl,
-} from './tiktok-catalog-images.ts';
-
 export interface TikTokSkuInventory {
   tiktok_product_id: string;
   tiktok_sku_id: string;
@@ -634,10 +633,14 @@ export async function searchTikTokProducts(
   return merged;
 }
 
-import {
-  extractProductImageUrl,
-  extractSkuImageUrl,
-} from './tiktok-catalog-images.ts';
+/** Unwrap product detail payload (API may nest under `product`). */
+function unwrapProductDetail(data: Record<string, unknown>): Record<string, unknown> {
+  const nested = data?.product;
+  if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+    return nested as Record<string, unknown>;
+  }
+  return data;
+}
 
 /** Fetch product detail and resolve image URL for a mapped SKU. */
 export async function fetchTikTokSkuImageUrl(
@@ -646,12 +649,13 @@ export async function fetchTikTokSkuImageUrl(
   tiktokProductId: string,
   tiktokSkuId: string,
 ): Promise<string | undefined> {
-  const data = await apiGet(
+  const raw = await apiGet(
     `/product/202309/products/${tiktokProductId}`,
     {},
     accessToken,
     shopCipher,
   );
+  const data = unwrapProductDetail(raw);
   const productImage = extractProductImageUrl(data);
   const skus = (data?.skus as Record<string, unknown>[]) || [];
   const sku = skus.find(s => String(s.id || s.sku_id) === tiktokSkuId);
