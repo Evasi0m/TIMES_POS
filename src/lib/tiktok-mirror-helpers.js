@@ -118,10 +118,20 @@ export function buildSyncLine({
   };
 }
 
-/** @returns {'receive'|'void'|'sale'|'sale_void'|'sale_edit'|'return'} */
+/** Toast after customer return mirror. */
+export function formatReturnMirrorToast(results) {
+  return formatMirrorToast(results, { label: 'TikTok return mirror' });
+}
+
+/** Toast after voiding a customer return mirror. */
+export function formatReturnVoidMirrorToast(results) {
+  return formatMirrorToast(results, { label: 'TikTok return void mirror' });
+}
+
+/** @returns {'receive'|'void'|'sale'|'sale_void'|'sale_edit'|'return'|'return_void'} */
 export function normalizeSyncOperation(syncOperation) {
   const op = syncOperation || 'receive';
-  if (op === 'void' || op === 'sale' || op === 'sale_void' || op === 'sale_edit' || op === 'return') {
+  if (op === 'void' || op === 'sale' || op === 'sale_void' || op === 'sale_edit' || op === 'return' || op === 'return_void') {
     return op;
   }
   return 'receive';
@@ -149,14 +159,17 @@ export function pickCatalogSkuForMapping(m, skus) {
   return null;
 }
 
-/** Toast when sale mirror is skipped (not connected / incomplete mapping). */
-export function formatMirrorSkipToast({ reason, incompleteCount = 0, healed = 0 } = {}) {
+/** Toast when mirror is skipped (not connected / incomplete mapping). */
+export function formatMirrorSkipToast({
+  reason, incompleteCount = 0, healed = 0, context = 'sale',
+} = {}) {
+  const label = context === 'return' ? 'TikTok return mirror' : 'TikTok sale mirror';
   if (reason === 'not_connected') {
-    return { msg: 'TikTok sale mirror ข้าม: ยังไม่ได้เชื่อมต่อ TikTok Shop', type: 'warning' };
+    return { msg: `${label} ข้าม: ยังไม่ได้เชื่อมต่อ TikTok Shop`, type: 'warning' };
   }
   if (reason === 'no_mapping') {
     return {
-      msg: 'TikTok sale mirror ข้าม: สินค้านี้ยังไม่ได้จับคู่ TikTok',
+      msg: `${label} ข้าม: สินค้านี้ยังไม่ได้จับคู่ TikTok`,
       type: 'warning',
     };
   }
@@ -166,13 +179,19 @@ export function formatMirrorSkipToast({ reason, incompleteCount = 0, healed = 0 
       type: 'warning',
     };
   }
+  if (reason === 'return_void_no_target') {
+    return {
+      msg: 'TikTok ไม่ได้ sync — รับคืนนี้ไม่เคย mirror ไป TikTok',
+      type: 'warning',
+    };
+  }
   if (reason === 'incomplete_mapping') {
     if (healed > 0 && incompleteCount === 0) {
       return { msg: 'ซ่อม mapping TikTok อัตโนมัติแล้ว', type: 'info' };
     }
     const suffix = incompleteCount > 0 ? ` — ${incompleteCount} รายการ` : '';
     return {
-      msg: `TikTok sale mirror ข้าม: mapping ไม่ครบ (ขาด product id)${suffix}`,
+      msg: `${label} ข้าม: mapping ไม่ครบ (ขาด product id)${suffix}`,
       type: 'error',
     };
   }

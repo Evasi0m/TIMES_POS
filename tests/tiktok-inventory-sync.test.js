@@ -14,6 +14,8 @@ import {
   mappingNeedsProductId,
   pickCatalogSkuForMapping,
   formatMirrorSkipToast,
+  formatReturnMirrorToast,
+  formatReturnVoidMirrorToast,
   normalizeSyncOperation,
 } from '../src/lib/tiktok-mirror-helpers.js';
 
@@ -169,6 +171,18 @@ describe('buildSyncLine', () => {
     expect(line.receive_order_id).toBe(88);
   });
 
+  it('includes sync_operation return_void when requested', () => {
+    const line = buildSyncLine({
+      receiveOrderId: 99,
+      productId: 55,
+      posStockAfter: 2,
+      mapping: { tiktok_sku_id: 's', tiktok_product_id: 'p' },
+      syncOperation: 'return_void',
+    });
+    expect(line.sync_operation).toBe('return_void');
+    expect(line.receive_order_id).toBe(99);
+  });
+
   it('includes sync_operation sale_edit when requested', () => {
     const line = buildSyncLine({
       saleOrderId: 502,
@@ -182,8 +196,9 @@ describe('buildSyncLine', () => {
 });
 
 describe('normalizeSyncOperation', () => {
-  it('passes through known ops including return', () => {
+  it('passes through known ops including return and return_void', () => {
     expect(normalizeSyncOperation('return')).toBe('return');
+    expect(normalizeSyncOperation('return_void')).toBe('return_void');
     expect(normalizeSyncOperation('sale_edit')).toBe('sale_edit');
   });
   it('defaults unknown to receive', () => {
@@ -269,6 +284,34 @@ describe('formatMirrorSkipToast', () => {
     const t = formatMirrorSkipToast({ reason: 'void_no_target' });
     expect(t.type).toBe('warning');
     expect(t.msg).toContain('ไม่เคย mirror');
+  });
+
+  it('uses return label when context is return', () => {
+    const t = formatMirrorSkipToast({ reason: 'no_mapping', context: 'return' });
+    expect(t.msg).toContain('TikTok return mirror');
+    expect(t.msg).not.toContain('sale mirror');
+  });
+
+  it('warns when return void has no target', () => {
+    const t = formatMirrorSkipToast({ reason: 'return_void_no_target', context: 'return' });
+    expect(t.type).toBe('warning');
+    expect(t.msg).toContain('ไม่เคย mirror');
+  });
+});
+
+describe('formatReturnMirrorToast', () => {
+  it('formats success with return label', () => {
+    const { msg, isError } = formatReturnMirrorToast([{ ok: true, product_id: 1 }]);
+    expect(isError).toBe(false);
+    expect(msg).toContain('return mirror');
+  });
+});
+
+describe('formatReturnVoidMirrorToast', () => {
+  it('formats success with return void label', () => {
+    const { msg, isError } = formatReturnVoidMirrorToast([{ ok: true, product_id: 1 }]);
+    expect(isError).toBe(false);
+    expect(msg).toContain('return void mirror');
   });
 });
 

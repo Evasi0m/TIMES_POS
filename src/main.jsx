@@ -118,14 +118,15 @@ import {
   formatMirrorToast,
   getTikTokConnectionStatus,
   isTikTokLineReady,
-  mirrorStockAfterGoodsReturn,
   mirrorStockToTikTok,
   persistTiktokMatchMapping,
+  runReturnMirrorWithFeedback,
+  runReturnVoidMirrorWithFeedback,
   runSaleMirrorWithFeedback,
   runSaleVoidMirrorWithFeedback,
   runVoidMirrorWithFeedback,
 } from './lib/tiktok-inventory-sync.js';
-import { formatMirrorSkipToast, logMirrorBackgroundError, mappingRowFromTiktokSku } from './lib/tiktok-mirror-helpers.js';
+import { logMirrorBackgroundError, mappingRowFromTiktokSku } from './lib/tiktok-mirror-helpers.js';
 import AnimatedLogo from './components/ui/AnimatedLogo.jsx';
 import './styles.css';
 
@@ -3497,6 +3498,18 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
           await runVoidMirrorWithFeedback({ toast, receiveOrderId: order.id });
         } catch (e) {
           toast.push('Mirror TikTok (void) ไม่สำเร็จ: ' + mapError(e), 'error', { durationMs: 8000 });
+        }
+      }
+      if (kind === 'return' && order.goods_returned !== false) {
+        try {
+          const voidProductIds = (items || []).map(it => it.product_id).filter(Boolean);
+          await runReturnVoidMirrorWithFeedback({
+            toast,
+            returnOrderId: order.id,
+            productIds: voidProductIds.length ? voidProductIds : null,
+          });
+        } catch (e) {
+          toast.push('Mirror TikTok (return void) ไม่สำเร็จ: ' + mapError(e), 'error', { durationMs: 8000 });
         }
       }
     } finally { setBusy(false); voidLockRef.current = false; }
@@ -8912,6 +8925,7 @@ function BillPickerPopup({ open, product, onPick, onClose }) {
 
 const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, headerAction, searchRowAction }, ref) {
   const toast = useToast();
+  const askConfirm = useConfirm();
   const productSearchRef = useRef(null);
   const [scannerOpen, setScannerOpen] = useState(false);
   // Duplicate-bill guard — fetched once on form mount. Used only for
@@ -9007,7 +9021,6 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
   }, [kind]);
 
   const tiktokMirrorOn = kind === 'receive' && syncTikTokAfterReceive && tiktokConnected;
-  const tiktokReturnMirrorOn = kind === 'return' && goodsReturned && tiktokConnected;
   const tiktokCatalogLines = React.useMemo(() => {
     const seen = new Set();
     const lines = [];
@@ -9165,6 +9178,21 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
   // with ALL items from that bill (the old behavior), since they explicitly
   // chose the bill first.
   const selectSaleFromSearch = async (sale) => {
+    const { data: existingReturns } = await sb.from('return_orders')
+      .select('id')
+      .eq('original_sale_order_id', sale.id)
+      .is('voided_at', null)
+      .limit(5);
+    if (existingReturns?.length) {
+      const ids = existingReturns.map(r => `#${r.id}`).join(', ');
+      const proceed = await askConfirm({
+        title: 'บิลนี้มีใบรับคืนอยู่แล้ว',
+        message: `บิลขาย #${sale.id} มีใบรับคืน ${ids} ที่ยังไม่ยกเลิก — คืนซ้ำจะบวกสต็อกเกินจริง ต้องการดำเนินการต่อหรือไม่?`,
+        okLabel: 'ดำเนินการต่อ',
+        danger: true,
+      });
+      if (!proceed) return;
+    }
     const { data } = await sb.from('sale_order_items').select('*').eq('sale_order_id', sale.id);
     const fullSale = { ...sale, items: data || [] };
     setSelectedSale(fullSale);
@@ -9653,23 +9681,12 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
         }
       }
 
-      if (tiktokReturnMirrorOn && items.length) {
-        try {
-          const productIds = [...new Set(items.map(l => l.product_id).filter(Boolean))];
-          const { results, skipped, reason } = await mirrorStockAfterGoodsReturn({
-            returnOrderId: head.id,
-            productIds,
-          });
-          if (!skipped) {
-            const { msg, isError } = formatMirrorToast(results, { label: 'TikTok return mirror' });
-            toast.push(msg, isError ? 'error' : 'success');
-          } else {
-            const t = formatMirrorSkipToast({ reason });
-            if (t) toast.push(t.msg, t.type);
-          }
-        } catch (e) {
-          toast.push('Mirror TikTok ไม่สำเร็จ: ' + mapError(e), 'error');
-        }
+      if (kind === 'return' && goodsReturned && items.length) {
+        runReturnMirrorWithFeedback({
+          toast,
+          returnOrderId: head.id,
+          productIds: [...new Set(items.map(l => l.product_id).filter(Boolean))],
+        }).catch((e) => logMirrorBackgroundError('return-mirror', e));
       }
 
       setItems([]); setNotes(""); setSupplierName(""); setSupplierInvoiceNo(""); setSupplierTaxId(""); setSelectedSupplier(null); setOrigSaleId(""); setReturnReason("");
@@ -9955,6 +9972,13 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
           )}
           {kind==='return' && selectedSale && (
             <div className="flex justify-between"><span className="text-muted">บิลขายต้นฉบับ</span><span className="font-medium font-mono">#{selectedSale.id}</span></div>
+          )}
+          {kind==='return' && goodsReturned && (
+            <div className="rounded-xl border hairline p-3 bg-surface-soft text-sm">
+              <div className="text-muted leading-relaxed">
+                TikTok: จะ sync สต็อกตาม POS หลังบันทึก (เฉพาะ SKU ที่จับคู่ TikTok แล้ว)
+              </div>
+            </div>
           )}
           {kind==='return' && !goodsReturned && (
             // Loud warning for the refund-only case — single-glance confirmation

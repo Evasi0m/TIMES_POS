@@ -11,6 +11,8 @@ import {
   formatVoidMirrorToast,
   formatSaleMirrorToast,
   formatSaleVoidMirrorToast,
+  formatReturnMirrorToast,
+  formatReturnVoidMirrorToast,
   formatMirrorSkipToast,
   logMirrorBackgroundError,
   mappingNeedsProductId,
@@ -31,6 +33,8 @@ export {
   formatVoidMirrorToast,
   formatSaleMirrorToast,
   formatSaleVoidMirrorToast,
+  formatReturnMirrorToast,
+  formatReturnVoidMirrorToast,
   formatMirrorSkipToast,
   formatTikTokApiError,
   logMirrorBackgroundError,
@@ -396,8 +400,8 @@ function mirrorSkipReason(rawMappings, eligibleMappings, failedHeal) {
   return null;
 }
 
-function pushMirrorSkipToast(toast, result) {
-  const skip = formatMirrorSkipToast(result);
+function pushMirrorSkipToast(toast, result, { context = 'sale' } = {}) {
+  const skip = formatMirrorSkipToast({ ...result, context });
   if (skip && toast) {
     toast.push(skip.msg, skip.type, { durationMs: skip.type === 'error' ? 8000 : 6000 });
   }
@@ -526,6 +530,126 @@ export async function mirrorStockAfterGoodsReturn({
   }));
   const results = await mirrorStockToTikTok(mirrorPayload);
   return { results, skipped: false, targetCount: mappings.length };
+}
+
+/** Products eligible for return void mirror (prior successful return sync). */
+export async function fetchReturnVoidMirrorTargets(returnOrderId, productIds = null) {
+  const { data, error } = await sb.rpc('get_tiktok_return_void_mirror_targets', {
+    p_return_order_id: returnOrderId,
+    p_product_ids: productIds?.length ? productIds : null,
+  });
+  if (error) throw error;
+  return data || [];
+}
+
+/** Mirror after voiding a customer return — only SKUs previously return-mirrored. */
+export async function mirrorStockAfterReturnVoid({
+  returnOrderId, productIds = null, targets: preloadedTargets = null,
+}) {
+  const rawTargets = preloadedTargets ?? await fetchReturnVoidMirrorTargets(returnOrderId, productIds);
+  if (!rawTargets.length) {
+    return { results: [], skipped: true, targetCount: 0, reason: 'return_void_no_target' };
+  }
+
+  if (!(await isTikTokMirrorAvailable())) {
+    return { results: [], skipped: true, targetCount: 0, reason: 'not_connected' };
+  }
+
+  const { mappings: readyTargets } = await ensureMappingsReady(rawTargets);
+  const targets = filterMirrorEligibleMappings(readyTargets);
+  if (!targets.length) {
+    return {
+      results: [],
+      skipped: true,
+      targetCount: 0,
+      reason: 'incomplete_mapping',
+    };
+  }
+
+  const stocks = await fetchPosStocks(targets.map(t => t.product_id));
+  const mirrorPayload = targets.map(t => buildSyncLine({
+    receiveOrderId: returnOrderId,
+    productId: t.product_id,
+    posStockAfter: stocks[t.product_id]?.current_stock ?? 0,
+    mapping: t,
+    syncOperation: 'return_void',
+  }));
+  const results = await mirrorStockToTikTok(mirrorPayload);
+  return { results, skipped: false, targetCount: targets.length };
+}
+
+/** Customer return mirror with toast feedback. */
+export async function runReturnMirrorWithFeedback({ toast, returnOrderId, productIds }) {
+  const ids = [...new Set((productIds || []).filter(id => id != null))];
+  if (!returnOrderId || !ids.length) return { results: [], skipped: true, targetCount: 0 };
+
+  const count = ids.length;
+  if (count >= 2 && toast) {
+    toast.push(formatVoidMirrorProgressToast(count), 'info', {
+      durationMs: voidMirrorToastDurationMs(count),
+    });
+  }
+
+  try {
+    const result = await mirrorStockAfterGoodsReturn({ returnOrderId, productIds: ids });
+    const { results, skipped, targetCount, reason } = result;
+    if (skipped && toast) {
+      pushMirrorSkipToast(toast, result, { context: 'return' });
+    } else if (!skipped && toast) {
+      const { msg, isError } = formatReturnMirrorToast(results);
+      toast.push(msg, isError ? 'error' : 'success', {
+        durationMs: voidMirrorToastDurationMs(targetCount || count, { isError }),
+      });
+    }
+    return { results, skipped, targetCount, reason };
+  } catch (e) {
+    if (toast) {
+      toast.push('TikTok return mirror: ' + formatTikTokApiError(e?.message || e), 'error', {
+        durationMs: 8000,
+      });
+    }
+    return { results: [], skipped: true, targetCount: 0, error: e };
+  }
+}
+
+/** Void customer return mirror with toast feedback. */
+export async function runReturnVoidMirrorWithFeedback({ toast, returnOrderId, productIds = null }) {
+  const targets = await fetchReturnVoidMirrorTargets(returnOrderId, productIds);
+  if (!targets.length) {
+    if (toast) pushMirrorSkipToast(toast, { reason: 'return_void_no_target' }, { context: 'return' });
+    return { results: [], skipped: true, targetCount: 0, reason: 'return_void_no_target' };
+  }
+
+  const count = targets.length;
+  if (count >= 2 && toast) {
+    toast.push(formatVoidMirrorProgressToast(count), 'info', {
+      durationMs: voidMirrorToastDurationMs(count),
+    });
+  }
+
+  try {
+    const { results, skipped, targetCount, reason } = await mirrorStockAfterReturnVoid({
+      returnOrderId,
+      productIds,
+      targets,
+    });
+    if (skipped && toast) {
+      pushMirrorSkipToast(toast, { reason: reason || 'return_void_no_target' }, { context: 'return' });
+    } else if (!skipped && toast) {
+      const { msg, isError } = formatReturnVoidMirrorToast(results);
+      toast.push(msg, isError ? 'error' : 'success', {
+        durationMs: voidMirrorToastDurationMs(targetCount || count, { isError }),
+      });
+    }
+    return { results, skipped, targetCount: targetCount || count };
+  } catch (e) {
+    if (toast) {
+      toast.push('TikTok return void mirror: ' + formatTikTokApiError(e?.message || e), 'error', {
+        durationMs: 8000,
+      });
+    }
+    return { results: [], skipped: true, targetCount: 0, error: e };
+  }
 }
 
 /**

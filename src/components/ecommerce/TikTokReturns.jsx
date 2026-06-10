@@ -91,6 +91,11 @@ export default function TikTokReturns({ toast }) {
         </>
       )}
     >
+      <div className="mb-4 rounded-xl border hairline bg-surface-soft px-4 py-3 text-sm text-muted leading-relaxed">
+        <strong className="text-ink">แนะนำ:</strong> บันทึกรับคืนที่เมนู{' '}
+        <strong className="text-ink">รับคืนจากลูกค้า</strong>{' '}
+        เพื่อ sync สต็อก POS ↔ TikTok อัตโนมัติ — ปุ่ม &quot;ออกใบลดหนี้&quot; ด้านล่างออกเอกสารอย่างเดียว ไม่ mirror สต็อก
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>

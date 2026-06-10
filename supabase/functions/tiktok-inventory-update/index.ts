@@ -23,17 +23,36 @@ interface SyncItem {
   seller_sku?: string;
   tiktok_product_name?: string;
   skip?: boolean;
-  sync_operation?: 'receive' | 'void' | 'sale' | 'sale_void' | 'sale_edit' | 'return';
+  sync_operation?: 'receive' | 'void' | 'sale' | 'sale_void' | 'sale_edit' | 'return' | 'return_void';
 }
 
-type SyncOp = 'receive' | 'void' | 'sale' | 'sale_void' | 'sale_edit' | 'return';
+type SyncOp = 'receive' | 'void' | 'sale' | 'sale_void' | 'sale_edit' | 'return' | 'return_void';
 
 function resolveSyncOperation(it: SyncItem): SyncOp {
   const op = it.sync_operation;
-  if (op === 'void' || op === 'sale' || op === 'sale_void' || op === 'sale_edit' || op === 'return') {
+  if (op === 'void' || op === 'sale' || op === 'sale_void' || op === 'sale_edit' || op === 'return' || op === 'return_void') {
     return op;
   }
   return 'receive';
+}
+
+async function checkAlreadySynced(
+  supa: ReturnType<typeof serviceClient>,
+  receiveOrderId: number,
+  productId: number,
+  syncOp: SyncOp,
+): Promise<boolean> {
+  if (syncOp === 'sale_edit') return false;
+  const { data, error } = await supa.rpc('tiktok_inventory_already_synced', {
+    p_receive_order_id: receiveOrderId,
+    p_product_id: productId,
+    p_sync_operation: syncOp,
+  });
+  if (error) {
+    console.warn('[tiktok-inventory-update] already_synced check failed:', error.message);
+    return false;
+  }
+  return data === true;
 }
 
 async function rpcOrThrow(
@@ -101,14 +120,8 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const { data: already } = syncOp === 'sale_edit'
-        ? { data: false }
-        : await supa.rpc('tiktok_inventory_already_synced', {
-          p_receive_order_id: receiveOrderId,
-          p_product_id: productId,
-          p_sync_operation: syncOp,
-        });
-      if (already === true) {
+      const already = await checkAlreadySynced(supa, receiveOrderId, productId, syncOp);
+      if (already) {
         results.push({ product_id: productId, status: 'duplicate' });
         continue;
       }
