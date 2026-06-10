@@ -47,7 +47,7 @@ export default function TikTokPendingModal({
         className={
           'ttc-pending-modal ttc-modal-card relative w-full glass-strong rounded-3xl border hairline overflow-hidden flex flex-col ' +
           (isConfirmView ? 'max-w-[min(96vw,900px)]' : 'max-w-[min(96vw,640px)]') +
-          ' h-[min(90vh,820px)] ' +
+          (isConfirmView ? ' max-h-[min(90vh,820px)] ' : ' h-[min(90vh,820px)] ') +
           (closing ? 'holo-card-out' : 'holo-card-in')
         }
         onClick={e => e.stopPropagation()}

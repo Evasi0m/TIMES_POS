@@ -1553,6 +1553,70 @@
   }
   .btn-app-settings-sidebar svg { filter: drop-shadow(0 1px 0 rgba(255, 215, 190, 0.5)); }
 
+  /* Purple + Tiffany pixel-mesh — รายการอัปเดต sidebar button
+     (sizing + shadow recipe mirrors `.btn-app-settings-sidebar`) */
+  .btn-patch-log-sidebar {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%;
+    position: relative;
+    overflow: hidden;
+    color: #f0fdfa;
+    text-shadow: 0 1px 0 rgba(15, 60, 55, 0.45);
+    padding: 8px 16px;
+    min-height: 38px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.2px;
+    border: 1px solid rgba(90, 45, 80, 0.55);
+    background:
+      radial-gradient(circle at 14% 22%, #c084fc 0%, transparent 52%),
+      radial-gradient(circle at 86% 18%, #5eead4 0%, transparent 48%),
+      radial-gradient(circle at 52% 108%, #a855f7 0%, transparent 58%),
+      radial-gradient(circle at 72% 55%, #0abab5 0%, transparent 42%),
+      linear-gradient(135deg, #7c3aed 0%, #5b21b6 42%, #0f766e 100%);
+    box-shadow:
+      0 2px 8px rgba(91, 33, 182, 0.40),
+      0 1px 0 rgba(255, 255, 255, 0.28) inset,
+      0 -1px 0 rgba(15, 60, 55, 0.30) inset;
+    cursor: pointer;
+    transition: all .18s var(--ease-out);
+  }
+  .btn-patch-log-sidebar::before {
+    content: "";
+    position: absolute; top: 0; left: 0; right: 0; height: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.18), transparent);
+    pointer-events: none;
+    border-radius: inherit;
+  }
+  .btn-patch-log-sidebar::after {
+    content: "";
+    position: absolute; inset: 0;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.04) 0, rgba(255,255,255,0.04) 1px, transparent 1px, transparent 3px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.04) 0, rgba(255,255,255,0.04) 1px, transparent 1px, transparent 3px);
+    pointer-events: none;
+    border-radius: inherit;
+    opacity: 0.55;
+  }
+  .btn-patch-log-sidebar:hover {
+    filter: brightness(1.05) saturate(1.03);
+    transform: translateY(-1px);
+    box-shadow:
+      0 6px 16px rgba(91, 33, 182, 0.55),
+      0 0 0 1px rgba(180, 255, 240, 0.35),
+      0 1px 0 rgba(255, 255, 255, 0.45) inset,
+      0 -1px 0 rgba(15, 60, 55, 0.30) inset;
+  }
+  .btn-patch-log-sidebar:active {
+    transform: scale(0.97);
+    box-shadow:
+      0 1px 4px rgba(91, 33, 182, 0.40),
+      0 1px 0 rgba(255, 255, 255, 0.35) inset;
+  }
+  .btn-patch-log-sidebar svg { filter: drop-shadow(0 1px 1px rgba(30, 10, 60, 0.35)); position: relative; z-index: 1; }
+  .btn-patch-log-sidebar > * { position: relative; z-index: 1; }
+
   /* Used by the OverviewView segment tabs (ยอดขาย / วิเคราะห์).
      Mirrors `.btn-app-settings-sidebar` so the brand identity feels
      consistent — same coral gradient, same shadow recipe — but applies

@@ -26,6 +26,7 @@ import {
   onUpdateStateChange,
 } from './lib/app-update.js';
 import AppUpdateBanner from './components/ui/AppUpdateBanner.jsx';
+import UpdateLogButton from './components/ui/UpdateLogButton.jsx';
 import { fetchAll } from './lib/sb-paginate.js';
 import { sb } from './lib/supabase-client.js';
 import {
@@ -4125,6 +4126,7 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
         })}
       </nav>
       <div className="sidebar-footer p-4 border-t space-y-2">
+        <UpdateLogButton />
         <AppUpdateButton />
         {/* User-management button — super_admin only. Reuses the yellow
             `.btn-settings-sidebar` style so it visually contrasts with
@@ -4220,6 +4222,7 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
                 <Icon name="crown" size={16}/> การตั้งค่า user
               </button>
             )}
+            <UpdateLogButton onDone={() => setOpenMenu(false)} />
             <AppUpdateButton onDone={() => setOpenMenu(false)} />
             <button className="btn-app-settings-sidebar" onClick={()=>{ setOpenMenu(false); onOpenSettings?.(); }}>
               <Icon name="settings" size={16}/> การตั้งค่า

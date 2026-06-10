@@ -1,3 +1,5 @@
+import { skuMatchTier } from '../../../lib/fuzzy-match.js';
+
 export const SORT_OLDEST = 'oldest';
 export const SORT_NEWEST = 'newest';
 
@@ -76,13 +78,20 @@ export function normalizeSkuToken(s) {
   return String(s || '').trim().toUpperCase().replace(/\s+/g, '');
 }
 
-/** True when picked POS SKU differs from TikTok seller_sku (detector only — not user opt-in). */
+/**
+ * True when picked POS SKU is a genuinely different model from TikTok.
+ * Whitelisted distributor suffixes (VDF, UDF, DR, …) count as the same SKU —
+ * TikTok lists the bare model code; POS appends the regional suffix.
+ */
 export function isTikTokSkuMismatch(item, pick) {
   if (!item || !pick?.name) return false;
   const tiktokSku = normalizeSkuToken(item.seller_sku || extractTikTokSkuKey(item));
   const pickSku = normalizeSkuToken(pick.name);
   if (!tiktokSku || !pickSku) return false;
-  return tiktokSku !== pickSku;
+  if (tiktokSku === pickSku) return false;
+
+  const { tier } = skuMatchTier(tiktokSku, pickSku);
+  return tier !== 'exact' && tier !== 'suffix';
 }
 
 /** @deprecated use isTikTokSkuMismatch — kept for existing imports */

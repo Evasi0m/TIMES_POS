@@ -3,11 +3,13 @@ import TikTokStepProgress from './TikTokStepProgress.jsx';
 import TikTokOrderSummaryCard from './TikTokOrderSummaryCard.jsx';
 import TikTokItemNavigator from './TikTokItemNavigator.jsx';
 import TikTokMatchSidePanel from './TikTokMatchSidePanel.jsx';
+import TikTokOrderReviewPane from './TikTokOrderReviewPane.jsx';
 import TikTokConfirmActionBar from './TikTokConfirmActionBar.jsx';
 import {
   orderHasStockIssue,
   orderHasSubstitutionBlock,
   defaultSubstitutionMeta,
+  isTikTokSkuMismatch,
 } from './helpers.js';
 
 export default function TikTokOrderConfirmPane({
@@ -30,6 +32,7 @@ export default function TikTokOrderConfirmPane({
   onRetryCatalog,
 }) {
   const [activeItemId, setActiveItemId] = useState(null);
+  const [viewMode, setViewMode] = useState('match');
 
   const items = order?.items || [];
 
@@ -37,6 +40,7 @@ export default function TikTokOrderConfirmPane({
     if (!order?.id) return;
     const first = items.find(it => !picks[it.id]?.id);
     setActiveItemId(first?.id ?? items[0]?.id ?? null);
+    setViewMode('match');
   }, [order?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!order) return null;
@@ -60,7 +64,18 @@ export default function TikTokOrderConfirmPane({
       }));
     }
     const next = items.find(it => it.id !== itemId && !picks[it.id]?.id);
-    setActiveItemId(next?.id ?? null);
+    if (next) {
+      setActiveItemId(next.id);
+      setViewMode('match');
+      return;
+    }
+    setActiveItemId(itemId);
+    const mismatch = item && isTikTokSkuMismatch(item, { name: p.name });
+    if (!mismatch) {
+      setViewMode('review');
+    } else {
+      setViewMode('match');
+    }
   };
 
   const handleClear = (itemId) => {
@@ -75,6 +90,7 @@ export default function TikTokOrderConfirmPane({
       return n;
     });
     setActiveItemId(itemId);
+    setViewMode('match');
   };
 
   const handleSubstitutionChange = (itemId, patch) => {
@@ -84,24 +100,36 @@ export default function TikTokOrderConfirmPane({
     }));
   };
 
+  const goToReview = () => setViewMode('review');
+
+  const backToMatch = (itemId) => {
+    setViewMode('match');
+    if (itemId) setActiveItemId(itemId);
+    else if (!activeItemId && items[0]) setActiveItemId(items[0].id);
+  };
+
   return (
     <div className="flex flex-col h-full min-h-0 bg-surface-cream-strong">
-      <TikTokStepProgress allMatched={allMatched} netOk={netOk}/>
+      <TikTokStepProgress
+        allMatched={allMatched}
+        viewMode={viewMode}
+        netOk={netOk}
+        stockBlocked={stockBlocked}
+        substitutionBlocked={substitutionBlocked}
+      />
 
-      {/* Order strip — softened teal, compact */}
       <div className="px-4 pt-2.5 pb-1.5 shrink-0">
         <TikTokOrderSummaryCard order={order}/>
       </div>
 
-      {/* Item navigator — switch focus between SKUs (multi-item only;
-          for a single item the focus header already shows it). */}
-      {items.length > 1 && (
+      {viewMode === 'match' && items.length > 1 && (
         <div className="px-4 pb-1.5 shrink-0">
           <TikTokItemNavigator
             items={items}
             activeItemId={activeItemId}
             picks={picks}
             catalog={catalog}
+            substitutionMeta={substitutionMeta}
             disabled={saving}
             onSelect={setActiveItemId}
             onClear={handleClear}
@@ -109,26 +137,36 @@ export default function TikTokOrderConfirmPane({
         </div>
       )}
 
-      {/* Focus matcher — full width, fills remaining height */}
       <div className="ttc-match-side-panel-wrap flex-1 min-h-0 px-3 pb-2">
         {items.length ? (
-          <TikTokMatchSidePanel
-            item={activeItem}
-            items={items}
-            picks={picks}
-            matched={activeMatched}
-            pick={activePick}
-            disabled={saving}
-            catalog={catalog}
-            catalogLoading={catalogLoading}
-            catalogError={catalogError}
-            onRetryCatalog={onRetryCatalog}
-            onPick={(p) => activeItem && handlePick(activeItem.id, p)}
-            onClear={handleClear}
-            onEditMatches={() => setActiveItemId(items[0]?.id ?? null)}
-            substitutionMeta={substitutionMeta}
-            onSubstitutionChange={handleSubstitutionChange}
-          />
+          viewMode === 'review' ? (
+            <TikTokOrderReviewPane
+              items={items}
+              picks={picks}
+              catalog={catalog}
+              substitutionMeta={substitutionMeta}
+              disabled={saving}
+              onSubstitutionChange={handleSubstitutionChange}
+              onChangeProduct={backToMatch}
+              onBackToMatch={() => backToMatch(null)}
+            />
+          ) : (
+            <TikTokMatchSidePanel
+              item={activeItem}
+              picks={picks}
+              matched={activeMatched}
+              pick={activePick}
+              disabled={saving}
+              catalog={catalog}
+              catalogLoading={catalogLoading}
+              catalogError={catalogError}
+              onRetryCatalog={onRetryCatalog}
+              onPick={(p) => activeItem && handlePick(activeItem.id, p)}
+              onClear={handleClear}
+              onGoToReview={goToReview}
+              allMatched={allMatched}
+            />
+          )
         ) : (
           <div className="glass-soft !bg-surface-strong/75 ring-1 ring-hairline shadow-sm rounded-lg p-6 text-sm text-muted text-center">
             ไม่มีรายการสินค้า
@@ -143,6 +181,7 @@ export default function TikTokOrderConfirmPane({
         setDeferNet={setDeferNet}
         saving={saving}
         allMatched={allMatched}
+        viewMode={viewMode}
         netOk={netOk}
         stockBlocked={stockBlocked}
         substitutionBlocked={substitutionBlocked}

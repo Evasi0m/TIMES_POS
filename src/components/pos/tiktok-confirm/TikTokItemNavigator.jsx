@@ -1,18 +1,19 @@
 import React from 'react';
 import Icon from '../../ui/Icon.jsx';
 import SkuThumb from './SkuThumb.jsx';
-import { resolvePickStock, stockShortfall } from './helpers.js';
+import {
+  resolvePickStock,
+  stockShortfall,
+  isTikTokSkuMismatch,
+  lineNeedsSubstitutionAck,
+} from './helpers.js';
 
-/**
- * Horizontal item switcher for the focus-one-at-a-time confirm flow.
- * Replaces the old vertical item list. Pure presentation — drives the
- * existing activeItemId / handleClear handlers from the pane.
- */
 export default function TikTokItemNavigator({
   items,
   activeItemId,
   picks,
   catalog,
+  substitutionMeta,
   onSelect,
   onClear,
   disabled,
@@ -26,20 +27,29 @@ export default function TikTokItemNavigator({
       </div>
       <div className="ttc-focus-nav__track">
         {items.map((it, idx) => {
-          const matched = Boolean(picks[it.id]?.id);
+          const pick = picks[it.id];
+          const matched = Boolean(pick?.id);
           const active = activeItemId === it.id;
           const skuName = it.sku_name || it.product_name || '—';
-          const shortfall = matched ? stockShortfall(it, picks[it.id], catalog) : null;
-          const stock = matched ? resolvePickStock(picks[it.id], catalog) : null;
+          const shortfall = matched ? stockShortfall(it, pick, catalog) : null;
+          const stock = matched ? resolvePickStock(pick, catalog) : null;
+          const mismatch = matched && isTikTokSkuMismatch(it, pick);
+          const needsSubst = mismatch && lineNeedsSubstitutionAck(it, pick, substitutionMeta?.[it.id]);
+
+          let chipClass = ' ttc-focus-chip--pending';
+          if (matched) {
+            if (shortfall) chipClass = ' ttc-focus-chip--stock-warn';
+            else if (needsSubst) chipClass = ' ttc-focus-chip--subst';
+            else chipClass = ' ttc-focus-chip--matched';
+          }
+
           return (
             <div
               key={it.id}
               className={
                 'ttc-focus-chip' +
                 (active ? ' ttc-focus-chip--active' : '') +
-                (matched
-                  ? (shortfall ? ' ttc-focus-chip--stock-warn' : ' ttc-focus-chip--matched')
-                  : ' ttc-focus-chip--pending') +
+                chipClass +
                 (disabled ? ' is-disabled' : '')
               }
               role="button"
@@ -57,9 +67,18 @@ export default function TikTokItemNavigator({
                         <Icon name="alert" size={10}/>
                         stock {stock ?? '?'} · ไม่พอ
                       </span>
+                    ) : needsSubst ? (
+                      <span className="inline-flex items-center gap-0.5 text-amber-800">
+                        <Icon name="alert" size={10}/>
+                        SKU ไม่ตรง · รอติ๊กส่งแทน
+                      </span>
+                    ) : mismatch ? (
+                      <span className="inline-flex items-center gap-0.5 text-[#0a7a43]">
+                        <Icon name="check" size={10}/> ส่งแทนแล้ว
+                      </span>
                     ) : (
                       <span className="inline-flex items-center gap-0.5 text-[#0a7a43]">
-                        <Icon name="check" size={10}/> จับคู่แล้ว · stock {stock ?? '?'}
+                        <Icon name="check" size={10}/> SKU ตรง · stock {stock ?? '?'}
                       </span>
                     )
                   ) : (
@@ -75,7 +94,7 @@ export default function TikTokItemNavigator({
                   type="button"
                   className="ttc-focus-chip__change"
                   onClick={(e) => { e.stopPropagation(); onClear(it.id); }}
-                  aria-label="เปลี่ยนการจับคู่"
+                  aria-label="เปลี่ยนสินค้า"
                 >
                   เปลี่ยน
                 </button>

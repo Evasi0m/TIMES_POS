@@ -29,7 +29,18 @@ describe('isTikTokSkuMismatch', () => {
     expect(isTikTokSkuMismatch(tiktokLine, { name: 'AE-1600HX-3A' })).toBe(false);
   });
 
-  it('returns true when pick differs from TikTok seller_sku', () => {
+  it('returns false when POS has whitelisted distributor suffix (same model)', () => {
+    expect(isTikTokSkuMismatch(
+      { seller_sku: 'AMW-870DA-2A1' },
+      { name: 'AMW-870DA-2A1VDF' },
+    )).toBe(false);
+    expect(isTikTokSkuMismatch(
+      { seller_sku: 'GA-2100-1A1' },
+      { name: 'GA-2100-1A1DR' },
+    )).toBe(false);
+  });
+
+  it('returns true when pick is a genuinely different model', () => {
     expect(isTikTokSkuMismatch(tiktokLine, { name: 'AE-1500WHX-1AVDF' })).toBe(true);
   });
 

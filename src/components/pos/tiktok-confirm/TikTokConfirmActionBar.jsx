@@ -2,16 +2,15 @@ import React from 'react';
 import Icon from '../../ui/Icon.jsx';
 import DeferNetButton from '../DeferNetButton.jsx';
 
-/** Net-received card — softened red accent on a cream frame (cart tone). */
-function NetReceivedCard({ allMatched, deferNet, setDeferNet, net, setNet, saving }) {
+function NetReceivedCard({ showNet, deferNet, setDeferNet, net, setNet, saving }) {
   return (
     <div
       className={
         'ttc-net-card relative overflow-hidden rounded-xl px-3 py-2.5 ' +
-        (!allMatched ? 'opacity-55 pointer-events-none select-none' : '')
+        (!showNet ? 'opacity-55 pointer-events-none select-none' : '')
       }
     >
-      <div className="relative">
+      <div className="relative min-w-0">
         <div className="flex items-center justify-between gap-2 mb-2">
           <div className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#b3261e]">
             <Icon name="store" size={11}/> เงินที่ร้านได้รับ
@@ -19,9 +18,9 @@ function NetReceivedCard({ allMatched, deferNet, setDeferNet, net, setNet, savin
           </div>
         </div>
 
-        {!allMatched ? (
+        {!showNet ? (
           <div className="text-xs text-muted leading-relaxed">
-            จับคู่สินค้าครบก่อน แล้วค่อยกรอกยอดเงิน
+            ตรวจสอบรายการให้ครบก่อน แล้วค่อยกรอกยอดเงิน
           </div>
         ) : deferNet ? (
           <div className="flex flex-col gap-2 min-w-0">
@@ -83,20 +82,23 @@ export default function TikTokConfirmActionBar({
   setDeferNet,
   saving,
   allMatched,
+  viewMode,
   netOk,
   stockBlocked,
   substitutionBlocked,
   onConfirm,
 }) {
-  const canConfirm = allMatched && netOk && !saving && !stockBlocked && !substitutionBlocked;
+  const reviewReady = allMatched && viewMode === 'review';
+  const showNet = reviewReady && !stockBlocked && !substitutionBlocked;
+  const canConfirm = showNet && netOk && !saving;
+
+  const blocked = reviewReady && (stockBlocked || substitutionBlocked);
 
   return (
-    <div className="px-4 py-3 border-t-2 border-ink/10 bg-surface-cream-strong shrink-0 space-y-2.5">
-      {/* Net card only matters after matching — hidden in step 1 to give the
-          recommendation list more room (purely presentational). */}
-      {allMatched ? (
+    <div className="px-4 py-3 border-t-2 border-ink/10 bg-surface-cream-strong shrink-0 space-y-2.5 min-w-0 overflow-hidden">
+      {reviewReady ? (
         <NetReceivedCard
-          allMatched={allMatched}
+          showNet={showNet}
           deferNet={deferNet}
           setDeferNet={setDeferNet}
           net={net}
@@ -106,28 +108,11 @@ export default function TikTokConfirmActionBar({
       ) : (
         <div className="text-xs text-muted flex items-center gap-2 px-1">
           <Icon name="link" size={14}/>
-          <span>จับคู่สินค้า POS ให้ครบทุกรายการก่อน แล้วจึงกรอกยอดเงิน</span>
-        </div>
-      )}
-
-      {canConfirm && (
-        <div className="text-sm text-[#0a7a43] flex items-center gap-2 px-1">
-          <Icon name="check" size={16}/>
-          <span>พร้อมยืนยัน — กดปุ่มด้านล่างเพื่อตัดสต็อกและออกใบเสร็จ</span>
-        </div>
-      )}
-
-      {allMatched && stockBlocked && (
-        <div className="text-sm text-[#b3261e] flex items-start gap-2 px-1 leading-relaxed">
-          <Icon name="alert" size={16} className="shrink-0 mt-0.5"/>
-          <span>สต็อก POS ไม่พอ — แก้การจับคู่หรือยกเลิกออเดอร์บน TikTok</span>
-        </div>
-      )}
-
-      {allMatched && !stockBlocked && substitutionBlocked && (
-        <div className="text-sm text-[#b3261e] flex items-start gap-2 px-1 leading-relaxed">
-          <Icon name="alert" size={16} className="shrink-0 mt-0.5"/>
-          <span>SKU ไม่ตรง TikTok — ต้องจับคู่ให้ตรง หรือติ๊ก &quot;ส่งจริงคนละรุ่น&quot;</span>
+          <span>
+            {allMatched
+              ? 'กด "ถัดไป → ตรวจสอบ" เพื่อตรวจ SKU ก่อนยืนยัน'
+              : 'จับคู่สินค้า POS ให้ครบทุกรายการก่อน'}
+          </span>
         </div>
       )}
 
@@ -138,7 +123,7 @@ export default function TikTokConfirmActionBar({
         disabled={!canConfirm}
       >
         {saving ? <span className="spinner"/> : <Icon name="check" size={18}/>}
-        ยืนยันการขาย · ตัดสต็อก
+        {blocked ? 'แก้รายการด้านบนก่อนยืนยัน' : 'ยืนยันการขาย · ตัดสต็อก'}
       </button>
     </div>
   );

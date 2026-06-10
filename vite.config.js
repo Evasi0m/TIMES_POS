@@ -6,7 +6,7 @@
 // The single HTML file is deploy-ready: copy to any static host
 // (Cloudflare Pages, Vercel, S3, an SD card on a POS terminal). The SW
 // file goes next to it.
-import { writeFileSync } from 'node:fs';
+import { copyFileSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -46,7 +46,7 @@ export default defineConfig({
         // hash. Without this, the SW would install fine but the app shell
         // wouldn't be cached for true offline boot.
         globPatterns: ['**/*.{html,png,ico,json}'],
-        globIgnores: ['**/version.json'],
+        globIgnores: ['**/version.json', '**/updates.json'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
       },
       manifest: false, // we already ship a hand-written manifest.json
@@ -58,14 +58,30 @@ export default defineConfig({
     // file stays separate.
     viteSingleFile({ removeViteModuleLoader: false }),
 
-    // version.json is fetched at runtime (never precached) so clients can
-    // detect a new deploy without waiting for the SW precache list to change.
+    // version.json + updates.json are fetched at runtime (never precached).
     {
-      name: 'write-version-json',
+      name: 'write-runtime-json',
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          const path = req.url?.split('?')[0];
+          if (path !== '/updates.json' && path !== './updates.json') return next();
+          try {
+            const body = readFileSync(join('src', 'data', 'updates.json'), 'utf8');
+            res.setHeader('Content-Type', 'application/json');
+            res.end(body);
+          } catch {
+            next();
+          }
+        });
+      },
       closeBundle() {
         writeFileSync(
           join('dist', 'version.json'),
           JSON.stringify({ buildId, builtAt: new Date().toISOString() }, null, 0),
+        );
+        copyFileSync(
+          join('src', 'data', 'updates.json'),
+          join('dist', 'updates.json'),
         );
       },
     },
