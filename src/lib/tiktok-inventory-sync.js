@@ -20,6 +20,7 @@ import {
   normalizeSyncOperation,
   pickCatalogSkuForMapping,
   shouldPersistTiktokMatch,
+  tiktokSkuImageUrl,
   voidMirrorToastDurationMs,
 } from './tiktok-mirror-helpers.js';
 import { filterTikTokSkusByTerm, posSkuSearchVariants } from './tiktok-receive-match.js';
@@ -77,10 +78,18 @@ export async function fetchTikTokMappings(productIds) {
   return data || [];
 }
 
+function buildTiktokMappingPayload(productId, { tiktokSku, tiktokMapping } = {}) {
+  const fromSku = tiktokSku ? mappingRowFromTiktokSku(tiktokSku, productId) : null;
+  const m = { ...(fromSku || {}), ...(tiktokMapping || {}) };
+  const imageUrl = tiktokSkuImageUrl(tiktokSku) || tiktokSkuImageUrl(tiktokMapping) || tiktokSkuImageUrl(fromSku);
+  if (imageUrl) m.image_url = imageUrl;
+  return m;
+}
+
 /** Persist POS product ↔ TikTok SKU mapping (receive match confirm). */
 export async function upsertTiktokInventoryMapping({ productId, tiktokSku, tiktokMapping }) {
   if (productId == null) return;
-  const m = tiktokMapping || (tiktokSku ? mappingRowFromTiktokSku(tiktokSku, productId) : null);
+  const m = buildTiktokMappingPayload(productId, { tiktokSku, tiktokMapping });
   if (!m?.tiktok_sku_id) return;
   const { error } = await sb.rpc('upsert_tiktok_inventory_mapping', {
     p_tiktok_sku_id: String(m.tiktok_sku_id),
@@ -89,19 +98,37 @@ export async function upsertTiktokInventoryMapping({ productId, tiktokSku, tikto
     p_seller_sku: m.seller_sku || null,
     p_tiktok_product_name: m.tiktok_product_name || null,
     p_warehouse_id: m.warehouse_id || null,
-    p_image_url: m.image_url || m.sku_image_url || null,
+    p_image_url: tiktokSkuImageUrl(m),
   });
   if (error) throw error;
+  return { hadImage: !!tiktokSkuImageUrl(m) };
+}
+
+/** Fetch product_images from TikTok Product Detail API (mapped SKUs missing photos). */
+export async function syncTikTokProductImages({ productIds, limit = 50 } = {}) {
+  const ids = [...new Set((productIds || []).filter(id => id != null))];
+  if (!ids.length) return { synced: 0, no_image: 0, errors: 0, checked: 0 };
+  const data = await invokeTikTokFunction('tiktok-product-image-backfill', {
+    product_ids: ids,
+    limit: Math.min(Math.max(limit, ids.length), 200),
+  });
+  if (!data?.ok) throw new Error(data?.error || 'TikTok catalog image sync failed');
+  return data;
 }
 
 /** Persist mapping after user picks TikTok SKU (manual + bulk ×10). */
-export async function persistTiktokMatchMapping(productId, patch, { onPersisted } = {}) {
+export async function persistTiktokMatchMapping(productId, patch, { onPersisted, syncImage = true } = {}) {
   if (!shouldPersistTiktokMatch(productId, patch)) return;
-  await upsertTiktokInventoryMapping({
+  const { hadImage } = await upsertTiktokInventoryMapping({
     productId,
     tiktokSku: patch.tiktok_sku,
     tiktokMapping: patch.tiktok_mapping,
-  });
+  }) || {};
+  if (syncImage && !hadImage) {
+    syncTikTokProductImages({ productIds: [productId], limit: 5 }).catch((e) => {
+      console.warn('[TikTok match] catalog image sync failed:', e?.message || e);
+    });
+  }
   await onPersisted?.(productId);
 }
 
@@ -239,17 +266,29 @@ function applyHealedMapping(m, match) {
     warehouse_id: m.warehouse_id || match.warehouse_id || null,
     seller_sku: m.seller_sku || match.seller_sku,
     tiktok_product_name: m.tiktok_product_name || match.product_name,
+    ...(tiktokSkuImageUrl(match) ? { image_url: tiktokSkuImageUrl(match) } : {}),
   };
 }
 
 /** Search TikTok catalog and pick SKU row for an incomplete mapping. */
 async function healMappingProductId(m, catalog = null) {
+  const persistHealed = async (healed) => {
+    const { hadImage } = await upsertTiktokInventoryMapping({
+      productId: m.product_id,
+      tiktokMapping: healed,
+    }) || {};
+    if (!hadImage) {
+      syncTikTokProductImages({ productIds: [m.product_id], limit: 1 }).catch((e) => {
+        console.warn('[TikTok heal] catalog image sync failed:', e?.message || e);
+      });
+    }
+    return healed;
+  };
+
   if (catalog?.length) {
     const match = pickCatalogSkuForMapping(m, catalog);
     if (match?.tiktok_product_id) {
-      const healed = applyHealedMapping(m, match);
-      await upsertTiktokInventoryMapping({ productId: m.product_id, tiktokMapping: healed });
-      return healed;
+      return persistHealed(applyHealedMapping(m, match));
     }
   }
 
@@ -274,9 +313,7 @@ async function healMappingProductId(m, catalog = null) {
     });
     const match = pickCatalogSkuForMapping(m, skus);
     if (!match?.tiktok_product_id) continue;
-    const healed = applyHealedMapping(m, match);
-    await upsertTiktokInventoryMapping({ productId: m.product_id, tiktokMapping: healed });
-    return healed;
+    return persistHealed(applyHealedMapping(m, match));
   }
   return m;
 }

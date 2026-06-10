@@ -173,4 +173,12 @@ describe('tiktokSkuAsMatchProduct', () => {
     expect(p.barcode).toBe('LTP-1302DS-4AVDF');
     expect(p.quantity).toBe(9);
   });
+  it('preserves image_url from catalog row', () => {
+    const p = tiktokSkuAsMatchProduct({
+      ...CATALOG[0],
+      image_url: 'https://cdn.example/sku.jpg',
+    });
+    expect(p.image_url).toBe('https://cdn.example/sku.jpg');
+    expect(p.sku_image_url).toBe('https://cdn.example/sku.jpg');
+  });
 });

@@ -1,5 +1,11 @@
 // Pure helpers for TikTok mirror receive flow (no Supabase import).
 
+/** First HTTP image URL on a catalog SKU or mapping row. */
+export function tiktokSkuImageUrl(skuOrMapping) {
+  if (!skuOrMapping) return null;
+  return skuOrMapping.image_url || skuOrMapping.sku_image_url || null;
+}
+
 /** Build a tiktok_product_mappings-shaped row from a catalog SKU pick. */
 export function mappingRowFromTiktokSku(sku, productId) {
   if (!sku || productId == null) return null;
@@ -10,9 +16,7 @@ export function mappingRowFromTiktokSku(sku, productId) {
     seller_sku: sku.seller_sku || sku.name || sku.barcode,
     tiktok_product_name: sku.product_name || sku.name,
     warehouse_id: sku.warehouse_id || null,
-    ...(sku.image_url || sku.sku_image_url
-      ? { image_url: sku.image_url || sku.sku_image_url }
-      : {}),
+    ...(tiktokSkuImageUrl(sku) ? { image_url: tiktokSkuImageUrl(sku) } : {}),
   };
 }
 

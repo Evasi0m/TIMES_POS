@@ -153,6 +153,7 @@ export default function TikTokSkuMatchRow({
     seller_sku: mapping.seller_sku,
     product_name: mapping.tiktok_product_name,
     quantity: tiktokBefore,
+    image_url: mapping.image_url || mapping.sku_image_url || null,
   } : null);
 
   const pickSku = (sku) => {

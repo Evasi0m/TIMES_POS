@@ -5,6 +5,7 @@ import { classifySkuMatch, findSkuCandidates, KNOWN_SKU_SUFFIXES, skuMatchTier }
 /** Normalize TikTok SKU row for fuzzy-match pool (uses seller_sku as primary code). */
 export function tiktokSkuAsMatchProduct(sku) {
   const code = (sku.seller_sku || sku.product_name || '').trim();
+  const imageUrl = sku.image_url || sku.sku_image_url || null;
   return {
     id: sku.tiktok_sku_id,
     name: code,
@@ -15,6 +16,7 @@ export function tiktokSkuAsMatchProduct(sku) {
     product_name: sku.product_name,
     quantity: sku.quantity ?? 0,
     warehouse_id: sku.warehouse_id,
+    ...(imageUrl ? { image_url: imageUrl, sku_image_url: imageUrl } : {}),
   };
 }
 

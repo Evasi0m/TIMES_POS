@@ -86,6 +86,7 @@ Deno.serve(async (req) => {
           p_seller_sku: row.seller_sku || match.seller_sku,
           p_tiktok_product_name: row.tiktok_product_name || match.product_name,
           p_warehouse_id: match.warehouse_id || null,
+          p_image_url: match.image_url || null,
         });
         healed++;
         details.push({

@@ -29,19 +29,30 @@ Deno.serve(async (req) => {
     const { accessToken, shopCipher } = await getValidAccessToken(supa);
 
     let limit = 100;
+    let productIds: number[] | undefined;
     try {
       const body = await req.json();
       if (body?.limit) limit = Math.min(Math.max(Number(body.limit) || 100, 1), 200);
+      if (Array.isArray(body?.product_ids)) {
+        productIds = body.product_ids
+          .map((id: unknown) => Number(id))
+          .filter((id: number) => Number.isFinite(id) && id > 0);
+      }
     } catch { /* empty body ok */ }
 
-    const mappings = (await rpcOrThrow(supa, 'get_tiktok_mappings_needing_images', {
-      p_limit: limit,
+    let mappings = (await rpcOrThrow(supa, 'get_tiktok_mappings_needing_images', {
+      p_limit: productIds?.length ? Math.max(productIds.length, limit) : limit,
     })) as Array<{
       product_id: number;
       tiktok_sku_id: string;
       tiktok_product_id: string;
       seller_sku?: string;
     }>;
+
+    if (productIds?.length) {
+      const idSet = new Set(productIds);
+      mappings = (mappings || []).filter(m => idSet.has(Number(m.product_id)));
+    }
 
     let synced = 0;
     let noImage = 0;
