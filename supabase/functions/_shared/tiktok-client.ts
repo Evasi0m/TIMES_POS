@@ -634,6 +634,31 @@ export async function searchTikTokProducts(
   return merged;
 }
 
+import {
+  extractProductImageUrl,
+  extractSkuImageUrl,
+} from './tiktok-catalog-images.ts';
+
+/** Fetch product detail and resolve image URL for a mapped SKU. */
+export async function fetchTikTokSkuImageUrl(
+  accessToken: string,
+  shopCipher: string,
+  tiktokProductId: string,
+  tiktokSkuId: string,
+): Promise<string | undefined> {
+  const data = await apiGet(
+    `/product/202309/products/${tiktokProductId}`,
+    {},
+    accessToken,
+    shopCipher,
+  );
+  const productImage = extractProductImageUrl(data);
+  const skus = (data?.skus as Record<string, unknown>[]) || [];
+  const sku = skus.find(s => String(s.id || s.sku_id) === tiktokSkuId);
+  if (sku) return extractSkuImageUrl(sku, productImage);
+  return productImage;
+}
+
 /** Read current qty for one SKU (first warehouse in response). */
 export async function getTikTokSkuQuantity(
   accessToken: string,

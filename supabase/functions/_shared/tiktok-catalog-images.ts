@@ -18,15 +18,17 @@ export function pickFirstUrl(value: unknown): string | undefined {
       || pickFirstUrl(o.uri)
       || pickFirstUrl(o.urls)
       || pickFirstUrl(o.thumb_url)
-      || pickFirstUrl(o.thumb_urls);
+      || pickFirstUrl(o.thumb_urls)
+      || pickFirstUrl(o.image_url);
   }
   return undefined;
 }
 
-/** Product-level image from catalog search payload. */
+/** Product-level image from catalog search or product detail payload. */
 export function extractProductImageUrl(product: Record<string, unknown>): string | undefined {
   return pickFirstUrl(product.thumb_url)
     || pickFirstUrl(product.main_images)
+    || pickFirstUrl(product.main_image)
     || pickFirstUrl(product.images)
     || pickFirstUrl(product.product_image)
     || pickFirstUrl(product.image);

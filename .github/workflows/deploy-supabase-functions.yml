@@ -29,6 +29,7 @@ on:
         options:
           - tiktok-inventory-update
           - tiktok-mapping-backfill
+          - tiktok-product-image-backfill
           - tiktok-products-search
           - tiktok-auth
           - tiktok-connect
@@ -89,6 +90,7 @@ jobs:
             deploy_one tiktok-products-search
             deploy_one tiktok-inventory-update
             deploy_one tiktok-mapping-backfill
+            deploy_one tiktok-product-image-backfill
           else
             case "$FN" in
               tiktok-auth|tiktok-webhook|tiktok-invoice-submit)

@@ -341,11 +341,28 @@ export async function backfillMissingTikTokProductIds({ limit = 50 } = {}) {
   return ensureMappingsReady(rows);
 }
 
-/** Backfill product_images from TikTok order line sku_image_url for mapped products. */
-export async function backfillTikTokProductImages() {
-  const { data, error } = await sb.rpc('backfill_tiktok_product_images');
+/** Backfill product_images from order lines, then TikTok Product Detail API. */
+export async function backfillTikTokProductImages({ limit = 150 } = {}) {
+  const { data: fromOrders, error } = await sb.rpc('backfill_tiktok_product_images');
   if (error) throw error;
-  return data || { synced: 0, skipped: 0, no_image: 0 };
+  const orderResult = fromOrders || { synced: 0, skipped: 0, no_image: 0 };
+
+  const catalogData = await invokeTikTokFunction('tiktok-product-image-backfill', {
+    limit: Math.min(Math.max(limit, 1), 200),
+  });
+  if (!catalogData?.ok) {
+    throw new Error(catalogData?.error || 'TikTok catalog image backfill failed');
+  }
+
+  return {
+    synced: (orderResult.synced || 0) + (catalogData.synced || 0),
+    skipped: orderResult.skipped || 0,
+    no_image: catalogData.no_image ?? orderResult.no_image ?? 0,
+    from_orders: orderResult.synced || 0,
+    from_catalog: catalogData.synced || 0,
+    errors: catalogData.errors || 0,
+    checked: catalogData.checked || 0,
+  };
 }
 
 /** Re-sync sale mirror for a bill after mapping backfill (e.g. bill #127254). */

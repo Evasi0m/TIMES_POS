@@ -16,6 +16,9 @@ describe('pickFirstUrl', () => {
   it('extracts first from array', () => {
     expect(pickFirstUrl([{ urls: ['https://cdn.example/c.jpg'] }])).toBe('https://cdn.example/c.jpg');
   });
+  it('extracts from object with urls array', () => {
+    expect(pickFirstUrl({ urls: ['https://cdn.example/d.jpg'] })).toBe('https://cdn.example/d.jpg');
+  });
 });
 
 describe('extractProductImageUrl', () => {
