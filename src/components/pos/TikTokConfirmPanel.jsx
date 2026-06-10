@@ -17,7 +17,7 @@ import { getProductCatalog } from '../../lib/product-catalog-cache.js';
 import { pollTikTokOrders, formatPollToast } from '../../lib/tiktok-poll-sync.js';
 import { useSimulatedSyncProgress } from '../../lib/use-simulated-sync-progress.js';
 import TikTokPendingModal from './tiktok-confirm/TikTokPendingModal.jsx';
-import { SORT_OLDEST, SORT_NEWEST } from './tiktok-confirm/helpers.js';
+import { SORT_OLDEST, SORT_NEWEST, resolveSubstitutionForConfirm } from './tiktok-confirm/helpers.js';
 import {
   resolveTikTokCatalogMatch,
   runSaleMirrorWithFeedback,
@@ -32,6 +32,7 @@ export default function TikTokConfirmPanel({ toast, onConfirmed }) {
   const [open, setOpen] = useState(false);
   const [activeId, setActiveId] = useState(null);
   const [picks, setPicks] = useState({});
+  const [substitutionMeta, setSubstitutionMeta] = useState({});
   const [net, setNet] = useState('');
   const [deferNet, setDeferNet] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -163,12 +164,19 @@ export default function TikTokConfirmPanel({ toast, onConfirmed }) {
       }
     });
     setPicks(seed);
+    setSubstitutionMeta({});
     setNet('');
     setDeferNet(false);
     if (!products.length) loadCatalog({ quiet: true });
   };
 
-  const backToList = () => { setActiveId(null); setPicks({}); setNet(''); setDeferNet(false); };
+  const backToList = () => {
+    setActiveId(null);
+    setPicks({});
+    setSubstitutionMeta({});
+    setNet('');
+    setDeferNet(false);
+  };
 
   const closeAll = () => {
     if (saving || closing) return;
@@ -207,7 +215,13 @@ export default function TikTokConfirmPanel({ toast, onConfirmed }) {
     let ok = false;
     try {
       const p_items = await Promise.all((activeOrder.items || []).map(async (it) => {
-        const product_id = picks[it.id]?.id ?? null;
+        const pick = picks[it.id];
+        const product_id = pick?.id ?? null;
+        const { substitute, substitution_note } = resolveSubstitutionForConfirm(
+          it,
+          pick,
+          substitutionMeta[it.id],
+        );
         let tiktok_product_id = null;
         let warehouse_id = null;
         if (product_id && it.tiktok_sku_id) {
@@ -220,7 +234,14 @@ export default function TikTokConfirmPanel({ toast, onConfirmed }) {
             warehouse_id = match?.warehouse_id || null;
           } catch { /* confirm RPC may use existing mapping */ }
         }
-        return { item_id: it.id, product_id, tiktok_product_id, warehouse_id };
+        return {
+          item_id: it.id,
+          product_id,
+          tiktok_product_id,
+          warehouse_id,
+          substitute,
+          substitution_note,
+        };
       }));
       const { error } = await sb.rpc('confirm_tiktok_sale_order', {
         p_order_id: confirmedId,
@@ -229,7 +250,15 @@ export default function TikTokConfirmPanel({ toast, onConfirmed }) {
       });
       if (error) throw error;
       ok = true;
+      const subCount = p_items.filter(x => x.substitute).length;
       toast?.(`ยืนยันออเดอร์ TikTok #${confirmedTid} แล้ว`, 'success');
+      if (subCount > 0) {
+        toast?.(
+          `มี ${subCount} รายการส่งจริงคนละรุ่น — หลัง ship บน TikTok ให้ admin ตรวจสต็อก SKU บนใบ order`,
+          'warning',
+          { duration: 8000 },
+        );
+      }
       const confirmedProductIds = (activeOrder.items || [])
         .map(it => picks[it.id]?.id)
         .filter(Boolean);
@@ -294,6 +323,8 @@ export default function TikTokConfirmPanel({ toast, onConfirmed }) {
           saving={saving}
           picks={picks}
           setPicks={setPicks}
+          substitutionMeta={substitutionMeta}
+          setSubstitutionMeta={setSubstitutionMeta}
           net={net}
           setNet={setNet}
           deferNet={deferNet}

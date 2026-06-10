@@ -24,13 +24,15 @@ function NetReceivedCard({ allMatched, deferNet, setDeferNet, net, setNet, savin
             จับคู่สินค้าครบก่อน แล้วค่อยกรอกยอดเงิน
           </div>
         ) : deferNet ? (
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 h-10 px-3 rounded-xl bg-surface-soft/70 border hairline text-muted text-xs flex-1">
-              <Icon name="bell" size={14}/> จะกรอกยอดจริงภายหลังผ่านปุ่มกระดิ่ง
+          <div className="flex flex-col gap-2 min-w-0">
+            <div className="flex items-center gap-2 h-10 px-3 rounded-xl bg-surface-soft/70 border hairline text-muted text-xs min-w-0">
+              <Icon name="bell" size={14} className="shrink-0"/>
+              <span className="truncate">จะกรอกยอดจริงภายหลังผ่านปุ่มกระดิ่ง</span>
             </div>
             <DeferNetButton
               active={deferNet}
               disabled={saving}
+              className="w-full justify-center !py-2 !text-xs"
               onToggle={() => {
                 setDeferNet(v => {
                   const next = !v;
@@ -41,21 +43,20 @@ function NetReceivedCard({ allMatched, deferNet, setDeferNet, net, setNet, savin
             />
           </div>
         ) : (
-          <div className="flex items-center gap-2">
-            <div className="flex-1">
-              <input
-                type="number"
-                inputMode="decimal"
-                className="input !h-10 !rounded-xl !py-2 !text-sm w-full"
-                placeholder="ยอดที่ TikTok โอนเข้าร้าน (บาท)"
-                value={net}
-                onChange={e => { setNet(e.target.value); setDeferNet(false); }}
-                disabled={saving}
-              />
-            </div>
+          <div className="flex flex-col gap-2 min-w-0">
+            <input
+              type="number"
+              inputMode="decimal"
+              className="input !h-10 !rounded-xl !py-2 !text-sm w-full min-w-0"
+              placeholder="ยอดที่ TikTok โอนเข้าร้าน (บาท)"
+              value={net}
+              onChange={e => { setNet(e.target.value); setDeferNet(false); }}
+              disabled={saving}
+            />
             <DeferNetButton
               active={deferNet}
               disabled={saving}
+              className="w-full justify-center !py-2 !text-xs shrink-0"
               onToggle={() => {
                 setDeferNet(v => {
                   const next = !v;
@@ -84,9 +85,10 @@ export default function TikTokConfirmActionBar({
   allMatched,
   netOk,
   stockBlocked,
+  substitutionBlocked,
   onConfirm,
 }) {
-  const canConfirm = allMatched && netOk && !saving && !stockBlocked;
+  const canConfirm = allMatched && netOk && !saving && !stockBlocked && !substitutionBlocked;
 
   return (
     <div className="px-4 py-3 border-t-2 border-ink/10 bg-surface-cream-strong shrink-0 space-y-2.5">
@@ -119,6 +121,13 @@ export default function TikTokConfirmActionBar({
         <div className="text-sm text-[#b3261e] flex items-start gap-2 px-1 leading-relaxed">
           <Icon name="alert" size={16} className="shrink-0 mt-0.5"/>
           <span>สต็อก POS ไม่พอ — แก้การจับคู่หรือยกเลิกออเดอร์บน TikTok</span>
+        </div>
+      )}
+
+      {allMatched && !stockBlocked && substitutionBlocked && (
+        <div className="text-sm text-[#b3261e] flex items-start gap-2 px-1 leading-relaxed">
+          <Icon name="alert" size={16} className="shrink-0 mt-0.5"/>
+          <span>SKU ไม่ตรง TikTok — ต้องจับคู่ให้ตรง หรือติ๊ก &quot;ส่งจริงคนละรุ่น&quot;</span>
         </div>
       )}
 

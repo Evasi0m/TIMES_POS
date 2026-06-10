@@ -4,12 +4,18 @@ import TikTokOrderSummaryCard from './TikTokOrderSummaryCard.jsx';
 import TikTokItemNavigator from './TikTokItemNavigator.jsx';
 import TikTokMatchSidePanel from './TikTokMatchSidePanel.jsx';
 import TikTokConfirmActionBar from './TikTokConfirmActionBar.jsx';
-import { orderHasStockIssue } from './helpers.js';
+import {
+  orderHasStockIssue,
+  orderHasSubstitutionBlock,
+  defaultSubstitutionMeta,
+} from './helpers.js';
 
 export default function TikTokOrderConfirmPane({
   order,
   picks,
   setPicks,
+  substitutionMeta,
+  setSubstitutionMeta,
   net,
   setNet,
   deferNet,
@@ -39,12 +45,20 @@ export default function TikTokOrderConfirmPane({
   const activePick = activeItem ? picks[activeItem.id] : null;
   const activeMatched = Boolean(activePick?.id);
   const stockBlocked = orderHasStockIssue(items, picks, catalog);
+  const substitutionBlocked = orderHasSubstitutionBlock(items, picks, substitutionMeta);
 
   const handlePick = (itemId, p) => {
+    const item = items.find(it => it.id === itemId);
     setPicks(prev => ({
       ...prev,
       [itemId]: { id: p.id, name: p.name, current_stock: p.current_stock },
     }));
+    if (item) {
+      setSubstitutionMeta(prev => ({
+        ...prev,
+        [itemId]: defaultSubstitutionMeta(),
+      }));
+    }
     const next = items.find(it => it.id !== itemId && !picks[it.id]?.id);
     setActiveItemId(next?.id ?? null);
   };
@@ -55,7 +69,19 @@ export default function TikTokOrderConfirmPane({
       delete n[itemId];
       return n;
     });
+    setSubstitutionMeta(prev => {
+      const n = { ...prev };
+      delete n[itemId];
+      return n;
+    });
     setActiveItemId(itemId);
+  };
+
+  const handleSubstitutionChange = (itemId, patch) => {
+    setSubstitutionMeta(prev => ({
+      ...prev,
+      [itemId]: { ...prev[itemId], ...patch },
+    }));
   };
 
   return (
@@ -100,6 +126,8 @@ export default function TikTokOrderConfirmPane({
             onPick={(p) => activeItem && handlePick(activeItem.id, p)}
             onClear={handleClear}
             onEditMatches={() => setActiveItemId(items[0]?.id ?? null)}
+            substitutionMeta={substitutionMeta}
+            onSubstitutionChange={handleSubstitutionChange}
           />
         ) : (
           <div className="glass-soft !bg-surface-strong/75 ring-1 ring-hairline shadow-sm rounded-lg p-6 text-sm text-muted text-center">
@@ -117,6 +145,7 @@ export default function TikTokOrderConfirmPane({
         allMatched={allMatched}
         netOk={netOk}
         stockBlocked={stockBlocked}
+        substitutionBlocked={substitutionBlocked}
         onConfirm={onConfirm}
       />
     </div>

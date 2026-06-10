@@ -8,9 +8,138 @@ import {
   resolvePickStock,
   stockShortfall,
   itemSkuLabel,
+  isTikTokSkuMismatch,
+  lineNeedsSubstitutionAck,
 } from './helpers.js';
 
-function MatchedSummaryRow({ item, pick, catalog }) {
+function SubstitutionControls({ item, pick, meta, disabled, onChange, panel = false }) {
+  if (!isTikTokSkuMismatch(item, pick)) return null;
+  const substitute = meta?.substitute === true;
+  const needsAck = lineNeedsSubstitutionAck(item, pick, meta);
+  const tiktokSku = extractTikTokSkuKey(item);
+  return (
+    <div
+      className={
+        'rounded-xl border border-amber-300/50 bg-amber-50/80 p-3 text-left ' +
+        (panel ? 'h-full min-h-0 flex flex-col overflow-y-auto overflow-x-hidden' : 'mt-2.5')
+      }
+    >
+      <div className="text-sm font-semibold text-amber-900">ส่งจริงคนละรุ่น?</div>
+      <div className="text-xs text-amber-800/90 mt-1 leading-relaxed break-words">
+        TikTok <span className="font-mono font-medium">{tiktokSku}</span>
+        {' → '}POS <span className="font-mono font-medium">{pick?.name}</span>
+      </div>
+      {needsAck && (
+        <div className="text-xs text-[#b3261e] font-medium mt-2 leading-relaxed">
+          ติ๊กยืนยันด้านล่าง — หรือกดเปลี่ยนการจับคู่ให้ตรง SKU
+        </div>
+      )}
+      <label
+        className={
+          'flex items-start gap-2.5 mt-3 text-sm text-amber-900 cursor-pointer ' +
+          'rounded-lg border border-amber-400/40 bg-white/70 p-2.5 min-w-0'
+        }
+      >
+        <input
+          type="checkbox"
+          className="mt-0.5 w-4 h-4 shrink-0"
+          checked={substitute}
+          disabled={disabled}
+          onChange={e => onChange({ substitute: e.target.checked, note: meta?.note || '' })}
+        />
+        <span className="min-w-0 break-words">
+          <span className="font-semibold">ส่งจริงคนละรุ่น</span>
+          <span className="block text-xs text-amber-800/90 mt-1 font-normal leading-relaxed">
+            ลูกค้าตกลงส่งรุ่นอื่น — ไม่อัปเดต mapping ถาวร
+          </span>
+        </span>
+      </label>
+      {substitute && (
+        <input
+          type="text"
+          className="input !text-xs mt-2 w-full min-w-0"
+          placeholder="หมายเหตุ (ถ้ามี)"
+          value={meta?.note || ''}
+          disabled={disabled}
+          onChange={e => onChange({ substitute: true, note: e.target.value })}
+        />
+      )}
+    </div>
+  );
+}
+
+function MatchedCompactCard({ item, pick, stock, shortfall, onClear, disabled, vertical = false }) {
+  const tiktokSku = extractTikTokSkuKey(item);
+  return (
+    <div
+      className={
+        'ttc-matched-compact rounded-xl border p-3 flex flex-col min-h-0 min-w-0 overflow-hidden ' +
+        (shortfall
+          ? 'border-[#b3261e]/35 bg-[#fdecea]/70'
+          : 'border-[#0a7a43]/25 bg-[#e6f7ed]/60')
+      }
+    >
+      {vertical ? (
+        <>
+          <div className="flex items-center gap-2 min-w-0">
+            <SkuThumb url={item.sku_image_url} sizeClass="w-9 h-9" iconSize={16}/>
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">TikTok</div>
+              <div className="font-mono text-sm font-medium truncate" title={tiktokSku}>{tiktokSku}</div>
+            </div>
+          </div>
+          <div className="border-t border-black/8 my-2 shrink-0"/>
+          <div className="min-w-0 flex-1">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">POS</div>
+            <div className="font-mono text-sm font-semibold text-[#0a5a32] truncate" title={pick?.name}>
+              {pick?.name || '—'}
+            </div>
+            <div className="text-[11px] text-muted tabular-nums mt-0.5">
+              {stock != null ? <>stock {stock}</> : 'ไม่ทราบ stock'}
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="flex items-center gap-2 min-w-0">
+          <SkuThumb url={item.sku_image_url} sizeClass="w-10 h-10" iconSize={18}/>
+          <div className="min-w-0 flex-1">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">TikTok</div>
+            <div className="font-mono text-sm font-medium truncate" title={tiktokSku}>{tiktokSku}</div>
+          </div>
+          <Icon name="chevron-r" size={16} className="text-muted shrink-0"/>
+          <div className="min-w-0 flex-1">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">POS</div>
+            <div className="font-mono text-sm font-semibold text-[#0a5a32] truncate" title={pick?.name}>
+              {pick?.name || '—'}
+            </div>
+            <div className="text-[11px] text-muted tabular-nums mt-0.5">
+              {stock != null ? <>stock {stock}</> : 'ไม่ทราบ stock'}
+            </div>
+          </div>
+          {!shortfall && (
+            <Icon name="check" size={18} className="text-[#0a7a43] shrink-0"/>
+          )}
+        </div>
+      )}
+      {shortfall && (
+        <div className="text-xs text-[#b3261e] mt-2 leading-relaxed">
+          สต็อก POS ไม่พอ — คงเหลือ {shortfall.stock} ต้องการ {shortfall.need}
+        </div>
+      )}
+      {onClear && !disabled && (
+        <button
+          type="button"
+          className="btn-secondary !py-1.5 !px-3 !text-xs mt-auto pt-2.5 w-full max-w-full truncate"
+          onClick={() => onClear(item.id)}
+        >
+          <Icon name="refresh" size={13}/> เปลี่ยนการจับคู่
+        </button>
+      )}
+    </div>
+  );
+}
+
+function MatchedSummaryRow({ item, pick, catalog, substitutionMeta }) {
   const shortfall = stockShortfall(item, pick, catalog);
   const stock = resolvePickStock(pick, catalog);
   return (
@@ -26,6 +155,9 @@ function MatchedSummaryRow({ item, pick, catalog }) {
       <div className="min-w-0 flex-1">
         <div className="text-xs text-muted truncate">{itemSkuLabel(item)}</div>
         <div className="font-mono font-semibold text-[#0a5a32] truncate">{pick?.name || '—'}</div>
+        {substitutionMeta?.[item.id]?.substitute === true && (
+          <div className="text-[10px] font-medium text-amber-800 mt-0.5">ส่งจริงคนละรุ่น</div>
+        )}
         <div className="text-[11px] text-muted tabular-nums mt-0.5">
           {stock != null ? <>stock {stock}</> : 'ไม่ทราบ stock'}
           {shortfall && (
@@ -63,6 +195,8 @@ export default function TikTokMatchSidePanel({
   onPick,
   onClear,
   onEditMatches,
+  substitutionMeta,
+  onSubstitutionChange,
 }) {
   if (!item) {
     const allItems = items || [];
@@ -90,6 +224,7 @@ export default function TikTokMatchSidePanel({
                 item={it}
                 pick={picks[it.id]}
                 catalog={catalog}
+                substitutionMeta={substitutionMeta}
               />
             ))}
           </div>
@@ -113,10 +248,49 @@ export default function TikTokMatchSidePanel({
   const stock = matched ? resolvePickStock(pick, catalog) : null;
 
   if (matched) {
+    const hasMismatch = isTikTokSkuMismatch(item, pick);
+
+    if (hasMismatch) {
+      return (
+        <div className="ttc-match-side-panel ttc-focus-pane ttc-matched-split flex flex-col h-full min-h-0 p-3 gap-2 overflow-hidden">
+          <div className={'ttc-focus-item-head shrink-0' + (shortfall ? '' : ' ttc-focus-item-head--matched')}>
+            <SkuThumb url={item.sku_image_url} sizeClass="w-10 h-10" iconSize={18}/>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium leading-snug line-clamp-2">{skuName}</div>
+              <div className="text-[11px] text-muted tabular-nums mt-0.5">
+                {skuKey && <span className="font-mono">{skuKey} · </span>}
+                ×{item.quantity} · {fmtTHB(item.unit_price)}
+              </div>
+            </div>
+          </div>
+
+          <div className="ttc-matched-split__grid flex-1 min-h-0 grid grid-cols-2 gap-2">
+            <MatchedCompactCard
+              item={item}
+              pick={pick}
+              stock={stock}
+              shortfall={shortfall}
+              onClear={onClear}
+              disabled={disabled}
+              vertical
+            />
+            <SubstitutionControls
+              item={item}
+              pick={pick}
+              meta={substitutionMeta?.[item.id]}
+              disabled={disabled}
+              panel
+              onChange={(patch) => onSubstitutionChange?.(item.id, patch)}
+            />
+          </div>
+        </div>
+      );
+    }
+
     return (
-      <div className="ttc-match-side-panel ttc-focus-pane flex flex-col h-full p-3">
-        <div className={'ttc-focus-item-head' + (shortfall ? '' : ' ttc-focus-item-head--matched')}>
-          <SkuThumb url={item.sku_image_url} sizeClass="w-12 h-12" iconSize={20}/>
+      <div className="ttc-match-side-panel ttc-focus-pane flex flex-col h-full min-h-0 p-3 gap-2 overflow-hidden">
+        <div className={'ttc-focus-item-head shrink-0' + (shortfall ? '' : ' ttc-focus-item-head--matched')}>
+          <SkuThumb url={item.sku_image_url} sizeClass="w-10 h-10" iconSize={18}/>
           <div className="min-w-0 flex-1">
             <div className="text-sm font-medium leading-snug line-clamp-2">{skuName}</div>
             <div className="text-[11px] text-muted tabular-nums mt-0.5">
@@ -125,59 +299,15 @@ export default function TikTokMatchSidePanel({
             </div>
           </div>
         </div>
-        <div
-          className={
-            'flex-1 flex flex-col items-center justify-center text-center p-5 rounded-2xl border mt-2.5 ' +
-            (shortfall
-              ? 'border-[#b3261e]/35 bg-[#fdecea]/70'
-              : 'border-[#0a7a43]/25 bg-[#e6f7ed]/60')
-          }
-        >
-          {shortfall ? (
-            <Icon name="alert" size={30} className="text-[#b3261e] mb-2"/>
-          ) : (
-            <Icon name="check" size={30} className="text-[#0a7a43] mb-2"/>
-          )}
-          <div
-            className={
-              'text-[11px] font-semibold uppercase tracking-wider ' +
-              (shortfall ? 'text-[#b3261e]/90' : 'text-[#0a7a43]/80')
-            }
-          >
-            จับคู่กับสินค้า POS
-          </div>
-          <div
-            className={
-              'text-base font-semibold mt-1 font-mono break-all ' +
-              (shortfall ? 'text-[#8a1c12]' : 'text-[#0a5a32]')
-            }
-          >
-            {pick.name}
-          </div>
-          <div className="text-sm tabular-nums mt-2 text-muted">
-            {stock != null ? (
-              <>stock <span className="font-semibold text-ink">{stock}</span></>
-            ) : (
-              'ไม่ทราบ stock ปัจจุบัน'
-            )}
-          </div>
-          {shortfall && (
-            <div className="text-sm text-[#b3261e] mt-3 leading-relaxed max-w-sm">
-              สต็อก POS ไม่พอ — คงเหลือ {shortfall.stock} ต้องการ {shortfall.need} · ยืนยันไม่ได้
-              <div className="text-xs text-[#8a1c12]/90 mt-1.5">
-                แนะนำยกเลิกออเดอร์บน TikTok Shop แทน
-              </div>
-            </div>
-          )}
-          {onClear && !disabled && (
-            <button
-              type="button"
-              className="btn-secondary !py-1.5 !px-4 !text-xs mt-4"
-              onClick={() => onClear(item.id)}
-            >
-              <Icon name="refresh" size={13}/> เปลี่ยนการจับคู่
-            </button>
-          )}
+        <div className="flex-1 min-h-0 flex flex-col justify-center">
+          <MatchedCompactCard
+            item={item}
+            pick={pick}
+            stock={stock}
+            shortfall={shortfall}
+            onClear={onClear}
+            disabled={disabled}
+          />
         </div>
       </div>
     );

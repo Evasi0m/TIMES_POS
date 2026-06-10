@@ -70,3 +70,48 @@ export function orderHasStockIssue(items, picks, catalog) {
     it => picks[it.id]?.id && stockShortfall(it, picks[it.id], catalog),
   );
 }
+
+/** Normalize SKU tokens for substitution comparison. */
+export function normalizeSkuToken(s) {
+  return String(s || '').trim().toUpperCase().replace(/\s+/g, '');
+}
+
+/** True when picked POS SKU differs from TikTok seller_sku (detector only — not user opt-in). */
+export function isTikTokSkuMismatch(item, pick) {
+  if (!item || !pick?.name) return false;
+  const tiktokSku = normalizeSkuToken(item.seller_sku || extractTikTokSkuKey(item));
+  const pickSku = normalizeSkuToken(pick.name);
+  if (!tiktokSku || !pickSku) return false;
+  return tiktokSku !== pickSku;
+}
+
+/** @deprecated use isTikTokSkuMismatch — kept for existing imports */
+export const isSkuSubstitution = isTikTokSkuMismatch;
+
+/** Default substitution meta when a pick is made — always opt-in (off). */
+export function defaultSubstitutionMeta() {
+  return { substitute: false, note: '' };
+}
+
+/** SKU mismatch without explicit user opt-in — blocks confirm. */
+export function lineNeedsSubstitutionAck(item, pick, meta) {
+  if (!isTikTokSkuMismatch(item, pick)) return false;
+  return meta?.substitute !== true;
+}
+
+export function orderHasSubstitutionBlock(items, picks, substitutionMeta) {
+  return (items || []).some(it => {
+    const pick = picks[it.id];
+    if (!pick?.id) return false;
+    return lineNeedsSubstitutionAck(it, pick, substitutionMeta?.[it.id]);
+  });
+}
+
+/** Resolve substitute flag + note for confirm RPC — explicit opt-in only. */
+export function resolveSubstitutionForConfirm(item, pick, meta) {
+  const substitute = meta?.substitute === true && isTikTokSkuMismatch(item, pick);
+  return {
+    substitute,
+    substitution_note: substitute ? (meta?.note || '').trim() || null : null,
+  };
+}

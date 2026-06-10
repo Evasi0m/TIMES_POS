@@ -1039,6 +1039,16 @@
   border: 1px solid rgba(10, 122, 67, 0.25);
 }
 
+/* Matched + SKU mismatch — left/right columns (vertical divider) */
+.ttc-matched-split__grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+.ttc-matched-compact {
+  min-height: 0;
+  min-width: 0;
+}
+
 /* Candidate list — full-width vertical rows, fills remaining height
    (override the base .ttc-match-panel__body 240px cap so empty space is used) */
 .ttc-match-panel__body--focus {
@@ -1475,19 +1485,25 @@
 }
 
 /* Expandable product image — hover overlay + lightbox backdrop */
+.product-img-shadow {
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.05),
+    0 2px 6px rgb(0 0 0 / 0.06);
+}
+[data-theme="dark"] .product-img-shadow {
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.22),
+    0 2px 8px rgb(0 0 0 / 0.28);
+}
 .product-img-expandable {
   position: relative;
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
   cursor: zoom-in;
-}
-/* Radius comes from the consumer's own rounded-* utility (in @layer utilities).
-   It must win over any inherited radius so the clipped image matches its frame
-   — keep this fallback in @layer components so utilities take precedence. */
-@layer components {
-  .product-img-expandable {
-    border-radius: inherit;
-  }
+  /* Clip img + overlay to the same radius as the frame (set via rounded-* on this node). */
+  isolation: isolate;
 }
 .product-img-expand-overlay {
   position: absolute;
@@ -1500,7 +1516,6 @@
   opacity: 0;
   transition: opacity 0.18s ease;
   pointer-events: none;
-  border-radius: inherit;
 }
 @media (hover: hover) {
   .product-img-expandable:hover .product-img-expand-overlay {

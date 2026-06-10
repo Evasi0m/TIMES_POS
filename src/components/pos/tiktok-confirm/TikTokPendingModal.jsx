@@ -21,6 +21,8 @@ export default function TikTokPendingModal({
   saving,
   picks,
   setPicks,
+  substitutionMeta,
+  setSubstitutionMeta,
   net,
   setNet,
   deferNet,
@@ -97,6 +99,8 @@ export default function TikTokPendingModal({
               order={activeOrder}
               picks={picks}
               setPicks={setPicks}
+              substitutionMeta={substitutionMeta}
+              setSubstitutionMeta={setSubstitutionMeta}
               net={net}
               setNet={setNet}
               deferNet={deferNet}

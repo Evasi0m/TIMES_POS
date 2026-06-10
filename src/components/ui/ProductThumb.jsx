@@ -45,10 +45,16 @@ export default function ProductThumb({ product, size = 'md', className = '' }) {
     return url + (url.includes('?') ? '&' : '?') + 'cb=' + Date.now();
   }, [url]);
 
-  // Liquid glass container base classes
+  // Photo tile — solid bg + hairline border (avoid ring-* at rounded corners).
+  const photoTile =
+    'flex-shrink-0 inline-flex items-center justify-center overflow-hidden ' +
+    'rounded-[10px] relative bg-white border border-black/[0.07] product-img-shadow ' +
+    'dark:bg-surface-soft dark:border-white/[0.08] ' + className;
+
+  // Liquid glass container base classes (placeholders only)
   const tileBase =
     'flex-shrink-0 inline-flex items-center justify-center overflow-hidden ' +
-    'rounded-[10px] relative ' + className;
+    'rounded-[10px] relative product-img-shadow ' + className;
 
   // Glass border overlay for placeholder tiles
   const glassOverlay =
@@ -62,13 +68,13 @@ export default function ProductThumb({ product, size = 'md', className = '' }) {
       <ExpandableImageThumb
         src={cacheBustedUrl}
         alt={product?.name || ''}
-        className={tileBase + ' bg-surface-soft ring-1 ring-hairline'}
+        className={photoTile}
         style={{ width: px, height: px }}
-        imgClassName="w-full h-full object-contain"
+        imgClassName="w-full h-full object-contain rounded-[10px]"
         onImageError={() => setBroken(true)}
         placeholder={
-          <div className={tileBase + ' bg-surface-soft ring-1 ring-hairline'} style={{ width: px, height: px }}>
-            <span className="skeleton absolute inset-0 !rounded-none" aria-hidden="true"/>
+          <div className={photoTile} style={{ width: px, height: px }}>
+            <span className="skeleton absolute inset-0 rounded-[10px]" aria-hidden="true"/>
           </div>
         }
       />

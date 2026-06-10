@@ -46,7 +46,7 @@ import {
   fmtTimeBangkok,
 } from './lib/date.js';
 import { syncServerClock, todayISO, serverNowISO, serverNowDate } from './lib/server-clock.js';
-import { saleLineSku, saleLineCartCaption, saleLineSearchText } from './lib/sale-line-display.js';
+import { saleLineSku, saleLineCartCaption, saleLineSearchText, saleLineIsSubstitution, saleLineSubstitutionCaption } from './lib/sale-line-display.js';
 import {
   BRAND_RULES, SERIES_RULES, SERIES_SUBS, MATERIAL_MAP, COLOR_MAP, PRICE_PRESETS,
   classifyBrand, classifySeries, parseCasioModel, enrichProduct,
@@ -7520,6 +7520,7 @@ function SalesView({ onGoPOS }) {
             profit: (o.status === 'voided' || o.net_received_pending) ? 0 : totalProfit,
             itemCount: lines.length,
             costApprox,
+            hasSubstitution: lines.some(l => saleLineIsSubstitution(l)),
           };
         }
         setOrderSummary(summary);
@@ -8086,6 +8087,9 @@ function SalesView({ onGoPOS }) {
                 <div className="col-span-1 text-sm tabular-nums">{fmtTimeBangkok(o.sale_date)}</div>
                 <div className="col-span-3 text-sm min-w-0">
                   <div className="truncate font-semibold" title={sm?.productLabel || ''}>{sm?.productLabel ?? <span className="text-muted-soft">—</span>}</div>
+                  {sm?.hasSubstitution && (
+                    <span className="badge-pill !bg-amber-100 !text-amber-900 !text-[10px] mt-0.5" title="มีรายการส่งจริงคนละรุ่นกับ TikTok SKU">ส่งแทน</span>
+                  )}
                   {sm?.costApprox && <span className="badge-pill !bg-warning/15 !text-[#8a6500] !text-xs mt-0.5">ทุนประมาณ</span>}
                 </div>
                 <div className="col-span-2 flex flex-wrap items-center gap-1">
@@ -8154,6 +8158,9 @@ function SalesView({ onGoPOS }) {
                     </div>
                     {sm && sm.itemCount > 0 && (
                       <div className="text-sm text-ink font-semibold mt-1 truncate" title={sm.productLabel}>{sm.productLabel}</div>
+                    )}
+                    {sm?.hasSubstitution && (
+                      <span className="badge-pill !bg-amber-100 !text-amber-900 !text-[10px] mt-1">ส่งแทน</span>
                     )}
                     <div className="text-xs text-muted mt-1 tabular-nums">{fmtTimeBangkok(o.sale_date)} น. · {PAYMENTS.find(p=>p.v===o.payment_method)?.label || '—'}</div>
                   </div>
@@ -8335,9 +8342,19 @@ function SalesView({ onGoPOS }) {
                       <div className="font-medium text-sm font-mono truncate" title={saleLineSku(it)}>
                         {saleLineSku(it)}
                       </div>
+                      {saleLineIsSubstitution(it) && (
+                        <span className="inline-block text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900 mt-0.5" title={saleLineSubstitutionCaption(it)}>
+                          ส่งจริง ≠ TikTok SKU
+                        </span>
+                      )}
                       {saleLineCartCaption(it) && (
                         <div className="text-xs text-muted mt-0.5 line-clamp-2 break-words" title={saleLineCartCaption(it)}>
                           {saleLineCartCaption(it)}
+                        </div>
+                      )}
+                      {saleLineIsSubstitution(it) && saleLineSubstitutionCaption(it) && (
+                        <div className="text-xs text-amber-800/90 mt-0.5 line-clamp-2 break-words" title={saleLineSubstitutionCaption(it)}>
+                          {saleLineSubstitutionCaption(it)}
                         </div>
                       )}
                       <div className="text-xs text-muted mt-0.5">

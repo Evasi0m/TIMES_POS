@@ -23,3 +23,22 @@ export function saleLineSearchText(item) {
     .join(' ')
     .toLowerCase();
 }
+
+/** True when line was confirmed with a different POS product than TikTok seller_sku. */
+export function saleLineIsSubstitution(item) {
+  return Boolean(item?.is_sku_substitution);
+}
+
+/** Caption for substituted lines — TikTok SKU vs what was actually shipped. */
+export function saleLineSubstitutionCaption(item) {
+  if (!saleLineIsSubstitution(item)) return '';
+  const tiktok = (item?.seller_sku || '').trim();
+  const shipped = (item?.product_name || '').trim();
+  if (!tiktok || !shipped || tiktok === shipped) {
+    return item?.substitution_note?.trim() || 'ส่งจริงคนละรุ่นกับ TikTok SKU';
+  }
+  const note = item?.substitution_note?.trim();
+  return note
+    ? `TikTok: ${tiktok} → ส่งจริง: ${shipped} (${note})`
+    : `TikTok: ${tiktok} → ส่งจริง: ${shipped}`;
+}

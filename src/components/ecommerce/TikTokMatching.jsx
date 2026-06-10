@@ -255,7 +255,7 @@ export default function TikTokMatching({ toast }) {
                 className="w-10 h-10 rounded border hairline shrink-0"
                 imgClassName="w-full h-full object-cover rounded"
                 placeholder={(
-                  <div className="w-10 h-10 rounded bg-surface-soft border hairline flex items-center justify-center text-muted shrink-0">
+                  <div className="w-10 h-10 rounded bg-surface-soft border hairline flex items-center justify-center text-muted shrink-0 product-img-shadow">
                     <Icon name="image" size={14}/>
                   </div>
                 )}

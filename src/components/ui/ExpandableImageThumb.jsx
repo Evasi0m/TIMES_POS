@@ -29,7 +29,7 @@ export default function ExpandableImageThumb({
     if (placeholder) return placeholder;
     return (
       <div
-        className={'flex items-center justify-center bg-surface-soft border hairline text-muted shrink-0 ' + className}
+        className={'flex items-center justify-center bg-surface-soft border hairline text-muted shrink-0 product-img-shadow ' + className}
         style={style}
         aria-hidden="true"
       >
@@ -49,7 +49,7 @@ export default function ExpandableImageThumb({
       <div
         role="button"
         tabIndex={loaded ? 0 : -1}
-        className={'product-img-expandable border-0 p-0 bg-transparent ' + className}
+        className={'product-img-expandable product-img-shadow border-0 p-0 bg-transparent ' + className}
         style={style}
         onClick={openLightbox}
         onKeyDown={(e) => {
@@ -61,7 +61,7 @@ export default function ExpandableImageThumb({
         aria-label={'ขยายภาพ ' + (alt || 'สินค้า')}
         aria-disabled={!loaded}
       >
-        {!loaded && <span className="skeleton absolute inset-0 !rounded-none" aria-hidden="true"/>}
+        {!loaded && <span className="skeleton absolute inset-0 rounded-[inherit]" aria-hidden="true"/>}
         <img
           src={src}
           alt={alt}

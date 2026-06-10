@@ -12,7 +12,7 @@ function SkuThumb({ url, alt }) {
       className="w-14 h-14 rounded-lg border hairline bg-surface-soft shrink-0"
       imgClassName="w-full h-full object-cover rounded-lg"
       placeholder={(
-        <div className="w-14 h-14 rounded-lg bg-surface-soft border hairline flex items-center justify-center shrink-0 text-muted">
+        <div className="w-14 h-14 rounded-lg bg-surface-soft border hairline flex items-center justify-center shrink-0 text-muted product-img-shadow">
           <Icon name="image" size={20}/>
         </div>
       )}
