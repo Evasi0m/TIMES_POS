@@ -188,8 +188,8 @@ function StageAside({
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className={'air-list-row__status-pill ' + displayState.pillCls}>
-          <Icon name={displayState.icon} size={13}/>
+        <span className={'air-status-chip ' + displayState.pillCls}>
+          <Icon name={displayState.icon} size={9}/>
           <span>{displayState.label}</span>
         </span>
         {hasVat && <span className="vat-chip">VAT</span>}
@@ -432,8 +432,8 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
         <div className="air-stage__main">
           {billComplete && (
             <div className="air-stage__main-top shrink-0">
-              <span className="air-list-row__status-pill air-list-row__status-pill--done ml-auto">
-                <Icon name="check" size={13}/> บิลนี้พร้อมบันทึก
+              <span className="air-status-chip air-status-chip--done ml-auto">
+                <Icon name="check" size={9}/> บิลนี้พร้อมบันทึก
               </span>
             </div>
           )}

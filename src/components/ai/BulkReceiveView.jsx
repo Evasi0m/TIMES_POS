@@ -1518,28 +1518,30 @@ function ReviewWizard({
         />
       )}
 
-      {/* Navigation buttons */}
-      <div className="flex items-center justify-between gap-2">
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={() => setCurrentIdx((c) => Math.max(0, c - 1))}
-          disabled={!canPrev || submitting}
-        >
-          <Icon name="chevron-l" size={16}/> บิลก่อน
-        </button>
-        <div className="text-xs text-muted-soft tabular-nums">
-          บิลที่ {currentIdx + 1} / {bills.length}
+      {/* Navigation buttons — only when reviewing multiple bills */}
+      {bills.length > 1 && (
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => setCurrentIdx((c) => Math.max(0, c - 1))}
+            disabled={!canPrev || submitting}
+          >
+            <Icon name="chevron-l" size={16}/> บิลก่อน
+          </button>
+          <div className="text-xs text-muted-soft tabular-nums">
+            บิลที่ {currentIdx + 1} / {bills.length}
+          </div>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => setCurrentIdx((c) => Math.min(bills.length - 1, c + 1))}
+            disabled={!canNext || submitting}
+          >
+            บิลถัดไป <Icon name="chevron-r" size={16}/>
+          </button>
         </div>
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={() => setCurrentIdx((c) => Math.min(bills.length - 1, c + 1))}
-          disabled={!canNext || submitting}
-        >
-          บิลถัดไป <Icon name="chevron-r" size={16}/>
-        </button>
-      </div>
+      )}
 
       {/* Submit bar */}
       <SubmitBar

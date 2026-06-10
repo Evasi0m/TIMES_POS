@@ -47,9 +47,12 @@ const BillItemsListCard = forwardRef(function BillItemsListCard({
               aria-label={`รายการที่ ${idx + 1} ${sku} · ${ds.label}`}
               aria-current={isActive ? 'true' : undefined}
             >
-              <span className="air-bill-list-card__sku">{sku || row.model_code || '—'}</span>
-              <span className={'air-list-row__status-pill air-bill-list-card__pill ' + ds.pillCls}>
-                <Icon name={ds.icon} size={10}/>
+              <div className="air-bill-list-card__row-head">
+                <span className="air-bill-list-card__idx" aria-hidden="true">{idx + 1}</span>
+                <span className="air-bill-list-card__sku">{sku || row.model_code || '—'}</span>
+              </div>
+              <span className={'air-status-chip ' + ds.pillCls}>
+                <Icon name={ds.icon} size={9}/>
                 <span>{ds.label}</span>
               </span>
             </button>
