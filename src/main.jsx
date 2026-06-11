@@ -87,6 +87,7 @@ import {
 } from './lib/vat-report.js';
 import { downloadStructuredCsv } from './lib/csv.js';
 import Icon from './components/ui/Icon.jsx';
+import NavGlyphIcon from './components/ui/NavGlyphIcon.jsx';
 import Modal from './components/ui/Modal.jsx';
 import { useMountedToggle } from './lib/use-mounted-toggle.js';
 import TikTokMatchPromptModal from './components/ecommerce/TikTokMatchPromptModal.jsx';
@@ -4195,7 +4196,7 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
                    : role === 'admin'       ? 'text-primary'
                    : 'text-muted-soft';
   return (
-    <aside className="sidebar hidden lg:flex w-64 flex-col">
+    <aside className="sidebar hidden lg:flex w-80 flex-col">
       {/* Hidden SVG defs — one-shot linearGradient referenced by
           `.nav-item-ai > svg { stroke: url(#ai-icon-gradient) }` so
           AI-flagged nav icons inherit the same orange→red→purple sweep
@@ -4238,7 +4239,7 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
                   } : undefined}
                   aria-expanded={ecomExpanded}
                 >
-                  <Icon name={it.icon} size={22} strokeWidth={ecomActive && allowed ? 2.1 : 1.85}/>
+                  <NavGlyphIcon name={it.icon} size={30} active={ecomActive && allowed} />
                   <span className="flex-1 truncate">{it.labelLong || it.label}</span>
                   {allowed && (
                     <Icon
@@ -4291,22 +4292,13 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
               aria-current={view===it.k ? 'page' : undefined}
               title={allowed ? undefined : 'ไม่มีสิทธิ์เข้าถึง'}
             >
-              <Icon name={it.icon} size={22} strokeWidth={view===it.k && allowed ?2.1:1.85}/>
-              <span className="flex-1">
-                {it.labelLong}
-                {/* Inline AI chip for nav items that host AI features
-                    (currently just `receive`, whose รับเข้า×10 sub-tab
-                    uses Gemini bill OCR). Reuses the same .ai-tab-badge
-                    class as KindTabs so both surfaces stay consistent. */}
-                {it.ai && <span className="ai-tab-badge ml-1.5 align-middle">AI</span>}
-                {/* Today's bill count — only on the "sales" row. Hidden
-                    until the count is loaded (null) so the row doesn't
-                    flash a "0" before the first fetch resolves. Hidden
-                    when 0 too — an empty red dot is noise. Cap at 99+
-                    to keep the pill from blowing up the row width. */}
+              <NavGlyphIcon name={it.icon} size={30} active={view === it.k && allowed} />
+              <span className="flex-1 min-w-0 flex items-center gap-1.5 flex-nowrap">
+                <span className="whitespace-nowrap">{it.labelLong}</span>
+                {it.ai && <span className="ai-tab-badge shrink-0">AI</span>}
                 {it.k === 'sales' && allowed && (role === 'admin' || role === 'super_admin') && todaySalesCount > 0 && (
                   <span
-                    className="nav-count-badge ml-1.5 align-middle"
+                    className="nav-count-badge shrink-0"
                     title={`วันนี้ขายไปแล้ว ${todaySalesCount} บิล`}
                   >
                     {todaySalesCount > 99 ? '99+' : todaySalesCount}
@@ -4388,7 +4380,7 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
                   }
                   onClick={() => { setView('dashboard'); setOpenMenu(false); }}
                 >
-                  <Icon name="dashboard" size={16} className="shrink-0 mt-0.5"/>
+                  <NavGlyphIcon name="dashboard" size={24} active={view === 'dashboard'} className="mt-0.5" />
                   <span className="min-w-0 leading-snug">ภาพรวม</span>
                 </button>
                 <div className="text-xs uppercase tracking-wider text-muted mb-2 mt-5 pt-1">E-Commerce</div>
@@ -4481,7 +4473,7 @@ function MobileTabBar({ view, setView }) {
         aria-current={view===it.k ? "page" : undefined}
         title={allowed ? it.label : 'ไม่มีสิทธิ์เข้าถึง'}
       >
-        <Icon name={it.icon} size={20} strokeWidth={view===it.k && allowed ?2.2:1.8}/>
+        <NavGlyphIcon name={it.icon} size={27} ai={it.ai} active={view === it.k && allowed} />
         <span className="tab-label">{it.label}</span>
       </button>
     );
@@ -4509,7 +4501,7 @@ function MobileTabBar({ view, setView }) {
             aria-current={view==='pos' ? "page" : undefined}
             title={posAllowed ? (posItem.labelLong || posItem.label) : 'ไม่มีสิทธิ์เข้าถึง'}
           >
-            <Icon name="cart" size={28} strokeWidth={2.4}/>
+            <NavGlyphIcon name="cart" size={38} active={view === 'pos' && posAllowed} />
             {queued > 0 && (
               <span className="fab-badge" aria-label={`มี ${queued} บิลรอ sync`}>{queued > 99 ? '99+' : queued}</span>
             )}
@@ -14422,7 +14414,7 @@ function App() {
           <Sidebar view={view} setView={setView} userEmail={session.user?.email}
             onOpenSettings={()=>setSettingsOpen(true)}
             onOpenUserManagement={()=>setUserMgmtOpen(true)} />
-          <main className="flex-1 min-h-screen lg:pl-64 main-mobile-pb">
+          <main className="flex-1 min-h-screen lg:pl-80 main-mobile-pb">
             <MobileTopBar title={mobilePageTitle} userEmail={session.user?.email}
               onLogout={()=>sb.auth.signOut()}
               onOpenSettings={()=>setSettingsOpen(true)}

@@ -10,6 +10,7 @@
 @import './styles/tiktok-glass.css';
 @import './styles/sale-bill-glass.css';
 @import './styles/glass-hover-tip.css';
+@import './styles/nav-glyph-icon.css';
 @import './styles/order-status-dot.css';
 @import './styles/payment-method-icon.css';
 
@@ -2405,7 +2406,7 @@
 }
 @media (min-width: 1024px) {
   .ttc-sync-overlay--page-backdrop {
-    left: 16rem;
+    left: 20rem;
   }
 }
 .ttc-sync-overlay--page-ring {
@@ -2427,7 +2428,7 @@
 }
 @media (min-width: 1024px) {
   .ttc-sync-overlay--page-ring {
-    left: 16rem;
+    left: 20rem;
   }
 }
 .ttc-sync-overlay--in {

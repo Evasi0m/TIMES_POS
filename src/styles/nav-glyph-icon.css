@@ -1,0 +1,139 @@
+/* Sidebar / mobile tab — colorful nav glyphs; aura only on hover / active */
+
+.nav-glyph-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.nav-glyph-icon__glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.18s var(--ease-out, ease), filter 0.18s ease;
+  filter: none;
+}
+
+.nav-glyph-icon__svg {
+  display: block;
+}
+
+/* Hover lift */
+.nav-item:hover .nav-glyph-icon__glyph,
+.tab-btn:hover .nav-glyph-icon__glyph,
+.mobile-fab:hover .nav-glyph-icon__glyph,
+.btn-secondary:hover .nav-glyph-icon__glyph {
+  transform: translateY(-1px) scale(1.04);
+}
+
+.nav-item.active .nav-glyph-icon__glyph,
+.tab-btn.active .nav-glyph-icon__glyph,
+.mobile-fab.active .nav-glyph-icon__glyph,
+.nav-glyph-icon--lit .nav-glyph-icon__glyph {
+  transform: scale(1.06);
+}
+
+/* Edge aura — hover or active page only */
+.nav-item:hover .nav-glyph-icon--coral .nav-glyph-icon__glyph,
+.nav-item.active .nav-glyph-icon--coral .nav-glyph-icon__glyph,
+.tab-btn:hover .nav-glyph-icon--coral .nav-glyph-icon__glyph,
+.tab-btn.active .nav-glyph-icon--coral .nav-glyph-icon__glyph,
+.mobile-fab:hover .nav-glyph-icon--coral .nav-glyph-icon__glyph,
+.mobile-fab.active .nav-glyph-icon--coral .nav-glyph-icon__glyph,
+.nav-glyph-icon--lit.nav-glyph-icon--coral .nav-glyph-icon__glyph,
+.btn-secondary:hover .nav-glyph-icon--coral .nav-glyph-icon__glyph {
+  filter:
+    drop-shadow(0 0 8px rgba(196, 92, 74, 0.62))
+    drop-shadow(0 2px 4px rgba(20, 20, 19, 0.18));
+}
+
+.nav-item:hover .nav-glyph-icon--green .nav-glyph-icon__glyph,
+.nav-item.active .nav-glyph-icon--green .nav-glyph-icon__glyph,
+.tab-btn:hover .nav-glyph-icon--green .nav-glyph-icon__glyph,
+.tab-btn.active .nav-glyph-icon--green .nav-glyph-icon__glyph,
+.nav-glyph-icon--lit.nav-glyph-icon--green .nav-glyph-icon__glyph,
+.btn-secondary:hover .nav-glyph-icon--green .nav-glyph-icon__glyph {
+  filter:
+    drop-shadow(0 0 8px rgba(95, 178, 74, 0.6))
+    drop-shadow(0 2px 4px rgba(20, 20, 19, 0.18));
+}
+
+.nav-item:hover .nav-glyph-icon--indigo .nav-glyph-icon__glyph,
+.nav-item.active .nav-glyph-icon--indigo .nav-glyph-icon__glyph,
+.tab-btn:hover .nav-glyph-icon--indigo .nav-glyph-icon__glyph,
+.tab-btn.active .nav-glyph-icon--indigo .nav-glyph-icon__glyph,
+.nav-glyph-icon--lit.nav-glyph-icon--indigo .nav-glyph-icon__glyph,
+.btn-secondary:hover .nav-glyph-icon--indigo .nav-glyph-icon__glyph {
+  filter:
+    drop-shadow(0 0 8px rgba(93, 100, 153, 0.65))
+    drop-shadow(0 2px 4px rgba(20, 20, 19, 0.18));
+}
+
+.nav-item:hover .nav-glyph-icon--teal .nav-glyph-icon__glyph,
+.nav-item.active .nav-glyph-icon--teal .nav-glyph-icon__glyph,
+.tab-btn:hover .nav-glyph-icon--teal .nav-glyph-icon__glyph,
+.tab-btn.active .nav-glyph-icon--teal .nav-glyph-icon__glyph,
+.nav-glyph-icon--lit.nav-glyph-icon--teal .nav-glyph-icon__glyph,
+.btn-secondary:hover .nav-glyph-icon--teal .nav-glyph-icon__glyph {
+  filter:
+    drop-shadow(0 0 8px rgba(0, 131, 143, 0.58))
+    drop-shadow(0 2px 4px rgba(20, 20, 19, 0.18));
+}
+
+.nav-item:hover .nav-glyph-icon--orange .nav-glyph-icon__glyph,
+.nav-item.active .nav-glyph-icon--orange .nav-glyph-icon__glyph,
+.tab-btn:hover .nav-glyph-icon--orange .nav-glyph-icon__glyph,
+.tab-btn.active .nav-glyph-icon--orange .nav-glyph-icon__glyph,
+.nav-glyph-icon--lit.nav-glyph-icon--orange .nav-glyph-icon__glyph,
+.btn-secondary:hover .nav-glyph-icon--orange .nav-glyph-icon__glyph {
+  filter:
+    drop-shadow(0 0 8px rgba(230, 81, 0, 0.6))
+    drop-shadow(0 2px 4px rgba(20, 20, 19, 0.18));
+}
+
+.nav-item:hover .nav-glyph-icon--purple .nav-glyph-icon__glyph,
+.nav-item.active .nav-glyph-icon--purple .nav-glyph-icon__glyph,
+.tab-btn:hover .nav-glyph-icon--purple .nav-glyph-icon__glyph,
+.tab-btn.active .nav-glyph-icon--purple .nav-glyph-icon__glyph,
+.nav-glyph-icon--lit.nav-glyph-icon--purple .nav-glyph-icon__glyph,
+.btn-secondary:hover .nav-glyph-icon--purple .nav-glyph-icon__glyph {
+  filter:
+    drop-shadow(0 0 8px rgba(123, 31, 162, 0.6))
+    drop-shadow(0 2px 4px rgba(20, 20, 19, 0.18));
+}
+
+.nav-item:hover .nav-glyph-icon--slate .nav-glyph-icon__glyph,
+.nav-item.active .nav-glyph-icon--slate .nav-glyph-icon__glyph,
+.tab-btn:hover .nav-glyph-icon--slate .nav-glyph-icon__glyph,
+.tab-btn.active .nav-glyph-icon--slate .nav-glyph-icon__glyph,
+.nav-glyph-icon--lit.nav-glyph-icon--slate .nav-glyph-icon__glyph,
+.btn-secondary:hover .nav-glyph-icon--slate .nav-glyph-icon__glyph {
+  filter:
+    drop-shadow(0 0 8px rgba(60, 60, 60, 0.55))
+    drop-shadow(0 2px 4px rgba(20, 20, 19, 0.18));
+}
+
+.nav-item:hover .nav-glyph-icon--blue .nav-glyph-icon__glyph,
+.nav-item.active .nav-glyph-icon--blue .nav-glyph-icon__glyph,
+.tab-btn:hover .nav-glyph-icon--blue .nav-glyph-icon__glyph,
+.tab-btn.active .nav-glyph-icon--blue .nav-glyph-icon__glyph,
+.nav-glyph-icon--lit.nav-glyph-icon--blue .nav-glyph-icon__glyph,
+.btn-secondary:hover .nav-glyph-icon--blue .nav-glyph-icon__glyph {
+  filter:
+    drop-shadow(0 0 8px rgba(33, 150, 243, 0.6))
+    drop-shadow(0 2px 4px rgba(20, 20, 19, 0.18));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-glyph-icon__glyph {
+    transition: none;
+  }
+  .nav-item:hover .nav-glyph-icon__glyph,
+  .tab-btn:hover .nav-glyph-icon__glyph,
+  .nav-item.active .nav-glyph-icon__glyph,
+  .tab-btn.active .nav-glyph-icon__glyph,
+  .nav-glyph-icon--lit .nav-glyph-icon__glyph {
+    transform: none;
+  }
+}

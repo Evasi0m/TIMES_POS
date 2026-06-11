@@ -2,6 +2,18 @@
   "schemaVersion": 1,
   "patches": [
     {
+      "id": "2026-06-11-nav-colorful-glyphs",
+      "date": "2026-06-11",
+      "title": "เมนูนำทาง — ไอคอน Colorful Glyph",
+      "tags": ["ปรับปรุง", "UI"],
+      "items": [
+        "Sidebar + แท็บมือถือใช้ SVG glyph สีสัน (ตะกร้า/กล่อง/ใบเสร็จ/ถุงช้อป ฯลฯ) แทน stroke icon เดิม",
+        "E-Commerce ใช้รูปถุงช้อปเดียวกับ TikTok Shop · OAuth โทน teal gradient",
+        "ขยาย sidebar ให้กว้างขึ้น · aura เรืองแสงเฉพาะ hover/แท็บที่เลือก",
+        "ป้าย AI กับชื่อเมนูอยู่บรรทัดเดียวกัน · ปรับ offset overlay sync TikTok ให้ตรง sidebar ใหม่"
+      ]
+    },
+    {
       "id": "2026-06-11-tiktok-confirm-sku-plain-thai",
       "date": "2026-06-11",
       "title": "ยืนยันออเดอร์ TikTok — จับคู่สินค้า + ภาษาเข้าใจง่าย",
