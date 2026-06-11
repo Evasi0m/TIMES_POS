@@ -5,6 +5,7 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  overflow: visible;
 }
 
 .nav-glyph-icon__glyph {
@@ -13,6 +14,7 @@
   justify-content: center;
   transition: transform 0.18s var(--ease-out, ease), filter 0.18s ease;
   filter: none;
+  overflow: visible;
 }
 
 .nav-glyph-icon__svg {

@@ -2,6 +2,42 @@ import { useEffect, useRef } from 'react';
 import { subscribeTable } from './realtime-bus.js';
 
 /**
+ * Debounced invalidation scheduler with optional minimum interval between fires.
+ * Exported for unit tests — production code uses via useRealtimeInvalidate.
+ */
+export function createDebouncedInvalidate({ debounceMs = 300, minIntervalMs = 0, onInvalidate }) {
+  let timer = null;
+  let lastFireAt = 0;
+
+  const fire = () => {
+    timer = null;
+    const now = Date.now();
+    const wait = minIntervalMs > 0 ? minIntervalMs - (now - lastFireAt) : 0;
+    if (wait > 0) {
+      timer = setTimeout(fire, wait);
+      return;
+    }
+    lastFireAt = Date.now();
+    try { onInvalidate?.(); } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[realtime] onInvalidate threw:', err);
+    }
+  };
+
+  const schedule = () => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(fire, debounceMs);
+  };
+
+  const dispose = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+  };
+
+  return { schedule, dispose };
+}
+
+/**
  * Subscribe to postgres changes on one or more tables and call
  * `onInvalidate()` after a short debounce. Intended for "a row changed
  * somewhere, re-run the view's loader" — NOT for surgical state patching.
@@ -21,12 +57,13 @@ import { subscribeTable } from './realtime-bus.js';
  *   sb            Supabase client (passed in so lib is framework-agnostic)
  *   tables        string | string[]  names under public.*
  *   onInvalidate  () => void (fired after the idle window)
- *   options.debounceMs  default 300
- *   options.enabled     default true — flip false to pause without unsubscribing
- *                       every dependency change (useful when the view hides)
+ *   options.debounceMs    default 300
+ *   options.minIntervalMs default 0 — minimum ms between consecutive fires
+ *   options.enabled       default true — flip false to pause without unsubscribing
+ *                         every dependency change (useful when the view hides)
  */
 export function useRealtimeInvalidate(sb, tables, onInvalidate, options = {}) {
-  const { debounceMs = 300, enabled = true } = options;
+  const { debounceMs = 300, minIntervalMs = 0, enabled = true } = options;
 
   // Keep onInvalidate stable across renders without re-subscribing.
   const cbRef = useRef(onInvalidate);
@@ -38,23 +75,17 @@ export function useRealtimeInvalidate(sb, tables, onInvalidate, options = {}) {
 
   useEffect(() => {
     if (!enabled) return;
-    let timer = null;
-    const schedule = () => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        timer = null;
-        try { cbRef.current?.(); } catch (err) {
-          // eslint-disable-next-line no-console
-          console.error('[realtime] onInvalidate threw:', err);
-        }
-      }, debounceMs);
-    };
+    const { schedule, dispose } = createDebouncedInvalidate({
+      debounceMs,
+      minIntervalMs,
+      onInvalidate: () => cbRef.current?.(),
+    });
 
     const unsubs = list.map((t) => subscribeTable(sb, t, schedule));
     return () => {
-      if (timer) clearTimeout(timer);
+      dispose();
       unsubs.forEach((u) => u && u());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sb, key, debounceMs, enabled]);
+  }, [sb, key, debounceMs, minIntervalMs, enabled]);
 }

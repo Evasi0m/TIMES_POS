@@ -11,6 +11,9 @@ export const NAV_GLYPH_TONE = {
   'shop-bag': 'teal',
 };
 
+/** Visual boost — SVG draws larger inside a fixed layout slot so nav rows stay the same height. */
+const NAV_GLYPH_VISUAL_SCALE = 1.2;
+
 function svgProps(size) {
   return {
     width: size,
@@ -198,10 +201,15 @@ export function NavGlyphSvg({ name, size = 30, ai = false }) {
 
 export default function NavGlyphIcon({ name, size = 30, ai = false, active = false, className = '' }) {
   const tone = NAV_GLYPH_TONE[name] || 'indigo';
+  const slot = size;
+  const renderSize = Math.round(size * NAV_GLYPH_VISUAL_SCALE);
   return (
-    <span className={`nav-glyph-icon nav-glyph-icon--${tone}${active ? ' nav-glyph-icon--lit' : ''} shrink-0 ${className}`}>
+    <span
+      className={`nav-glyph-icon nav-glyph-icon--${tone}${active ? ' nav-glyph-icon--lit' : ''} shrink-0 ${className}`}
+      style={{ width: slot, height: slot, minWidth: slot, minHeight: slot }}
+    >
       <span className="nav-glyph-icon__glyph">
-        <NavGlyphSvg name={name} size={size} ai={ai} />
+        <NavGlyphSvg name={name} size={renderSize} ai={ai} />
       </span>
     </span>
   );

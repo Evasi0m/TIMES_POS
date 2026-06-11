@@ -2,6 +2,26 @@
   "schemaVersion": 1,
   "patches": [
     {
+      "id": "2026-06-11-nav-glyph-larger",
+      "date": "2026-06-11",
+      "title": "เมนูนำทาง — ไอคอนใหญ่ขึ้น 20%",
+      "tags": ["ปรับปรุง", "UI"],
+      "items": [
+        "SVG glyph ใน sidebar + แท็บมือถือใหญ่ขึ้น 20% โดยไม่ขยายความสูงแถวเมนู"
+      ]
+    },
+    {
+      "id": "2026-06-11-dashboard-sales-load-flicker",
+      "date": "2026-06-11",
+      "title": "แดชบอร์ด + ประวัติขาย — หยุดกระพริบโหลด",
+      "tags": ["แก้ไข", "UI"],
+      "items": [
+        "แดชบอร์ด + ประวัติการขาย ใช้ stale-while-revalidate — คงข้อมูลเดิมระหว่าง sync แทนล้างทั้งหน้า",
+        "Realtime refresh จำกัดความถี่ (min 2 วินาที) ลด reload ซ้อนจาก TikTok/POS",
+        "ยกเลิก request เก่า + try/finally กัน loading ค้างเมื่อ fetch ล้มเหลว"
+      ]
+    },
+    {
       "id": "2026-06-11-nav-colorful-glyphs",
       "date": "2026-06-11",
       "title": "เมนูนำทาง — ไอคอน Colorful Glyph",

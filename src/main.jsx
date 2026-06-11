@@ -7565,6 +7565,9 @@ function SalesView({ onGoPOS }) {
   const [orderSummary, setOrderSummary] = useState({});
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const loadedFilterRef = useRef(null);
+  const loadGenRef = useRef(0);
   const voidLockRef = useRef(false);
   // Phase 3.4: default-expanded so first-time users discover filters; auto-collapses
   // after a range pick (see handleRangeChange below).
@@ -7588,155 +7591,156 @@ function SalesView({ onGoPOS }) {
   const [editHistory, setEditHistory] = useState([]);
   const [historyOpen, setHistoryOpen] = useState(false);
 
+  const filterKey = `${from}_${to}_${channel}_${excludeVoided}`;
+
   const load = useCallback(async () => {
-    setLoading(true);
-    // Chunked pagination: PostgREST max-rows (1000 default) silently
-    // truncates .limit(5000) too. fetchAll() loops in 1000-row chunks so a
-    // wide date range (e.g. annual report) loads completely.
-    const { data, error } = await fetchAll((fromIdx, toIdx) => {
-      let q = excludePendingTikTok(sb.from('sale_orders').select('*'))
-        .gte('sale_date', startOfDayBangkok(from))
-        .lte('sale_date', endOfDayBangkok(to))
-        .order('sale_date', { ascending: false })
-        .range(fromIdx, toIdx);
-      if (channel) q = q.eq('channel', channel);
-      if (excludeVoided) q = q.eq('status', 'active');
-      return q;
-    });
-    if (error) toast.push("โหลดไม่ได้", "error");
-    const ordersList = data || [];
-    setOrders(ordersList);
+    const isFirstForFilter = loadedFilterRef.current !== filterKey;
+    const gen = ++loadGenRef.current;
+    if (isFirstForFilter) setLoading(true);
+    else setRefreshing(true);
 
-    // Compute per-order product summary + profit (mirrors ProfitLossView).
-    if (ordersList.length) {
-      try {
-        const orderIds = ordersList.map(o => o.id);
-        // Chunked: a wide range can yield > 1000 line items; we'd silently
-        // under-count profit/qty without fetchAll().
-        const { data: itemsData } = await fetchAll((fromIdx, toIdx) =>
-          sb.from('sale_order_items').select('*')
-            .in('sale_order_id', orderIds).range(fromIdx, toIdx)
-        );
-        const items = itemsData || [];
-        const pids = [...new Set(items.map(i => i.product_id).filter(Boolean))];
+    try {
+      const { data, error } = await fetchAll((fromIdx, toIdx) => {
+        let q = excludePendingTikTok(sb.from('sale_orders').select('*'))
+          .gte('sale_date', startOfDayBangkok(from))
+          .lte('sale_date', endOfDayBangkok(to))
+          .order('sale_date', { ascending: false })
+          .range(fromIdx, toIdx);
+        if (channel) q = q.eq('channel', channel);
+        if (excludeVoided) q = q.eq('status', 'active');
+        return q;
+      });
+      if (gen !== loadGenRef.current) return;
+      if (error) toast.push("โหลดไม่ได้", "error");
+      const ordersList = data || [];
+      setOrders(ordersList);
 
-        let recvRows = [];
-        if (pids.length) {
-          // Same pagination concern for receive history lookups.
-          const { data: rd } = await fetchAll((fromIdx, toIdx) =>
-            sb.from('receive_order_items')
-              .select('product_id, unit_price, receive_orders!inner(receive_date, voided_at)')
-              .in('product_id', pids).is('receive_orders.voided_at', null)
-              .range(fromIdx, toIdx)
+      if (ordersList.length) {
+        try {
+          const orderIds = ordersList.map(o => o.id);
+          const { data: itemsData } = await fetchAll((fromIdx, toIdx) =>
+            sb.from('sale_order_items').select('*')
+              .in('sale_order_id', orderIds).range(fromIdx, toIdx)
           );
-          recvRows = rd || [];
-        }
-        const recvMap = {};
-        recvRows.forEach(r => {
-          const date = r.receive_orders?.receive_date;
-          if (!date) return;
-          (recvMap[r.product_id] ||= []).push({ date: new Date(date).getTime(), unit_price: Number(r.unit_price)||0 });
-        });
-        Object.values(recvMap).forEach(arr => arr.sort((a,b)=>b.date-a.date));
+          if (gen !== loadGenRef.current) return;
+          const items = itemsData || [];
+          const pids = [...new Set(items.map(i => i.product_id).filter(Boolean))];
 
-        const prodMap = {};
-        if (pids.length) {
-          // Chunked: > 1000 distinct products in a wide period would
-          // truncate cost lookups, skewing displayed profit.
-          const { data: prods } = await fetchAll((fromIdx, toIdx) =>
-            sb.from('products').select('id, cost_price').in('id', pids).range(fromIdx, toIdx)
-          );
-          (prods||[]).forEach(p => { prodMap[p.id] = Number(p.cost_price)||0; });
-        }
-
-        const itemsByOrder = {};
-        items.forEach(it => { (itemsByOrder[it.sale_order_id] ||= []).push(it); });
-
-        const summary = {};
-        for (const o of ordersList) {
-          const lines = itemsByOrder[o.id] || [];
-          const lineRevenues = lines.map(it => applyDiscounts(
-            it.unit_price, it.quantity,
-            it.discount1_value, it.discount1_type,
-            it.discount2_value, it.discount2_type,
-          ));
-          const subtotalCalc = lineRevenues.reduce((s,x)=>s+x, 0);
-          const revenueBase = (ECOMMERCE_CHANNELS.has(o.channel) && o.net_received != null)
-            ? Number(o.net_received)
-            : Number(o.grand_total) || 0;
-          const ratio = subtotalCalc > 0 ? revenueBase / subtotalCalc : 1;
-          const saleTs = new Date(o.sale_date).getTime();
-          let totalProfit = 0;
-          let costApprox = false;
-          lines.forEach((it, idx) => {
-            const qty = Number(it.quantity)||0;
-            const lineRev = lineRevenues[idx] * ratio;
-            let unitCost = 0;
-            // Authoritative source: cost_price snapshot taken at sale time
-            // (sale_order_items.cost_price). Added 2026-05-15 — locks in the
-            // actual COGS so profit can't drift when receive history changes
-            // or admins correct cost_price retroactively. Legacy rows have
-            // NULL → fall back to receive-history lookup, then product cost.
-            //
-            // The snapshot is then run through `normalizeCostToGross` against
-            // the latest receive on/before the sale, snapping any stray
-            // ex-VAT/double-VAT rows back to Gross. See helper doc-comment.
-            if (it.cost_price != null) {
-              const snap = Number(it.cost_price) || 0;
-              const list = it.product_id ? recvMap[it.product_id] : null;
-              const peer = (list && list.length) ? list.find(r => r.date <= saleTs) : null;
-              unitCost = normalizeCostToGross(snap, peer ? peer.unit_price : 0);
-            } else if (it.product_id) {
-              const list = recvMap[it.product_id];
-              if (list && list.length) {
-                const found = list.find(r => r.date <= saleTs);
-                if (found) unitCost = found.unit_price;
-                else { unitCost = prodMap[it.product_id] || 0; costApprox = true; }
-              } else {
-                unitCost = prodMap[it.product_id] || 0;
-                costApprox = true;
-              }
-            }
-            totalProfit += lineRev - unitCost * qty;
+          let recvRows = [];
+          if (pids.length) {
+            const { data: rd } = await fetchAll((fromIdx, toIdx) =>
+              sb.from('receive_order_items')
+                .select('product_id, unit_price, receive_orders!inner(receive_date, voided_at)')
+                .in('product_id', pids).is('receive_orders.voided_at', null)
+                .range(fromIdx, toIdx)
+            );
+            if (gen !== loadGenRef.current) return;
+            recvRows = rd || [];
+          }
+          const recvMap = {};
+          recvRows.forEach(r => {
+            const date = r.receive_orders?.receive_date;
+            if (!date) return;
+            (recvMap[r.product_id] ||= []).push({ date: new Date(date).getTime(), unit_price: Number(r.unit_price)||0 });
           });
-          const productLabel = lines.length === 0 ? '—'
-            : lines.length === 1 ? saleLineSku(lines[0])
-            : `${saleLineSku(lines[0])} +${lines.length - 1}`;
-          summary[o.id] = {
-            productLabel,
-            // Full list of searchable names — powers the free-text filter.
-            allProductNames: lines.map(l => saleLineSearchText(l)),
-            // "ใส่ทีหลัง" bills have no recorded payout yet → profit is 0 until
-            // the real net_received is entered (matches the cart indicator).
-            profit: (o.status === 'voided' || o.net_received_pending) ? 0 : totalProfit,
-            itemCount: lines.length,
-            costApprox,
-            hasSubstitution: o.has_substitution ?? lines.some(l => saleLineIsSubstitution(l)),
-          };
+          Object.values(recvMap).forEach(arr => arr.sort((a,b)=>b.date-a.date));
+
+          const prodMap = {};
+          if (pids.length) {
+            const { data: prods } = await fetchAll((fromIdx, toIdx) =>
+              sb.from('products').select('id, cost_price').in('id', pids).range(fromIdx, toIdx)
+            );
+            if (gen !== loadGenRef.current) return;
+            (prods||[]).forEach(p => { prodMap[p.id] = Number(p.cost_price)||0; });
+          }
+
+          const itemsByOrder = {};
+          items.forEach(it => { (itemsByOrder[it.sale_order_id] ||= []).push(it); });
+
+          const summary = {};
+          for (const o of ordersList) {
+            const lines = itemsByOrder[o.id] || [];
+            const lineRevenues = lines.map(it => applyDiscounts(
+              it.unit_price, it.quantity,
+              it.discount1_value, it.discount1_type,
+              it.discount2_value, it.discount2_type,
+            ));
+            const subtotalCalc = lineRevenues.reduce((s,x)=>s+x, 0);
+            const revenueBase = (ECOMMERCE_CHANNELS.has(o.channel) && o.net_received != null)
+              ? Number(o.net_received)
+              : Number(o.grand_total) || 0;
+            const ratio = subtotalCalc > 0 ? revenueBase / subtotalCalc : 1;
+            const saleTs = new Date(o.sale_date).getTime();
+            let totalProfit = 0;
+            let costApprox = false;
+            lines.forEach((it, idx) => {
+              const qty = Number(it.quantity)||0;
+              const lineRev = lineRevenues[idx] * ratio;
+              let unitCost = 0;
+              if (it.cost_price != null) {
+                const snap = Number(it.cost_price) || 0;
+                const list = it.product_id ? recvMap[it.product_id] : null;
+                const peer = (list && list.length) ? list.find(r => r.date <= saleTs) : null;
+                unitCost = normalizeCostToGross(snap, peer ? peer.unit_price : 0);
+              } else if (it.product_id) {
+                const list = recvMap[it.product_id];
+                if (list && list.length) {
+                  const found = list.find(r => r.date <= saleTs);
+                  if (found) unitCost = found.unit_price;
+                  else { unitCost = prodMap[it.product_id] || 0; costApprox = true; }
+                } else {
+                  unitCost = prodMap[it.product_id] || 0;
+                  costApprox = true;
+                }
+              }
+              totalProfit += lineRev - unitCost * qty;
+            });
+            const productLabel = lines.length === 0 ? '—'
+              : lines.length === 1 ? saleLineSku(lines[0])
+              : `${saleLineSku(lines[0])} +${lines.length - 1}`;
+            summary[o.id] = {
+              productLabel,
+              allProductNames: lines.map(l => saleLineSearchText(l)),
+              profit: (o.status === 'voided' || o.net_received_pending) ? 0 : totalProfit,
+              itemCount: lines.length,
+              costApprox,
+              hasSubstitution: o.has_substitution ?? lines.some(l => saleLineIsSubstitution(l)),
+            };
+          }
+          setOrderSummary(summary);
+        } catch (e) {
+          console.error('orderSummary load failed', e);
+          setOrderSummary({});
         }
-        setOrderSummary(summary);
-      } catch (e) {
-        console.error('orderSummary load failed', e);
+      } else {
         setOrderSummary({});
       }
-    } else {
-      setOrderSummary({});
-    }
 
-    const voidedIds = ordersList.filter(o => o.status === 'voided').map(o => o.id);
-    if (voidedIds.length) {
-      try {
-        setVoidStockStatus(await fetchVoidStockStatusMap(sb, voidedIds));
-      } catch (e) {
-        console.error('voidStockStatus load failed', e);
+      if (gen !== loadGenRef.current) return;
+
+      const voidedIds = ordersList.filter(o => o.status === 'voided').map(o => o.id);
+      if (voidedIds.length) {
+        try {
+          setVoidStockStatus(await fetchVoidStockStatusMap(sb, voidedIds));
+        } catch (e) {
+          console.error('voidStockStatus load failed', e);
+          setVoidStockStatus({});
+        }
+      } else {
         setVoidStockStatus({});
       }
-    } else {
-      setVoidStockStatus({});
-    }
 
-    setLoading(false);
-  }, [from, to, channel, excludeVoided]);
+      loadedFilterRef.current = filterKey;
+    } catch (e) {
+      console.error('sales load failed', e);
+      toast.push('โหลดไม่ได้', 'error');
+    } finally {
+      if (gen === loadGenRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }
+  }, [from, to, channel, excludeVoided, filterKey, toast]);
 
   // When active-only list hides a voided bill the user searched by ID, offer shortcut.
   useEffect(() => {
@@ -7835,7 +7839,11 @@ function SalesView({ onGoPOS }) {
   useEffect(()=>{ load(); }, [load]);
   // Realtime: new sale on another device → refresh the list. sale_order_items
   // is included so "รายการถูกแก้" (e.g. void line) also triggers a refresh.
-  useRealtimeInvalidate(sb, ['sale_orders', 'sale_order_items'], load);
+  useRealtimeInvalidate(sb, ['sale_orders', 'sale_order_items'], load,
+    { minIntervalMs: 2000 });
+
+  const showSkeleton = loading && loadedFilterRef.current !== filterKey;
+  const showTable = loadedFilterRef.current === filterKey && !showSkeleton;
 
   const openDetail = async (order) => {
     const [iRes, hRes] = await Promise.all([
@@ -8289,8 +8297,13 @@ function SalesView({ onGoPOS }) {
 
       {/* Desktop — grouped by day */}
       <div className="hidden lg:block space-y-4">
-        {loading && <div className="card-canvas overflow-hidden"><SkeletonRows n={6} label="กำลังโหลดบิล" /></div>}
-        {!loading && filteredOrders.length===0 && (
+        {refreshing && !loading && (
+          <div className="flex items-center gap-2 text-xs text-muted px-1">
+            <span className="spinner"/> กำลังอัปเดต…
+          </div>
+        )}
+        {showSkeleton && <div className="card-canvas overflow-hidden"><SkeletonRows n={6} label="กำลังโหลดบิล" /></div>}
+        {showTable && !loading && filteredOrders.length===0 && (
           <div className="card-canvas p-8 text-center">
             <div className="text-muted text-sm">{searchQuery ? `ไม่พบบิลที่ตรงกับ “${searchQuery}” ในช่วงวันที่เลือก` : 'ไม่พบบิลในช่วงเวลานี้'}</div>
             {onGoPOS && (
@@ -8300,7 +8313,7 @@ function SalesView({ onGoPOS }) {
             )}
           </div>
         )}
-        {!loading && groupedByDay.map(g => (
+        {showTable && groupedByDay.map(g => (
           <div key={g.day} className="card-canvas overflow-hidden">
             {/* Day header */}
             <div className="flex items-center justify-between px-4 py-3 border-b hairline bg-surface-cream-strong/50">
@@ -8385,8 +8398,13 @@ function SalesView({ onGoPOS }) {
 
       {/* Mobile — grouped by day */}
       <div className="lg:hidden space-y-4">
-        {loading && <div className="p-4 text-muted text-sm flex items-center gap-2"><span className="spinner"/>กำลังโหลด...</div>}
-        {!loading && filteredOrders.length===0 && (
+        {refreshing && !loading && (
+          <div className="flex items-center gap-2 text-xs text-muted px-1">
+            <span className="spinner"/> กำลังอัปเดต…
+          </div>
+        )}
+        {showSkeleton && <div className="p-4 text-muted text-sm flex items-center gap-2"><span className="spinner"/>กำลังโหลด...</div>}
+        {showTable && !loading && filteredOrders.length===0 && (
           <div className="p-6 text-center">
             <div className="text-muted text-sm">{searchQuery ? `ไม่พบบิลที่ตรงกับ “${searchQuery}” ในช่วงวันที่เลือก` : 'ไม่พบบิลในช่วงเวลานี้'}</div>
             {onGoPOS && (
@@ -8396,7 +8414,7 @@ function SalesView({ onGoPOS }) {
             )}
           </div>
         )}
-        {!loading && groupedByDay.map(g => (
+        {showTable && groupedByDay.map(g => (
           <div key={g.day}>
             {/* Sticky day header */}
             <div className="sticky top-14 z-20 -mx-4 px-4 py-2.5 mb-2 mobile-topbar flex items-center justify-between">
@@ -11193,119 +11211,142 @@ function DashboardView({ embedded = false, dateRange: dateRangeProp, onDateRange
   // current range. Drives the <DeltaBadge/> in the hero card.
   const [prevTotal, setPrevTotal] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   // Bumping this re-runs the loader — drives the realtime refresh below.
   const [reloadTick, setReloadTick] = useState(0);
+  const loadedRangeRef = useRef(null);
+  const loadGenRef = useRef(0);
 
-  useEffect(()=>{ (async ()=>{
-    setLoading(true);
-    setStats(null);
-    const { from, to } = dateRange;
+  useEffect(() => {
+    let cancelled = false;
+    const rangeKey = `${dateRange.from}_${dateRange.to}`;
+    const isFirstForRange = loadedRangeRef.current !== rangeKey;
+    const gen = ++loadGenRef.current;
 
-    // Previous window of identical length — for delta comparison. e.g.
-    // today vs yesterday; this week vs last week; this month vs prior 30d.
-    const fromD = new Date(from + 'T00:00:00');
-    const toD   = new Date(to   + 'T00:00:00');
-    const dayMs = 86400000;
-    const lengthDays = Math.max(1, Math.round((toD - fromD) / dayMs) + 1);
-    const prevTo   = new Date(fromD.getTime() - dayMs);
-    const prevFrom = new Date(prevTo.getTime() - (lengthDays - 1) * dayMs);
-    const prevFromIso = dateISOBangkok(prevFrom);
-    const prevToIso   = dateISOBangkok(prevTo);
-
-    // Dashboard sale_orders is paginated — without fetchAll() the dashboard
-    // silently under-reports any month with > 1000 active orders.
-    const [rangeQ, prevQ, lowQ] = await Promise.all([
-      fetchAll((fromIdx, toIdx) =>
-        excludePendingTikTok(sb.from('sale_orders').select('id, grand_total, channel, net_received, sale_date'))
-          .eq('status','active')
-          .gte('sale_date', startOfDayBangkok(from))
-          .lte('sale_date', endOfDayBangkok(to))
-          .order('id', { ascending: false })
-          .range(fromIdx, toIdx)
-      ),
-      fetchAll((fromIdx, toIdx) =>
-        excludePendingTikTok(sb.from('sale_orders').select('grand_total, channel, net_received'))
-          .eq('status','active')
-          .gte('sale_date', startOfDayBangkok(prevFromIso))
-          .lte('sale_date', endOfDayBangkok(prevToIso))
-          .range(fromIdx, toIdx)
-      ),
-      sb.from('products').select('id,name,current_stock').lt('current_stock', 5).gt('current_stock', -1).order('current_stock', { ascending: true }).limit(8),
-    ]);
-
-    // For e-commerce sales the actual shop revenue is net_received (after platform fee).
-    // Fallback to grand_total when net_received hasn't been entered yet.
-    const revenueOf = (r) => (ECOMMERCE_CHANNELS.has(r.channel) && r.net_received != null)
-      ? Number(r.net_received)
-      : Number(r.grand_total) || 0;
-
-    const rangeRows = rangeQ.data || [];
-    const rangeTotal = rangeRows.reduce((s,r)=>s+revenueOf(r),0);
-    const prevRows = prevQ.data || [];
-    setPrevTotal(prevRows.reduce((s,r)=>s+revenueOf(r),0));
-
-    if (lengthDays === 1) {
-      // Single-day range → bucket by Bangkok hour so the sparkline shows an
-      // intraday curve instead of one lone dot. Seed 00:00 up to the last
-      // relevant hour (now, if it's today; otherwise the last hour with a
-      // sale) so there's no misleading flat-zero tail into the future.
-      const isToday = to === todayISO();
-      const saleHours = rangeRows.map(r => hourBangkok(r.sale_date)).filter(h => h != null);
-      const lastSaleHour = saleHours.length ? Math.max(...saleHours) : 0;
-      const nowHour = isToday ? (hourBangkok(serverNowDate()) ?? 23) : 23;
-      const maxHour = isToday ? Math.max(nowHour, lastSaleHour) : Math.max(lastSaleHour, 8);
-      const hourMap = new Map();
-      for (let h = 0; h <= maxHour; h++) hourMap.set(h, 0);
-      rangeRows.forEach(r => {
-        const h = hourBangkok(r.sale_date);
-        if (h != null && hourMap.has(h)) hourMap.set(h, hourMap.get(h) + revenueOf(r));
-      });
-      setDailySeries(Array.from(hourMap.entries()).map(([h, value]) => ({
-        label: `${from} ${String(h).padStart(2, '0')}:00`, value,
-      })));
-    } else {
-      // Daily series — group by Bangkok date. Seed every day in the range
-      // with 0 first so days with no sales still render as data points (gives
-      // the sparkline a calendar-accurate shape).
-      const dayMap = new Map();
-      for (let i = 0; i < lengthDays; i++) {
-        const d = new Date(fromD.getTime() + i * dayMs);
-        dayMap.set(dateISOBangkok(d), 0);
+    (async () => {
+      if (isFirstForRange) {
+        setLoading(true);
+        setStats(null);
+      } else {
+        setRefreshing(true);
       }
-      rangeRows.forEach(r => {
-        const key = bangkokDateKey(r.sale_date);
-        if (dayMap.has(key)) dayMap.set(key, dayMap.get(key) + revenueOf(r));
-      });
-      setDailySeries(Array.from(dayMap.entries()).map(([day, value]) => ({ label: day, value })));
-    }
 
-    const chMap = {};
-    rangeRows.forEach(r=>{ const k = r.channel||'store'; chMap[k]=(chMap[k]||0)+revenueOf(r); });
-    setByChannel(Object.entries(chMap).map(([k,v])=>({ channel:k, total:v })));
+      const { from, to } = dateRange;
 
-    setStats({ rangeCount: rangeRows.length, rangeTotal });
-    setLowStock(lowQ.data || []);
+      try {
+        // Previous window of identical length — for delta comparison. e.g.
+        // today vs yesterday; this week vs last week; this month vs prior 30d.
+        const fromD = new Date(from + 'T00:00:00');
+        const toD   = new Date(to   + 'T00:00:00');
+        const dayMs = 86400000;
+        const lengthDays = Math.max(1, Math.round((toD - fromD) / dayMs) + 1);
+        const prevTo   = new Date(fromD.getTime() - dayMs);
+        const prevFrom = new Date(prevTo.getTime() - (lengthDays - 1) * dayMs);
+        const prevFromIso = dateISOBangkok(prevFrom);
+        const prevToIso   = dateISOBangkok(prevTo);
 
-    const ids = rangeRows.map(x=>x.id);
-    if (ids.length) {
-      // Chunked: many orders × line items easily exceeds 1000 rows.
-      const { data: items } = await fetchAll((fromIdx, toIdx) =>
-        sb.from('sale_order_items').select('product_name,quantity')
-          .in('sale_order_id', ids).range(fromIdx, toIdx)
-      );
-      const map = {};
-      (items||[]).forEach(it => { map[it.product_name] = (map[it.product_name]||0) + (Number(it.quantity)||0); });
-      const top = Object.entries(map).map(([name,q])=>({name,q})).sort((a,b)=>b.q-a.q).slice(0,8);
-      setTopProducts(top);
-    } else setTopProducts([]);
-    setLoading(false);
-  })(); }, [dateRange.from, dateRange.to, reloadTick]);
+        // Dashboard sale_orders is paginated — without fetchAll() the dashboard
+        // silently under-reports any month with > 1000 active orders.
+        const [rangeQ, prevQ, lowQ] = await Promise.all([
+          fetchAll((fromIdx, toIdx) =>
+            excludePendingTikTok(sb.from('sale_orders').select('id, grand_total, channel, net_received, sale_date'))
+              .eq('status','active')
+              .gte('sale_date', startOfDayBangkok(from))
+              .lte('sale_date', endOfDayBangkok(to))
+              .order('id', { ascending: false })
+              .range(fromIdx, toIdx)
+          ),
+          fetchAll((fromIdx, toIdx) =>
+            excludePendingTikTok(sb.from('sale_orders').select('grand_total, channel, net_received'))
+              .eq('status','active')
+              .gte('sale_date', startOfDayBangkok(prevFromIso))
+              .lte('sale_date', endOfDayBangkok(prevToIso))
+              .range(fromIdx, toIdx)
+          ),
+          sb.from('products').select('id,name,current_stock').lt('current_stock', 5).gt('current_stock', -1).order('current_stock', { ascending: true }).limit(8),
+        ]);
+
+        if (cancelled || gen !== loadGenRef.current) return;
+
+        // For e-commerce sales the actual shop revenue is net_received (after platform fee).
+        // Fallback to grand_total when net_received hasn't been entered yet.
+        const revenueOf = (r) => (ECOMMERCE_CHANNELS.has(r.channel) && r.net_received != null)
+          ? Number(r.net_received)
+          : Number(r.grand_total) || 0;
+
+        const rangeRows = rangeQ.data || [];
+        const rangeTotal = rangeRows.reduce((s,r)=>s+revenueOf(r),0);
+        const prevRows = prevQ.data || [];
+        setPrevTotal(prevRows.reduce((s,r)=>s+revenueOf(r),0));
+
+        if (lengthDays === 1) {
+          const isToday = to === todayISO();
+          const saleHours = rangeRows.map(r => hourBangkok(r.sale_date)).filter(h => h != null);
+          const lastSaleHour = saleHours.length ? Math.max(...saleHours) : 0;
+          const nowHour = isToday ? (hourBangkok(serverNowDate()) ?? 23) : 23;
+          const maxHour = isToday ? Math.max(nowHour, lastSaleHour) : Math.max(lastSaleHour, 8);
+          const hourMap = new Map();
+          for (let h = 0; h <= maxHour; h++) hourMap.set(h, 0);
+          rangeRows.forEach(r => {
+            const h = hourBangkok(r.sale_date);
+            if (h != null && hourMap.has(h)) hourMap.set(h, hourMap.get(h) + revenueOf(r));
+          });
+          setDailySeries(Array.from(hourMap.entries()).map(([h, value]) => ({
+            label: `${from} ${String(h).padStart(2, '0')}:00`, value,
+          })));
+        } else {
+          const dayMap = new Map();
+          for (let i = 0; i < lengthDays; i++) {
+            const d = new Date(fromD.getTime() + i * dayMs);
+            dayMap.set(dateISOBangkok(d), 0);
+          }
+          rangeRows.forEach(r => {
+            const key = bangkokDateKey(r.sale_date);
+            if (dayMap.has(key)) dayMap.set(key, dayMap.get(key) + revenueOf(r));
+          });
+          setDailySeries(Array.from(dayMap.entries()).map(([day, value]) => ({ label: day, value })));
+        }
+
+        const chMap = {};
+        rangeRows.forEach(r=>{ const k = r.channel||'store'; chMap[k]=(chMap[k]||0)+revenueOf(r); });
+        setByChannel(Object.entries(chMap).map(([k,v])=>({ channel:k, total:v })));
+
+        setStats({ rangeCount: rangeRows.length, rangeTotal });
+        setLowStock(lowQ.data || []);
+
+        const ids = rangeRows.map(x=>x.id);
+        if (ids.length) {
+          const { data: items } = await fetchAll((fromIdx, toIdx) =>
+            sb.from('sale_order_items').select('product_name,quantity')
+              .in('sale_order_id', ids).range(fromIdx, toIdx)
+          );
+          if (cancelled || gen !== loadGenRef.current) return;
+          const map = {};
+          (items||[]).forEach(it => { map[it.product_name] = (map[it.product_name]||0) + (Number(it.quantity)||0); });
+          const top = Object.entries(map).map(([name,q])=>({name,q})).sort((a,b)=>b.q-a.q).slice(0,8);
+          setTopProducts(top);
+        } else setTopProducts([]);
+
+        loadedRangeRef.current = rangeKey;
+      } catch (e) {
+        console.error('dashboard load failed', e);
+      } finally {
+        if (!cancelled && gen === loadGenRef.current) {
+          setLoading(false);
+          setRefreshing(false);
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [dateRange.from, dateRange.to, reloadTick]);
 
   // Realtime: when another device records a sale or changes stock, refresh
   // the dashboard so the manager watching it from the back doesn't see
   // stale numbers. Products listens for low-stock badge updates.
   useRealtimeInvalidate(sb, ['sale_orders', 'sale_order_items', 'products'],
-    () => setReloadTick(t => t + 1));
+    () => setReloadTick(t => t + 1),
+    { minIntervalMs: 2000 });
 
   const rangeLabel = dateRange.from === dateRange.to
     ? fmtThaiDateShort(dateRange.from)
@@ -11351,6 +11392,7 @@ function DashboardView({ embedded = false, dateRange: dateRangeProp, onDateRange
           <div className="flex items-center gap-3 pb-1">
             <DatePicker mode="range" value={dateRange} onChange={setDateRange} placeholder="เลือกช่วงวันที่" className="w-64"/>
             {loading && <span className="spinner text-muted"/>}
+            {refreshing && !loading && <span className="spinner text-muted-soft" title="กำลังอัปเดต"/>}
           </div>
         </header>
       )}
@@ -11373,7 +11415,10 @@ function DashboardView({ embedded = false, dateRange: dateRangeProp, onDateRange
         {/* Quick range presets */}
         <div style={{ '--i': 0 }} className="flex items-center justify-between gap-3 flex-wrap fade-in stagger">
           <RangePresets dateRange={dateRange} setDateRange={setDateRange}/>
-          <div className="text-xs text-muted-soft tabular-nums">{rangeLabel}</div>
+          <div className="flex items-center gap-2 text-xs text-muted-soft tabular-nums">
+            {refreshing && !loading && <span className="spinner shrink-0" title="กำลังอัปเดต"/>}
+            {rangeLabel}
+          </div>
         </div>
 
         {/* ━━━━━━━━━━ HERO — total + 14-day sparkline ━━━━━━━━━━ */}
