@@ -23,6 +23,11 @@ import TikTokOrdersToolbar from './tiktok/TikTokOrdersToolbar.jsx';
 import TikTokStatusTabs from './tiktok/TikTokStatusTabs.jsx';
 import TikTokBulkActionBar from './tiktok/TikTokBulkActionBar.jsx';
 import TikTokOrderList from './tiktok/TikTokOrderList.jsx';
+import {
+  navigateToTikTokCancelledReturn,
+  saleMatchesOrderSearch,
+} from '../../lib/tiktok-cancel-return.js';
+import { fetchVoidStockStatusMap } from '../../lib/sale-void-stock-status.js';
 
 function fmtDateTime(iso) {
   if (!iso) return '—';
@@ -120,6 +125,8 @@ export default function TikTokPanel({ toast, section = 'orders', onSyncChange, i
   const [labelBusy, setLabelBusy] = useState(null);
   const [shipBusy, setShipBusy] = useState(null);
   const [shipFilter, setShipFilter] = useState('to_ship');
+  const [orderSearch, setOrderSearch] = useState('');
+  const [voidStockStatus, setVoidStockStatus] = useState({});
   const [selected, setSelected] = useState(new Set());
   const [singleId, setSingleId] = useState('');
   const [singleBusy, setSingleBusy] = useState(false);
@@ -146,9 +153,21 @@ export default function TikTokPanel({ toast, section = 'orders', onSyncChange, i
           Object.values(map).flat().map(it => it.product_id).filter(Boolean),
         )];
         setImageByProduct(await fetchProductImageMap(sb, productIds));
+
+        const voidedIds = list.filter(o => o.status === 'voided').map(o => o.id);
+        if (voidedIds.length) {
+          try {
+            setVoidStockStatus(await fetchVoidStockStatusMap(sb, voidedIds));
+          } catch {
+            setVoidStockStatus({});
+          }
+        } else {
+          setVoidStockStatus({});
+        }
       } else {
         setItemsByOrder({});
         setImageByProduct({});
+        setVoidStockStatus({});
       }
       return list;
     } catch (e) {
@@ -189,10 +208,16 @@ export default function TikTokPanel({ toast, section = 'orders', onSyncChange, i
     return counts;
   }, [orders]);
 
-  const filteredOrders = useMemo(
+  const tabFilteredOrders = useMemo(
     () => orders.filter(o => orderMatchesTab(o, shipFilter)),
     [orders, shipFilter],
   );
+
+  const filteredOrders = useMemo(() => {
+    const q = orderSearch.trim();
+    if (!q) return tabFilteredOrders;
+    return orders.filter(o => saleMatchesOrderSearch(o, q));
+  }, [orders, tabFilteredOrders, orderSearch]);
 
   const stats = useMemo(() => ({
     total: orders.length,
@@ -222,8 +247,16 @@ export default function TikTokPanel({ toast, section = 'orders', onSyncChange, i
       });
       setLastSyncedAt(new Date());
       const afterCount = list?.length ?? beforeCount;
+      const voided = Number(data?.voided ?? 0);
       const { message, level } = formatPollToast(data, { beforeCount, afterCount });
       toast?.push(message, level);
+      if (voided > 0) {
+        toast?.push(
+          `TikTok ยกเลิก ${voided} ออเดอร์ — ดูในแท็บ「ยกเลิก」 (บิลไม่หายจากระบบ)`,
+          'info',
+        );
+        setShipFilter('cancelled');
+      }
     } catch (e) {
       syncProgress.stop();
       toast?.push('อัปเดตไม่สำเร็จ: ' + mapError(e), 'error');
@@ -345,6 +378,12 @@ export default function TikTokPanel({ toast, section = 'orders', onSyncChange, i
     }
   };
 
+  const handleReturnGoods = useCallback((order) => {
+    if (!order?.id) return;
+    navigateToTikTokCancelledReturn(order.id, setView);
+    toast?.push(`เปิดฟอร์มรับคืนสำหรับบิล #${order.id}`, 'info');
+  }, [setView, toast]);
+
   const selectedIds = [...selected];
   const activeFiltered = filteredOrders.filter(o => o.status === 'active');
 
@@ -360,97 +399,152 @@ export default function TikTokPanel({ toast, section = 'orders', onSyncChange, i
     : null;
 
   return (
-    <div className="space-y-5 lg:space-y-6 fade-in">
+    <div className="tt-glass__workspace fade-in">
       {section === 'orders' && (
         <>
-          <TikTokConnectionStrip
-            toast={toast}
-            livePollSec={TIKTOK_LIVE_POLL_MS / 1000}
-            liveLabel={liveLabel}
-            pullBusy={pullBusy}
-          />
-          <TikTokStatStrip cards={statCards}/>
-          <TikTokOrdersToolbar
-            singleId={singleId}
-            onSingleIdChange={setSingleId}
-            onSyncSingle={syncSingle}
-            onSyncOrders={syncOrders}
-            onRefresh={load}
-            onPrintLabels={() => printLabels(selectedIds.length ? selectedIds : activeFiltered.map(o => o.id))}
-            onShipPackages={() => shipPackages(selectedIds)}
-            loading={loading}
-            syncing={syncing}
-            pullBusy={pullBusy}
-            singleBusy={singleBusy}
-            syncPct={syncProgress.pct}
-            labelBusy={labelBusy}
-            shipBusy={shipBusy}
-            selectedCount={selectedIds.length}
-            activeFilteredCount={activeFiltered.length}
-          />
-          <TikTokStatusTabs
-            tabs={ORDER_TABS}
-            activeKey={shipFilter}
-            tabCounts={tabCounts}
-            onSelect={setShipFilter}
-            onSelectAll={selectAllVisible}
-            selectableCount={activeFiltered.length}
-          />
-          <TikTokBulkActionBar
-            selectedCount={selectedIds.length}
-            onPrint={() => printLabels(selectedIds)}
-            onShip={() => shipPackages(selectedIds)}
-            labelBusy={labelBusy}
-            shipBusy={shipBusy}
-          />
-          <TikTokOrderList
-            loading={loading}
-            orders={filteredOrders}
-            ordersTruncated={ordersTruncated}
-            ordersCap={TIKTOK_ORDERS_LOAD_CAP}
-            itemsByOrder={itemsByOrder}
-            imageByProduct={imageByProduct}
-            selected={selected}
-            shipFilter={shipFilter}
-            canShipFn={canShipOrder}
-            labelBusy={labelBusy}
-            shipBusy={shipBusy}
-            lineTitle={lineTitle}
-            shippingLabel={shippingLabel}
-            paymentLabel={paymentLabel}
-            fmtDateTime={fmtDateTime}
-            livePollSec={TIKTOK_LIVE_POLL_MS / 1000}
-            syncing={syncing}
-            pullBusy={pullBusy}
-            syncPct={syncProgress.pct}
-            onToggleSelect={toggleSelect}
-            onShip={shipPackages}
-            onPrintLabel={printOneLabel}
-            onPrintPackingSlip={printOneLabel}
-            onSyncOrders={syncOrders}
-          />
+          <section className="tt-glass__group" aria-label="TikTok overview">
+            <div className="tt-glass__group-heading">
+              <h2 className="tt-glass__group-title">Overview</h2>
+              <p className="tt-glass__group-caption">สถานะร้านและงานที่ต้องจัดการตอนนี้</p>
+            </div>
+            <div className="tt-glass__overview-grid">
+              <TikTokConnectionStrip
+                toast={toast}
+                livePollSec={TIKTOK_LIVE_POLL_MS / 1000}
+                liveLabel={liveLabel}
+                pullBusy={pullBusy}
+              />
+              <TikTokStatStrip cards={statCards}/>
+            </div>
+          </section>
+
+          <section className="tt-glass__group" aria-label="TikTok order controls">
+            <div className="tt-glass__group-heading">
+              <h2 className="tt-glass__group-title">Command Center</h2>
+              <p className="tt-glass__group-caption">ดึงข้อมูลและจัดการออเดอร์แบบกลุ่ม</p>
+            </div>
+            <div className="tt-glass__command-panel">
+              <TikTokOrdersToolbar
+                singleId={singleId}
+                onSingleIdChange={setSingleId}
+                orderSearch={orderSearch}
+                onOrderSearchChange={setOrderSearch}
+                onSyncSingle={syncSingle}
+                onSyncOrders={syncOrders}
+                onRefresh={load}
+                onPrintLabels={() => printLabels(selectedIds.length ? selectedIds : activeFiltered.map(o => o.id))}
+                onShipPackages={() => shipPackages(selectedIds)}
+                loading={loading}
+                syncing={syncing}
+                pullBusy={pullBusy}
+                singleBusy={singleBusy}
+                syncPct={syncProgress.pct}
+                labelBusy={labelBusy}
+                shipBusy={shipBusy}
+                selectedCount={selectedIds.length}
+                activeFilteredCount={activeFiltered.length}
+              />
+              <TikTokBulkActionBar
+                selectedCount={selectedIds.length}
+                onPrint={() => printLabels(selectedIds)}
+                onShip={() => shipPackages(selectedIds)}
+                labelBusy={labelBusy}
+                shipBusy={shipBusy}
+              />
+            </div>
+          </section>
+
+          <section className="tt-glass__group" aria-label="TikTok order list">
+            <div className="tt-glass__group-heading">
+              <h2 className="tt-glass__group-title">Work Queue</h2>
+              <p className="tt-glass__group-caption">รายการออเดอร์ตามสถานะที่เลือก</p>
+            </div>
+            <div className="tt-glass__filter-rail">
+              <TikTokStatusTabs
+                tabs={ORDER_TABS}
+                activeKey={shipFilter}
+                tabCounts={tabCounts}
+                onSelect={setShipFilter}
+                onSelectAll={selectAllVisible}
+                selectableCount={activeFiltered.length}
+              />
+            </div>
+            <TikTokOrderList
+              loading={loading}
+              orders={filteredOrders}
+              ordersTruncated={ordersTruncated}
+              ordersCap={TIKTOK_ORDERS_LOAD_CAP}
+              orderSearch={orderSearch}
+              itemsByOrder={itemsByOrder}
+              imageByProduct={imageByProduct}
+              selected={selected}
+              shipFilter={shipFilter}
+              canShipFn={canShipOrder}
+              labelBusy={labelBusy}
+              shipBusy={shipBusy}
+              lineTitle={lineTitle}
+              shippingLabel={shippingLabel}
+              paymentLabel={paymentLabel}
+              fmtDateTime={fmtDateTime}
+              livePollSec={TIKTOK_LIVE_POLL_MS / 1000}
+              syncing={syncing}
+              pullBusy={pullBusy}
+              syncPct={syncProgress.pct}
+              onToggleSelect={toggleSelect}
+              onShip={shipPackages}
+              onPrintLabel={printOneLabel}
+              onPrintPackingSlip={printOneLabel}
+              onSyncOrders={syncOrders}
+              onReturnGoods={handleReturnGoods}
+              voidStockStatus={voidStockStatus}
+            />
+          </section>
         </>
       )}
 
       {section === 'invoices' && (
-        <TikTokInvoiceSection
-          orders={orders}
-          itemsByOrder={itemsByOrder}
-          toast={toast}
-          onOrdersChange={setOrders}
-        />
+        <section className="tt-glass__group" aria-label="TikTok tax documents">
+          <div className="tt-glass__group-heading">
+            <h2 className="tt-glass__group-title">Tax Documents</h2>
+            <p className="tt-glass__group-caption">ตรวจ Tax ID แก้ข้อมูลผู้ซื้อ และพิมพ์ใบกำกับ</p>
+          </div>
+          <TikTokInvoiceSection
+            orders={orders}
+            itemsByOrder={itemsByOrder}
+            toast={toast}
+            onOrdersChange={setOrders}
+          />
+        </section>
       )}
 
       {section === 'returns' && (
-        <TikTokReturns toast={toast} />
+        <section className="tt-glass__group" aria-label="TikTok returns desk">
+          <div className="tt-glass__group-heading">
+            <h2 className="tt-glass__group-title">Returns Desk</h2>
+            <p className="tt-glass__group-caption">ดึงรายการคืน ตรวจสถานะ และออกใบลดหนี้</p>
+          </div>
+          <TikTokReturns toast={toast} />
+        </section>
       )}
 
       {section === 'matching' && isSuperAdmin && (
-        <TikTokMatching toast={toast} />
+        <section className="tt-glass__group" aria-label="TikTok matching queue">
+          <div className="tt-glass__group-heading">
+            <h2 className="tt-glass__group-title">Matching Queue</h2>
+            <p className="tt-glass__group-caption">จับคู่ SKU จาก TikTok กับสินค้าใน POS</p>
+          </div>
+          <TikTokMatching toast={toast} />
+        </section>
       )}
 
       {section === 'stock' && isSuperAdmin && (
-        <TikTokStockReconcile toast={toast} setView={setView} />
+        <section className="tt-glass__group" aria-label="TikTok stock control">
+          <div className="tt-glass__group-heading">
+            <h2 className="tt-glass__group-title">Stock Control</h2>
+            <p className="tt-glass__group-caption">ตรวจสุขภาพระบบและ reconcile สต็อก POS ↔ TikTok</p>
+          </div>
+          <TikTokStockReconcile toast={toast} setView={setView} />
+        </section>
       )}
     </div>
   );

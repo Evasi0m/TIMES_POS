@@ -1,4 +1,5 @@
-import React from 'react';
+import { isTikTokCancelledVoid } from '../../../lib/tiktok-cancel-return.js';
+import VoidStockStatusBadge from '../../sales/VoidStockStatusBadge.jsx';
 import Icon from '../../ui/Icon.jsx';
 import ExpandableImageThumb from '../../ui/ExpandableImageThumb.jsx';
 import TikTokStatusBadge from './TikTokStatusBadge.jsx';
@@ -44,6 +45,8 @@ export default function TikTokOrderCard({
   onShip,
   onPrintLabel,
   onPrintPackingSlip,
+  onReturnGoods,
+  voidStockStatus,
   staggerIndex = 0,
   embedded = false,
 }) {
@@ -90,6 +93,8 @@ export default function TikTokOrderCard({
         onShip={onShip}
         onPrintLabel={onPrintLabel}
         onPrintPackingSlip={onPrintPackingSlip}
+        onReturnGoods={onReturnGoods}
+        voidStockStatus={voidStockStatus}
       />
     </article>
   );
@@ -108,7 +113,11 @@ function OrderBody({
   onShip,
   onPrintLabel,
   onPrintPackingSlip,
+  onReturnGoods,
+  voidStockStatus,
 }) {
+  const isCancelledVoid = isTikTokCancelledVoid(order);
+
   return (
     <div className="tt-glass__order-group-body grid grid-cols-1 lg:grid-cols-[minmax(0,2.2fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1.1fr)] gap-3 items-start">
       <div className="min-w-0">
@@ -198,6 +207,27 @@ function OrderBody({
           >
             packing slip
           </TikTokGlassBtn>
+        </div>
+      )}
+
+      {isCancelledVoid && (
+        <div className="flex flex-col gap-2 w-full lg:items-end">
+          <span className="badge-pill !bg-error/10 !text-error text-[10px] w-full text-center lg:text-right">
+            ยกเลิก TikTok
+          </span>
+          {voidStockStatus && (
+            <VoidStockStatusBadge status={voidStockStatus} className="w-full text-center lg:text-right"/>
+          )}
+          {onReturnGoods && (
+            <TikTokGlassBtn
+              variant="coral"
+              className="tt-glass__btn--lg w-full whitespace-nowrap"
+              onClick={() => onReturnGoods(order)}
+            >
+              <Icon name="package" size={16}/>
+              รับคืนสินค้า (เอกสาร)
+            </TikTokGlassBtn>
+          )}
         </div>
       )}
     </div>

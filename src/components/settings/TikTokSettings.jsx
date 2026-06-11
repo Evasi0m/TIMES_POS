@@ -29,6 +29,7 @@ export default function TikTokSettings({
   livePollSec,
   liveLabel,
   pullBusy,
+  compact = false,
 }) {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -100,6 +101,55 @@ export default function TikTokSettings({
     return (
       <TikTokGlassShell loading className={'tt-glass--' + tone}>
         <span className="spinner"/> กำลังโหลดสถานะการเชื่อมต่อ…
+      </TikTokGlassShell>
+    );
+  }
+
+  if (compact) {
+    return (
+      <TikTokGlassShell className={'tt-glass--' + tone + ' tt-glass--compact-connect'}>
+        <div className="tt-glass__compact-connect">
+          <div className="tt-glass__compact-connect-head">
+            <div className="tt-glass__compact-connect-main">
+              <div className="tt-glass__icon-wrap" aria-hidden="true">
+                <Icon name="shop-bag" size={18} color="currentColor"/>
+              </div>
+              <div className="min-w-0">
+                <div className="tt-glass__eyebrow">TikTok Shop · OAuth</div>
+                <div className="tt-glass__heading truncate">{status?.shop_name || 'เชื่อมต่อร้านค้า'}</div>
+              </div>
+            </div>
+            <div className="tt-glass__compact-status-tile">
+              <TikTokGlassBadge tone={tone}>{statusLabel}</TikTokGlassBadge>
+            </div>
+          </div>
+          <div className="tt-glass__compact-connect-meta">
+            {connected && (
+              <>
+                <span className="tt-glass__compact-kv">
+                  <span>ใช้ได้ถึง</span>
+                  <strong>{fmtExpiry(status.access_token_expires_at)}</strong>
+                </span>
+                {showLiveFooter && (
+                  <span className={'tt-glass__live-chip' + (pullBusy ? ' tt-glass__live-chip--busy' : '')}>
+                    <span className="tt-glass__live-chip-dot"/>
+                    {pullBusy ? 'Syncing' : (liveLabel || 'Live')}
+                  </span>
+                )}
+              </>
+            )}
+            <TikTokGlassBtn variant="coral" onClick={connect} disabled={connecting}>
+              {connecting ? <span className="spinner"/> : <Icon name="link" size={14}/>}
+              {connected ? 'เชื่อมต่อใหม่' : 'เชื่อมต่อ'}
+            </TikTokGlassBtn>
+          </div>
+        </div>
+        {lastErr && (
+          <div className="tt-glass__alert tt-glass__compact-alert">
+            <Icon name="alert" size={14}/>
+            <span>{lastErr}</span>
+          </div>
+        )}
       </TikTokGlassShell>
     );
   }

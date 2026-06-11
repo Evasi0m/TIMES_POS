@@ -13,6 +13,7 @@ import {
   VOID_STATUSES,
   vatBreakdown,
 } from './tiktok-client.ts';
+import { queueSaleVoidMirror } from './tiktok-sale-void-mirror.ts';
 
 const NUMERIC_STATUS: Record<string, string> = {
   '100': 'UNPAID',
@@ -199,7 +200,11 @@ export async function importTikTokOrder(
       p_tiktok_order_id: tiktokOrderId,
       p_reason: 'TikTok order cancelled',
     });
-    return { action: 'voided', tiktok_order_id: tiktokOrderId, order_id: data?.id };
+    const orderId = data?.id as number | undefined;
+    if (orderId && data?.previous_status === 'active') {
+      queueSaleVoidMirror(supa, orderId).catch(() => {});
+    }
+    return { action: 'voided', tiktok_order_id: tiktokOrderId, order_id: orderId };
   }
   if (!IMPORT_STATUSES.has(status)) {
     return { action: 'skipped', tiktok_order_id: tiktokOrderId, reason: `status:${status}` };

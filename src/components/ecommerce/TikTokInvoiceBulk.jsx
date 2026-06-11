@@ -9,7 +9,13 @@ import { fullBuyerValid } from '../../lib/tax-buyer.js';
 import FullTaxInvoiceA4 from '../invoice/FullTaxInvoiceA4.jsx';
 import Icon from '../ui/Icon.jsx';
 import TikTokSection from './tiktok/TikTokSection.jsx';
-import { TikTokGlassBtn, TikTokGlassShell } from './tiktok/glass/index.js';
+import {
+  TikTokGlassBadge,
+  TikTokGlassBtn,
+  TikTokGlassShell,
+  TikTokGlassStat,
+  TikTokGlassTabs,
+} from './tiktok/glass/index.js';
 
 const INVOICE_GRID = 'grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)_minmax(0,0.7fr)_minmax(0,0.9fr)_minmax(0,1fr)]';
 
@@ -28,6 +34,7 @@ export default function TikTokInvoiceSection({ orders, itemsByOrder, toast, onOr
   const [busy, setBusy] = useState(null);
   const [printOrders, setPrintOrders] = useState(null);
   const [printItems, setPrintItems] = useState({});
+  const [invoiceFilter, setInvoiceFilter] = useState('all');
   const copies = 'both';
 
   useEffect(() => {
@@ -35,6 +42,21 @@ export default function TikTokInvoiceSection({ orders, itemsByOrder, toast, onOr
   }, []);
 
   const activeOrders = orders.filter(o => o.status !== 'voided');
+  const readyOrders = activeOrders.filter(buyerReady);
+  const missingTaxOrders = activeOrders.filter(o => !buyerReady(o));
+  const issuedOrders = activeOrders.filter(o => o.tax_invoice_no);
+  const visibleOrders = activeOrders.filter((o) => {
+    if (invoiceFilter === 'ready') return buyerReady(o);
+    if (invoiceFilter === 'missing') return !buyerReady(o);
+    if (invoiceFilter === 'issued') return !!o.tax_invoice_no;
+    return true;
+  });
+  const invoiceTabs = [
+    { key: 'all', label: 'ทั้งหมด', count: activeOrders.length },
+    { key: 'missing', label: 'รอ Tax ID', count: missingTaxOrders.length },
+    { key: 'ready', label: 'พร้อมพิมพ์', count: readyOrders.length },
+    { key: 'issued', label: 'พิมพ์แล้ว', count: issuedOrders.length },
+  ];
 
   const openEdit = (order) => {
     setEditOrder(order);
@@ -153,6 +175,34 @@ export default function TikTokInvoiceSection({ orders, itemsByOrder, toast, onOr
         </>
       )}
     >
+      <div className="tt-glass__invoice-summary">
+        <TikTokGlassStat
+          tone="warn"
+          label="รอ Tax ID"
+          value={missingTaxOrders.length.toLocaleString('th-TH')}
+          hint="ต้องเติมข้อมูลก่อนพิมพ์"
+        />
+        <TikTokGlassStat
+          tone="ok"
+          label="พร้อมพิมพ์"
+          value={readyOrders.length.toLocaleString('th-TH')}
+          hint="ข้อมูลผู้ซื้อครบ"
+        />
+        <TikTokGlassStat
+          tone="muted"
+          label="พิมพ์แล้ว"
+          value={issuedOrders.length.toLocaleString('th-TH')}
+          hint="มีเลขใบกำกับ"
+        />
+      </div>
+      <div className="tt-glass__filter-rail mb-3">
+        <TikTokGlassTabs
+          variant="toolbar"
+          tabs={invoiceTabs}
+          activeKey={invoiceFilter}
+          onSelect={setInvoiceFilter}
+        />
+      </div>
       <div className="tt-glass__table">
         <div className={'tt-glass__table-head grid ' + INVOICE_GRID}>
           <span>TikTok Order</span>
@@ -161,18 +211,18 @@ export default function TikTokInvoiceSection({ orders, itemsByOrder, toast, onOr
           <span>เลขใบกำกับ</span>
           <span>การกระทำ</span>
         </div>
-        {activeOrders.length === 0 && (
+        {visibleOrders.length === 0 && (
           <div className="tt-glass__table-empty">ไม่มีออเดอร์</div>
         )}
         <div className="tt-glass__table-body">
-        {activeOrders.map(o => (
+        {visibleOrders.map(o => (
           <div key={o.id} className={'tt-glass__table-row grid ' + INVOICE_GRID}>
             <span className="font-mono text-xs font-semibold">{o.tiktok_order_id || `#${o.id}`}</span>
             <span>{o.buyer_name || o.shipping_recipient_name || '—'}</span>
             <span>
               {buyerReady(o)
-                ? <span className="text-success text-xs">ครบ</span>
-                : <span className="text-[#8a6500] text-xs">รอ Tax ID</span>}
+                ? <TikTokGlassBadge tone="ok" context="surface">ครบ</TikTokGlassBadge>
+                : <TikTokGlassBadge tone="warn" context="surface">รอ Tax ID</TikTokGlassBadge>}
             </span>
             <span className="font-mono text-xs">{o.tax_invoice_no || '—'}</span>
             <span className="flex gap-1 flex-wrap">

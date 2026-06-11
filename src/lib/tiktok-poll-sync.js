@@ -20,13 +20,17 @@ export async function pollTikTokOrders({ resync = true, hours = 720 } = {}) {
 export function formatPollToast(data, { beforeCount, afterCount } = {}) {
   const imported = Number(data?.imported ?? 0);
   const updated = Number(data?.updated ?? 0);
-  const changed = imported + updated;
+  const voided = Number(data?.voided ?? 0);
+  const changed = imported + updated + voided;
   const capped = data?.capped === true;
   const awaitingFound = Number(data?.awaiting_found ?? 0);
   const staleFound = Number(data?.stale_found ?? 0);
   const staleRefreshed = Number(data?.stale_refreshed ?? 0);
 
   let base = `อัปเดตแล้ว — นำเข้า ${imported} · อัปเดต ${updated}`;
+  if (voided > 0) {
+    base += ` · ยกเลิก ${voided}`;
+  }
   if (changed > 0) {
     base += ` · เปลี่ยนแปลง ${changed} รายการ`;
   }

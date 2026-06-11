@@ -5,15 +5,27 @@ import { mapError } from '../../lib/error-map.js';
 import { fmtTHB } from '../../lib/format.js';
 import Icon from '../ui/Icon.jsx';
 import TikTokSection from './tiktok/TikTokSection.jsx';
-import { TikTokGlassBtn } from './tiktok/glass/index.js';
+import { TikTokGlassBadge, TikTokGlassBtn } from './tiktok/glass/index.js';
 
 const RETURN_STATUS = {
-  RETURN_OR_REFUND_REQUEST_PENDING: 'รอตรวจสอบ',
-  REFUND_OR_RETURN_REQUEST_REJECT_PENDING: 'รอปฏิเสธ',
-  RETURN_OR_REFUND_REQUEST_SUCCESS: 'อนุมัติ',
-  COMPLETED: 'เสร็จสิ้น',
-  CANCELLED: 'ยกเลิก',
+  RETURN_OR_REFUND_REQUEST_PENDING: { label: 'รอตรวจสอบ', tone: 'warn' },
+  REFUND_OR_RETURN_REQUEST_REJECT_PENDING: { label: 'รอปฏิเสธ', tone: 'warn' },
+  RETURN_OR_REFUND_REQUEST_SUCCESS: { label: 'อนุมัติ', tone: 'ok' },
+  RETURN_OR_REFUND_REQUEST_COMPLETE: { label: 'คืนสำเร็จ', tone: 'ok' },
+  RETURN_OR_REFUND_REQUEST_CANCEL: { label: 'ยกเลิก', tone: 'bad' },
+  AWAITING_BUYER_SHIP: { label: 'รอลูกค้าส่งคืน', tone: 'warn' },
+  BUYER_SHIPPED_ITEM: { label: 'ลูกค้าส่งคืนแล้ว', tone: 'ok' },
+  COMPLETED: { label: 'เสร็จสิ้น', tone: 'ok' },
+  CANCELLED: { label: 'ยกเลิก', tone: 'bad' },
 };
+
+function returnStatusMeta(status) {
+  const key = String(status || '').toUpperCase();
+  return RETURN_STATUS[key] || {
+    label: key ? key.replace(/_/g, ' ').toLowerCase() : '—',
+    tone: 'idle',
+  };
+}
 
 const RETURNS_GRID = 'grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.9fr)_minmax(0,0.7fr)_minmax(0,0.8fr)_minmax(0,0.9fr)]';
 
@@ -116,7 +128,16 @@ export default function TikTokReturns({ toast }) {
           <div key={r.id} className={'tt-glass__table-row grid ' + RETURNS_GRID + ' min-w-[720px]'}>
             <span className="font-mono text-xs font-semibold">{r.tiktok_order_id || '—'}</span>
             <span className="text-xs">{r.return_type || '—'}</span>
-            <span className="text-xs">{RETURN_STATUS[r.return_status] || r.return_status || '—'}</span>
+            <span>
+              {(() => {
+                const meta = returnStatusMeta(r.return_status);
+                return (
+                  <TikTokGlassBadge tone={meta.tone} context="surface">
+                    {meta.label}
+                  </TikTokGlassBadge>
+                );
+              })()}
+            </span>
             <span className="text-right tabular-nums">{r.refund_amount != null ? fmtTHB(r.refund_amount) : '—'}</span>
             <span className="font-mono text-xs">
               {r.return_order_id

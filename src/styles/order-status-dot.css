@@ -1,0 +1,11 @@
+/* Order status dot — liquid glass circle (tooltip via glass-hover-tip) */
+
+.order-status-dot__mark {
+  display: inline-flex;
+}
+
+.order-status-dot__tip-mark {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.75) inset,
+    0 2px 6px -2px rgb(var(--shadow-rgb) / 0.12);
+}

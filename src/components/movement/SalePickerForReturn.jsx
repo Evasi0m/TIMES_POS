@@ -28,6 +28,7 @@ export default function SalePickerForReturn({
   saleResults, saleSearching,
   onSelectSale, onClearSale,
   showError,
+  tiktokCancelMeta = null,
 }) {
   return (
     <div>
@@ -59,7 +60,12 @@ export default function SalePickerForReturn({
                   className="w-full text-left px-3 py-2.5 border-b hairline last:border-0 hover:bg-white/50 transition-colors flex items-center justify-between gap-2"
                 >
                   <div>
-                    <div className="font-mono text-sm font-semibold">#{s.id}</div>
+                    <div className="font-mono text-sm font-semibold flex items-center gap-1.5">
+                      #{s.id}
+                      {s.isTikTokCancelledVoid && (
+                        <span className="badge-pill !bg-error/10 !text-error !text-[10px]">ยกเลิก TikTok</span>
+                      )}
+                    </div>
                     <div className="text-xs text-muted mt-0.5">{CHANNEL_LABELS[s.channel] || s.channel}</div>
                   </div>
                   <div className="text-right flex-shrink-0">
@@ -85,7 +91,15 @@ export default function SalePickerForReturn({
             </div>
             <div className="text-xs text-muted mt-0.5">
               {CHANNEL_LABELS[selectedSale.channel] || selectedSale.channel} · {fmtTHB(selectedSale.grand_total)}
+              {selectedSale.isTikTokCancelledVoid && (
+                <span className="badge-pill !bg-error/10 !text-error !text-[10px] ml-1">ยกเลิก TikTok</span>
+              )}
             </div>
+            {tiktokCancelMeta?.pos_stock_restored && (
+              <div className="text-[10px] text-[#8a6500] mt-1 leading-snug">
+                สต็อก POS คืนแล้วจาก void — บันทึกรับคืนเป็นเอกสาร (ไม่บวกสต็อกซ้ำ) เป็นค่าเริ่มต้น
+              </div>
+            )}
             <div className="text-[10px] text-primary mt-1 flex items-center gap-1">
               <Icon name="check" size={11} />วันที่และช่องทางถูกกรอกอัตโนมัติแล้ว · สินค้าที่เพิ่มต้องอยู่ในบิลนี้
             </div>

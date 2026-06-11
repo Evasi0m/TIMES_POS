@@ -1,0 +1,75 @@
+/* Shared glass hover tooltip — used by status dots, payment icons, etc. */
+
+.glass-hover-tip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  cursor: default;
+}
+
+.glass-hover-tip__bubble {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  z-index: 30;
+  transform: translateX(-50%) translateY(3px);
+  padding: 0.35rem 0.6rem;
+  border-radius: 8px;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease,
+    visibility 0.15s ease;
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-mid);
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+}
+
+.glass-hover-tip__row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  white-space: nowrap;
+}
+
+.glass-hover-tip__label {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: rgb(var(--c-ink));
+  letter-spacing: 0.01em;
+}
+
+.glass-hover-tip__bubble::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--glass-border);
+}
+
+.glass-hover-tip:hover .glass-hover-tip__bubble,
+.glass-hover-tip:focus-visible .glass-hover-tip__bubble {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+:root[data-theme='dark'] .glass-hover-tip__bubble {
+  background: rgb(var(--c-surface-card) / 0.94);
+  border-color: rgb(var(--c-hairline) / 0.65);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-hover-tip__bubble {
+    transition: none;
+  }
+}

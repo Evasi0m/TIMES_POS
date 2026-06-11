@@ -1,0 +1,77 @@
+/* Payment method icon — colourful glyph with edge aura */
+
+.payment-method-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.payment-method-icon__glyph {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.16s var(--ease-out, ease), filter 0.16s ease;
+}
+
+.payment-method-icon__svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+/* Per-tone aura glow */
+.payment-method-icon--green .payment-method-icon__glyph {
+  filter:
+    drop-shadow(0 0 5px rgba(95, 178, 74, 0.45))
+    drop-shadow(0 1px 2px rgba(20, 20, 19, 0.18));
+}
+
+.payment-method-icon--indigo .payment-method-icon__glyph {
+  filter:
+    drop-shadow(0 0 5px rgba(93, 100, 153, 0.5))
+    drop-shadow(0 1px 2px rgba(20, 20, 19, 0.18));
+}
+
+.payment-method-icon--orange .payment-method-icon__glyph {
+  filter:
+    drop-shadow(0 0 5px rgba(230, 81, 0, 0.45))
+    drop-shadow(0 1px 2px rgba(20, 20, 19, 0.18));
+}
+
+.payment-method-icon:hover .payment-method-icon__glyph,
+.payment-method-icon:focus-visible .payment-method-icon__glyph {
+  transform: translateY(-1px) scale(1.04);
+}
+
+.payment-method-icon--green:hover .payment-method-icon__glyph {
+  filter:
+    drop-shadow(0 0 9px rgba(95, 178, 74, 0.65))
+    drop-shadow(0 2px 4px rgba(20, 20, 19, 0.22));
+}
+
+.payment-method-icon--indigo:hover .payment-method-icon__glyph {
+  filter:
+    drop-shadow(0 0 9px rgba(93, 100, 153, 0.7))
+    drop-shadow(0 2px 4px rgba(20, 20, 19, 0.22));
+}
+
+.payment-method-icon--orange:hover .payment-method-icon__glyph {
+  filter:
+    drop-shadow(0 0 9px rgba(230, 81, 0, 0.65))
+    drop-shadow(0 2px 4px rgba(20, 20, 19, 0.22));
+}
+
+.payment-method-icon--empty {
+  font-size: 12px;
+  color: rgb(var(--c-muted-soft));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .payment-method-icon__glyph {
+    transition: none;
+  }
+  .payment-method-icon:hover .payment-method-icon__glyph,
+  .payment-method-icon:focus-visible .payment-method-icon__glyph {
+    transform: none;
+  }
+}

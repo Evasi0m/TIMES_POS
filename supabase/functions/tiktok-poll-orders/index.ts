@@ -112,6 +112,7 @@ Deno.serve(async (req) => {
       processed: results.length,
       imported: results.filter((r) => (r as ImportResult).action === 'imported').length,
       updated: results.filter((r) => (r as ImportResult).action === 'updated').length,
+      voided: results.filter((r) => (r as ImportResult).action === 'voided').length,
       skipped: results.filter((r) => (r as ImportResult).action === 'skipped').length,
       errors: results.filter((r) => (r as { error?: string }).error).length,
     }), {

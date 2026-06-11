@@ -10,11 +10,22 @@
 .tt-glass,
 .tt-connect-native,
 .tt-health-native {
-  --tt-coral: #ff0050;
-  --tt-cyan: #00f2ea;
+  --tt-coral: #f42f68;
+  --tt-coral-strong: #e81e5a;
+  --tt-cyan: #0cbfba;
+  --tt-cyan-strong: #079892;
+  --tt-amber: #b7791f;
+  --tt-amber-soft: rgba(183, 121, 31, 0.11);
   --tt-black: #000000;
-  --tt-coral-soft: rgba(255, 0, 80, 0.12);
-  --tt-cyan-soft: rgba(0, 242, 234, 0.1);
+  --tt-ink: #171413;
+  --tt-panel-dark: rgba(19, 18, 17, 0.9);
+  --tt-panel-dark-soft: rgba(25, 24, 23, 0.78);
+  --tt-surface: rgba(255, 255, 255, 0.68);
+  --tt-surface-strong: rgba(255, 255, 255, 0.86);
+  --tt-border: rgba(44, 35, 28, 0.1);
+  --tt-border-strong: rgba(44, 35, 28, 0.16);
+  --tt-coral-soft: rgba(244, 47, 104, 0.11);
+  --tt-cyan-soft: rgba(12, 191, 186, 0.1);
 
   /* Radius scale */
   --tt-r-shell: 16px;
@@ -27,17 +38,17 @@
   --tt-r-pill: 999px;
 
   /* Blur tokens */
-  --tt-blur-ambient: 32px;
+  --tt-blur-ambient: 28px;
   --tt-blur-shell: 36px;
   --tt-blur-hero: 24px;
   --tt-blur-pane: 16px;
   --tt-blur-pill: 14px;
   --tt-blur-control: 8px;
   --tt-blur-alert: 12px;
-  --tt-saturate-shell: 1.25;
-  --tt-saturate-hero: 1.02;
-  --tt-saturate-pane: 1.15;
-  --tt-saturate-pill: 1.1;
+  --tt-saturate-shell: 1.12;
+  --tt-saturate-hero: 1;
+  --tt-saturate-pane: 1.06;
+  --tt-saturate-pill: 1.04;
 
   position: relative;
   isolation: isolate;
@@ -96,7 +107,7 @@
   height: 90%;
   top: -35%;
   left: 4%;
-  background: radial-gradient(circle, rgba(255, 0, 80, 0.07), transparent 68%);
+  background: radial-gradient(circle, rgba(244, 47, 104, 0.045), transparent 68%);
 }
 
 .tt-glass__ambient::after,
@@ -106,7 +117,7 @@
   height: 80%;
   top: -28%;
   right: 6%;
-  background: radial-gradient(circle, rgba(0, 242, 234, 0.06), transparent 68%);
+  background: radial-gradient(circle, rgba(12, 191, 186, 0.04), transparent 68%);
 }
 
 /* --------------------------------------------------------------------------
@@ -121,14 +132,14 @@
   padding: 1px;
   background: linear-gradient(
     168deg,
-    rgba(255, 255, 255, 0.62) 0%,
-    rgba(255, 255, 255, 0.14) 38%,
-    rgba(0, 0, 0, 0.08) 100%
+    rgba(255, 255, 255, 0.74) 0%,
+    rgba(255, 255, 255, 0.28) 42%,
+    rgba(44, 35, 28, 0.08) 100%
   );
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.45) inset,
+    0 1px 0 rgba(255, 255, 255, 0.58) inset,
     0 -1px 0 rgba(0, 0, 0, 0.04) inset,
-    0 6px 24px -10px rgba(0, 0, 0, 0.14);
+    0 10px 28px -18px rgba(38, 29, 22, 0.24);
 }
 
 /* --------------------------------------------------------------------------
@@ -140,7 +151,7 @@
   position: relative;
   border-radius: var(--tt-r-body);
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.38);
+  background: var(--tt-surface, rgba(255, 255, 255, 0.68));
   backdrop-filter: blur(var(--tt-blur-shell)) saturate(var(--tt-saturate-shell));
   -webkit-backdrop-filter: blur(var(--tt-blur-shell)) saturate(var(--tt-saturate-shell));
   box-shadow:
@@ -157,9 +168,9 @@
   border-radius: inherit;
   pointer-events: none;
   background:
-    radial-gradient(ellipse 90% 55% at 50% 0%, rgba(255, 255, 255, 0.28), transparent 58%),
-    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.12), transparent 22%),
-    radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.1), transparent 20%);
+    radial-gradient(ellipse 90% 55% at 50% 0%, rgba(255, 255, 255, 0.34), transparent 60%),
+    radial-gradient(circle at 0% 0%, rgba(244, 47, 104, 0.035), transparent 24%),
+    radial-gradient(circle at 100% 0%, rgba(12, 191, 186, 0.032), transparent 22%);
 }
 
 /* Loading state */
@@ -208,16 +219,16 @@
   border-radius: var(--tt-r-hero);
   color: #fff;
   overflow: hidden;
-  background: rgba(0, 0, 0, 0.94);
+  background: var(--tt-panel-dark, rgba(19, 18, 17, 0.9));
   backdrop-filter: blur(var(--tt-blur-hero)) saturate(var(--tt-saturate-hero));
   -webkit-backdrop-filter: blur(var(--tt-blur-hero)) saturate(var(--tt-saturate-hero));
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
     inset 1px 0 0 rgba(255, 255, 255, 0.03),
     inset -1px 0 0 rgba(255, 255, 255, 0.02),
     inset 0 -1px 0 rgba(0, 0, 0, 0.5),
-    0 2px 10px -4px rgba(0, 0, 0, 0.45);
+    0 6px 18px -12px rgba(0, 0, 0, 0.42);
 }
 
 /* Mini hero — compact header for order cards */
@@ -232,7 +243,7 @@
   border-radius: var(--tt-r-hero);
   color: #fff;
   overflow: hidden;
-  background: rgba(0, 0, 0, 0.92);
+  background: var(--tt-panel-dark-soft, rgba(25, 24, 23, 0.78));
   backdrop-filter: blur(var(--tt-blur-hero)) saturate(var(--tt-saturate-hero));
   -webkit-backdrop-filter: blur(var(--tt-blur-hero)) saturate(var(--tt-saturate-hero));
   border: 1px solid rgba(255, 255, 255, 0.05);
@@ -339,24 +350,24 @@
   background:
     radial-gradient(
       ellipse 130% 90% at 50% -35%,
-      rgba(255, 255, 255, 0.07),
+      rgba(255, 255, 255, 0.055),
       transparent 52%
     ),
     repeating-linear-gradient(
       0deg,
-      rgba(255, 255, 255, 0.028) 0,
-      rgba(255, 255, 255, 0.028) 1px,
+      rgba(255, 255, 255, 0.014) 0,
+      rgba(255, 255, 255, 0.014) 1px,
       transparent 1px,
-      transparent 4px
+      transparent 6px
     ),
     repeating-linear-gradient(
       90deg,
-      rgba(255, 255, 255, 0.028) 0,
-      rgba(255, 255, 255, 0.028) 1px,
+      rgba(255, 255, 255, 0.014) 0,
+      rgba(255, 255, 255, 0.014) 1px,
       transparent 1px,
-      transparent 4px
+      transparent 6px
     );
-  opacity: 0.85;
+  opacity: 0.62;
 }
 
 .tt-glass__hero-pane::after,
@@ -378,8 +389,33 @@
     ),
     radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.04), transparent 26%),
     radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.03), transparent 24%),
-    linear-gradient(135deg, rgba(255, 0, 80, 0.03) 0%, transparent 42%),
-    linear-gradient(225deg, rgba(0, 242, 234, 0.025) 0%, transparent 40%);
+    linear-gradient(135deg, rgba(244, 47, 104, 0.022) 0%, transparent 42%),
+    linear-gradient(225deg, rgba(12, 191, 186, 0.018) 0%, transparent 40%);
+}
+
+.tt-glass__hero--light .tt-glass__hero-pane {
+  color: rgb(var(--c-ink));
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--tt-border, rgba(44, 35, 28, 0.1));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    0 6px 18px -14px rgba(38, 29, 22, 0.24);
+}
+
+.tt-glass__hero--light .tt-glass__hero-pane::before {
+  background:
+    radial-gradient(ellipse 80% 70% at 50% 0%, rgba(255, 255, 255, 0.42), transparent 62%),
+    linear-gradient(90deg, rgba(244, 47, 104, 0.026), transparent 36%, rgba(12, 191, 186, 0.026));
+  opacity: 1;
+}
+
+.tt-glass__hero--light .tt-glass__hero-pane::after,
+.tt-glass__hero--light .tt-glass__hero-sheen {
+  display: none;
+}
+
+.tt-glass__hero--light .tt-glass__heading {
+  color: rgb(var(--c-ink));
 }
 
 /* --------------------------------------------------------------------------
@@ -433,7 +469,7 @@
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(0, 242, 234, 0.72);
+  color: rgba(151, 232, 225, 0.82);
   margin-bottom: 0.125rem;
 }
 
@@ -485,18 +521,18 @@
   cursor: pointer;
   white-space: nowrap;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  background: var(--tt-coral);
+  background: linear-gradient(180deg, var(--tt-coral, #f42f68), var(--tt-coral-strong, #e81e5a));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
     inset 0 -1px 0 rgba(0, 0, 0, 0.15),
-    0 2px 8px -3px rgba(255, 0, 80, 0.35);
+    0 5px 14px -8px rgba(232, 30, 90, 0.5);
   transition: background 0.15s ease, box-shadow 0.15s ease;
 }
 
 .tt-glass__btn--coral:hover:not(:disabled),
 .tt-connect-native__cta:hover:not(:disabled),
 .tt-health-native__action-btn:hover:not(:disabled) {
-  background: #e6004a;
+  background: linear-gradient(180deg, #ec285f, #d91b51);
 }
 
 .tt-connect-native__cta:hover:not(:disabled) {
@@ -536,8 +572,8 @@
   color: rgb(var(--c-ink));
   cursor: pointer;
   white-space: nowrap;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid var(--tt-border, rgba(44, 35, 28, 0.1));
+  background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(var(--tt-blur-control));
   -webkit-backdrop-filter: blur(var(--tt-blur-control));
   box-shadow:
@@ -547,8 +583,8 @@
 }
 
 .tt-glass__btn--ghost:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.72);
-  border-color: rgba(0, 0, 0, 0.16);
+  background: rgba(255, 255, 255, 0.9);
+  border-color: var(--tt-border-strong, rgba(44, 35, 28, 0.16));
 }
 
 .tt-glass__btn--ghost:disabled {
@@ -573,7 +609,7 @@
   cursor: pointer;
   white-space: nowrap;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(var(--tt-blur-control));
   -webkit-backdrop-filter: blur(var(--tt-blur-control));
   box-shadow:
@@ -606,8 +642,8 @@
   color: rgb(var(--c-ink));
   cursor: pointer;
   white-space: nowrap;
-  border: 1px solid rgba(255, 255, 255, 0.42);
-  background: rgba(255, 255, 255, 0.42);
+  border: 1px solid var(--tt-border, rgba(44, 35, 28, 0.1));
+  background: rgba(255, 255, 255, 0.76);
   backdrop-filter: blur(var(--tt-blur-control));
   -webkit-backdrop-filter: blur(var(--tt-blur-control));
   box-shadow:
@@ -617,8 +653,8 @@
 }
 
 .tt-glass__btn--surface:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.52);
-  border-color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.94);
+  border-color: var(--tt-border-strong, rgba(44, 35, 28, 0.16));
 }
 
 .tt-glass__btn--surface:disabled {
@@ -638,8 +674,8 @@
   color: rgb(var(--c-ink));
   cursor: pointer;
   white-space: nowrap;
-  border: 1px solid rgba(0, 0, 0, 0.14);
-  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--tt-border-strong, rgba(44, 35, 28, 0.16));
+  background: rgba(255, 255, 255, 0.84);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
     0 1px 2px -1px rgba(0, 0, 0, 0.08);
@@ -765,9 +801,9 @@
 }
 
 .tt-glass__badge--ok {
-  color: rgba(0, 242, 234, 0.88);
-  border-color: rgba(0, 242, 234, 0.2);
-  background: rgba(0, 242, 234, 0.08);
+  color: var(--tt-cyan-strong, #079892);
+  border-color: rgba(12, 191, 186, 0.22);
+  background: rgba(12, 191, 186, 0.09);
 }
 
 .tt-glass__badge--ok .tt-glass__badge-dot {
@@ -776,9 +812,9 @@
 }
 
 .tt-glass__badge--warn {
-  color: rgba(245, 158, 11, 0.95);
-  border-color: rgba(245, 158, 11, 0.28);
-  background: rgba(245, 158, 11, 0.1);
+  color: var(--tt-amber, #b7791f);
+  border-color: rgba(183, 121, 31, 0.28);
+  background: var(--tt-amber-soft, rgba(183, 121, 31, 0.11));
 }
 
 .tt-glass__badge--warn .tt-glass__badge-dot {
@@ -787,9 +823,9 @@
 }
 
 .tt-glass__badge--bad {
-  color: rgba(255, 0, 80, 0.92);
-  border-color: rgba(255, 0, 80, 0.28);
-  background: rgba(255, 0, 80, 0.1);
+  color: var(--tt-coral-strong, #e81e5a);
+  border-color: rgba(244, 47, 104, 0.28);
+  background: var(--tt-coral-soft, rgba(244, 47, 104, 0.11));
 }
 
 .tt-glass__badge--bad .tt-glass__badge-dot {
@@ -866,15 +902,15 @@
   --tt-r-panel: 12px;
   --tt-r-control: 9px;
   --tt-r-pill: 999px;
-  --tt-cyan: #00f2ea;
-  --tt-coral: #ff0050;
+  --tt-cyan: #0cbfba;
+  --tt-coral: #f42f68;
   display: flex;
   flex-wrap: wrap;
   gap: 0.375rem;
   padding: 0.375rem;
   border-radius: var(--tt-r-panel, 12px);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid var(--tt-border, rgba(44, 35, 28, 0.1));
+  background: rgba(255, 255, 255, 0.68);
   backdrop-filter: blur(var(--tt-blur-pill, 14px)) saturate(var(--tt-saturate-pill, 1.1));
   -webkit-backdrop-filter: blur(var(--tt-blur-pill, 14px)) saturate(var(--tt-saturate-pill, 1.1));
   box-shadow:
@@ -889,17 +925,14 @@
   padding: 0.35rem;
   gap: 0.3rem;
   border-radius: var(--tt-r-panel, 12px);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(0, 0, 0, 0.92);
+  color: rgb(var(--c-ink));
+  border: 1px solid var(--tt-border, rgba(44, 35, 28, 0.1));
+  background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(var(--tt-blur-hero, 24px)) saturate(var(--tt-saturate-hero, 1.02));
   -webkit-backdrop-filter: blur(var(--tt-blur-hero, 24px)) saturate(var(--tt-saturate-hero, 1.02));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.07),
-    inset 1px 0 0 rgba(255, 255, 255, 0.03),
-    inset -1px 0 0 rgba(255, 255, 255, 0.02),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
-    0 2px 12px -4px rgba(0, 0, 0, 0.45);
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 8px 22px -18px rgba(38, 29, 22, 0.28);
   overflow: hidden;
 }
 
@@ -911,22 +944,9 @@
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(ellipse 120% 80% at 50% -40%, rgba(255, 255, 255, 0.06), transparent 52%),
-    repeating-linear-gradient(
-      0deg,
-      rgba(255, 255, 255, 0.022) 0,
-      rgba(255, 255, 255, 0.022) 1px,
-      transparent 1px,
-      transparent 4px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0.022) 0,
-      rgba(255, 255, 255, 0.022) 1px,
-      transparent 1px,
-      transparent 4px
-    );
-  opacity: 0.75;
+    radial-gradient(ellipse 80% 70% at 50% 0%, rgba(255, 255, 255, 0.44), transparent 62%),
+    linear-gradient(90deg, rgba(244, 47, 104, 0.035), transparent 28%, rgba(12, 191, 186, 0.03));
+  opacity: 0.95;
 }
 
 .tt-glass__tabs--nav .tt-glass__tab {
@@ -935,37 +955,36 @@
   padding: 0.5rem 1rem;
   font-size: 0.8125rem;
   border-radius: var(--tt-r-control, 9px);
-  color: rgba(255, 255, 255, 0.62);
+  color: rgb(var(--c-muted));
 }
 
 .tt-glass__tabs--nav .tt-glass__tab:hover:not(:disabled) {
-  color: rgba(255, 255, 255, 0.92);
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.1);
+  color: rgb(var(--c-ink));
+  background: rgba(255, 255, 255, 0.72);
+  border-color: var(--tt-border, rgba(44, 35, 28, 0.1));
 }
 
 .tt-glass__tabs--nav .tt-glass__tab--active {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.14);
+  color: var(--tt-coral-strong, #e81e5a);
+  background: rgba(255, 255, 255, 0.94);
+  border-color: rgba(244, 47, 104, 0.24);
   border-radius: var(--tt-r-control, 9px);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.25),
-    0 0 0 1px rgba(255, 0, 80, 0.28),
-    inset 3px 0 0 var(--tt-coral, #ff0050);
+    inset 0 1px 0 rgba(255, 255, 255, 0.94),
+    0 1px 4px -2px rgba(38, 29, 22, 0.18),
+    inset 0 -2px 0 var(--tt-coral, #f42f68);
 }
 
 .tt-glass__tabs--nav .tt-glass__tab-count {
-  color: rgba(255, 255, 255, 0.72);
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgb(var(--c-muted));
+  background: rgba(44, 35, 28, 0.06);
+  border: 1px solid rgba(44, 35, 28, 0.08);
 }
 
 .tt-glass__tabs--nav .tt-glass__tab--active .tt-glass__tab-count {
-  color: rgba(255, 0, 80, 0.95);
-  background: rgba(255, 0, 80, 0.14);
-  border-color: rgba(255, 0, 80, 0.28);
+  color: var(--tt-coral-strong, #e81e5a);
+  background: var(--tt-coral-soft, rgba(244, 47, 104, 0.11));
+  border-color: rgba(244, 47, 104, 0.18);
 }
 
 .tt-glass__tab {
@@ -1000,9 +1019,9 @@
   border-radius: var(--tt-r-control, 9px);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    inset 3px 0 0 var(--tt-coral, #ff0050),
+    inset 0 -2px 0 var(--tt-coral, #f42f68),
     0 1px 4px -1px rgba(0, 0, 0, 0.12),
-    0 0 0 1px rgba(255, 0, 80, 0.2);
+    0 0 0 1px rgba(244, 47, 104, 0.14);
 }
 
 .tt-glass__tab-count {
@@ -1020,8 +1039,8 @@
 }
 
 .tt-glass__tab--active .tt-glass__tab-count {
-  color: rgba(255, 0, 80, 0.95);
-  background: rgba(255, 0, 80, 0.14);
+  color: var(--tt-coral-strong, #e81e5a);
+  background: var(--tt-coral-soft, rgba(244, 47, 104, 0.11));
 }
 
 /* --------------------------------------------------------------------------
@@ -1138,13 +1157,14 @@
   border-radius: var(--tt-r-control, 9px);
   font-size: 0.8125rem;
   color: rgb(var(--c-ink));
-  border: 1px solid rgba(255, 255, 255, 0.42);
-  background: rgba(255, 255, 255, 0.32);
+  border: 1px solid rgba(44, 35, 28, 0.14);
+  background: rgba(255, 255, 255, 0.74);
   backdrop-filter: blur(var(--tt-blur-pane)) saturate(var(--tt-saturate-pane));
   -webkit-backdrop-filter: blur(var(--tt-blur-pane)) saturate(var(--tt-saturate-pane));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.52),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.02);
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.025),
+    0 0 0 1px rgba(255, 255, 255, 0.36);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -1154,10 +1174,10 @@
 
 .tt-glass__input:focus {
   outline: none;
-  border-color: rgba(0, 242, 234, 0.35);
+  border-color: rgba(12, 191, 186, 0.42);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.58),
-    0 0 0 2px rgba(0, 242, 234, 0.12);
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 0 0 2px rgba(12, 191, 186, 0.12);
 }
 
 /* --------------------------------------------------------------------------
@@ -1167,8 +1187,8 @@
   position: relative;
   padding: 0.625rem 0.75rem;
   border-radius: var(--tt-r-card);
-  border: 1px solid rgba(255, 255, 255, 0.42);
-  background: rgba(255, 255, 255, 0.32);
+  border: 1px solid var(--tt-border, rgba(44, 35, 28, 0.1));
+  background: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(var(--tt-blur-pane)) saturate(var(--tt-saturate-pane));
   -webkit-backdrop-filter: blur(var(--tt-blur-pane)) saturate(var(--tt-saturate-pane));
   box-shadow:
@@ -1184,8 +1204,8 @@
   border-radius: inherit;
   pointer-events: none;
   background:
-    radial-gradient(ellipse 80% 50% at 50% 0%, rgba(255, 255, 255, 0.35), transparent 55%),
-    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.1), transparent 20%);
+    radial-gradient(ellipse 80% 50% at 50% 0%, rgba(255, 255, 255, 0.32), transparent 58%),
+    radial-gradient(circle at 0% 0%, rgba(244, 47, 104, 0.026), transparent 22%);
 }
 
 .tt-glass__pane > * {
@@ -1214,8 +1234,8 @@
   gap: 0.5rem;
   padding: 0.625rem 0.75rem;
   border-radius: var(--tt-r-card);
-  border: 1px solid rgba(255, 255, 255, 0.42);
-  background: rgba(255, 255, 255, 0.32);
+  border: 1px solid var(--tt-border, rgba(44, 35, 28, 0.1));
+  background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(var(--tt-blur-pane)) saturate(var(--tt-saturate-pane));
   -webkit-backdrop-filter: blur(var(--tt-blur-pane)) saturate(var(--tt-saturate-pane));
   box-shadow:
@@ -1255,9 +1275,9 @@
 
 .tt-glass__stat--warn .tt-glass__stat-icon,
 .tt-connect-native__stat--warn .tt-connect-native__stat-icon {
-  color: var(--tt-coral, #ff0050);
-  background: rgba(255, 0, 80, 0.1);
-  border-color: rgba(255, 0, 80, 0.18);
+  color: var(--tt-amber, #b7791f);
+  background: var(--tt-amber-soft, rgba(183, 121, 31, 0.11));
+  border-color: rgba(183, 121, 31, 0.2);
 }
 
 .tt-glass__stat-body,
@@ -1287,19 +1307,19 @@
 }
 
 .tt-connect-native__stat-value--warn {
-  color: var(--tt-coral, #ff0050);
+  color: var(--tt-amber, #b7791f);
 }
 
 .tt-glass__stat-value--warn {
-  color: var(--tt-coral, #ff0050);
+  color: var(--tt-amber, #b7791f);
 }
 
 .tt-glass__stat--warn {
-  border-color: rgba(0, 0, 0, 0.08);
+  border-color: rgba(183, 121, 31, 0.2);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.58),
-    inset 3px 0 0 var(--tt-coral, #ff0050),
-    0 0 0 1px rgba(255, 0, 80, 0.1);
+    inset 3px 0 0 var(--tt-amber, #b7791f),
+    0 0 0 1px rgba(183, 121, 31, 0.08);
 }
 
 /* --------------------------------------------------------------------------
@@ -1516,8 +1536,8 @@
   gap: 0.5rem 0.75rem;
   padding: 0.45rem 0.75rem;
   border-radius: var(--tt-r-pill);
-  border: 1px solid rgba(255, 255, 255, 0.38);
-  background: rgba(255, 255, 255, 0.28);
+  border: 1px solid var(--tt-border, rgba(44, 35, 28, 0.1));
+  background: rgba(255, 255, 255, 0.68);
   backdrop-filter: blur(var(--tt-blur-pill)) saturate(var(--tt-saturate-pill));
   -webkit-backdrop-filter: blur(var(--tt-blur-pill)) saturate(var(--tt-saturate-pill));
   box-shadow:
@@ -1552,17 +1572,17 @@
   text-transform: uppercase;
   padding: 0.2rem 0.5rem;
   border-radius: var(--tt-r-pill);
-  color: rgba(0, 0, 0, 0.72);
-  background: rgba(0, 242, 234, 0.22);
-  border: 1px solid rgba(0, 242, 234, 0.28);
+  color: var(--tt-cyan-strong, #079892);
+  background: rgba(12, 191, 186, 0.12);
+  border: 1px solid rgba(12, 191, 186, 0.24);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 .tt-glass__live-chip--busy,
 .tt-connect-native__live-chip--busy {
-  color: rgba(0, 0, 0, 0.65);
-  background: rgba(255, 0, 80, 0.12);
-  border-color: rgba(255, 0, 80, 0.22);
+  color: var(--tt-coral-strong, #e81e5a);
+  background: var(--tt-coral-soft, rgba(244, 47, 104, 0.11));
+  border-color: rgba(244, 47, 104, 0.22);
 }
 
 .tt-glass__live-chip-dot,
@@ -1584,8 +1604,8 @@
 .tt-glass__order-card {
   position: relative;
   border-radius: var(--tt-r-panel);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid var(--tt-border, rgba(44, 35, 28, 0.1));
+  background: rgba(255, 255, 255, 0.78);
   backdrop-filter: blur(var(--tt-blur-pane)) saturate(var(--tt-saturate-pane));
   -webkit-backdrop-filter: blur(var(--tt-blur-pane)) saturate(var(--tt-saturate-pane));
   box-shadow:
@@ -1596,17 +1616,17 @@
 }
 
 .tt-glass__order-card:hover {
-  border-color: rgba(0, 0, 0, 0.12);
+  border-color: var(--tt-border-strong, rgba(44, 35, 28, 0.16));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
     0 4px 14px -6px rgba(0, 0, 0, 0.14);
 }
 
 .tt-glass__order-card--selected {
-  border-color: rgba(0, 242, 234, 0.55);
+  border-color: rgba(12, 191, 186, 0.42);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.85),
-    0 0 0 1px rgba(0, 242, 234, 0.28),
+    0 0 0 1px rgba(12, 191, 186, 0.2),
     0 2px 10px -6px rgba(0, 0, 0, 0.1);
 }
 
@@ -2273,7 +2293,7 @@
 .tt-glass__stat-grid {
   --tt-r-panel: 12px;
   --tt-r-card: 10px;
-  --tt-coral: #ff0050;
+  --tt-coral: #f42f68;
   position: relative;
   isolation: isolate;
   display: grid;
@@ -2281,14 +2301,13 @@
   gap: 0.5rem;
   padding: 0.5rem;
   border-radius: var(--tt-r-panel, 12px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(0, 0, 0, 0.92);
-  backdrop-filter: blur(var(--tt-blur-hero, 24px)) saturate(var(--tt-saturate-hero, 1.02));
-  -webkit-backdrop-filter: blur(var(--tt-blur-hero, 24px)) saturate(var(--tt-saturate-hero, 1.02));
+  border: 1px solid rgba(44, 35, 28, 0.1);
+  background: rgba(255, 255, 255, 0.68);
+  backdrop-filter: blur(var(--tt-blur-shell, 36px)) saturate(var(--tt-saturate-shell, 1.12));
+  -webkit-backdrop-filter: blur(var(--tt-blur-shell, 36px)) saturate(var(--tt-saturate-shell, 1.12));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.07),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
-    0 2px 12px -4px rgba(0, 0, 0, 0.35);
+    inset 0 1px 0 rgba(255, 255, 255, 0.76),
+    0 8px 24px -18px rgba(38, 29, 22, 0.28);
   overflow: hidden;
 }
 
@@ -2300,22 +2319,9 @@
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(ellipse 120% 80% at 50% -40%, rgba(255, 255, 255, 0.06), transparent 52%),
-    repeating-linear-gradient(
-      0deg,
-      rgba(255, 255, 255, 0.022) 0,
-      rgba(255, 255, 255, 0.022) 1px,
-      transparent 1px,
-      transparent 4px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0.022) 0,
-      rgba(255, 255, 255, 0.022) 1px,
-      transparent 1px,
-      transparent 4px
-    );
-  opacity: 0.75;
+    radial-gradient(ellipse 80% 70% at 50% -10%, rgba(255, 255, 255, 0.42), transparent 62%),
+    linear-gradient(90deg, rgba(244, 47, 104, 0.04), transparent 34%, rgba(12, 191, 186, 0.035));
+  opacity: 1;
 }
 
 @media (min-width: 1024px) {
@@ -2331,27 +2337,27 @@
   z-index: 1;
   padding: 1rem 0.875rem;
   border-radius: var(--tt-r-card, 10px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(44, 35, 28, 0.1);
+  background: rgba(255, 255, 255, 0.72);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.15);
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 1px 4px -3px rgba(38, 29, 22, 0.18);
 }
 
 .tt-glass__stat-grid .tt-glass__stat::before {
   background:
-    radial-gradient(ellipse 80% 50% at 50% 0%, rgba(255, 255, 255, 0.08), transparent 55%);
+    radial-gradient(ellipse 80% 50% at 50% 0%, rgba(255, 255, 255, 0.3), transparent 58%);
 }
 
 .tt-glass__stat-grid .tt-glass__stat-icon {
-  color: rgba(255, 255, 255, 0.72);
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  color: rgb(var(--c-muted));
+  background: rgba(44, 35, 28, 0.05);
+  border-color: rgba(44, 35, 28, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62);
 }
 
 .tt-glass__stat-grid .tt-glass__stat-label {
-  color: rgba(255, 255, 255, 0.52);
+  color: rgb(var(--c-muted-soft));
 }
 
 .tt-glass__stat-grid .tt-glass__stat-value {
@@ -2359,27 +2365,129 @@
   font-size: 1.75rem;
   font-weight: 500;
   line-height: 1;
-  color: #fff;
+  color: rgb(var(--c-ink));
 }
 
 .tt-glass__stat-grid .tt-glass__stat--warn {
-  border-color: rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(183, 121, 31, 0.22);
+  background: rgba(255, 251, 242, 0.76);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.2),
-    inset 3px 0 0 var(--tt-coral, #ff0050),
-    0 0 0 1px rgba(255, 0, 80, 0.12);
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 3px 0 0 var(--tt-amber, #b7791f),
+    0 0 0 1px rgba(183, 121, 31, 0.08);
 }
 
 .tt-glass__stat-grid .tt-glass__stat--warn .tt-glass__stat-icon {
-  color: var(--tt-coral, #ff0050);
-  background: rgba(255, 0, 80, 0.14);
-  border-color: rgba(255, 0, 80, 0.22);
+  color: var(--tt-amber, #b7791f);
+  background: var(--tt-amber-soft, rgba(183, 121, 31, 0.11));
+  border-color: rgba(183, 121, 31, 0.2);
 }
 
 .tt-glass__stat-grid .tt-glass__stat-value--warn {
-  color: var(--tt-coral, #ff0050);
+  color: var(--tt-amber, #b7791f);
+}
+
+.tt-glass__stat-grid--bento {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(5rem, auto);
+  gap: 0.625rem;
+}
+
+@media (min-width: 768px) {
+  .tt-glass__stat-grid--bento {
+    grid-template-columns: minmax(8rem, 1fr) minmax(8rem, 0.95fr) minmax(8rem, 1fr);
+    grid-template-rows: repeat(2, minmax(4.45rem, auto));
+  }
+}
+
+@media (min-width: 1180px) {
+  .tt-glass__stat-grid--bento {
+    grid-template-columns: minmax(9rem, 1fr) minmax(9rem, 0.95fr) minmax(9rem, 1fr);
+    min-height: 100%;
+  }
+}
+
+.tt-glass__stat-grid--bento .tt-glass__stat {
+  min-height: 5rem;
+  align-items: flex-start;
+  border-radius: 14px;
+  border-color: rgba(255, 255, 255, 0.64);
+  background:
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.58), transparent 34%),
+    radial-gradient(circle at 88% 18%, rgba(12, 191, 186, 0.07), transparent 36%),
+    linear-gradient(135deg, rgba(255, 253, 248, 0.86), rgba(249, 245, 238, 0.68));
+  backdrop-filter: blur(18px) saturate(142%);
+  -webkit-backdrop-filter: blur(18px) saturate(142%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    inset 0 -1px 0 rgba(174, 155, 128, 0.16),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 12px 28px -18px rgba(38, 29, 22, 0.30);
+}
+
+.tt-glass__stat-grid--bento .tt-glass__stat--primary {
+  grid-column: span 2;
+  min-height: 7rem;
+  padding: 1rem;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.66), transparent 34%),
+    radial-gradient(circle at 88% 18%, rgba(12, 191, 186, 0.12), transparent 36%),
+    radial-gradient(circle at 50% 110%, rgba(244, 47, 104, 0.08), transparent 44%),
+    linear-gradient(135deg, rgba(255, 253, 248, 0.90), rgba(249, 245, 238, 0.72));
+}
+
+@media (min-width: 768px) {
+  .tt-glass__stat-grid--bento .tt-glass__stat--primary {
+    grid-column: 1 / span 2;
+    grid-row: 1;
+  }
+
+  .tt-glass__stat-grid--bento .tt-glass__stat:not(.tt-glass__stat--primary) {
+    min-height: 4.45rem;
+  }
+
+  .tt-glass__stat-grid--bento .tt-glass__stat:not(.tt-glass__stat--primary):nth-child(2) {
+    grid-column: 3 / span 1;
+    grid-row: 1;
+  }
+
+  .tt-glass__stat-grid--bento .tt-glass__stat:not(.tt-glass__stat--primary):nth-child(3) {
+    grid-column: 1 / span 1;
+    grid-row: 2;
+  }
+
+  .tt-glass__stat-grid--bento .tt-glass__stat:not(.tt-glass__stat--primary):nth-child(4) {
+    grid-column: 2 / span 2;
+    grid-row: 2;
+  }
+}
+
+.tt-glass__stat-grid--bento .tt-glass__stat--warn {
+  border-color: rgba(210, 160, 86, 0.38);
+  background:
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.62), transparent 34%),
+    radial-gradient(circle at 88% 18%, rgba(232, 165, 90, 0.18), transparent 36%),
+    radial-gradient(circle at 50% 110%, rgba(255, 242, 218, 0.46), transparent 44%),
+    linear-gradient(135deg, rgba(255, 252, 245, 0.90), rgba(255, 246, 231, 0.74));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    inset 3px 0 0 rgba(183, 121, 31, 0.82),
+    inset 0 -1px 0 rgba(174, 155, 128, 0.14),
+    0 12px 28px -18px rgba(183, 121, 31, 0.34);
+}
+
+.tt-glass__stat-grid--bento .tt-glass__stat--primary .tt-glass__stat-icon {
+  width: 34px;
+  height: 34px;
+}
+
+.tt-glass__stat-grid--bento .tt-glass__stat--primary .tt-glass__stat-value {
+  font-size: clamp(2rem, 4.2vw, 3.25rem);
+  line-height: 0.95;
+}
+
+.tt-glass__stat-grid--bento .tt-glass__stat--primary .tt-glass__stat-label {
+  font-size: 0.625rem;
 }
 
 /* --------------------------------------------------------------------------
@@ -2404,8 +2512,8 @@
 .tt-glass__health-panel {
   --tt-r-panel: 12px;
   --tt-r-card: 10px;
-  --tt-coral: #ff0050;
-  --tt-cyan: #00f2ea;
+  --tt-coral: #f42f68;
+  --tt-cyan: #0cbfba;
   position: relative;
   isolation: isolate;
   display: flex;
@@ -2413,14 +2521,16 @@
   gap: 0.75rem;
   padding: 0.625rem;
   border-radius: var(--tt-r-panel, 12px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(0, 0, 0, 0.92);
-  backdrop-filter: blur(var(--tt-blur-hero, 24px)) saturate(var(--tt-saturate-hero, 1.02));
-  -webkit-backdrop-filter: blur(var(--tt-blur-hero, 24px)) saturate(var(--tt-saturate-hero, 1.02));
+  border: 1px solid var(--tt-border, rgba(44, 35, 28, 0.1));
+  background:
+    radial-gradient(ellipse 70% 70% at 0% 0%, rgba(12, 191, 186, 0.055), transparent 60%),
+    radial-gradient(ellipse 65% 70% at 100% 0%, rgba(244, 47, 104, 0.045), transparent 62%),
+    rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(var(--tt-blur-shell, 36px)) saturate(var(--tt-saturate-shell, 1.12));
+  -webkit-backdrop-filter: blur(var(--tt-blur-shell, 36px)) saturate(var(--tt-saturate-shell, 1.12));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.07),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
-    0 2px 12px -4px rgba(0, 0, 0, 0.35);
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 10px 26px -20px rgba(38, 29, 22, 0.28);
   overflow: hidden;
 }
 
@@ -2432,22 +2542,15 @@
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(ellipse 120% 80% at 50% -40%, rgba(255, 255, 255, 0.06), transparent 52%),
-    repeating-linear-gradient(
-      0deg,
-      rgba(255, 255, 255, 0.022) 0,
-      rgba(255, 255, 255, 0.022) 1px,
-      transparent 1px,
-      transparent 4px
-    ),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.46), transparent 34%),
     repeating-linear-gradient(
       90deg,
-      rgba(255, 255, 255, 0.022) 0,
-      rgba(255, 255, 255, 0.022) 1px,
+      rgba(44, 35, 28, 0.018) 0,
+      rgba(44, 35, 28, 0.018) 1px,
       transparent 1px,
-      transparent 4px
+      transparent 14px
     );
-  opacity: 0.75;
+  opacity: 0.45;
 }
 
 .tt-glass__health-section {
@@ -2457,7 +2560,7 @@
 
 .tt-glass__health-section + .tt-glass__health-section {
   padding-top: 0.75rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--tt-border, rgba(44, 35, 28, 0.1));
 }
 
 .tt-glass__health-section-title {
@@ -2467,7 +2570,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgb(var(--c-muted));
   font-family: inherit;
 }
 
@@ -2486,23 +2589,23 @@
 .tt-glass__health-metric {
   padding: 0.75rem 0.875rem;
   border-radius: var(--tt-r-card, 10px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(44, 35, 28, 0.095);
+  background: rgba(255, 255, 255, 0.78);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.15);
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    0 1px 5px -4px rgba(38, 29, 22, 0.18);
 }
 
 .tt-glass__health-metric::before {
   background:
-    radial-gradient(ellipse 80% 50% at 50% 0%, rgba(255, 255, 255, 0.08), transparent 55%);
+    radial-gradient(ellipse 80% 50% at 50% 0%, rgba(255, 255, 255, 0.34), transparent 58%);
 }
 
 .tt-glass__health-metric .tt-glass__metric-label {
   font-size: 0.625rem;
   font-weight: 600;
   letter-spacing: 0.05em;
-  color: rgba(255, 255, 255, 0.48);
+  color: rgb(var(--c-muted-soft));
   font-family: inherit;
 }
 
@@ -2512,23 +2615,23 @@
   font-weight: 700;
   line-height: 1.2;
   margin-top: 0.35rem;
-  color: #fff;
+  color: rgb(var(--c-ink));
 }
 
 .tt-glass__health-metric .tt-glass__metric-hint {
   font-size: 0.6875rem;
-  color: rgba(255, 255, 255, 0.42);
+  color: rgb(var(--c-muted-soft));
   margin-top: 0.35rem;
   line-height: 1.35;
   font-family: inherit;
 }
 
 .tt-glass__health-metric.tt-glass__metric--ok {
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(12, 191, 186, 0.2);
 }
 
 .tt-glass__health-metric.tt-glass__metric--ok .tt-glass__metric-value {
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--tt-cyan-strong, #079892);
 }
 
 .tt-glass__health-metric.tt-glass__metric--ok .tt-glass__metric-dot {
@@ -2537,28 +2640,30 @@
 }
 
 .tt-glass__health-metric.tt-glass__metric--warn {
-  border-color: rgba(255, 0, 80, 0.22);
+  border-color: rgba(183, 121, 31, 0.26);
+  background: rgba(255, 251, 242, 0.8);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    inset 3px 0 0 var(--tt-coral, #ff0050),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    inset 3px 0 0 var(--tt-amber, #b7791f),
+    0 1px 5px -4px rgba(38, 29, 22, 0.18);
 }
 
 .tt-glass__health-metric.tt-glass__metric--warn .tt-glass__metric-value {
-  color: var(--tt-coral, #ff0050);
+  color: var(--tt-amber, #b7791f);
 }
 
 .tt-glass__health-metric.tt-glass__metric--warn .tt-glass__metric-dot {
-  background: var(--tt-coral, #ff0050);
-  box-shadow: 0 0 6px rgba(255, 0, 80, 0.45);
+  background: var(--tt-amber, #b7791f);
+  box-shadow: 0 0 6px rgba(183, 121, 31, 0.32);
 }
 
 .tt-glass__health-metric.tt-glass__metric--bad {
   border-color: rgba(255, 0, 80, 0.28);
+  background: rgba(255, 247, 250, 0.82);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
     inset 3px 0 0 var(--tt-coral, #ff0050),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+    0 1px 5px -4px rgba(38, 29, 22, 0.18);
 }
 
 .tt-glass__health-metric.tt-glass__metric--bad .tt-glass__metric-value {
@@ -2570,7 +2675,7 @@
 }
 
 .tt-glass__health-metric.tt-glass__metric--muted .tt-glass__metric-value {
-  color: rgba(255, 255, 255, 0.55);
+  color: rgb(var(--c-muted));
 }
 
 .tt-glass__health-toolbar {
@@ -2580,7 +2685,7 @@
   padding: 0.75rem 0.875rem;
   border-radius: var(--tt-r-panel, 12px);
   border: 1px solid rgba(0, 0, 0, 0.08);
-  background: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.72);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
@@ -2617,11 +2722,16 @@
 }
 
 :root[data-theme='dark'] .tt-glass__health-panel {
-  background: rgba(0, 0, 0, 0.97);
+  background:
+    radial-gradient(ellipse 70% 70% at 0% 0%, rgba(12, 191, 186, 0.08), transparent 60%),
+    radial-gradient(ellipse 65% 70% at 100% 0%, rgba(244, 47, 104, 0.06), transparent 62%),
+    rgba(24, 24, 26, 0.88);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 :root[data-theme='dark'] .tt-glass__health-metric {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 :root[data-theme='dark'] .tt-glass__health-toolbar {
@@ -2715,8 +2825,8 @@
   gap: 0.375rem;
   border-radius: var(--tt-r-panel);
   overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  background: rgba(255, 255, 255, 0.35);
+  border: 1px solid var(--tt-border, rgba(44, 35, 28, 0.1));
+  background: rgba(255, 255, 255, 0.58);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
 }
 
@@ -2729,11 +2839,11 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.88);
-  background: rgba(0, 0, 0, 0.92);
+  color: rgb(var(--c-muted));
+  background: rgba(255, 255, 255, 0.72);
   border: none;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--tt-border, rgba(44, 35, 28, 0.1));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84);
 }
 
 .tt-glass__table-body {
@@ -2749,8 +2859,8 @@
   align-items: center;
   padding: 0.625rem 0.75rem;
   border-radius: var(--tt-r-control, 9px);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(44, 35, 28, 0.075);
+  background: rgba(255, 255, 255, 0.82);
   backdrop-filter: blur(var(--tt-blur-pane)) saturate(var(--tt-saturate-pane));
   -webkit-backdrop-filter: blur(var(--tt-blur-pane)) saturate(var(--tt-saturate-pane));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
@@ -2758,8 +2868,8 @@
 }
 
 .tt-glass__table-row:hover {
-  border-color: rgba(0, 0, 0, 0.1);
-  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(44, 35, 28, 0.14);
+  background: rgba(255, 255, 255, 0.96);
 }
 
 .tt-glass__table-empty {
@@ -2859,9 +2969,10 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.88);
-  background: rgba(0, 0, 0, 0.88);
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  color: rgb(var(--c-muted));
+  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid var(--tt-border, rgba(44, 35, 28, 0.1));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 @media (min-width: 1024px) {
@@ -2902,6 +3013,27 @@
   gap: 1rem;
 }
 
+.tt-glass__toolbar-surface {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: var(--tt-r-panel, 12px);
+  border: 1px solid var(--tt-border, rgba(44, 35, 28, 0.1));
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    0 1px 5px -4px rgba(38, 29, 22, 0.18);
+}
+
+.tt-glass__toolbar-surface-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0 0.125rem;
+}
+
 .tt-glass__toolbar-row {
   display: flex;
   flex-direction: column;
@@ -2923,8 +3055,11 @@
 }
 
 .tt-glass__toolbar-divider {
-  padding-top: 0.75rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.22);
+  align-items: center;
+  padding: 0.75rem;
+  border-top: 1px solid var(--tt-border, rgba(44, 35, 28, 0.1));
+  border-radius: var(--tt-r-panel, 12px);
+  background: rgba(255, 255, 255, 0.56);
 }
 
 .tt-glass__btn--coral.tt-glass__btn--lg,
@@ -3137,6 +3272,668 @@
   --ttc-sync-blur: var(--tt-blur-shell, 36px);
 }
 
+/* --------------------------------------------------------------------------
+   TikTok page composition — ordered operational groups
+   -------------------------------------------------------------------------- */
+.tt-glass__workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+@media (min-width: 1024px) {
+  .tt-glass__workspace {
+    gap: 1.25rem;
+  }
+}
+
+.tt-glass__group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.tt-glass__group-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.375rem 0.75rem;
+  padding: 0 0.125rem;
+}
+
+.tt-glass__group-title {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+  color: rgb(var(--c-muted));
+}
+
+.tt-glass__group-caption {
+  margin: 0;
+  font-size: 0.6875rem;
+  color: rgb(var(--c-muted-soft));
+}
+
+.tt-glass__overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+@media (min-width: 1180px) {
+  .tt-glass__overview-grid {
+    grid-template-columns: minmax(18rem, 0.78fr) minmax(0, 1.22fr);
+    grid-auto-rows: minmax(14.25rem, auto);
+  }
+
+  .tt-glass__overview-grid > .tt-glass {
+    display: flex;
+    min-height: 100%;
+    align-self: stretch;
+  }
+
+  .tt-glass__overview-grid > .tt-glass > .tt-glass__shell {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .tt-glass__overview-grid > .tt-glass > .tt-glass__shell > .tt-glass__body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .tt-glass__overview-grid > .tt-glass--compact-connect .tt-glass__compact-connect,
+  .tt-glass__overview-grid > .tt-glass .tt-glass__stat-grid--bento {
+    flex: 1 1 auto;
+    min-height: 100%;
+  }
+}
+
+.tt-glass__command-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: var(--tt-r-shell, 16px);
+  border: 1px solid var(--tt-border, rgba(44, 35, 28, 0.1));
+  background: rgba(255, 255, 255, 0.58);
+  backdrop-filter: blur(var(--tt-blur-shell, 36px)) saturate(var(--tt-saturate-shell, 1.12));
+  -webkit-backdrop-filter: blur(var(--tt-blur-shell, 36px)) saturate(var(--tt-saturate-shell, 1.12));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.76),
+    0 10px 28px -22px rgba(38, 29, 22, 0.32);
+}
+
+.tt-glass__command-panel .tt-glass__tabs--status {
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
+}
+
+.tt-glass__filter-rail {
+  padding: 0.625rem;
+  border-radius: var(--tt-r-shell, 16px);
+  border: 1px solid var(--tt-border, rgba(44, 35, 28, 0.1));
+  background: rgba(255, 255, 255, 0.58);
+  backdrop-filter: blur(var(--tt-blur-shell, 36px)) saturate(var(--tt-saturate-shell, 1.12));
+  -webkit-backdrop-filter: blur(var(--tt-blur-shell, 36px)) saturate(var(--tt-saturate-shell, 1.12));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.76),
+    0 8px 22px -20px rgba(38, 29, 22, 0.28);
+}
+
+.tt-glass__filter-rail .tt-glass__tabs--status {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.tt-glass__invoice-summary {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 0.625rem;
+  margin-bottom: 0.75rem;
+}
+
+@media (min-width: 768px) {
+  .tt-glass__invoice-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.tt-glass__content-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.tt-glass--compact-connect .tt-glass__body {
+  overflow: visible;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.62), transparent 34%),
+    radial-gradient(circle at 92% 18%, rgba(12, 191, 186, 0.08), transparent 36%),
+    radial-gradient(circle at 52% 110%, rgba(244, 47, 104, 0.045), transparent 46%),
+    linear-gradient(135deg, rgba(255, 253, 248, 0.86), rgba(249, 245, 238, 0.68));
+  backdrop-filter: blur(22px) saturate(145%);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    inset 0 -1px 0 rgba(174, 155, 128, 0.14);
+}
+
+.tt-glass__compact-connect {
+  --tt-compact-tile-radius: 14px;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) minmax(3.35rem, auto);
+  gap: 0.75rem;
+  min-height: 7.05rem;
+  padding: 0.875rem;
+}
+
+.tt-glass__compact-connect-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: 0.625rem;
+  min-width: 0;
+}
+
+@media (min-width: 640px) {
+  .tt-glass__compact-connect-head {
+    grid-template-columns: minmax(0, 1fr) minmax(8.25rem, 0.36fr);
+  }
+}
+
+@media (min-width: 768px) {
+  .tt-glass__compact-connect {
+    min-height: 8.95rem;
+  }
+}
+
+.tt-glass__compact-connect-main {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  min-width: 0;
+  height: 100%;
+  min-height: 4.25rem;
+  padding: 0.75rem;
+  border-radius: var(--tt-compact-tile-radius);
+  border: 1px solid rgba(255, 255, 255, 0.66);
+  background:
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.68), transparent 34%),
+    radial-gradient(circle at 92% 18%, rgba(12, 191, 186, 0.08), transparent 36%),
+    rgba(255, 255, 255, 0.58);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    inset 0 -1px 0 rgba(174, 155, 128, 0.12),
+    0 10px 24px -18px rgba(38, 29, 22, 0.28);
+}
+
+.tt-glass--compact-connect .tt-glass__icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--tt-compact-tile-radius);
+  color: var(--tt-cyan-strong, #079892);
+  background:
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.66), transparent 34%),
+    linear-gradient(135deg, rgba(220, 255, 252, 0.84), rgba(235, 255, 253, 0.62));
+  border-color: rgba(12, 191, 186, 0.24);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 8px 18px -14px rgba(7, 152, 146, 0.34);
+}
+
+.tt-glass--compact-connect .tt-glass__eyebrow {
+  color: var(--tt-cyan-strong, #079892);
+}
+
+.tt-glass__compact-status-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 4.25rem;
+  padding: 0.75rem;
+  border-radius: var(--tt-compact-tile-radius);
+  border: 1px solid rgba(12, 191, 186, 0.24);
+  background:
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.62), transparent 34%),
+    radial-gradient(circle at 92% 18%, rgba(12, 191, 186, 0.20), transparent 36%),
+    linear-gradient(135deg, rgba(231, 255, 253, 0.82), rgba(236, 253, 251, 0.58));
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(12, 191, 186, 0.10),
+    0 10px 24px -18px rgba(7, 152, 146, 0.30);
+}
+
+.tt-glass__compact-status-tile .tt-glass__badge {
+  width: 100%;
+  min-height: 2.2rem;
+  justify-content: center;
+  border-radius: var(--tt-compact-tile-radius);
+  background: rgba(255, 255, 255, 0.26);
+  backdrop-filter: blur(10px) saturate(150%);
+  -webkit-backdrop-filter: blur(10px) saturate(150%);
+}
+
+.tt-glass__compact-connect-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: 0.625rem;
+  min-width: 0;
+}
+
+@media (min-width: 640px) {
+  .tt-glass__compact-connect-meta {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.tt-glass__compact-connect-meta .tt-glass__live-chip,
+.tt-glass__compact-connect-meta .tt-glass__btn {
+  width: 100%;
+  min-width: 0;
+  min-height: 3rem;
+  border-radius: var(--tt-compact-tile-radius);
+  justify-self: stretch;
+}
+
+.tt-glass__compact-connect-meta .tt-glass__btn {
+  justify-content: center;
+  padding-inline: 0.75rem;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(160, 22, 68, 0.22),
+    0 12px 24px -14px rgba(232, 30, 90, 0.55);
+}
+
+.tt-glass__compact-connect-meta .tt-glass__live-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-inline: 0.75rem;
+  border: 1px solid rgba(244, 47, 104, 0.22);
+  background:
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.58), transparent 34%),
+    linear-gradient(135deg, rgba(255, 237, 244, 0.88), rgba(255, 228, 238, 0.70));
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    inset 0 -1px 0 rgba(244, 47, 104, 0.08),
+    0 10px 22px -16px rgba(244, 47, 104, 0.34);
+}
+
+.tt-glass__compact-kv {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  width: 100%;
+  min-width: 0;
+  min-height: 3rem;
+  justify-content: center;
+  padding: 0.4rem 0.65rem;
+  border-radius: var(--tt-compact-tile-radius);
+  border: 1px solid rgba(255, 255, 255, 0.66);
+  background:
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.62), transparent 34%),
+    linear-gradient(135deg, rgba(255, 253, 248, 0.82), rgba(249, 245, 238, 0.66));
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(174, 155, 128, 0.12),
+    0 10px 22px -16px rgba(38, 29, 22, 0.24);
+  font-size: 0.625rem;
+  color: rgb(var(--c-muted-soft));
+}
+
+.tt-glass__compact-kv strong {
+  font-size: 0.6875rem;
+  color: rgb(var(--c-ink));
+  font-weight: 700;
+}
+
+.tt-glass__compact-alert {
+  margin: 0 0.75rem 0.75rem;
+}
+
+/* --------------------------------------------------------------------------
+   TikTok-wide liquid glass pass — aligned with Sales History cards
+   -------------------------------------------------------------------------- */
+.tt-glass {
+  --tt-lg-radius: 14px;
+  --tt-lg-radius-sm: 10px;
+  --tt-lg-border: rgba(255, 255, 255, 0.58);
+  --tt-lg-border-warm: rgba(174, 155, 128, 0.26);
+  --tt-lg-shadow: 0 14px 34px -24px rgba(38, 29, 22, 0.34);
+  --tt-lg-shadow-hover: 0 18px 42px -24px rgba(38, 29, 22, 0.42);
+  --tt-lg-rim-top: rgba(255, 255, 255, 0.9);
+  --tt-lg-rim-bottom: rgba(174, 155, 128, 0.14);
+  --tt-lg-surface:
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.62), transparent 34%),
+    radial-gradient(circle at 88% 18%, rgba(12, 191, 186, 0.075), transparent 36%),
+    radial-gradient(circle at 50% 110%, rgba(244, 47, 104, 0.045), transparent 44%),
+    linear-gradient(135deg, rgba(255, 253, 248, 0.86), rgba(249, 245, 238, 0.66));
+  --tt-lg-tile:
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.66), transparent 34%),
+    radial-gradient(circle at 88% 18%, rgba(12, 191, 186, 0.065), transparent 36%),
+    linear-gradient(135deg, rgba(255, 253, 248, 0.82), rgba(249, 245, 238, 0.62));
+  --tt-lg-tile-strong:
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.72), transparent 34%),
+    radial-gradient(circle at 88% 18%, rgba(12, 191, 186, 0.10), transparent 36%),
+    linear-gradient(135deg, rgba(255, 253, 248, 0.92), rgba(249, 245, 238, 0.74));
+  --tt-lg-cyan:
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.66), transparent 34%),
+    radial-gradient(circle at 88% 18%, rgba(12, 191, 186, 0.22), transparent 36%),
+    linear-gradient(135deg, rgba(229, 255, 253, 0.84), rgba(235, 255, 253, 0.62));
+  --tt-lg-amber:
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.66), transparent 34%),
+    radial-gradient(circle at 88% 18%, rgba(232, 165, 90, 0.20), transparent 36%),
+    linear-gradient(135deg, rgba(255, 252, 245, 0.90), rgba(255, 244, 226, 0.68));
+  --tt-lg-coral:
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.60), transparent 34%),
+    radial-gradient(circle at 88% 18%, rgba(244, 47, 104, 0.22), transparent 36%),
+    linear-gradient(135deg, rgba(255, 241, 247, 0.88), rgba(255, 226, 238, 0.66));
+}
+
+.tt-glass__section .tt-glass__body,
+.tt-glass__command-panel,
+.tt-glass__filter-rail,
+.tt-glass__toolbar-surface,
+.tt-glass__table,
+.tt-glass__order-card,
+.tt-glass__health-panel,
+.tt-glass__notice,
+.tt-glass__popover,
+.tt-glass__pagination,
+.tt-glass__reconcile-toolbar,
+.tt-glass__modal .tt-glass__body {
+  position: relative;
+  isolation: isolate;
+  border-radius: var(--tt-lg-radius);
+  border-color: var(--tt-lg-border-warm);
+  background: var(--tt-lg-surface);
+  backdrop-filter: blur(22px) saturate(145%);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+  box-shadow:
+    inset 0 1px 0 var(--tt-lg-rim-top),
+    inset 0 -1px 0 var(--tt-lg-rim-bottom),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    var(--tt-lg-shadow);
+}
+
+.tt-glass__section .tt-glass__body::before,
+.tt-glass__command-panel::before,
+.tt-glass__filter-rail::before,
+.tt-glass__toolbar-surface::before,
+.tt-glass__table::before,
+.tt-glass__order-card::before,
+.tt-glass__health-panel::before,
+.tt-glass__notice::before,
+.tt-glass__pagination::before,
+.tt-glass__reconcile-toolbar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.30), transparent 34%),
+    radial-gradient(circle at 8% 0%, rgba(255, 255, 255, 0.28), transparent 30%);
+  opacity: 0.72;
+}
+
+.tt-glass__section .tt-glass__body > *,
+.tt-glass__command-panel > *,
+.tt-glass__filter-rail > *,
+.tt-glass__toolbar-surface > *,
+.tt-glass__table > *,
+.tt-glass__order-card > *,
+.tt-glass__health-panel > *,
+.tt-glass__notice > *,
+.tt-glass__pagination > *,
+.tt-glass__reconcile-toolbar > * {
+  position: relative;
+  z-index: 1;
+}
+
+.tt-glass__tabs,
+.tt-glass__tabs--nav,
+.tt-glass__tabs--toolbar,
+.tt-glass__tabs--status {
+  border-radius: var(--tt-lg-radius);
+  border-color: var(--tt-lg-border-warm);
+  background: var(--tt-lg-surface);
+  backdrop-filter: blur(18px) saturate(145%);
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    inset 0 -1px 0 rgba(174, 155, 128, 0.12),
+    0 10px 26px -20px rgba(38, 29, 22, 0.30);
+}
+
+.tt-glass__tab,
+.tt-glass__tabs--nav .tt-glass__tab,
+.tt-glass__tabs--toolbar .tt-glass__tab {
+  border-radius: var(--tt-lg-radius-sm);
+}
+
+.tt-glass__tab:hover:not(:disabled),
+.tt-glass__tabs--nav .tt-glass__tab:hover:not(:disabled) {
+  background: var(--tt-lg-tile);
+  border-color: rgba(255, 255, 255, 0.58);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+.tt-glass__tab--active,
+.tt-glass__tabs--nav .tt-glass__tab--active,
+.tt-glass__tabs--toolbar .tt-glass__tab--active {
+  background: var(--tt-lg-tile-strong);
+  border-color: rgba(244, 47, 104, 0.26);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    inset 0 -2px 0 var(--tt-coral, #f42f68),
+    0 10px 22px -18px rgba(232, 30, 90, 0.34);
+}
+
+.tt-glass__pane,
+.tt-glass__stat,
+.tt-glass__metric,
+.tt-glass__health-metric,
+.tt-glass__table-row,
+.tt-glass__order-list-head,
+.tt-glass__order-group-header,
+.tt-glass__toolbar-divider,
+.tt-glass__input,
+.tt-glass__reconcile-search,
+.tt-glass__pagination-select,
+.tt-glass__pagination-btn,
+.tt-glass__empty-icon {
+  border-radius: var(--tt-lg-radius);
+  border-color: rgba(255, 255, 255, 0.58);
+  background: var(--tt-lg-tile);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    inset 0 -1px 0 rgba(174, 155, 128, 0.12),
+    0 10px 22px -18px rgba(38, 29, 22, 0.26);
+}
+
+.tt-glass__input,
+.tt-glass__reconcile-search {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.74), transparent 34%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.86), rgba(250, 247, 241, 0.70));
+}
+
+.tt-glass__input:focus,
+.tt-glass__reconcile-search:focus {
+  border-color: rgba(12, 191, 186, 0.38);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 0 0 2px rgba(12, 191, 186, 0.12),
+    0 12px 26px -18px rgba(7, 152, 146, 0.26);
+}
+
+.tt-glass__btn--ghost,
+.tt-glass__btn--glass,
+.tt-glass__btn--surface,
+.tt-glass__btn--outline,
+.tt-glass__btn--hero {
+  border-radius: var(--tt-lg-radius-sm);
+  border-color: rgba(255, 255, 255, 0.58);
+  background: var(--tt-lg-tile);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.84),
+    inset 0 -1px 0 rgba(174, 155, 128, 0.12),
+    0 8px 18px -14px rgba(38, 29, 22, 0.24);
+}
+
+.tt-glass__btn--coral {
+  border-radius: var(--tt-lg-radius-sm);
+  background:
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.22), transparent 34%),
+    linear-gradient(180deg, var(--tt-coral, #f42f68), var(--tt-coral-strong, #e81e5a));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -1px 0 rgba(132, 16, 52, 0.24),
+    0 12px 24px -14px rgba(232, 30, 90, 0.58);
+}
+
+.tt-glass__table {
+  gap: 0.5rem;
+  padding: 0.5rem;
+  overflow: visible;
+}
+
+.tt-glass__table-head {
+  border-radius: var(--tt-lg-radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  background: var(--tt-lg-tile-strong);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    0 8px 18px -16px rgba(38, 29, 22, 0.20);
+}
+
+.tt-glass__table-body {
+  padding: 0;
+}
+
+.tt-glass__table-row:hover,
+.tt-glass__order-card:hover {
+  border-color: rgba(12, 191, 186, 0.28);
+  background: var(--tt-lg-tile-strong);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.94),
+    inset 0 -1px 0 rgba(12, 191, 186, 0.08),
+    var(--tt-lg-shadow-hover);
+}
+
+.tt-glass__order-card {
+  overflow: hidden;
+}
+
+.tt-glass__order-card--selected {
+  border-color: rgba(12, 191, 186, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 0 0 1px rgba(12, 191, 186, 0.20),
+    var(--tt-lg-shadow);
+}
+
+.tt-glass__order-group-header {
+  border-radius: 0;
+  border-width: 0 0 1px;
+  border-color: rgba(174, 155, 128, 0.20);
+  background:
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.58), transparent 34%),
+    linear-gradient(180deg, rgba(255, 253, 248, 0.82), rgba(249, 245, 238, 0.58));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84);
+}
+
+.tt-glass__order-id-chip,
+.tt-glass__order-pos-id,
+.tt-glass__badge,
+.tt-glass__tab-count,
+.tt-glass__qty-pill {
+  border-radius: var(--tt-lg-radius-sm);
+  backdrop-filter: blur(10px) saturate(145%);
+  -webkit-backdrop-filter: blur(10px) saturate(145%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.tt-glass__stat-icon,
+.tt-glass__stat-grid .tt-glass__stat-icon,
+.tt-glass__health-metric .tt-glass__metric-dot,
+.tt-glass__metric-dot {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 4px 12px -8px currentColor;
+}
+
+.tt-glass__stat--warn,
+.tt-glass__metric--warn,
+.tt-glass__health-metric.tt-glass__metric--warn {
+  border-color: rgba(210, 160, 86, 0.36);
+  background: var(--tt-lg-amber);
+}
+
+.tt-glass__metric--ok,
+.tt-glass__health-metric.tt-glass__metric--ok {
+  border-color: rgba(12, 191, 186, 0.26);
+  background: var(--tt-lg-cyan);
+}
+
+.tt-glass__metric--bad,
+.tt-glass__health-metric.tt-glass__metric--bad {
+  border-color: rgba(244, 47, 104, 0.30);
+  background: var(--tt-lg-coral);
+}
+
+.tt-glass__health-panel,
+.tt-glass__health-toolbar,
+.tt-glass__health-metric {
+  --tt-r-panel: var(--tt-lg-radius);
+  --tt-r-card: var(--tt-lg-radius);
+}
+
+.tt-glass__health-section + .tt-glass__health-section {
+  border-top-color: rgba(174, 155, 128, 0.22);
+}
+
+.tt-glass__modal-backdrop {
+  background: rgba(26, 22, 18, 0.34);
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+}
+
+.tt-glass__popover {
+  border-color: rgba(255, 255, 255, 0.62);
+  overflow: hidden auto;
+}
+
+.tt-glass__popover-item:hover {
+  background: rgba(12, 191, 186, 0.10);
+}
+
 :root[data-theme='dark'] .tt-glass__popover {
   background: rgba(20, 20, 22, 0.94);
   border-color: rgba(255, 255, 255, 0.1);
@@ -3145,4 +3942,3 @@
 :root[data-theme='dark'] .tt-glass__table-row:hover {
   background: rgba(255, 255, 255, 0.06);
 }
-

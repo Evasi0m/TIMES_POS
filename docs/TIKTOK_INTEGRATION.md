@@ -62,6 +62,7 @@
 20. `supabase-migrations/052_tiktok_inventory_sync_service_role.sql` — ให้ Edge Function บันทึก `tiktok_inventory_sync_log` ได้ (แก้ void mirror ไม่ทำงานหลัง receive สำเร็จ)
 21. `supabase-migrations/050_tiktok_health_rpc.sql` — `get_tiktok_health()` สำหรับ health card ใน ตั้งค่า → TikTok Shop
 22. `supabase-migrations/053_tiktok_receipt_sku_name.sql` — ใบเสร็จออเดอร์ TikTok แสดง **ชื่อ SKU ที่จับคู่** (ไม่ใช่ชื่อตะกร้า/ชื่อ TikTok); แก้ confirm/link/relink ให้ snapshot `product_name` จากสินค้า POS + backfill ออเดอร์เก่า
+23. `supabase-migrations/067_tiktok_cancel_recovery.sql` — รับคืนจากบิล voided TikTok cancel + audit `tiktok_order_events` + `sale_void` mirror หลัง auto-void
 
 **Go-live cutoff:** 13:00 07/06/2026 Asia/Bangkok — ออเดอร์หลัง cutoff เข้า `pending`; ก่อน cutoff → `voided`
 
@@ -277,4 +278,23 @@ flowchart LR
 | Mirror ไม่ทำงานหลังบันทึก | เช็ค checkbox Mirror + TikTok เชื่อมต่อ + Product write scope |
 | ยกเลิกบิลแล้ว TikTok ไม่ลด | รัน migration 049 + redeploy `tiktok-inventory-update`; ต้องเคย mirror สำเร็จตอนรับเข้า |
 | ขาย Shopee/Lazada แล้ว TikTok ไม่ลด | รัน migration 055; ต้องจับคู่ mapping + TikTok เชื่อมต่อ; ดู toast TikTok sale mirror |
-| ยกเลิกบิลขายแล้ว TikTok ไม่คืน | ต้องเคย mirror `sale` สำเร็จในบิลนั้นก่อน (sale_void) |
+| ลูกค้ายกเลิก TikTok ก่อนจัดส่ง — บิล "หาย" | บิลไม่ถูกลบ — เป็น `voided` · ดูแท็บ **ยกเลิก** หรือค้นหา POS # ใน Command Center · ประวัติขาย → ปิด "ไม่รวมบิลที่ยกเลิก" |
+| รับคืนจากลูกค้า หaบิล voided ไม่ได้ | รัน migration **067** · ฟอร์มรับคืนรองรับ voided TikTok cancel แล้ว · หรือกด **รับคืนสินค้า** จากแท็บยกเลิก |
+| รับคืนแล้วสต็อกเกิน | ถ้า void คืนสต็อกแล้ว (`sale_void`) ระบบตั้ง **ไม่บวกสต็อก** เป็นค่าเริ่มต้น — อย่าติ๊ก "รับสินค้าคืน" ซ้ำ |
+| TikTok cancel แล้ว mirror ไม่คืน | หลัง migration 067 webhook/poll เรียก `sale_void` mirror อัตโนมัติเมื่อ void จาก `active` |
+
+## UI — Liquid Glass design system (June 2026)
+
+> Cursor rule สำหรับ AI: `.cursor/rules/tiktok-glass-ui.mdc`
+
+หน้า E-Commerce → TikTok ใช้ชุด **liquid glass** แยกจากธีม POS หลัก:
+
+- **CSS:** `src/styles/tiktok-glass.css` — tokens, tabs, cards, tables, workspace layout
+- **Components:** `src/components/ecommerce/tiktok/glass/` — Shell, Tabs, Btn, Stat, Badge, …
+- **Layout:** `TikTokPanel` จัดเป็น 3 โซนหลัก (orders): **Overview** (connection + KPI bento) → **Command Center** (toolbar + bulk) → **Work Queue** (status tabs + list)
+- **แท็บ nav หลัก** (ออเดอร์ / ใบกำกับ / คืน / จับคู่ / เช็คสต็อก): dark glass + active coral
+- **แท็บ filter** (สถานะออเดอร์, ใบกำกับ): `variant="toolbar"` หรือ `status` — 44px, scroll แนวนอน
+- **Connection strip** บนหน้าออเดอร์: `compact` mode ใน overview grid (desktop 2 คอลัมน์)
+- **Invoice / Returns:** stat summary + filter tabs + `TikTokGlassBadge` ในตาราง
+
+เมื่อเพิ่ม UI ใหม่ในหน้า TikTok ให้ reuse class/component ข้างต้น ไม่สร้าง style แยกเอง

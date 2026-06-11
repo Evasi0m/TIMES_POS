@@ -8,6 +8,10 @@
  */
 @import './styles.legacy.css';
 @import './styles/tiktok-glass.css';
+@import './styles/sale-bill-glass.css';
+@import './styles/glass-hover-tip.css';
+@import './styles/order-status-dot.css';
+@import './styles/payment-method-icon.css';
 
 /* Tailwind layers — purges unused classes at build time (vs the JIT runtime
  * the legacy CDN setup loaded on every page view). */

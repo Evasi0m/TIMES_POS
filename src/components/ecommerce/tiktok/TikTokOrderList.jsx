@@ -50,6 +50,9 @@ export default function TikTokOrderList({
   onPrintLabel,
   onPrintPackingSlip,
   onSyncOrders,
+  onReturnGoods,
+  orderSearch = '',
+  voidStockStatus = {},
 }) {
   const [pageSize, setPageSize] = useState(20);
   const [page, setPage] = useState(1);
@@ -76,7 +79,7 @@ export default function TikTokOrderList({
 
   if (!orders.length) {
     return (
-      <TikTokGlassSection title="รายการออเดอร์">
+      <TikTokGlassSection title="รายการออเดอร์" heroClassName="tt-glass__hero--light">
         <div className="tt-glass__empty">
           <div className="tt-glass__empty-icon">
             <Icon name="package" size={24}/>
@@ -104,7 +107,7 @@ export default function TikTokOrderList({
   }
 
   return (
-    <TikTokGlassSection title="รายการออเดอร์" bodyClassName="!pt-2">
+    <TikTokGlassSection title="รายการออเดอร์" heroClassName="tt-glass__hero--light" bodyClassName="!pt-2">
       <div className="tt-glass__order-list-meta">
         <span>
           พบ <span className="font-medium text-ink tabular-nums">{orders.length.toLocaleString('th-TH')}</span> รายการ
@@ -112,6 +115,11 @@ export default function TikTokOrderList({
         {ordersTruncated && ordersCap && (
           <span className="text-warning">
             · แสดง {ordersCap.toLocaleString('th-TH')} ออเดอร์ล่าสุด
+          </span>
+        )}
+        {orderSearch.trim() && (
+          <span className="text-muted-soft">
+            · ค้นหา「{orderSearch.trim()}」ข้ามแท็บ
           </span>
         )}
         {orders.length > pageSize && (
@@ -152,6 +160,8 @@ export default function TikTokOrderList({
               onShip={() => onShip([o.id])}
               onPrintLabel={() => onPrintLabel(o.id)}
               onPrintPackingSlip={() => onPrintPackingSlip(o.id, 'PACKING_SLIP')}
+              onReturnGoods={onReturnGoods}
+              voidStockStatus={voidStockStatus[o.id]}
             />
           );
         })}

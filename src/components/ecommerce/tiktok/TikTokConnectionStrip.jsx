@@ -8,6 +8,7 @@ export default function TikTokConnectionStrip({ toast, livePollSec, liveLabel, p
       livePollSec={livePollSec}
       liveLabel={liveLabel}
       pullBusy={pullBusy}
+      compact
     />
   );
 }

@@ -2,6 +2,62 @@
   "schemaVersion": 1,
   "patches": [
     {
+      "id": "2026-06-11-sales-history-table-polish",
+      "date": "2026-06-11",
+      "title": "ประวัติขาย — จัดตารางและบิลให้สวยขึ้น",
+      "tags": ["ปรับปรุง", "UI"],
+      "items": [
+        "จัดกึ่งกลางทุกคอลัมน์ในตารางประวัติขาย (desktop)",
+        "บิลรายละเอียด: การ์ดย่อย liquid glass Champagne Luxe — layout เดิม ไม่เปลี่ยนโครง modal",
+        "Badge「ส่งแทน」ในรายการสินค้าเป็น pill ม่วง glass แยกจากจุดสถานะคำสั่งซื้อ"
+      ]
+    },
+    {
+      "id": "2026-06-10-payment-icon-column",
+      "date": "2026-06-10",
+      "title": "ประวัติขาย — คอลัมน์ชำระเป็นไอคอน",
+      "tags": ["ปรับปรุง", "UI"],
+      "items": [
+        "คอลัมน์ชำระแสดง SVG สี premium ขนาดใหญ่ แทนข้อความ — โอน/บัตร/paylater/COD",
+        "โทนสีแยกชัด: โอน+paylater เขียว · บัตร indigo · COD ส้ม (ไม่สับสนกับโอน)",
+        "Hover tooltip glass แสดงชื่อช่องทาง · Mobile card ใช้ไอคอนเดียวกัน"
+      ]
+    },
+    {
+      "id": "2026-06-10-sales-status-column",
+      "date": "2026-06-10",
+      "title": "ประวัติขาย — คอลัมน์สถานะคำสั่งซื้อ",
+      "tags": ["ปรับปรุง", "UI"],
+      "items": [
+        "เพิ่มคอลัมน์「สถานะ」 — จุดวงกลม liquid glass + hover tooltip (ปกติ/ส่งแทน/ยกเลิก/รอยืนยัน/รอใส่ราคา/แก้ไขแล้ว)",
+        "ลำดับความสำคัญ: void → pending → substitution → pending_price → edited → normal",
+        "Migration 068: has_substitution + has_edits บน sale_orders พร้อม trigger sync"
+      ]
+    },
+    {
+      "id": "2026-06-10-void-stock-status-ui",
+      "date": "2026-06-10",
+      "title": "บิลยกเลิก — แสดงสถานะสต็อกชัดเจน",
+      "tags": ["ปรับปรุง", "สต็อก"],
+      "items": [
+        "ประวัติขาย + รายละเอียดบิล void แสดง badge สต็อกคืนแล้ว / ยังไม่คืน / ไม่เคยตัด",
+        "TikTok แท็บยกเลิก แสดงสถานะสต็อก + ปุ่มรับคืนเป็น「เอกสาร」",
+        "ช่วยลดความสับสน: void คืนสต็อกแล้ว ไม่ต้องเข้ารับคืนเพื่อบวกสต็อกซ้ำ"
+      ]
+    },
+    {
+      "id": "2026-06-10-tiktok-cancel-recovery",
+      "date": "2026-06-10",
+      "title": "TikTok ยกเลิกก่อนจัดส่ง — หaบิล + รับคืนได้",
+      "tags": ["แก้ไข", "TikTok"],
+      "items": [
+        "บิล TikTok ที่ลูกค้ายกเลิกไม่หาย — อยู่แท็บ「ยกเลิก」+ ค้นหา POS # / TikTok Order ID ข้ามแท็บ",
+        "ซิงค์แล้วแจ้งเตือนเมื่อมีออเดอร์ถูก void · ประวัติขายมีทางลัด「ดูบิลที่ยกเลิก」",
+        "ฟอร์มรับคืนรองรับบิล voided TikTok — กัน double-restock เมื่อ void คืนสต็อกแล้ว",
+        "ปุ่ม「รับคืนสินค้า」บนการ์ดออเดอร์ที่ยกเลิก · migration 067 + sale_void mirror หลัง auto-cancel"
+      ]
+    },
+    {
       "id": "2026-06-10-tiktok-glass-ui",
       "date": "2026-06-10",
       "title": "TikTok Shop — UI liquid glass ใหม่",

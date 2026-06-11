@@ -48,6 +48,7 @@ import {
 } from './lib/date.js';
 import { syncServerClock, todayISO, serverNowISO, serverNowDate } from './lib/server-clock.js';
 import { saleLineSku, saleLineCartCaption, saleLineSearchText, saleLineIsSubstitution, saleLineSubstitutionCaption } from './lib/sale-line-display.js';
+import { substitutionBadgeStyle } from './lib/substitution-badge-style.js';
 import {
   BRAND_RULES, SERIES_RULES, SERIES_SUBS, MATERIAL_MAP, COLOR_MAP, PRICE_PRESETS,
   classifyBrand, classifySeries, parseCasioModel, enrichProduct,
@@ -102,6 +103,19 @@ import MovementItemsPanel from './components/movement/MovementItemsPanel.jsx';
 import { useRecentReceivesMap } from './lib/recent-receives.js';
 import SupplierForm from './components/movement/SupplierForm.jsx';
 import SalePickerForReturn from './components/movement/SalePickerForReturn.jsx';
+import VoidStockStatusBadge from './components/sales/VoidStockStatusBadge.jsx';
+import OrderStatusBadge from './components/sales/OrderStatusBadge.jsx';
+import PaymentMethodIcon from './components/sales/PaymentMethodIcon.jsx';
+import { PAYMENT_METHOD_LABELS as PAYMENT_LABELS } from './lib/payment-method-label.js';
+import { fetchVoidStockStatusMap } from './lib/sale-void-stock-status.js';
+import {
+  TIKTOK_CANCEL_RETURN_EVENT,
+  TIKTOK_CANCEL_RETURN_PREFILL_KEY,
+  isTikTokCancelledVoid,
+  fetchTikTokCancelReturnMeta,
+  recommendedGoodsReturned,
+  normalizeReturnLookupSale,
+} from './lib/tiktok-cancel-return.js';
 import InsightsView from './views/InsightsView.jsx';
 import AISettings from './components/settings/AISettings.jsx';
 import InvoiceRequestView from './views/InvoiceRequestView.jsx';
@@ -2330,7 +2344,6 @@ function TOTPChallengeModal({ open, onSuccess, onCancel }) {
    RECEIPT — 100mm thermal sticker layout
 ========================================================= */
 // 'cash' kept for legacy bills that haven't been migrated; the dropdown no longer offers it.
-const PAYMENT_LABELS = { cash: 'เงินสด', transfer: 'โอนเงิน', card: 'บัตร', paylater: 'paylater', cod: 'เก็บปลายทาง' };
 const CHANNEL_LABELS = { store: 'หน้าร้าน', tiktok: 'TikTok', shopee: 'Shopee', lazada: 'Lazada', facebook: 'Facebook' };
 
 function Receipt({ order, items, shop, variant = 'receipt' }) {
@@ -7551,6 +7564,8 @@ function SalesView({ onGoPOS }) {
   // round-trip to Supabase per keystroke — the date+channel query has
   // already pulled all candidate rows; we filter in-memory.
   const [searchQuery, setSearchQuery] = useState("");
+  const [voidedSearchHit, setVoidedSearchHit] = useState(null);
+  const [voidStockStatus, setVoidStockStatus] = useState({});
   const [profitSort, setProfitSort] = useState("none");
   const [orders, setOrders] = useState([]);
   // Per-order summary: { [orderId]: { productLabel, profit, itemCount, costApprox } }
@@ -7704,7 +7719,7 @@ function SalesView({ onGoPOS }) {
             profit: (o.status === 'voided' || o.net_received_pending) ? 0 : totalProfit,
             itemCount: lines.length,
             costApprox,
-            hasSubstitution: lines.some(l => saleLineIsSubstitution(l)),
+            hasSubstitution: o.has_substitution ?? lines.some(l => saleLineIsSubstitution(l)),
           };
         }
         setOrderSummary(summary);
@@ -7715,10 +7730,56 @@ function SalesView({ onGoPOS }) {
     } else {
       setOrderSummary({});
     }
+
+    const voidedIds = ordersList.filter(o => o.status === 'voided').map(o => o.id);
+    if (voidedIds.length) {
+      try {
+        setVoidStockStatus(await fetchVoidStockStatusMap(sb, voidedIds));
+      } catch (e) {
+        console.error('voidStockStatus load failed', e);
+        setVoidStockStatus({});
+      }
+    } else {
+      setVoidStockStatus({});
+    }
+
     setLoading(false);
   }, [from, to, channel, excludeVoided]);
 
-  // Apply the in-memory search filter. Empty query passes everything
+  // When active-only list hides a voided bill the user searched by ID, offer shortcut.
+  useEffect(() => {
+    const q = searchQuery.trim().replace(/^#/, '');
+    if (!/^\d+$/.test(q) || !excludeVoided) {
+      setVoidedSearchHit(null);
+      return;
+    }
+    if (orders.some(o => String(o.id) === q)) {
+      setVoidedSearchHit(null);
+      return;
+    }
+    let cancel = false;
+    (async () => {
+      const { data } = await sb.from('sale_orders')
+        .select('id, status, void_reason, channel, sale_date')
+        .eq('id', parseInt(q, 10))
+        .eq('status', 'voided')
+        .maybeSingle();
+      if (cancel) return;
+      if (!data) {
+        setVoidedSearchHit(null);
+        return;
+      }
+      let stockStatus = null;
+      try {
+        const map = await fetchVoidStockStatusMap(sb, [data.id]);
+        stockStatus = map[data.id] ?? null;
+      } catch { /* ignore */ }
+      setVoidedSearchHit({ ...data, stockStatus });
+    })();
+    return () => { cancel = true; };
+  }, [searchQuery, excludeVoided, orders]);
+
+  // Apply the in-memory search filter.
   // through. Query matches against:
   //   - bill ID prefix (with or without leading "#")
   //   - any product name in the bill (case-insensitive substring)
@@ -7785,10 +7846,6 @@ function SalesView({ onGoPOS }) {
   useRealtimeInvalidate(sb, ['sale_orders', 'sale_order_items'], load);
 
   const openDetail = async (order) => {
-    // Fetch the line items + the bill's edit history in parallel. The
-    // history table is admin-RLS-gated so non-admins just get an empty
-    // array back (no error) — keeps the call cheap to issue
-    // unconditionally.
     const [iRes, hRes] = await Promise.all([
       sb.from('sale_order_items').select('*').eq('sale_order_id', order.id),
       sb.from('sale_order_edits').select('*').eq('sale_order_id', order.id).order('edited_at', { ascending: false }),
@@ -7800,6 +7857,14 @@ function SalesView({ onGoPOS }) {
     setHistoryOpen(false);
     setEditNet(false);
     setNetDraft(order.net_received != null ? String(order.net_received) : "");
+    if (order.status === 'voided' && !voidStockStatus[order.id]) {
+      try {
+        const map = await fetchVoidStockStatusMap(sb, [order.id]);
+        if (map[order.id]) {
+          setVoidStockStatus(prev => ({ ...prev, ...map }));
+        }
+      } catch { /* ignore */ }
+    }
   };
 
   // ── Bill edit (admin-only) ───────────────────────────────────────
@@ -8149,6 +8214,26 @@ function SalesView({ onGoPOS }) {
             ค้นหาในช่วงวันที่ที่เลือก · พบ {filteredOrders.length} บิล
           </div>
         )}
+        {voidedSearchHit && (
+          <div className="mt-2 p-3 rounded-xl border border-error/20 bg-error/5 text-sm">
+            <div className="font-medium text-error">
+              บิล #{voidedSearchHit.id} ถูกยกเลิกแล้ว
+              {voidedSearchHit.void_reason ? ` — ${voidedSearchHit.void_reason}` : ''}
+            </div>
+            {voidedSearchHit.stockStatus && (
+              <div className="mt-1.5">
+                <VoidStockStatusBadge status={voidedSearchHit.stockStatus} showHint/>
+              </div>
+            )}
+            <button
+              type="button"
+              className="btn-secondary !py-1.5 !px-3 !text-xs mt-2"
+              onClick={() => setExcludeVoided(false)}
+            >
+              ดูบิลที่ยกเลิก
+            </button>
+          </div>
+        )}
       </div>
       <label className="flex items-center gap-2 cursor-pointer select-none">
         <span className={"relative flex items-center justify-center w-5 h-5 rounded border transition-colors " + (excludeVoided?"bg-primary border-primary":"bg-surface-strong border-hairline")}>
@@ -8241,15 +8326,16 @@ function SalesView({ onGoPOS }) {
             </div>
             {/* Column header */}
             <div className="grid grid-cols-12 px-4 py-2 text-xs uppercase tracking-wider text-muted-soft border-b hairline">
-              <div className="col-span-1">เลขที่บิล</div>
-              <div className="col-span-1">เวลา</div>
-              <div className="col-span-3">SKU</div>
-              <div className="col-span-2">ช่องทาง</div>
-              <div className="col-span-1">ชำระ</div>
-              <div className="col-span-2 text-right">ยอดสุทธิ</div>
+              <div className="col-span-1 text-center">เลขที่บิล</div>
+              <div className="col-span-1 text-center">เวลา</div>
+              <div className="col-span-2 text-center">SKU</div>
+              <div className="col-span-1 text-center">สถานะ</div>
+              <div className="col-span-2 text-center">ช่องทาง</div>
+              <div className="col-span-1 text-center">ชำระ</div>
+              <div className="col-span-2 text-center">ยอดสุทธิ</div>
               <button
                 type="button"
-                className={"col-span-2 text-right justify-self-end inline-flex items-center gap-1 hover:text-primary transition " + (profitSort !== "none" ? "text-primary" : "")}
+                className={"col-span-2 text-center justify-self-center inline-flex items-center justify-center gap-1 hover:text-primary transition " + (profitSort !== "none" ? "text-primary" : "")}
                 onClick={toggleProfitSort}
                 title="กดเพื่อเรียงกำไร: น้อยไปมาก → มากไปน้อย → เวลาปกติ"
               >
@@ -8264,23 +8350,24 @@ function SalesView({ onGoPOS }) {
               const chBadge = channelBadgeForOrder(o);
               return (
               <div key={o.id} className={"grid grid-cols-12 px-4 py-3 items-center gap-x-2 border-b hairline last:border-0 hover:bg-surface-strong/40 cursor-pointer transition-colors " + (o.status==='voided'?'opacity-60':'') + (o.net_received_pending && o.status!=='voided' ? ' bg-error/5' : '')} onClick={()=>openDetail(o)}>
-                <div className="col-span-1 font-mono text-sm flex items-center gap-1 truncate">
+                <div className="col-span-1 font-mono text-sm truncate flex justify-center items-center min-h-[34px]">
                   <span className="truncate">#{o.id}</span>
-                  {o.status==='voided' && <span className="badge-pill !bg-error/10 !text-error !text-xs">VOID</span>}
                 </div>
-                <div className="col-span-1 text-sm tabular-nums">{fmtTimeBangkok(o.sale_date)}</div>
-                <div className="col-span-3 text-sm min-w-0">
-                  <div className="truncate font-semibold" title={sm?.productLabel || ''}>{sm?.productLabel ?? <span className="text-muted-soft">—</span>}</div>
-                  {sm?.hasSubstitution && (
-                    <span className="badge-pill !bg-amber-100 !text-amber-900 !text-[10px] mt-0.5" title="มีรายการส่งจริงคนละรุ่นกับ TikTok SKU">ส่งแทน</span>
-                  )}
+                <div className="col-span-1 text-sm tabular-nums flex justify-center items-center min-h-[34px]">{fmtTimeBangkok(o.sale_date)}</div>
+                <div className="col-span-2 text-sm min-w-0 flex flex-col justify-center items-center text-center min-h-[34px]">
+                  <div className="truncate font-semibold w-full max-w-full" title={sm?.productLabel || ''}>{sm?.productLabel ?? <span className="text-muted-soft">—</span>}</div>
                   {sm?.costApprox && <span className="badge-pill !bg-warning/15 !text-[#8a6500] !text-xs mt-0.5">ทุนประมาณ</span>}
                 </div>
-                <div className="col-span-2 flex flex-wrap items-center gap-1">
+                <div className="col-span-1 flex justify-center items-center min-h-[34px]">
+                  <OrderStatusBadge order={o} hasSubstitution={sm?.hasSubstitution}/>
+                </div>
+                <div className="col-span-2 flex justify-center items-center min-h-[34px]">
                   <span style={chBadge.style} title={chBadge.title}>{chBadge.label}</span>
                 </div>
-                <div className="col-span-1 text-xs text-muted truncate">{PAYMENTS.find(p=>p.v===o.payment_method)?.label || '—'}</div>
-                <div className={"col-span-2 text-right tabular-nums " + (o.status==='voided'?'line-through':'')}>
+                <div className="col-span-1 flex justify-center items-center min-h-[34px]">
+                  <PaymentMethodIcon method={o.payment_method} />
+                </div>
+                <div className={"col-span-2 flex flex-col justify-center items-center text-center tabular-nums min-h-[34px] " + (o.status==='voided'?'line-through':'')}>
                   <div className="font-medium">{fmtMoney(o.grand_total)}</div>
                   {ECOMMERCE_CHANNELS.has(o.channel) && o.net_received != null && (
                     <div className="text-xs text-muted-soft">ได้รับ {fmtMoney(o.net_received)}</div>
@@ -8289,7 +8376,7 @@ function SalesView({ onGoPOS }) {
                     <div className="text-xs text-error font-medium">รอใส่ราคา</div>
                   )}
                 </div>
-                <div className={"col-span-2 text-right tabular-nums font-medium " + (o.status==='voided' ? 'text-muted-soft line-through' : sm && sm.profit >= 0 ? 'text-ink' : 'text-error')}>
+                <div className={"col-span-2 flex flex-col justify-center items-center text-center tabular-nums font-medium min-h-[34px] " + (o.status==='voided' ? 'text-muted-soft line-through' : sm && sm.profit >= 0 ? 'text-ink' : 'text-error')}>
                   {sm == null ? <span className="text-muted-soft">—</span> : (
                     <>
                       <div>{(sm.profit >= 0 ? '+' : '') + fmtMoney(sm.profit)}</div>
@@ -8337,16 +8424,17 @@ function SalesView({ onGoPOS }) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-xs text-muted">#{o.id}</span>
+                      <OrderStatusBadge order={o} hasSubstitution={sm?.hasSubstitution}/>
                       <span style={chBadge.style} title={chBadge.title}>{chBadge.label}</span>
-                      {o.status==='voided' && <span className="badge-pill !bg-error/10 !text-error !text-xs">VOIDED</span>}
                     </div>
                     {sm && sm.itemCount > 0 && (
                       <div className="text-sm text-ink font-semibold mt-1 truncate" title={sm.productLabel}>{sm.productLabel}</div>
                     )}
-                    {sm?.hasSubstitution && (
-                      <span className="badge-pill !bg-amber-100 !text-amber-900 !text-[10px] mt-1">ส่งแทน</span>
-                    )}
-                    <div className="text-xs text-muted mt-1 tabular-nums">{fmtTimeBangkok(o.sale_date)} น. · {PAYMENTS.find(p=>p.v===o.payment_method)?.label || '—'}</div>
+                    <div className="text-xs text-muted mt-1 tabular-nums flex items-center gap-1.5 flex-wrap">
+                      <span>{fmtTimeBangkok(o.sale_date)} น.</span>
+                      <span className="text-muted-soft">·</span>
+                      <PaymentMethodIcon method={o.payment_method} />
+                    </div>
                   </div>
                   <div className="text-right flex-shrink-0">
                     <div className={"font-display text-lg leading-none tabular-nums " + (o.status==='voided'?'line-through':'')}>{fmtMoney(o.grand_total)}</div>
@@ -8420,23 +8508,26 @@ function SalesView({ onGoPOS }) {
           </>)}
         </>}>
         {detail && (
-          <div className="space-y-3">
+          <div className="sale-bill-glass space-y-3">
 
             {/* voided banner */}
             {detail.order.status==='voided' && (
-              <div className="p-3 rounded-xl bg-error/10 text-error text-sm flex items-start gap-2">
+              <div className="sale-bill-alert text-error text-sm flex items-start gap-2">
                 <Icon name="alert" size={16} className="mt-0.5 flex-shrink-0"/>
                 <div>
                   <div className="font-medium">บิลนี้ถูกยกเลิกแล้ว</div>
                   <div className="text-xs mt-1">{fmtDateTime(detail.order.voided_at)}{detail.order.void_reason?` · ${detail.order.void_reason}`:''}</div>
+                  {voidStockStatus[detail.order.id] && (
+                    <VoidStockStatusBadge status={voidStockStatus[detail.order.id]} showHint className="mt-2"/>
+                  )}
                 </div>
               </div>
             )}
 
             {/* ── ข้อมูลบิล ── */}
-            <div className="rounded-xl border hairline p-4">
+            <div className="sale-bill-card">
               <div className="mb-3">
-                <div className="inline-flex items-center gap-1.5 bg-ink/[0.06] rounded-md px-2 py-1">
+                <div className="sale-bill-card__chip">
                   <Icon name="receipt" size={12} className="text-muted"/>
                   <span className="text-xs font-semibold uppercase tracking-wider text-muted">ข้อมูลบิล</span>
                 </div>
@@ -8481,9 +8572,9 @@ function SalesView({ onGoPOS }) {
 
             {/* ── ใบกำกับภาษี ── */}
             {(detail.order.tax_invoice_no || detail.order.buyer_name) && (
-              <div className="rounded-xl border hairline bg-surface-soft p-4">
+              <div className="sale-bill-card sale-bill-card--soft">
                 <div className="mb-3">
-                  <div className="inline-flex items-center gap-1.5 bg-ink/[0.06] rounded-md px-2 py-1">
+                  <div className="sale-bill-card__chip">
                     <Icon name="edit" size={12} className="text-muted"/>
                     <span className="text-xs font-semibold uppercase tracking-wider text-muted">ใบกำกับภาษี</span>
                   </div>
@@ -8502,9 +8593,9 @@ function SalesView({ onGoPOS }) {
             )}
 
             {/* ── รายการสินค้า ── */}
-            <div className="rounded-xl border hairline p-4">
+            <div className="sale-bill-card">
               <div className="mb-3 flex items-center gap-2 flex-wrap">
-                <div className="inline-flex items-center gap-1.5 bg-ink/[0.06] rounded-md px-2 py-1">
+                <div className="sale-bill-card__chip">
                   <Icon name="box" size={12} className="text-muted"/>
                   <span className="text-xs font-semibold uppercase tracking-wider text-muted">รายการสินค้า</span>
                 </div>
@@ -8527,7 +8618,7 @@ function SalesView({ onGoPOS }) {
                         {saleLineSku(it)}
                       </div>
                       {saleLineIsSubstitution(it) && (
-                        <span className="inline-block text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900 mt-0.5" title={saleLineSubstitutionCaption(it)}>
+                        <span style={substitutionBadgeStyle()} className="mt-0.5" title={saleLineSubstitutionCaption(it)}>
                           ส่งจริง ≠ TikTok SKU
                         </span>
                       )}
@@ -8537,7 +8628,7 @@ function SalesView({ onGoPOS }) {
                         </div>
                       )}
                       {saleLineIsSubstitution(it) && saleLineSubstitutionCaption(it) && (
-                        <div className="text-xs text-amber-800/90 mt-0.5 line-clamp-2 break-words" title={saleLineSubstitutionCaption(it)}>
+                        <div className="text-xs text-[#6a1b9a]/85 mt-0.5 line-clamp-2 break-words" title={saleLineSubstitutionCaption(it)}>
                           {saleLineSubstitutionCaption(it)}
                         </div>
                       )}
@@ -8597,9 +8688,9 @@ function SalesView({ onGoPOS }) {
             </div>
 
             {/* ── ยอดเงิน ── */}
-            <div className="rounded-xl border hairline bg-surface-soft p-4">
+            <div className="sale-bill-card sale-bill-card--soft">
               <div className="mb-3">
-                <div className="inline-flex items-center gap-1.5 bg-ink/[0.06] rounded-md px-2 py-1">
+                <div className="sale-bill-card__chip">
                   <Icon name="credit-card" size={12} className="text-muted"/>
                   <span className="text-xs font-semibold uppercase tracking-wider text-muted">ยอดเงิน</span>
                 </div>
@@ -8669,14 +8760,14 @@ function SalesView({ onGoPOS }) {
 
             {/* ── ประวัติการแก้ไข (admin) ── */}
             {!editMode && editHistory.length > 0 && (
-              <div className="rounded-xl border hairline p-4">
+              <div className="sale-bill-card">
                 <button
                   type="button"
                   className="w-full flex items-center justify-between gap-2 text-left"
                   onClick={()=>setHistoryOpen(o=>!o)}
                   aria-expanded={historyOpen}
                 >
-                  <div className="inline-flex items-center gap-1.5 bg-ink/[0.06] rounded-md px-2 py-1">
+                  <div className="sale-bill-card__chip">
                     <Icon name="edit" size={12} className="text-muted"/>
                     <span className="text-xs font-semibold uppercase tracking-wider text-muted">ประวัติการแก้ไข ({editHistory.length})</span>
                   </div>
@@ -9017,12 +9108,23 @@ function BillPickerPopup({ open, product, onPick, onClose }) {
       //    200 items and never reaching recent bills (user saw newest as
       //    2565 even with fresh 2569 sales). Sorting on `sale_order_id`
       //    desc fixes this because the PK is monotonic with sale time.
-      const { data: hits } = await sb.from('sale_order_items')
-        .select('quantity, unit_price, sale_orders!inner(id, sale_date, channel, grand_total, status)')
+      const { data: activeHits } = await sb.from('sale_order_items')
+        .select('quantity, unit_price, sale_orders!inner(id, sale_date, channel, grand_total, status, void_reason)')
         .eq('product_id', product.id)
         .eq('sale_orders.status', 'active')
         .order('sale_order_id', { ascending: false })
         .limit(200);
+
+      const { data: voidHits } = await sb.from('sale_order_items')
+        .select('quantity, unit_price, sale_orders!inner(id, sale_date, channel, grand_total, status, void_reason)')
+        .eq('product_id', product.id)
+        .eq('sale_orders.status', 'voided')
+        .eq('sale_orders.channel', 'tiktok')
+        .ilike('sale_orders.void_reason', '%TikTok%cancel%')
+        .order('sale_order_id', { ascending: false })
+        .limit(50);
+
+      const hits = [...(activeHits || []), ...(voidHits || [])];
 
       // Group by sale_order_id — one row per bill even if it sold the same
       // product on multiple lines (rare, but happens with split discounts).
@@ -9033,8 +9135,11 @@ function BillPickerPopup({ open, product, onPick, onClose }) {
         const key = so.id;
         const cur = map.get(key) || {
           id: so.id, sale_date: so.sale_date, channel: so.channel,
-          grand_total: so.grand_total, status: so.status,
+          grand_total: so.grand_total, status: so.status, void_reason: so.void_reason,
           totalQty: 0, lastUnitPrice: r.unit_price,
+          isTikTokCancelledVoid: so.status === 'voided'
+            && so.channel === 'tiktok'
+            && String(so.void_reason || '').toLowerCase().includes('cancel'),
         };
         cur.totalQty += Number(r.quantity) || 0;
         // First row wins for unit_price display since hits are date-desc;
@@ -9138,6 +9243,9 @@ function BillPickerPopup({ open, product, onPick, onClose }) {
                   <div className="text-sm">{fmtThaiDateShort(r.sale_date)}</div>
                   <div className="text-xs text-muted mt-0.5">
                     {CHANNEL_LABELS[r.channel] || r.channel} · {r.totalQty.toLocaleString('th-TH')} ชิ้น · {fmtTHB(r.lastUnitPrice)}/ชิ้น
+                    {r.isTikTokCancelledVoid && (
+                      <span className="badge-pill !bg-error/10 !text-error !text-[10px] ml-1">ยกเลิก TikTok</span>
+                    )}
                   </div>
                 </div>
                 <div className="text-right flex-shrink-0">
@@ -9209,6 +9317,7 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
   // the customer physically handing back the item. Staff only tick the
   // "refund only" checkbox in exceptional cases.
   const [goodsReturned, setGoodsReturned] = useState(true);
+  const [tiktokCancelMeta, setTiktokCancelMeta] = useState(null);
   const [saleSearch, setSaleSearch] = useState("");
   const [recentSales, setRecentSales] = useState([]);
   const [saleSearching, setSaleSearching] = useState(false);
@@ -9361,13 +9470,27 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
     let cancel = false;
     setSaleSearching(true);
     const t = setTimeout(async () => {
-      const { data } = await sb.from('sale_orders')
-        .select('id, sale_date, channel, grand_total')
+      const cols = 'id, sale_date, channel, grand_total, status, void_reason';
+      const { data: activeHit } = await sb.from('sale_orders')
+        .select(cols)
         .eq('status', 'active')
         .eq('id', n)
-        .limit(1);
+        .maybeSingle();
+
+      let hit = activeHit;
+      if (!hit) {
+        const { data: voidHit } = await sb.from('sale_orders')
+          .select(cols)
+          .eq('id', n)
+          .eq('status', 'voided')
+          .eq('channel', 'tiktok')
+          .ilike('void_reason', '%TikTok%cancel%')
+          .maybeSingle();
+        hit = voidHit;
+      }
+
       if (!cancel) {
-        setSaleLookupHits(data || []);
+        setSaleLookupHits(hit ? [normalizeReturnLookupSale(hit)] : []);
         setSaleSearching(false);
       }
     }, 200);
@@ -9427,11 +9550,24 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
       if (!proceed) return;
     }
     const { data } = await sb.from('sale_order_items').select('*').eq('sale_order_id', sale.id);
-    const fullSale = { ...sale, items: data || [] };
+    const fullSale = { ...normalizeReturnLookupSale(sale), items: data || [] };
     setSelectedSale(fullSale);
     setOrigSaleId(String(sale.id));
     if (sale.sale_date) setDate(isoFromTimestamptz(sale.sale_date));
     if (sale.channel) setChannel(sale.channel);
+    if (isTikTokCancelledVoid(fullSale)) {
+      try {
+        const meta = await fetchTikTokCancelReturnMeta(sb, sale.id);
+        setTiktokCancelMeta(meta);
+        setGoodsReturned(recommendedGoodsReturned(meta));
+        if (meta?.void_reason) setReturnReason(meta.void_reason);
+      } catch {
+        setTiktokCancelMeta(null);
+      }
+    } else {
+      setTiktokCancelMeta(null);
+      setGoodsReturned(true);
+    }
     if (data && data.length) {
       setItems(data.map(l => lineFromSaleItem(l)));
     }
@@ -9441,11 +9577,25 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
   // bill (with `.items` already fetched). Lock the bill and add ONLY the
   // requested product, with price/qty snapped from the bill (qty=1 by
   // default; user can adjust up to the original sold quantity).
-  const selectSaleFromPopup = (sale) => {
-    setSelectedSale(sale);
+  const selectSaleFromPopup = async (sale) => {
+    const fullSale = normalizeReturnLookupSale(sale);
+    setSelectedSale(fullSale);
     setOrigSaleId(String(sale.id));
     if (sale.sale_date) setDate(isoFromTimestamptz(sale.sale_date));
     if (sale.channel) setChannel(sale.channel);
+    if (isTikTokCancelledVoid(fullSale)) {
+      try {
+        const meta = await fetchTikTokCancelReturnMeta(sb, sale.id);
+        setTiktokCancelMeta(meta);
+        setGoodsReturned(recommendedGoodsReturned(meta));
+        if (meta?.void_reason) setReturnReason(meta.void_reason);
+      } catch {
+        setTiktokCancelMeta(null);
+      }
+    } else {
+      setTiktokCancelMeta(null);
+      setGoodsReturned(true);
+    }
     if (pendingProduct) {
       const saleLine = (sale.items || []).find(l => l.product_id === pendingProduct.id);
       if (saleLine) {
@@ -9464,8 +9614,30 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
     setOrigSaleId("");
     setSaleSearch("");
     setSaleLookupHits([]);
+    setTiktokCancelMeta(null);
+    setGoodsReturned(true);
     setItems([]);
   };
+
+  // Prefill return form when navigated from TikTok cancelled order card.
+  useEffect(() => {
+    if (kind !== 'return') return;
+    const runPrefill = async (rawId) => {
+      const n = Number(rawId);
+      if (!Number.isFinite(n) || n <= 0) return;
+      sessionStorage.removeItem(TIKTOK_CANCEL_RETURN_PREFILL_KEY);
+      const { data: sale } = await sb.from('sale_orders')
+        .select('id, sale_date, channel, grand_total, status, void_reason')
+        .eq('id', n)
+        .maybeSingle();
+      if (sale) selectSaleFromSearch(sale);
+    };
+    const stored = sessionStorage.getItem(TIKTOK_CANCEL_RETURN_PREFILL_KEY);
+    if (stored) runPrefill(stored);
+    const onEvent = (e) => runPrefill(e.detail?.saleOrderId);
+    window.addEventListener(TIKTOK_CANCEL_RETURN_EVENT, onEvent);
+    return () => window.removeEventListener(TIKTOK_CANCEL_RETURN_EVENT, onEvent);
+  }, [kind]); // eslint-disable-line react-hooks/exhaustive-deps -- selectSaleFromSearch is stable enough for one-shot prefill
 
   // Auto-release the bill lock once the cart is emptied (e.g. user removed
   // items one-by-one). Without this the form would stay "locked" to a bill
@@ -9843,6 +10015,9 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
     if (!items.length) { toast.push("ไม่มีรายการ", 'error'); return; }
     submitLockRef.current = true;
     setSubmitting(true);
+    const effectiveGoodsReturned = (
+      kind === 'return' && tiktokCancelMeta?.pos_stock_restored && goodsReturned
+    ) ? false : goodsReturned;
     try {
       const totalR = roundMoney(total);
       // Date field name varies by kind; the RPC reads it from the header by the
@@ -9865,9 +10040,7 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
         headerPayload.return_reason = returnReason||null;
         const sid = parseInt(origSaleId,10);
         headerPayload.original_sale_order_id = Number.isFinite(sid) && sid>0 ? sid : null;
-        // Refund-only flag — RPC defaults to true if absent, but we always
-        // send it explicitly to keep the audit trail unambiguous.
-        headerPayload.goods_returned = goodsReturned;
+        headerPayload.goods_returned = effectiveGoodsReturned;
       }
 
       // Convert prices from Net (state) to Gross (DB storage)
@@ -9914,7 +10087,7 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
         }
       }
 
-      if (kind === 'return' && goodsReturned && items.length) {
+      if (kind === 'return' && effectiveGoodsReturned && items.length) {
         runReturnMirrorWithFeedback({
           toast,
           returnOrderId: head.id,
@@ -9925,6 +10098,7 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
       setItems([]); setNotes(""); setSupplierName(""); setSupplierInvoiceNo(""); setSupplierTaxId(""); setSelectedSupplier(null); setOrigSaleId(""); setReturnReason("");
       setShowTiktokMatchError(false);
       setSelectedSale(null); setSaleSearch(""); setSaleLookupHits([]); setGoodsReturned(true);
+      setTiktokCancelMeta(null);
       setCreatedVia('manual');
       // Cost % toggle: 'once' resets after save, 'persist' stays on until leaving page
       if (costPctMode !== 'persist') { setCostPctEnabled(false); setCostPct(58); setCostPctMode('once'); }
@@ -10124,7 +10298,15 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
                 onSelectSale={selectSaleFromSearch}
                 onClearSale={clearSelectedSale}
                 showError={attemptedSubmit && !selectedSale}
+                tiktokCancelMeta={tiktokCancelMeta}
               />
+            )}
+
+            {kind==='return' && tiktokCancelMeta?.pos_stock_restored && (
+              <div className="p-3 rounded-xl border border-warning/30 bg-warning/10 text-xs text-[#8a6500] leading-relaxed">
+                บิลนี้ถูก void แล้วและระบบ<strong>คืนสต็อก POS แล้ว</strong> (sale_void) —
+                ค่าเริ่มต้นคือเอกสาร/audit โดยไม่บวกสต็อกซ้ำ
+              </div>
             )}
 
             {/* Refund-only toggle (return form only). When checked, the save

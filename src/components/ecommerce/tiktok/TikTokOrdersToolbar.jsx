@@ -1,10 +1,12 @@
 import React from 'react';
 import Icon from '../../ui/Icon.jsx';
-import { TikTokGlassSection, TikTokGlassBtn } from './glass/index.js';
+import { TikTokGlassBtn } from './glass/index.js';
 
 export default function TikTokOrdersToolbar({
   singleId,
   onSingleIdChange,
+  orderSearch = '',
+  onOrderSearchChange,
   onSyncSingle,
   onSyncOrders,
   onRefresh,
@@ -21,11 +23,13 @@ export default function TikTokOrdersToolbar({
   activeFilteredCount,
 }) {
   return (
-    <TikTokGlassSection
-      eyebrow="TikTok Shop"
-      title="เครื่องมือออเดอร์"
-      bodyClassName="!pt-2"
-    >
+    <div className="tt-glass__toolbar-surface" aria-label="เครื่องมือออเดอร์">
+      <div className="tt-glass__toolbar-surface-head">
+        <div>
+          <div className="tt-glass__group-title">Order Tools</div>
+          <p className="tt-glass__group-caption">ดึงออเดอร์รายตัว ซิงค์ข้อมูล และสั่งงาน label</p>
+        </div>
+      </div>
       <div className="tt-glass__toolbar">
         <div className="tt-glass__toolbar-row">
           <div className="flex flex-wrap items-stretch gap-2 flex-1 min-w-0">
@@ -74,6 +78,19 @@ export default function TikTokOrdersToolbar({
         </div>
 
         <div className="tt-glass__toolbar-divider flex flex-col sm:flex-row sm:flex-wrap gap-2">
+          <div className="flex flex-wrap items-stretch gap-2 flex-1 min-w-0">
+            <input
+              type="search"
+              aria-label="ค้นหาออเดอร์ POS หรือ TikTok Order ID"
+              value={orderSearch}
+              onChange={(e) => onOrderSearchChange?.(e.target.value)}
+              placeholder="ค้นหา POS # หรือ TikTok Order ID (ข้ามแท็บ)"
+              className="tt-glass__input tt-glass__input--lg flex-1 min-w-[12rem]"
+            />
+          </div>
+        </div>
+
+        <div className="tt-glass__toolbar-divider flex flex-col sm:flex-row sm:flex-wrap gap-2">
           <TikTokGlassBtn
             variant="coral"
             className="tt-glass__btn--lg"
@@ -99,6 +116,6 @@ export default function TikTokOrdersToolbar({
           </p>
         </div>
       </div>
-    </TikTokGlassSection>
+    </div>
   );
 }
