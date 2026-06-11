@@ -5671,7 +5671,7 @@ function POSView() {
         </p>
         <p className="text-sm">
           หากเป็นออเดอร์เดียวกับ TikTok Shop ให้กด <strong>ยกเลิก</strong> แล้วเปิด
-          &quot;Order TikTok รอยืนยัน&quot; ด้านบน — การ key-in manual ซ้ำจะตัดสต็อกและนับยอดขายสองครั้ง
+          &quot;ออเดอร์ TikTok รอยืนยัน&quot; ด้านบน — การ key-in manual ซ้ำจะตัดสต็อกและนับยอดขายสองครั้ง
         </p>
       </Modal>
       {/* Desktop page header — owned by POSView (not App) so we can drop
@@ -8619,7 +8619,7 @@ function SalesView({ onGoPOS }) {
                       </div>
                       {saleLineIsSubstitution(it) && (
                         <span style={substitutionBadgeStyle()} className="mt-0.5" title={saleLineSubstitutionCaption(it)}>
-                          ส่งจริง ≠ TikTok SKU
+                          ส่งคนละรุ่น
                         </span>
                       )}
                       {saleLineCartCaption(it) && (

@@ -78,6 +78,34 @@ export async function fetchTikTokMappings(productIds) {
   return data || [];
 }
 
+/** Load saved mappings by TikTok SKU id (confirm panel pre-fill). */
+export async function fetchTikTokMappingsBySkuIds(tiktokSkuIds) {
+  const ids = [...new Set((tiktokSkuIds || []).filter(Boolean).map(String))];
+  if (!ids.length) return [];
+  const { data, error } = await sb
+    .from('tiktok_product_mappings')
+    .select('tiktok_sku_id, product_id, seller_sku, tiktok_product_name, tiktok_product_id, warehouse_id')
+    .in('tiktok_sku_id', ids);
+  if (error) throw error;
+  return data || [];
+}
+
+/** Persist mapping from TikTok confirm "ยืนยันการจับคู่" (keyed by tiktok_sku_id). */
+export async function persistTiktokConfirmMapping(item, pick) {
+  if (!item?.tiktok_sku_id || !pick?.id) return;
+  const seller = (item.seller_sku || '').trim();
+  const generic = !seller || ['DEFAULT', 'STANDARD', '—'].includes(seller.toUpperCase());
+  await upsertTiktokInventoryMapping({
+    productId: pick.id,
+    tiktokMapping: {
+      tiktok_sku_id: String(item.tiktok_sku_id),
+      seller_sku: generic ? null : seller,
+      tiktok_product_name: item.product_name || item.sku_name || null,
+      image_url: item.sku_image_url || null,
+    },
+  });
+}
+
 function buildTiktokMappingPayload(productId, { tiktokSku, tiktokMapping } = {}) {
   const fromSku = tiktokSku ? mappingRowFromTiktokSku(tiktokSku, productId) : null;
   const m = { ...(fromSku || {}), ...(tiktokMapping || {}) };

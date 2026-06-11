@@ -2,24 +2,26 @@ import React from 'react';
 import Icon from '../../ui/Icon.jsx';
 import TikTokReviewLineCard from './TikTokReviewLineCard.jsx';
 import {
-  orderHasSubstitutionBlock,
   orderHasStockIssue,
+  orderNeedsResolutionAck,
 } from './helpers.js';
+import { TTC_COPY } from './copy.js';
 
 export default function TikTokOrderReviewPane({
   items,
   picks,
   catalog,
   substitutionMeta,
+  matchConfirmed,
   disabled,
   onSubstitutionChange,
   onChangeProduct,
   onBackToMatch,
 }) {
   const list = items || [];
-  const substitutionBlocked = orderHasSubstitutionBlock(list, picks, substitutionMeta);
+  const resolutionBlocked = orderNeedsResolutionAck(list, picks, substitutionMeta, matchConfirmed);
   const stockBlocked = orderHasStockIssue(list, picks, catalog);
-  const blocked = substitutionBlocked || stockBlocked;
+  const blocked = resolutionBlocked || stockBlocked;
 
   return (
     <div className="ttc-review-pane flex flex-col h-full min-h-0">
@@ -28,8 +30,10 @@ export default function TikTokOrderReviewPane({
         <span className={'inline-flex items-center gap-1.5 text-xs font-semibold ' + (blocked ? 'text-amber-700' : 'text-[#0a7a43]')}>
           <Icon name={blocked ? 'alert' : 'check'} size={14}/>
           {blocked
-            ? (substitutionBlocked ? 'มี SKU ไม่ตรง — ติ๊กส่งแทนหรือเปลี่ยนสินค้า' : 'สต็อกไม่พอ — เปลี่ยนสินค้า')
-            : 'ตรวจครบแล้ว — กรอกเงินด้านล่าง'}
+            ? (resolutionBlocked
+              ? TTC_COPY.reviewBlockedResolution
+              : TTC_COPY.reviewBlockedStock)
+            : TTC_COPY.reviewAllClear}
         </span>
         <span className="flex-1"/>
         {onBackToMatch && !disabled && (
@@ -38,7 +42,7 @@ export default function TikTokOrderReviewPane({
             className="btn-secondary !py-1 !px-2.5 !text-[11px] shrink-0 whitespace-nowrap"
             onClick={onBackToMatch}
           >
-            <Icon name="chevron-l" size={12}/> จับคู่
+            <Icon name="chevron-l" size={12}/> {TTC_COPY.reviewBackToMatch}
           </button>
         )}
       </div>
@@ -52,6 +56,7 @@ export default function TikTokOrderReviewPane({
             pick={picks[it.id]}
             catalog={catalog}
             substitutionMeta={substitutionMeta}
+            matchConfirmed={matchConfirmed}
             disabled={disabled}
             onSubstitutionChange={onSubstitutionChange}
             onChangeProduct={onChangeProduct}

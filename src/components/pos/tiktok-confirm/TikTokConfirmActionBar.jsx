@@ -1,6 +1,7 @@
 import React from 'react';
 import Icon from '../../ui/Icon.jsx';
 import DeferNetButton from '../DeferNetButton.jsx';
+import { TTC_COPY } from './copy.js';
 
 function NetReceivedCard({ showNet, deferNet, setDeferNet, net, setNet, saving }) {
   return (
@@ -85,14 +86,14 @@ export default function TikTokConfirmActionBar({
   viewMode,
   netOk,
   stockBlocked,
-  substitutionBlocked,
+  resolutionBlocked,
   onConfirm,
 }) {
   const reviewReady = allMatched && viewMode === 'review';
-  const showNet = reviewReady && !stockBlocked && !substitutionBlocked;
+  const showNet = reviewReady && !stockBlocked && !resolutionBlocked;
   const canConfirm = showNet && netOk && !saving;
 
-  const blocked = reviewReady && (stockBlocked || substitutionBlocked);
+  const blocked = reviewReady && (stockBlocked || resolutionBlocked);
 
   return (
     <div className="px-4 py-3 border-t-2 border-ink/10 bg-surface-cream-strong shrink-0 space-y-2.5 min-w-0 overflow-hidden">
@@ -110,8 +111,8 @@ export default function TikTokConfirmActionBar({
           <Icon name="link" size={14}/>
           <span>
             {allMatched
-              ? 'กด "ถัดไป → ตรวจสอบ" เพื่อตรวจ SKU ก่อนยืนยัน'
-              : 'จับคู่สินค้า POS ให้ครบทุกรายการก่อน'}
+              ? TTC_COPY.actionGoReview
+              : TTC_COPY.actionPickAll}
           </span>
         </div>
       )}
@@ -123,7 +124,7 @@ export default function TikTokConfirmActionBar({
         disabled={!canConfirm}
       >
         {saving ? <span className="spinner"/> : <Icon name="check" size={18}/>}
-        {blocked ? 'แก้รายการด้านบนก่อนยืนยัน' : 'ยืนยันการขาย · ตัดสต็อก'}
+        {blocked ? TTC_COPY.actionFixFirst : TTC_COPY.actionConfirmSale}
       </button>
     </div>
   );

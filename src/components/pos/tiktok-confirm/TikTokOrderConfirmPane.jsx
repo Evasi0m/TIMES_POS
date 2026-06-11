@@ -5,12 +5,14 @@ import TikTokItemNavigator from './TikTokItemNavigator.jsx';
 import TikTokMatchSidePanel from './TikTokMatchSidePanel.jsx';
 import TikTokOrderReviewPane from './TikTokOrderReviewPane.jsx';
 import TikTokConfirmActionBar from './TikTokConfirmActionBar.jsx';
+import { mapError } from '../../../lib/error-map.js';
+import { persistTiktokConfirmMapping } from '../../../lib/tiktok-inventory-sync.js';
 import {
   orderHasStockIssue,
-  orderHasSubstitutionBlock,
+  orderNeedsResolutionAck,
   defaultSubstitutionMeta,
-  isTikTokSkuMismatch,
 } from './helpers.js';
+import { TTC_COPY } from './copy.js';
 
 export default function TikTokOrderConfirmPane({
   order,
@@ -18,6 +20,8 @@ export default function TikTokOrderConfirmPane({
   setPicks,
   substitutionMeta,
   setSubstitutionMeta,
+  matchConfirmed,
+  setMatchConfirmed,
   net,
   setNet,
   deferNet,
@@ -30,9 +34,11 @@ export default function TikTokOrderConfirmPane({
   catalogLoading,
   catalogError,
   onRetryCatalog,
+  toast,
 }) {
   const [activeItemId, setActiveItemId] = useState(null);
   const [viewMode, setViewMode] = useState('match');
+  const [matchConfirmBusy, setMatchConfirmBusy] = useState(null);
 
   const items = order?.items || [];
 
@@ -49,20 +55,27 @@ export default function TikTokOrderConfirmPane({
   const activePick = activeItem ? picks[activeItem.id] : null;
   const activeMatched = Boolean(activePick?.id);
   const stockBlocked = orderHasStockIssue(items, picks, catalog);
-  const substitutionBlocked = orderHasSubstitutionBlock(items, picks, substitutionMeta);
+  const resolutionBlocked = orderNeedsResolutionAck(items, picks, substitutionMeta, matchConfirmed);
 
   const handlePick = (itemId, p) => {
-    const item = items.find(it => it.id === itemId);
     setPicks(prev => ({
       ...prev,
-      [itemId]: { id: p.id, name: p.name, current_stock: p.current_stock },
+      [itemId]: {
+        id: p.id,
+        name: p.name,
+        model_code: p.model_code,
+        current_stock: p.current_stock,
+      },
     }));
-    if (item) {
-      setSubstitutionMeta(prev => ({
-        ...prev,
-        [itemId]: defaultSubstitutionMeta(),
-      }));
-    }
+    setMatchConfirmed(prev => {
+      const n = { ...prev };
+      delete n[itemId];
+      return n;
+    });
+    setSubstitutionMeta(prev => ({
+      ...prev,
+      [itemId]: defaultSubstitutionMeta(),
+    }));
     const next = items.find(it => it.id !== itemId && !picks[it.id]?.id);
     if (next) {
       setActiveItemId(next.id);
@@ -70,8 +83,12 @@ export default function TikTokOrderConfirmPane({
       return;
     }
     setActiveItemId(itemId);
-    const mismatch = item && isTikTokSkuMismatch(item, { name: p.name });
-    if (!mismatch) {
+    const nextPicks = {
+      ...picks,
+      [itemId]: { id: p.id, name: p.name, model_code: p.model_code },
+    };
+    const nextMeta = { ...substitutionMeta, [itemId]: defaultSubstitutionMeta() };
+    if (!orderNeedsResolutionAck(items, nextPicks, nextMeta, matchConfirmed)) {
       setViewMode('review');
     } else {
       setViewMode('match');
@@ -89,6 +106,11 @@ export default function TikTokOrderConfirmPane({
       delete n[itemId];
       return n;
     });
+    setMatchConfirmed(prev => {
+      const n = { ...prev };
+      delete n[itemId];
+      return n;
+    });
     setActiveItemId(itemId);
     setViewMode('match');
   };
@@ -98,9 +120,39 @@ export default function TikTokOrderConfirmPane({
       ...prev,
       [itemId]: { ...prev[itemId], ...patch },
     }));
+    if (patch.substitute === true) {
+      setMatchConfirmed(prev => {
+        const n = { ...prev };
+        delete n[itemId];
+        return n;
+      });
+    }
   };
 
-  const goToReview = () => setViewMode('review');
+  const handleConfirmMatch = async (itemId) => {
+    const item = items.find(it => it.id === itemId);
+    const pick = picks[itemId];
+    if (!item || !pick?.id || matchConfirmBusy === itemId) return;
+    setMatchConfirmBusy(itemId);
+    try {
+      await persistTiktokConfirmMapping(item, pick);
+      setMatchConfirmed(prev => ({ ...prev, [itemId]: true }));
+      setSubstitutionMeta(prev => ({
+        ...prev,
+        [itemId]: defaultSubstitutionMeta(),
+      }));
+      toast?.(TTC_COPY.toastMatchSaved, 'success');
+    } catch (e) {
+      toast?.(TTC_COPY.toastMatchFailed + ': ' + mapError(e), 'error');
+    } finally {
+      setMatchConfirmBusy(null);
+    }
+  };
+
+  const goToReview = () => {
+    if (resolutionBlocked) return;
+    setViewMode('review');
+  };
 
   const backToMatch = (itemId) => {
     setViewMode('match');
@@ -115,7 +167,7 @@ export default function TikTokOrderConfirmPane({
         viewMode={viewMode}
         netOk={netOk}
         stockBlocked={stockBlocked}
-        substitutionBlocked={substitutionBlocked}
+        resolutionBlocked={resolutionBlocked}
       />
 
       <div className="px-4 pt-2.5 pb-1.5 shrink-0">
@@ -130,6 +182,7 @@ export default function TikTokOrderConfirmPane({
             picks={picks}
             catalog={catalog}
             substitutionMeta={substitutionMeta}
+            matchConfirmed={matchConfirmed}
             disabled={saving}
             onSelect={setActiveItemId}
             onClear={handleClear}
@@ -145,6 +198,7 @@ export default function TikTokOrderConfirmPane({
               picks={picks}
               catalog={catalog}
               substitutionMeta={substitutionMeta}
+              matchConfirmed={matchConfirmed}
               disabled={saving}
               onSubstitutionChange={handleSubstitutionChange}
               onChangeProduct={backToMatch}
@@ -153,7 +207,6 @@ export default function TikTokOrderConfirmPane({
           ) : (
             <TikTokMatchSidePanel
               item={activeItem}
-              picks={picks}
               matched={activeMatched}
               pick={activePick}
               disabled={saving}
@@ -165,6 +218,12 @@ export default function TikTokOrderConfirmPane({
               onClear={handleClear}
               onGoToReview={goToReview}
               allMatched={allMatched}
+              matchConfirmed={matchConfirmed}
+              substitutionMeta={substitutionMeta}
+              onConfirmMatch={handleConfirmMatch}
+              onSubstitutionChange={handleSubstitutionChange}
+              matchConfirmBusy={matchConfirmBusy === activeItem?.id}
+              resolutionBlocked={resolutionBlocked}
             />
           )
         ) : (
@@ -184,7 +243,7 @@ export default function TikTokOrderConfirmPane({
         viewMode={viewMode}
         netOk={netOk}
         stockBlocked={stockBlocked}
-        substitutionBlocked={substitutionBlocked}
+        resolutionBlocked={resolutionBlocked}
         onConfirm={onConfirm}
       />
     </div>

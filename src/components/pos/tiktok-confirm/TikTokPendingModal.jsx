@@ -4,6 +4,7 @@ import TikTokSyncOverlay from '../../ui/TikTokSyncOverlay.jsx';
 import TikTokPendingList from './TikTokPendingList.jsx';
 import TikTokOrderConfirmPane from './TikTokOrderConfirmPane.jsx';
 import { fmtTHB, fmtTime } from './helpers.js';
+import { TTC_COPY } from './copy.js';
 
 export default function TikTokPendingModal({
   closing,
@@ -23,6 +24,8 @@ export default function TikTokPendingModal({
   setPicks,
   substitutionMeta,
   setSubstitutionMeta,
+  matchConfirmed,
+  setMatchConfirmed,
   net,
   setNet,
   deferNet,
@@ -34,6 +37,7 @@ export default function TikTokPendingModal({
   catalogLoading,
   catalogError,
   onRetryCatalog,
+  toast,
 }) {
   const isConfirmView = Boolean(activeOrder);
 
@@ -71,7 +75,7 @@ export default function TikTokPendingModal({
           )}
           <div className="min-w-0 flex-1 ttc-modal-header__text">
             <div className="ttc-modal-header__title font-semibold text-[16px] leading-tight truncate">
-              {isConfirmView ? 'ยืนยันการขาย TikTok' : 'Order TikTok รอยืนยัน'}
+              {isConfirmView ? TTC_COPY.modalConfirmTitle : TTC_COPY.badgeLabel}
             </div>
             <div className="ttc-modal-header__sub text-[12px] mt-0.5 tabular-nums truncate">
               {isConfirmView
@@ -101,6 +105,8 @@ export default function TikTokPendingModal({
               setPicks={setPicks}
               substitutionMeta={substitutionMeta}
               setSubstitutionMeta={setSubstitutionMeta}
+              matchConfirmed={matchConfirmed}
+              setMatchConfirmed={setMatchConfirmed}
               net={net}
               setNet={setNet}
               deferNet={deferNet}
@@ -113,6 +119,7 @@ export default function TikTokPendingModal({
               catalogLoading={catalogLoading}
               catalogError={catalogError}
               onRetryCatalog={onRetryCatalog}
+              toast={toast}
             />
           ) : (
             <TikTokPendingList

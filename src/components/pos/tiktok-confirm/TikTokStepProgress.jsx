@@ -1,40 +1,33 @@
 import React from 'react';
 import Icon from '../../ui/Icon.jsx';
+import { TTC_COPY } from './copy.js';
 
 const STEPS = [
-  { id: 1, label: 'จับคู่' },
+  { id: 1, label: 'เลือกสินค้า' },
   { id: 2, label: 'ตรวจสอบ' },
   { id: 3, label: 'กรอกเงิน' },
   { id: 4, label: 'ยืนยัน' },
 ];
 
-function resolveStep({ allMatched, viewMode, substitutionBlocked, stockBlocked, netOk }) {
-  if (!allMatched || viewMode === 'match') return 1;
-  const reviewClear = !substitutionBlocked && !stockBlocked;
-  if (!reviewClear) return 2;
+function resolveStep({ allMatched, viewMode, resolutionBlocked, stockBlocked, netOk }) {
+  if (!allMatched || viewMode === 'match' || resolutionBlocked) return 1;
+  if (stockBlocked) return 2;
   if (!netOk) return 3;
   return 4;
 }
 
-function resolveHint(step, { substitutionBlocked, stockBlocked }) {
+function resolveHint(step, { stockBlocked, resolutionBlocked }) {
   switch (step) {
     case 1:
-      return 'เลือกสินค้า POS ที่จะตัดสต็อก — ไม่ต้องตรง TikTok ก็ได้ (ตรวจในขั้นถัดไป)';
+      if (resolutionBlocked) return TTC_COPY.stepResolutionHint;
+      return TTC_COPY.stepPickHint;
     case 2:
-      if (stockBlocked && substitutionBlocked) {
-        return 'แก้สต็อกและติ๊กส่งแทนที่รายการสีเหลือง';
-      }
-      if (substitutionBlocked) {
-        return 'ติ๊ก "ส่งจริงคนละรุ่น" ที่รายการ SKU ไม่ตรง — หรือเปลี่ยนสินค้าให้ตรง';
-      }
-      if (stockBlocked) {
-        return 'มีรายการสต็อกไม่พอ — เปลี่ยนสินค้าหรือยกเลิกบน TikTok';
-      }
-      return 'ตรวจ SKU แต่ละบรรทัด — ถ้าลูกค้าขอเปลี่ยนรุ่น ติ๊กส่งแทน';
+      if (stockBlocked) return TTC_COPY.stepStockHint;
+      return TTC_COPY.stepReviewHint;
     case 3:
-      return 'กรอกยอดเงินที่ TikTok โอนเข้าร้าน (หรือใส่ทีหลัง)';
+      return TTC_COPY.stepNetHint;
     default:
-      return 'พร้อมยืนยัน — กดปุ่มด้านล่างเพื่อตัดสต็อก';
+      return TTC_COPY.stepReadyHint;
   }
 }
 
@@ -43,16 +36,16 @@ export default function TikTokStepProgress({
   viewMode,
   netOk,
   stockBlocked,
-  substitutionBlocked,
+  resolutionBlocked,
 }) {
   const current = resolveStep({
     allMatched,
     viewMode,
-    substitutionBlocked,
+    resolutionBlocked,
     stockBlocked,
     netOk,
   });
-  const hint = resolveHint(current, { substitutionBlocked, stockBlocked });
+  const hint = resolveHint(current, { stockBlocked, resolutionBlocked });
 
   return (
     <div className="ttc-step-bar shrink-0 px-4 py-2 border-b hairline flex items-center gap-3">

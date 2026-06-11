@@ -18,11 +18,14 @@ import { pollTikTokOrders, formatPollToast } from '../../lib/tiktok-poll-sync.js
 import { useSimulatedSyncProgress } from '../../lib/use-simulated-sync-progress.js';
 import TikTokPendingModal from './tiktok-confirm/TikTokPendingModal.jsx';
 import { SORT_OLDEST, SORT_NEWEST, resolveSubstitutionForConfirm } from './tiktok-confirm/helpers.js';
+import { TTC_COPY } from './tiktok-confirm/copy.js';
 import {
   resolveTikTokCatalogMatch,
   runSaleMirrorWithFeedback,
+  fetchTikTokMappingsBySkuIds,
 } from '../../lib/tiktok-inventory-sync.js';
 import { logMirrorBackgroundError } from '../../lib/tiktok-mirror-helpers.js';
+import { isGenericTikTokSku } from './tiktok-confirm/helpers.js';
 
 export default function TikTokConfirmPanel({ toast, onConfirmed }) {
   const [orders, setOrders] = useState([]);
@@ -33,6 +36,7 @@ export default function TikTokConfirmPanel({ toast, onConfirmed }) {
   const [activeId, setActiveId] = useState(null);
   const [picks, setPicks] = useState({});
   const [substitutionMeta, setSubstitutionMeta] = useState({});
+  const [matchConfirmed, setMatchConfirmed] = useState({});
   const [net, setNet] = useState('');
   const [deferNet, setDeferNet] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -150,30 +154,56 @@ export default function TikTokConfirmPanel({ toast, onConfirmed }) {
     return copy;
   }, [orders, sortOrder]);
 
-  const openOrder = (o) => {
+  const openOrder = async (o) => {
     setActiveId(o.id);
+    const items = o.items || [];
+    let catalog = products;
+    if (!catalog.length) {
+      catalog = await loadCatalog({ quiet: true });
+    }
+
+    const skuIds = items.map(it => it.tiktok_sku_id).filter(Boolean);
+    let mappings = [];
+    try {
+      mappings = await fetchTikTokMappingsBySkuIds(skuIds);
+    } catch { /* pre-fill is best-effort */ }
+    const mappingBySku = Object.fromEntries(
+      mappings.map(m => [String(m.tiktok_sku_id), m]),
+    );
+
     const seed = {};
-    (o.items || []).forEach(it => {
-      if (it.product_id) {
-        const prod = products.find(p => p.id === it.product_id);
+    const matchSeed = {};
+    items.forEach(it => {
+      const mapping = it.tiktok_sku_id ? mappingBySku[String(it.tiktok_sku_id)] : null;
+      const productId = it.product_id || mapping?.product_id;
+      if (productId) {
+        const prod = catalog.find(p => p.id === productId);
         seed[it.id] = {
-          id: it.product_id,
+          id: productId,
           name: prod?.name || it.product_name || it.sku_name || '',
+          model_code: prod?.model_code,
           current_stock: prod?.current_stock,
         };
+        if (mapping?.product_id && isGenericTikTokSku(it)) {
+          matchSeed[it.id] = true;
+        }
       }
     });
     setPicks(seed);
+    setMatchConfirmed(matchSeed);
     setSubstitutionMeta({});
     setNet('');
     setDeferNet(false);
-    if (!products.length) loadCatalog({ quiet: true });
+    if (!products.length && catalog.length) {
+      setProducts(catalog);
+    }
   };
 
   const backToList = () => {
     setActiveId(null);
     setPicks({});
     setSubstitutionMeta({});
+    setMatchConfirmed({});
     setNet('');
     setDeferNet(false);
   };
@@ -221,6 +251,7 @@ export default function TikTokConfirmPanel({ toast, onConfirmed }) {
           it,
           pick,
           substitutionMeta[it.id],
+          matchConfirmed,
         );
         let tiktok_product_id = null;
         let warehouse_id = null;
@@ -291,13 +322,13 @@ export default function TikTokConfirmPanel({ toast, onConfirmed }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label={`Order TikTok รอยืนยัน ${count} รายการ`}
+        aria-label={`${TTC_COPY.badgeLabel} ${count} รายการ`}
         className="ttc-pending-badge font-display"
       >
         <span className="ttc-pending-badge__count">
           <span className="ttc-pending-badge__count-num">{count > 99 ? '99+' : count}</span>
         </span>
-        <span className="ttc-pending-badge__label">Order TikTok รอยืนยัน</span>
+        <span className="ttc-pending-badge__label">{TTC_COPY.badgeLabel}</span>
       </button>
     </div>
   );
@@ -325,6 +356,8 @@ export default function TikTokConfirmPanel({ toast, onConfirmed }) {
           setPicks={setPicks}
           substitutionMeta={substitutionMeta}
           setSubstitutionMeta={setSubstitutionMeta}
+          matchConfirmed={matchConfirmed}
+          setMatchConfirmed={setMatchConfirmed}
           net={net}
           setNet={setNet}
           deferNet={deferNet}
@@ -336,6 +369,7 @@ export default function TikTokConfirmPanel({ toast, onConfirmed }) {
           catalogLoading={catalogLoading}
           catalogError={catalogError}
           onRetryCatalog={() => loadCatalog({ force: true })}
+          toast={toast}
         />,
         document.body
       )}

@@ -7,6 +7,7 @@ import {
   skuMatchTier,
   findSkuCandidates,
   classifySkuMatch,
+  isSameTikTokModel,
 } from '../src/lib/fuzzy-match.js';
 
 describe('normalizeCode', () => {
@@ -154,6 +155,8 @@ describe('skuMatchTier', () => {
     ['GA-2100-1A1', 'GA-2100-1A1DR', 'DR'],
     ['GX-56BB-1', 'GX-56BB-1DR', 'DR'],
     ['MWD-110H-8A', 'MWD-110H-8AVDF', 'VDF'],
+    ['EF-539D-1A', 'EF-539D-1AVUDF', 'VUDF'],
+    ['MTP-VD01D-1B', 'MTP-VD01D-1BVUDF', 'VUDF'],
   ])('auto-matches %s ↔ %s via whitelist suffix %s', (tiktok, pos) => {
     const r = skuMatchTier(tiktok, pos);
     expect(r.tier).toBe('suffix');
@@ -206,6 +209,18 @@ describe('skuMatchTier', () => {
   it('handles empty / null inputs safely', () => {
     expect(skuMatchTier('', 'GA-2100').tier).toBe('none');
     expect(skuMatchTier(null, undefined).auto).toBe(false);
+  });
+});
+
+describe('isSameTikTokModel', () => {
+  it('returns true for exact and whitelisted suffix pairs', () => {
+    expect(isSameTikTokModel('EF-539D-1A', 'EF-539D-1AVUDF')).toBe(true);
+    expect(isSameTikTokModel('MTP-VD01D-1B', 'MTP-VD01D-1BVUDF')).toBe(true);
+    expect(isSameTikTokModel('GA-2100-1A1', 'GA-2100-1A1DR')).toBe(true);
+  });
+
+  it('returns false for genuinely different models', () => {
+    expect(isSameTikTokModel('AE-1600HX-3A', 'AE-1500WHX-1AVDF')).toBe(false);
   });
 });
 

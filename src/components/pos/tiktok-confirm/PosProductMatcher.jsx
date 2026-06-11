@@ -3,7 +3,8 @@ import { sb } from '../../../lib/supabase-client.js';
 import { classifySkuMatch, findSkuCandidates } from '../../../lib/fuzzy-match.js';
 import { fetchSkuPrefilter, PRODUCT_CATALOG_SELECT } from '../../../lib/product-catalog-cache.js';
 import Icon from '../../ui/Icon.jsx';
-import { extractTikTokSkuKey, TIER_LABEL } from './helpers.js';
+import { extractTikTokSkuKey } from './helpers.js';
+import { TTC_COPY, TTC_TIER_LABEL } from './copy.js';
 
 function MatchCandidateRow({ product, score, tier, onPick, disabled, highlight, compact, cell }) {
   if (cell) {
@@ -20,7 +21,7 @@ function MatchCandidateRow({ product, score, tier, onPick, disabled, highlight, 
           </div>
           <div className="text-[11px] text-muted-soft tabular-nums mt-0.5 flex items-center gap-1.5 flex-wrap">
             <span>
-              {product.current_stock != null && <>stock {product.current_stock}</>}
+              {product.current_stock != null && TTC_COPY.stock(product.current_stock)}
               {Number(product.retail_price) > 0 && (
                 <> · ฿{Number(product.retail_price).toLocaleString()}</>
               )}
@@ -54,14 +55,14 @@ function MatchCandidateRow({ product, score, tier, onPick, disabled, highlight, 
           {product.name}
         </div>
         <div className="text-[10px] text-muted-soft tabular-nums mt-0.5">
-          {product.current_stock != null && <>stock {product.current_stock}</>}
+          {product.current_stock != null && TTC_COPY.stock(product.current_stock)}
           {Number(product.retail_price) > 0 && (
             <> · ฿{Number(product.retail_price).toLocaleString()}</>
           )}
         </div>
         {highlight && tier && !compact && (
           <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-md font-semibold bg-[#e6f7ed] text-[#0a7a43]">
-            จับคู่อัตโนมัติ · {TIER_LABEL[tier] || tier} {Math.round(score * 100)}%
+            {TTC_COPY.pickerAutoMatch} · {TTC_TIER_LABEL[tier] || tier} {Math.round(score * 100)}%
           </span>
         )}
       </div>
@@ -298,7 +299,7 @@ export default function PosProductMatcher({
         value={q}
         disabled={disabled}
         onChange={e => search(e.target.value)}
-        placeholder={(split || compact) && !focus ? 'พิมพ์ชื่อ / บาร์โค้ด POS' : 'พิมพ์ชื่อ / บาร์โค้ด สินค้า POS'}
+        placeholder={(split || compact) && !focus ? TTC_COPY.pickerSearchCompact : TTC_COPY.pickerSearchPlaceholder}
         className={'input w-full ' + (focus ? '!h-11 !rounded-xl !py-2.5 !text-sm' : split ? '!h-9 !rounded-lg !py-1.5 !text-xs' : compact ? '!h-9 !rounded-lg !py-1.5 !text-xs' : '!h-11 !rounded-xl !py-2.5 !text-sm')}
         autoComplete="off"
       />
@@ -337,7 +338,7 @@ export default function PosProductMatcher({
       onClick={() => pick(localMatch.product)}
     >
       <Icon name="check" size={compact && !focus ? 14 : 16}/>
-      จับคู่อัตโนมัติ · {localMatch.product.name}
+      {TTC_COPY.pickerAutoMatch} · {localMatch.product.name}
     </button>
   );
 

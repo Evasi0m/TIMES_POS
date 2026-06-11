@@ -35,10 +35,10 @@ export function saleLineSubstitutionCaption(item) {
   const tiktok = (item?.seller_sku || '').trim();
   const shipped = (item?.product_name || '').trim();
   if (!tiktok || !shipped || tiktok === shipped) {
-    return item?.substitution_note?.trim() || 'ส่งจริงคนละรุ่นกับ TikTok SKU';
+    return item?.substitution_note?.trim() || 'ส่งคนละรุ่นกับที่สั่งบน TikTok';
   }
   const note = item?.substitution_note?.trim();
   return note
-    ? `TikTok: ${tiktok} → ส่งจริง: ${shipped} (${note})`
-    : `TikTok: ${tiktok} → ส่งจริง: ${shipped}`;
+    ? `สั่ง: ${tiktok} → ส่งจริง: ${shipped} (${note})`
+    : `สั่ง: ${tiktok} → ส่งจริง: ${shipped}`;
 }

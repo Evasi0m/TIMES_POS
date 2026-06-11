@@ -47,8 +47,8 @@ export function resolveSaleOrderDisplayStatus(order, opts = {}) {
   if (hasSubstitution) {
     return {
       code: DISPLAY_STATUS.SUBSTITUTION,
-      label: 'ส่งแทน',
-      title: 'มีรายการส่งจริงคนละรุ่นกับ TikTok SKU',
+      label: 'ส่งคนละรุ่น',
+      title: 'มีรายการส่งคนละรุ่นกับที่สั่งบน TikTok',
       tone: 'purple',
     };
   }

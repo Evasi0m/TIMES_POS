@@ -149,7 +149,7 @@ export function classifyMatch(query, products, opts = {}) {
  *  "prefix + short alpha tail" rule which only *suggests*. */
 export const KNOWN_SKU_SUFFIXES = new Set([
   'DR', 'VDF', 'UDF', 'ER', 'EF', 'JF', 'GF', 'A', 'JR',
-  'AVDF', 'AUDF', 'VCF', 'DF', 'UD', 'SDF', 'CR', 'PR', 'VDR', 'AER',
+  'AVDF', 'AUDF', 'VUDF', 'BVUDF', 'VCF', 'DF', 'UD', 'SDF', 'CR', 'PR', 'VDR', 'AER',
 ]);
 
 /**
@@ -188,6 +188,12 @@ export function skuMatchTier(a, b) {
   const sim = similarityScore(A, B);
   if (sim >= 0.6) return { tier: 'fuzzy', score: sim, auto: false };
   return { tier: 'none', score: sim, auto: false };
+}
+
+/** True when TikTok bare code and POS code are the same model (exact or distributor suffix). */
+export function isSameTikTokModel(tiktokKey, posSku) {
+  const { tier } = skuMatchTier(tiktokKey, posSku);
+  return tier === 'exact' || tier === 'suffix';
 }
 
 /**

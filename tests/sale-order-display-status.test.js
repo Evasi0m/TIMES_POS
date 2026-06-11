@@ -30,7 +30,7 @@ describe('resolveSaleOrderDisplayStatus', () => {
     expect(r.label).toBe('รอยืนยัน');
   });
 
-  it('active + substitution → ส่งแทน (DB flag)', () => {
+  it('active + substitution → ส่งคนละรุ่น (DB flag)', () => {
     const r = resolveSaleOrderDisplayStatus({
       status: 'active',
       has_substitution: true,
@@ -38,7 +38,7 @@ describe('resolveSaleOrderDisplayStatus', () => {
       has_edits: true,
     });
     expect(r.code).toBe(DISPLAY_STATUS.SUBSTITUTION);
-    expect(r.label).toBe('ส่งแทน');
+    expect(r.label).toBe('ส่งคนละรุ่น');
   });
 
   it('active + substitution fallback from opts', () => {

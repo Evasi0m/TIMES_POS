@@ -4,9 +4,9 @@ import SkuThumb from './SkuThumb.jsx';
 import {
   resolvePickStock,
   stockShortfall,
-  isTikTokSkuMismatch,
   lineNeedsSubstitutionAck,
 } from './helpers.js';
+import { TTC_COPY } from './copy.js';
 
 export default function TikTokItemNavigator({
   items,
@@ -14,6 +14,7 @@ export default function TikTokItemNavigator({
   picks,
   catalog,
   substitutionMeta,
+  matchConfirmed,
   onSelect,
   onClear,
   disabled,
@@ -23,7 +24,7 @@ export default function TikTokItemNavigator({
   return (
     <div className="ttc-focus-nav shrink-0">
       <div className="text-[10px] font-semibold uppercase tracking-wider text-muted mb-1.5 inline-flex items-center gap-1.5">
-        <Icon name="link" size={11}/> จับคู่สินค้า · {items.length} รายการ
+        <Icon name="link" size={11}/> {TTC_COPY.navMatchItems(items.length)}
       </div>
       <div className="ttc-focus-nav__track">
         {items.map((it, idx) => {
@@ -33,13 +34,14 @@ export default function TikTokItemNavigator({
           const skuName = it.sku_name || it.product_name || '—';
           const shortfall = matched ? stockShortfall(it, pick, catalog) : null;
           const stock = matched ? resolvePickStock(pick, catalog) : null;
-          const mismatch = matched && isTikTokSkuMismatch(it, pick);
-          const needsSubst = mismatch && lineNeedsSubstitutionAck(it, pick, substitutionMeta?.[it.id]);
+          const needsResolution = matched && lineNeedsSubstitutionAck(it, pick, substitutionMeta?.[it.id], matchConfirmed);
+          const substOk = substitutionMeta?.[it.id]?.substitute === true;
+          const confirmed = matchConfirmed?.[it.id];
 
           let chipClass = ' ttc-focus-chip--pending';
           if (matched) {
             if (shortfall) chipClass = ' ttc-focus-chip--stock-warn';
-            else if (needsSubst) chipClass = ' ttc-focus-chip--subst';
+            else if (needsResolution) chipClass = ' ttc-focus-chip--subst';
             else chipClass = ' ttc-focus-chip--matched';
           }
 
@@ -65,25 +67,29 @@ export default function TikTokItemNavigator({
                     shortfall ? (
                       <span className="inline-flex items-center gap-0.5 text-[#b3261e]">
                         <Icon name="alert" size={10}/>
-                        stock {stock ?? '?'} · ไม่พอ
+                        {TTC_COPY.navStockShort(stock)}
                       </span>
-                    ) : needsSubst ? (
+                    ) : needsResolution ? (
                       <span className="inline-flex items-center gap-0.5 text-amber-800">
                         <Icon name="alert" size={10}/>
-                        SKU ไม่ตรง · รอติ๊กส่งแทน
+                        {TTC_COPY.navPendingResolution}
                       </span>
-                    ) : mismatch ? (
+                    ) : substOk ? (
                       <span className="inline-flex items-center gap-0.5 text-[#0a7a43]">
-                        <Icon name="check" size={10}/> ส่งแทนแล้ว
+                        <Icon name="check" size={10}/> {TTC_COPY.navSubstOk}
+                      </span>
+                    ) : confirmed ? (
+                      <span className="inline-flex items-center gap-0.5 text-[#0a7a43]">
+                        <Icon name="check" size={10}/> {TTC_COPY.navMatchOk}
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-0.5 text-[#0a7a43]">
-                        <Icon name="check" size={10}/> SKU ตรง · stock {stock ?? '?'}
+                        <Icon name="check" size={10}/> {TTC_COPY.navModelOk(stock ?? '?')}
                       </span>
                     )
                   ) : (
                     <span className="inline-flex items-center gap-0.5 text-[#8a6500]">
-                      <Icon name="alert" size={10}/> รอจับคู่
+                      <Icon name="alert" size={10}/> {TTC_COPY.navWaitingPick}
                     </span>
                   )}
                 </div>

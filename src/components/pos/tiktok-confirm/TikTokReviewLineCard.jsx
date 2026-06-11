@@ -6,22 +6,24 @@ import {
   fmtTHB,
   resolvePickStock,
   stockShortfall,
-  isTikTokSkuMismatch,
+  isGenericTikTokSku,
   lineNeedsSubstitutionAck,
 } from './helpers.js';
+import { TTC_COPY, displayTiktokSkuLabel } from './copy.js';
 
-function statusOf(item, pick, catalog, meta) {
+function statusOf(item, pick, catalog, meta, matchConfirmed = {}) {
   if (stockShortfall(item, pick, catalog)) return 'stock';
-  if (isTikTokSkuMismatch(item, pick)) {
-    return lineNeedsSubstitutionAck(item, pick, meta) ? 'subst' : 'subst-ok';
-  }
+  if (meta?.substitute === true) return 'subst-ok';
+  if (matchConfirmed[item.id] && isGenericTikTokSku(item)) return 'match-confirmed';
+  if (lineNeedsSubstitutionAck(item, pick, meta, matchConfirmed)) return 'subst';
   return 'ok';
 }
 
 const STATUS_META = {
-  ok: { cls: 'ttc-rl--ok', label: 'SKU ตรง', icon: 'check', tone: 'text-[#0a7a43]' },
-  'subst-ok': { cls: 'ttc-rl--subst-ok', label: 'ส่งแทน', icon: 'check', tone: 'text-[#0a7a43]' },
-  subst: { cls: 'ttc-rl--subst', label: 'SKU ไม่ตรง', icon: 'alert', tone: 'text-amber-700' },
+  ok: { cls: 'ttc-rl--ok', label: TTC_COPY.badgeOk, icon: 'check', tone: 'text-[#0a7a43]' },
+  'match-confirmed': { cls: 'ttc-rl--ok', label: TTC_COPY.badgeMatchConfirmed, icon: 'check', tone: 'text-[#0a7a43]' },
+  'subst-ok': { cls: 'ttc-rl--subst-ok', label: TTC_COPY.badgeSubstOk, icon: 'check', tone: 'text-[#0a7a43]' },
+  subst: { cls: 'ttc-rl--subst', label: TTC_COPY.badgeMismatch, icon: 'alert', tone: 'text-amber-700' },
   stock: { cls: 'ttc-rl--stock', label: 'สต็อกไม่พอ', icon: 'alert', tone: 'text-[#b3261e]' },
 };
 
@@ -30,15 +32,16 @@ export default function TikTokReviewLineCard({
   pick,
   catalog,
   substitutionMeta,
+  matchConfirmed,
   disabled,
   onSubstitutionChange,
   onChangeProduct,
 }) {
   const meta = substitutionMeta?.[item.id];
-  const tiktokSku = extractTikTokSkuKey(item);
+  const tiktokSku = displayTiktokSkuLabel(extractTikTokSkuKey(item));
   const stock = resolvePickStock(pick, catalog);
   const shortfall = stockShortfall(item, pick, catalog);
-  const status = statusOf(item, pick, catalog, meta);
+  const status = statusOf(item, pick, catalog, meta, matchConfirmed);
   const sm = STATUS_META[status];
   const showSubst = status === 'subst' || status === 'subst-ok';
   const substitute = meta?.substitute === true;
@@ -46,7 +49,6 @@ export default function TikTokReviewLineCard({
 
   return (
     <div className={'ttc-rl ttc-bento rounded-2xl border p-3 min-w-0 flex flex-col gap-2.5 ' + sm.cls}>
-      {/* หัวการ์ด: รูป + SKU mapping + สถานะ */}
       <div className="flex items-center gap-3 min-w-0">
         <SkuThumb url={item.sku_image_url} sizeClass="w-12 h-12" iconSize={20}/>
         <div className="min-w-0 flex-1">
@@ -59,7 +61,7 @@ export default function TikTokReviewLineCard({
             <span>×{item.quantity} · {fmtTHB(item.unit_price)}</span>
             <span className="text-muted-soft">·</span>
             <span className={shortfall ? 'text-[#b3261e] font-medium' : ''}>
-              {stock != null ? <>stock {stock}</> : 'ไม่ทราบ stock'}
+              {stock != null ? TTC_COPY.stock(stock) : TTC_COPY.stockUnknown}
               {shortfall && <> · ต้องการ {shortfall.need}</>}
             </span>
           </div>
@@ -70,20 +72,19 @@ export default function TikTokReviewLineCard({
         </span>
       </div>
 
-      {/* โซนกระทำ — แสดงเฉพาะตอนต้องตัดสินใจ (ไม่มีที่ว่างเปล่า) */}
       {showSubst && (
         <label className="ttc-rl__check ttc-bento flex items-start gap-2.5 rounded-xl border border-amber-400/45 p-2.5 cursor-pointer min-w-0">
           <input
             type="checkbox"
             className="mt-0.5 w-4 h-4 shrink-0"
             checked={substitute}
-            disabled={disabled}
+            disabled={disabled || (matchConfirmed?.[item.id] && !substitute)}
             onChange={e => onSubstitutionChange?.(item.id, { substitute: e.target.checked, note: meta?.note || '' })}
           />
           <span className="min-w-0">
-            <span className="text-sm font-semibold text-amber-900">ส่งจริงคนละรุ่น — ลูกค้าตกลงรับรุ่นนี้</span>
+            <span className="text-sm font-semibold text-amber-900">{TTC_COPY.substLong}</span>
             <span className="block text-[11px] text-amber-800/90 mt-0.5 leading-relaxed">
-              ตัดสต็อกตาม POS · ไม่อัปเดต mapping ถาวร
+              {TTC_COPY.reviewSubstHint}
             </span>
           </span>
         </label>
@@ -104,7 +105,7 @@ export default function TikTokReviewLineCard({
         <div className="ttc-rl__alert flex items-center gap-2 text-[#b3261e]">
           <Icon name="alert" size={16} className="shrink-0"/>
           <span className="text-xs font-medium">
-            สต็อก POS ไม่พอ — คงเหลือ {shortfall?.stock} ต้องการ {shortfall?.need}
+            {TTC_COPY.reviewStockShortfall(shortfall?.stock, shortfall?.need)}
           </span>
         </div>
       )}
@@ -115,7 +116,7 @@ export default function TikTokReviewLineCard({
           className="ttc-rl__change self-start inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
           onClick={() => onChangeProduct(item.id)}
         >
-          <Icon name="refresh" size={12}/> เปลี่ยนสินค้าให้ตรง SKU
+          <Icon name="refresh" size={12}/> {TTC_COPY.changeProductToMatch}
         </button>
       )}
     </div>
