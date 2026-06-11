@@ -138,7 +138,12 @@ export default function TikTokSettings({
                 )}
               </>
             )}
-            <TikTokGlassBtn variant="coral" onClick={connect} disabled={connecting}>
+            <TikTokGlassBtn
+              variant="coral"
+              className="tt-glass__compact-action"
+              onClick={connect}
+              disabled={connecting}
+            >
               {connecting ? <span className="spinner"/> : <Icon name="link" size={14}/>}
               {connected ? 'เชื่อมต่อใหม่' : 'เชื่อมต่อ'}
             </TikTokGlassBtn>

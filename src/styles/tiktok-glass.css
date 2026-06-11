@@ -2411,11 +2411,10 @@
   min-height: 5rem;
   align-items: flex-start;
   border-radius: 14px;
-  border-color: rgba(255, 255, 255, 0.64);
+  border-color: rgba(174, 155, 128, 0.24);
   background:
-    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.58), transparent 34%),
-    radial-gradient(circle at 88% 18%, rgba(12, 191, 186, 0.07), transparent 36%),
-    linear-gradient(135deg, rgba(255, 253, 248, 0.86), rgba(249, 245, 238, 0.68));
+    radial-gradient(circle at 96% 4%, rgba(12, 191, 186, 0.045), transparent 30%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(250, 247, 241, 0.80));
   backdrop-filter: blur(18px) saturate(142%);
   -webkit-backdrop-filter: blur(18px) saturate(142%);
   box-shadow:
@@ -2430,10 +2429,9 @@
   min-height: 7rem;
   padding: 1rem;
   background:
-    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.66), transparent 34%),
-    radial-gradient(circle at 88% 18%, rgba(12, 191, 186, 0.12), transparent 36%),
-    radial-gradient(circle at 50% 110%, rgba(244, 47, 104, 0.08), transparent 44%),
-    linear-gradient(135deg, rgba(255, 253, 248, 0.90), rgba(249, 245, 238, 0.72));
+    radial-gradient(circle at 96% 4%, rgba(12, 191, 186, 0.06), transparent 30%),
+    radial-gradient(circle at 0% 100%, rgba(244, 47, 104, 0.035), transparent 36%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(250, 247, 241, 0.82));
 }
 
 @media (min-width: 768px) {
@@ -2463,12 +2461,10 @@
 }
 
 .tt-glass__stat-grid--bento .tt-glass__stat--warn {
-  border-color: rgba(210, 160, 86, 0.38);
+  border-color: rgba(183, 121, 31, 0.34);
   background:
-    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.62), transparent 34%),
-    radial-gradient(circle at 88% 18%, rgba(232, 165, 90, 0.18), transparent 36%),
-    radial-gradient(circle at 50% 110%, rgba(255, 242, 218, 0.46), transparent 44%),
-    linear-gradient(135deg, rgba(255, 252, 245, 0.90), rgba(255, 246, 231, 0.74));
+    radial-gradient(circle at 96% 4%, rgba(232, 165, 90, 0.12), transparent 30%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 246, 231, 0.82));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.92),
     inset 3px 0 0 rgba(183, 121, 31, 0.82),
@@ -2488,6 +2484,20 @@
 
 .tt-glass__stat-grid--bento .tt-glass__stat--primary .tt-glass__stat-label {
   font-size: 0.625rem;
+}
+
+.tt-glass__stat-grid--bento .tt-glass__stat-label {
+  color: rgb(var(--c-muted));
+  font-weight: 700;
+}
+
+.tt-glass__stat-grid--bento .tt-glass__stat-value {
+  color: rgb(var(--c-ink));
+  font-weight: 700;
+}
+
+.tt-glass__stat-grid--bento .tt-glass__stat-value--warn {
+  color: var(--tt-amber, #b7791f);
 }
 
 /* --------------------------------------------------------------------------
@@ -3414,10 +3424,9 @@
 .tt-glass--compact-connect .tt-glass__body {
   overflow: visible;
   background:
-    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.62), transparent 34%),
-    radial-gradient(circle at 92% 18%, rgba(12, 191, 186, 0.08), transparent 36%),
-    radial-gradient(circle at 52% 110%, rgba(244, 47, 104, 0.045), transparent 46%),
-    linear-gradient(135deg, rgba(255, 253, 248, 0.86), rgba(249, 245, 238, 0.68));
+    radial-gradient(circle at 96% 6%, rgba(12, 191, 186, 0.055), transparent 32%),
+    radial-gradient(circle at 0% 100%, rgba(244, 47, 104, 0.026), transparent 38%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(251, 248, 242, 0.82));
   backdrop-filter: blur(22px) saturate(145%);
   -webkit-backdrop-filter: blur(22px) saturate(145%);
   box-shadow:
@@ -3465,11 +3474,10 @@
   min-height: 4.25rem;
   padding: 0.75rem;
   border-radius: var(--tt-compact-tile-radius);
-  border: 1px solid rgba(255, 255, 255, 0.66);
+  border: 1px solid rgba(174, 155, 128, 0.24);
   background:
-    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.68), transparent 34%),
-    radial-gradient(circle at 92% 18%, rgba(12, 191, 186, 0.08), transparent 36%),
-    rgba(255, 255, 255, 0.58);
+    radial-gradient(circle at 94% 0%, rgba(12, 191, 186, 0.052), transparent 30%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(250, 247, 241, 0.80));
   backdrop-filter: blur(16px) saturate(140%);
   -webkit-backdrop-filter: blur(16px) saturate(140%);
   box-shadow:
@@ -3484,16 +3492,24 @@
   border-radius: var(--tt-compact-tile-radius);
   color: var(--tt-cyan-strong, #079892);
   background:
-    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.66), transparent 34%),
-    linear-gradient(135deg, rgba(220, 255, 252, 0.84), rgba(235, 255, 253, 0.62));
-  border-color: rgba(12, 191, 186, 0.24);
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.72), transparent 34%),
+    linear-gradient(135deg, rgba(229, 255, 253, 0.92), rgba(219, 250, 247, 0.78));
+  border-color: rgba(7, 152, 146, 0.28);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
     0 8px 18px -14px rgba(7, 152, 146, 0.34);
 }
 
 .tt-glass--compact-connect .tt-glass__eyebrow {
-  color: var(--tt-cyan-strong, #079892);
+  color: #087f7a;
+  letter-spacing: 0.09em;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.tt-glass--compact-connect .tt-glass__heading {
+  color: rgb(var(--c-ink));
+  font-weight: 800;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.78);
 }
 
 .tt-glass__compact-status-tile {
@@ -3504,11 +3520,10 @@
   min-height: 4.25rem;
   padding: 0.75rem;
   border-radius: var(--tt-compact-tile-radius);
-  border: 1px solid rgba(12, 191, 186, 0.24);
+  border: 1px solid rgba(7, 152, 146, 0.26);
   background:
-    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.62), transparent 34%),
-    radial-gradient(circle at 92% 18%, rgba(12, 191, 186, 0.20), transparent 36%),
-    linear-gradient(135deg, rgba(231, 255, 253, 0.82), rgba(236, 253, 251, 0.58));
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.74), transparent 34%),
+    linear-gradient(135deg, rgba(229, 255, 253, 0.92), rgba(219, 250, 247, 0.76));
   backdrop-filter: blur(16px) saturate(140%);
   -webkit-backdrop-filter: blur(16px) saturate(140%);
   box-shadow:
@@ -3522,7 +3537,9 @@
   min-height: 2.2rem;
   justify-content: center;
   border-radius: var(--tt-compact-tile-radius);
-  background: rgba(255, 255, 255, 0.26);
+  color: #087f7a;
+  border-color: rgba(7, 152, 146, 0.24);
+  background: rgba(255, 255, 255, 0.52);
   backdrop-filter: blur(10px) saturate(150%);
   -webkit-backdrop-filter: blur(10px) saturate(150%);
 }
@@ -3543,15 +3560,20 @@
 }
 
 .tt-glass__compact-connect-meta .tt-glass__live-chip,
-.tt-glass__compact-connect-meta .tt-glass__btn {
+.tt-glass__compact-connect-meta .tt-glass__btn,
+.tt-glass__compact-connect-meta .tt-glass__btn--coral,
+.tt-glass__compact-connect-meta .tt-glass__compact-action {
   width: 100%;
+  inline-size: 100%;
   min-width: 0;
   min-height: 3rem;
   border-radius: var(--tt-compact-tile-radius);
   justify-self: stretch;
 }
 
-.tt-glass__compact-connect-meta .tt-glass__btn {
+.tt-glass__compact-connect-meta .tt-glass__btn,
+.tt-glass__compact-connect-meta .tt-glass__btn--coral,
+.tt-glass__compact-connect-meta .tt-glass__compact-action {
   justify-content: center;
   padding-inline: 0.75rem;
   box-shadow:
@@ -3565,10 +3587,11 @@
   align-items: center;
   justify-content: center;
   padding-inline: 0.75rem;
-  border: 1px solid rgba(244, 47, 104, 0.22);
+  color: var(--tt-coral-strong, #e81e5a);
+  border: 1px solid rgba(244, 47, 104, 0.28);
   background:
-    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.58), transparent 34%),
-    linear-gradient(135deg, rgba(255, 237, 244, 0.88), rgba(255, 228, 238, 0.70));
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.72), transparent 34%),
+    linear-gradient(135deg, rgba(255, 242, 247, 0.94), rgba(255, 229, 239, 0.78));
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   box-shadow:
@@ -3587,10 +3610,10 @@
   justify-content: center;
   padding: 0.4rem 0.65rem;
   border-radius: var(--tt-compact-tile-radius);
-  border: 1px solid rgba(255, 255, 255, 0.66);
+  border: 1px solid rgba(174, 155, 128, 0.24);
   background:
-    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.62), transparent 34%),
-    linear-gradient(135deg, rgba(255, 253, 248, 0.82), rgba(249, 245, 238, 0.66));
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.74), transparent 34%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(250, 247, 241, 0.78));
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   box-shadow:
@@ -3598,13 +3621,13 @@
     inset 0 -1px 0 rgba(174, 155, 128, 0.12),
     0 10px 22px -16px rgba(38, 29, 22, 0.24);
   font-size: 0.625rem;
-  color: rgb(var(--c-muted-soft));
+  color: rgb(var(--c-muted));
 }
 
 .tt-glass__compact-kv strong {
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   color: rgb(var(--c-ink));
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .tt-glass__compact-alert {
@@ -3614,7 +3637,8 @@
 /* --------------------------------------------------------------------------
    TikTok-wide liquid glass pass — aligned with Sales History cards
    -------------------------------------------------------------------------- */
-.tt-glass {
+.tt-glass,
+.tt-glass__workspace {
   --tt-lg-radius: 14px;
   --tt-lg-radius-sm: 10px;
   --tt-lg-border: rgba(255, 255, 255, 0.58);
@@ -3665,7 +3689,7 @@
   position: relative;
   isolation: isolate;
   border-radius: var(--tt-lg-radius);
-  border-color: var(--tt-lg-border-warm);
+  border: 1px solid var(--tt-lg-border-warm);
   background: var(--tt-lg-surface);
   backdrop-filter: blur(22px) saturate(145%);
   -webkit-backdrop-filter: blur(22px) saturate(145%);
@@ -3717,7 +3741,7 @@
 .tt-glass__tabs--toolbar,
 .tt-glass__tabs--status {
   border-radius: var(--tt-lg-radius);
-  border-color: var(--tt-lg-border-warm);
+  border: 1px solid var(--tt-lg-border-warm);
   background: var(--tt-lg-surface);
   backdrop-filter: blur(18px) saturate(145%);
   -webkit-backdrop-filter: blur(18px) saturate(145%);
@@ -3765,7 +3789,7 @@
 .tt-glass__pagination-btn,
 .tt-glass__empty-icon {
   border-radius: var(--tt-lg-radius);
-  border-color: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.58);
   background: var(--tt-lg-tile);
   backdrop-filter: blur(16px) saturate(140%);
   -webkit-backdrop-filter: blur(16px) saturate(140%);
@@ -3777,9 +3801,15 @@
 
 .tt-glass__input,
 .tt-glass__reconcile-search {
+  border: 1px solid rgba(174, 155, 128, 0.32);
   background:
     radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.74), transparent 34%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.86), rgba(250, 247, 241, 0.70));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    inset 0 -1px 0 rgba(174, 155, 128, 0.12),
+    0 0 0 1px rgba(255, 255, 255, 0.30),
+    0 8px 18px -16px rgba(38, 29, 22, 0.24);
 }
 
 .tt-glass__input:focus,
@@ -3934,6 +3964,100 @@
   background: rgba(12, 191, 186, 0.10);
 }
 
+/* Command + queue refinement: remove wireframe-like nested borders */
+.tt-glass__command-panel {
+  gap: 0;
+  padding: 0.875rem;
+  border: 1px solid rgba(174, 155, 128, 0.22);
+}
+
+.tt-glass__command-panel .tt-glass__toolbar-surface {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+
+.tt-glass__command-panel .tt-glass__toolbar-surface::before {
+  display: none;
+}
+
+.tt-glass__toolbar-surface-head {
+  padding: 0.125rem 0.125rem 0.625rem;
+  border-bottom: 1px solid rgba(174, 155, 128, 0.16);
+}
+
+.tt-glass__toolbar {
+  gap: 0.75rem;
+  padding-top: 0.75rem;
+}
+
+.tt-glass__toolbar-row {
+  gap: 0.625rem;
+  padding: 0;
+}
+
+.tt-glass__toolbar-divider {
+  padding: 0.75rem 0 0;
+  border: 0;
+  border-top: 1px solid rgba(174, 155, 128, 0.16);
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+
+.tt-glass__toolbar-divider::before {
+  display: none;
+}
+
+.tt-glass__toolbar-actions {
+  gap: 0.625rem;
+}
+
+.tt-glass__filter-rail {
+  padding: 0.75rem;
+  border: 1px solid rgba(174, 155, 128, 0.22);
+}
+
+.tt-glass__filter-rail .tt-glass__tabs--status {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+
+.tt-glass__filter-rail .tt-glass__tabs--status::before {
+  display: none;
+}
+
+.tt-glass__filter-rail .tt-glass__tab {
+  min-height: 40px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.tt-glass__filter-rail .tt-glass__tab:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.tt-glass__filter-rail .tt-glass__tab--active {
+  background: var(--tt-lg-tile-strong);
+  border-color: rgba(244, 47, 104, 0.26);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -2px 0 var(--tt-coral, #f42f68),
+    0 10px 22px -18px rgba(232, 30, 90, 0.34);
+}
+
 :root[data-theme='dark'] .tt-glass__popover {
   background: rgba(20, 20, 22, 0.94);
   border-color: rgba(255, 255, 255, 0.1);
@@ -3941,4 +4065,398 @@
 
 :root[data-theme='dark'] .tt-glass__table-row:hover {
   background: rgba(255, 255, 255, 0.06);
+}
+
+/* TikTok Shop dark mode: align with the app's Obsidian Luxe glass theme. */
+:root[data-theme='dark'] .tt-glass,
+:root[data-theme='dark'] .tt-glass__workspace {
+  --tt-coral: #d9775c;
+  --tt-coral-strong: #cf4f70;
+  --tt-cyan: #55b7a5;
+  --tt-cyan-strong: #7bd8c8;
+  --tt-amber: #d9a24f;
+  --tt-ink: rgb(var(--c-ink));
+  --tt-muted: rgb(var(--c-body));
+  --tt-soft: rgb(var(--c-muted));
+  --tt-lg-border: rgba(247, 224, 190, 0.12);
+  --tt-lg-border-warm: rgba(217, 162, 79, 0.16);
+  --tt-lg-rim-top: rgba(247, 224, 190, 0.11);
+  --tt-lg-rim-bottom: rgba(0, 0, 0, 0.34);
+  --tt-lg-shadow: 0 18px 44px -20px rgba(0, 0, 0, 0.72);
+  --tt-lg-shadow-hover: 0 22px 52px -20px rgba(0, 0, 0, 0.82);
+  --tt-lg-surface:
+    radial-gradient(circle at 12% 0%, rgba(215, 119, 92, 0.09), transparent 38%),
+    radial-gradient(circle at 88% 12%, rgba(85, 183, 165, 0.07), transparent 36%),
+    linear-gradient(135deg, rgba(29, 25, 21, 0.88), rgba(14, 12, 10, 0.64));
+  --tt-lg-tile:
+    radial-gradient(circle at 12% 8%, rgba(247, 224, 190, 0.08), transparent 34%),
+    radial-gradient(circle at 88% 18%, rgba(85, 183, 165, 0.06), transparent 36%),
+    linear-gradient(135deg, rgba(29, 25, 21, 0.82), rgba(20, 17, 15, 0.62));
+  --tt-lg-tile-strong:
+    radial-gradient(circle at 12% 8%, rgba(247, 224, 190, 0.11), transparent 34%),
+    radial-gradient(circle at 88% 18%, rgba(85, 183, 165, 0.09), transparent 36%),
+    linear-gradient(135deg, rgba(41, 35, 29, 0.86), rgba(29, 25, 21, 0.72));
+  --tt-lg-cyan:
+    radial-gradient(circle at 12% 8%, rgba(247, 224, 190, 0.08), transparent 34%),
+    radial-gradient(circle at 88% 18%, rgba(85, 183, 165, 0.22), transparent 36%),
+    linear-gradient(135deg, rgba(28, 55, 49, 0.74), rgba(20, 34, 31, 0.62));
+  --tt-lg-amber:
+    radial-gradient(circle at 12% 8%, rgba(247, 224, 190, 0.08), transparent 34%),
+    radial-gradient(circle at 88% 18%, rgba(217, 162, 79, 0.20), transparent 36%),
+    linear-gradient(135deg, rgba(54, 43, 29, 0.78), rgba(31, 25, 18, 0.66));
+  --tt-lg-coral:
+    radial-gradient(circle at 12% 8%, rgba(247, 224, 190, 0.08), transparent 34%),
+    radial-gradient(circle at 88% 18%, rgba(215, 119, 92, 0.22), transparent 36%),
+    linear-gradient(135deg, rgba(58, 30, 30, 0.80), rgba(31, 18, 20, 0.66));
+  color: var(--tt-ink);
+}
+
+:root[data-theme='dark'] .tt-glass__shell,
+:root[data-theme='dark'] .tt-glass__body,
+:root[data-theme='dark'] .tt-glass__section .tt-glass__body,
+:root[data-theme='dark'] .tt-glass__command-panel,
+:root[data-theme='dark'] .tt-glass__filter-rail,
+:root[data-theme='dark'] .tt-glass__toolbar-surface,
+:root[data-theme='dark'] .tt-glass__table,
+:root[data-theme='dark'] .tt-glass__order-card,
+:root[data-theme='dark'] .tt-glass__health-panel,
+:root[data-theme='dark'] .tt-glass__notice,
+:root[data-theme='dark'] .tt-glass__popover,
+:root[data-theme='dark'] .tt-glass__pagination,
+:root[data-theme='dark'] .tt-glass__reconcile-toolbar,
+:root[data-theme='dark'] .tt-glass--compact-connect .tt-glass__body,
+:root[data-theme='dark'] .tt-glass__stat-grid,
+:root[data-theme='dark'] .tt-glass__tabs,
+:root[data-theme='dark'] .tt-glass__tabs--nav,
+:root[data-theme='dark'] .tt-glass__tabs--toolbar,
+:root[data-theme='dark'] .tt-glass__tabs--status {
+  border-color: var(--tt-lg-border);
+  background: var(--tt-lg-surface);
+  color: var(--tt-ink);
+  box-shadow:
+    inset 0 1px 0 var(--tt-lg-rim-top),
+    inset 0 -1px 0 var(--tt-lg-rim-bottom),
+    var(--tt-lg-shadow);
+}
+
+:root[data-theme='dark'] .tt-glass__command-panel .tt-glass__toolbar-surface,
+:root[data-theme='dark'] .tt-glass__filter-rail .tt-glass__tabs--status {
+  background: transparent;
+  box-shadow: none;
+}
+
+:root[data-theme='dark'] .tt-glass__compact-connect-main,
+:root[data-theme='dark'] .tt-glass__compact-status-tile,
+:root[data-theme='dark'] .tt-glass__compact-kv,
+:root[data-theme='dark'] .tt-glass__compact-connect-meta .tt-glass__live-chip,
+:root[data-theme='dark'] .tt-glass__stat,
+:root[data-theme='dark'] .tt-glass__pane,
+:root[data-theme='dark'] .tt-glass__metric,
+:root[data-theme='dark'] .tt-glass__health-metric,
+:root[data-theme='dark'] .tt-glass__table-row,
+:root[data-theme='dark'] .tt-glass__order-list-head,
+:root[data-theme='dark'] .tt-glass__table-head,
+:root[data-theme='dark'] .tt-glass__empty-icon,
+:root[data-theme='dark'] .tt-glass__pagination-btn,
+:root[data-theme='dark'] .tt-glass__tab {
+  border-color: rgba(247, 224, 190, 0.12);
+  background: var(--tt-lg-tile);
+  color: var(--tt-ink);
+  box-shadow:
+    inset 0 1px 0 rgba(247, 224, 190, 0.10),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.24);
+}
+
+:root[data-theme='dark'] .tt-glass__compact-connect-main,
+:root[data-theme='dark'] .tt-glass__compact-status-tile,
+:root[data-theme='dark'] .tt-glass__compact-kv {
+  border-color: rgba(247, 224, 190, 0.14);
+}
+
+:root[data-theme='dark'] .tt-glass__compact-status-tile {
+  background: var(--tt-lg-cyan);
+}
+
+:root[data-theme='dark'] .tt-glass__compact-connect-meta .tt-glass__live-chip {
+  background: var(--tt-lg-coral);
+  border-color: rgba(215, 119, 92, 0.30);
+  color: #f4a7b8;
+}
+
+:root[data-theme='dark'] .tt-glass__stat--warn,
+:root[data-theme='dark'] .tt-glass__metric--warn,
+:root[data-theme='dark'] .tt-glass__health-metric.tt-glass__metric--warn {
+  border-color: rgba(217, 162, 79, 0.28);
+  background: var(--tt-lg-amber);
+}
+
+:root[data-theme='dark'] .tt-glass__metric--ok,
+:root[data-theme='dark'] .tt-glass__health-metric.tt-glass__metric--ok {
+  border-color: rgba(85, 183, 165, 0.26);
+  background: var(--tt-lg-cyan);
+}
+
+:root[data-theme='dark'] .tt-glass__metric--bad,
+:root[data-theme='dark'] .tt-glass__health-metric.tt-glass__metric--bad,
+:root[data-theme='dark'] .tt-glass__stat--danger {
+  border-color: rgba(215, 119, 92, 0.28);
+  background: var(--tt-lg-coral);
+}
+
+:root[data-theme='dark'] .tt-glass__heading,
+:root[data-theme='dark'] .tt-glass__compact-connect-main .tt-glass__heading,
+:root[data-theme='dark'] .tt-glass__stat-value,
+:root[data-theme='dark'] .tt-glass__metric-value,
+:root[data-theme='dark'] .tt-glass__line-item__title,
+:root[data-theme='dark'] .tt-glass__order-id-chip,
+:root[data-theme='dark'] .tt-glass__order-pos-id {
+  color: rgb(var(--c-ink));
+}
+
+:root[data-theme='dark'] .tt-glass__eyebrow,
+:root[data-theme='dark'] .tt-glass__group-title,
+:root[data-theme='dark'] .tt-glass__section-title,
+:root[data-theme='dark'] .tt-glass__toolbar-title,
+:root[data-theme='dark'] .tt-glass__stat-label,
+:root[data-theme='dark'] .tt-glass__metric-label,
+:root[data-theme='dark'] .tt-glass__line-item__meta,
+:root[data-theme='dark'] .tt-glass__order-id-label,
+:root[data-theme='dark'] .tt-glass__sticky-bar__meta,
+:root[data-theme='dark'] .tt-glass__tabs .tt-glass__tab,
+:root[data-theme='dark'] .tt-glass__compact-kv span,
+:root[data-theme='dark'] .tt-glass__compact-kv small {
+  color: rgb(var(--c-muted));
+}
+
+:root[data-theme='dark'] .tt-glass__compact-kv strong,
+:root[data-theme='dark'] .tt-glass__tab--active,
+:root[data-theme='dark'] .tt-glass__tabs .tt-glass__tab--active {
+  color: rgb(var(--c-ink));
+}
+
+:root[data-theme='dark'] .tt-glass__input,
+:root[data-theme='dark'] .tt-glass__reconcile-search,
+:root[data-theme='dark'] .tt-glass__pagination-select {
+  border-color: rgba(247, 224, 190, 0.16);
+  background:
+    radial-gradient(circle at 15% 0%, rgba(247, 224, 190, 0.08), transparent 38%),
+    linear-gradient(180deg, rgba(29, 25, 21, 0.86), rgba(20, 17, 15, 0.68));
+  color: rgb(var(--c-ink));
+  box-shadow:
+    inset 0 1px 0 rgba(247, 224, 190, 0.10),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28),
+    0 8px 18px -16px rgba(0, 0, 0, 0.78);
+}
+
+:root[data-theme='dark'] .tt-glass__input::placeholder,
+:root[data-theme='dark'] .tt-glass__reconcile-search::placeholder {
+  color: rgba(216, 205, 188, 0.56);
+}
+
+:root[data-theme='dark'] .tt-glass__input:focus,
+:root[data-theme='dark'] .tt-glass__reconcile-search:focus,
+:root[data-theme='dark'] .tt-glass__pagination-select:focus {
+  border-color: rgba(85, 183, 165, 0.38);
+  box-shadow:
+    inset 0 1px 0 rgba(247, 224, 190, 0.12),
+    0 0 0 2px rgba(85, 183, 165, 0.13),
+    0 14px 26px -18px rgba(0, 0, 0, 0.88);
+}
+
+:root[data-theme='dark'] .tt-glass__btn--ghost,
+:root[data-theme='dark'] .tt-glass__btn--glass,
+:root[data-theme='dark'] .tt-glass__btn--surface,
+:root[data-theme='dark'] .tt-glass__btn--outline,
+:root[data-theme='dark'] .tt-glass__btn--hero {
+  border-color: rgba(247, 224, 190, 0.14);
+  background: var(--tt-lg-tile);
+  color: rgb(var(--c-ink));
+  box-shadow:
+    inset 0 1px 0 rgba(247, 224, 190, 0.10),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.26),
+    0 10px 22px -18px rgba(0, 0, 0, 0.82);
+}
+
+:root[data-theme='dark'] .tt-glass__btn--ghost:hover:not(:disabled),
+:root[data-theme='dark'] .tt-glass__btn--glass:hover:not(:disabled),
+:root[data-theme='dark'] .tt-glass__btn--surface:hover:not(:disabled),
+:root[data-theme='dark'] .tt-glass__btn--outline:hover:not(:disabled),
+:root[data-theme='dark'] .tt-glass__btn--hero:hover:not(:disabled),
+:root[data-theme='dark'] .tt-glass__tab:hover:not(:disabled),
+:root[data-theme='dark'] .tt-glass__table-row:hover,
+:root[data-theme='dark'] .tt-glass__order-card:hover {
+  border-color: rgba(85, 183, 165, 0.26);
+  background: var(--tt-lg-tile-strong);
+  color: rgb(var(--c-ink));
+  box-shadow:
+    inset 0 1px 0 rgba(247, 224, 190, 0.13),
+    inset 0 -1px 0 rgba(85, 183, 165, 0.08),
+    var(--tt-lg-shadow-hover);
+}
+
+:root[data-theme='dark'] .tt-glass__btn--coral {
+  border-color: rgba(247, 224, 190, 0.16);
+  background:
+    radial-gradient(circle at 15% 0%, rgba(247, 224, 190, 0.22), transparent 34%),
+    linear-gradient(180deg, #d9775c, #cf4f70);
+  color: #fff8f2;
+  box-shadow:
+    inset 0 1px 0 rgba(247, 224, 190, 0.24),
+    inset 0 -1px 0 rgba(80, 20, 28, 0.38),
+    0 14px 28px -14px rgba(207, 79, 112, 0.48);
+}
+
+:root[data-theme='dark'] .tt-glass__tab--active,
+:root[data-theme='dark'] .tt-glass__filter-rail .tt-glass__tab--active,
+:root[data-theme='dark'] .tt-glass__tabs--nav .tt-glass__tab--active {
+  border-color: rgba(215, 119, 92, 0.34);
+  background: var(--tt-lg-coral);
+  box-shadow:
+    inset 0 1px 0 rgba(247, 224, 190, 0.13),
+    inset 0 -2px 0 #d9775c,
+    0 10px 24px -18px rgba(207, 79, 112, 0.52);
+}
+
+:root[data-theme='dark'] .tt-glass__badge,
+:root[data-theme='dark'] .tt-glass__tab-count,
+:root[data-theme='dark'] .tt-glass__qty-pill,
+:root[data-theme='dark'] .tt-glass__order-id-chip,
+:root[data-theme='dark'] .tt-glass__order-pos-id {
+  border-color: rgba(247, 224, 190, 0.13);
+  background: rgba(247, 224, 190, 0.08);
+  color: rgb(var(--c-body));
+  box-shadow: inset 0 1px 0 rgba(247, 224, 190, 0.10);
+}
+
+:root[data-theme='dark'] .tt-glass__badge--live,
+:root[data-theme='dark'] .tt-glass__badge--ok,
+:root[data-theme='dark'] .tt-glass__compact-status-tile .tt-glass__badge {
+  border-color: rgba(85, 183, 165, 0.28);
+  background: rgba(85, 183, 165, 0.12);
+  color: var(--tt-cyan-strong);
+}
+
+:root[data-theme='dark'] .tt-glass__badge--warn,
+:root[data-theme='dark'] .tt-glass__stat-value--warn {
+  color: #e7b866;
+}
+
+:root[data-theme='dark'] .tt-glass__badge--bad,
+:root[data-theme='dark'] .tt-glass__badge--expired {
+  border-color: rgba(215, 119, 92, 0.30);
+  background: rgba(215, 119, 92, 0.13);
+  color: #f3a0b7;
+}
+
+:root[data-theme='dark'] .tt-glass__stat-icon,
+:root[data-theme='dark'] .tt-glass__icon-wrap,
+:root[data-theme='dark'] .tt-glass__line-item__thumb {
+  border-color: rgba(247, 224, 190, 0.14);
+  background:
+    radial-gradient(circle at 18% 8%, rgba(247, 224, 190, 0.12), transparent 36%),
+    linear-gradient(135deg, rgba(41, 35, 29, 0.86), rgba(20, 17, 15, 0.68));
+  color: var(--tt-cyan-strong);
+  box-shadow:
+    inset 0 1px 0 rgba(247, 224, 190, 0.12),
+    0 8px 18px -14px rgba(0, 0, 0, 0.80);
+}
+
+:root[data-theme='dark'] .tt-glass__toolbar-surface-head,
+:root[data-theme='dark'] .tt-glass__toolbar-divider,
+:root[data-theme='dark'] .tt-glass__health-section + .tt-glass__health-section,
+:root[data-theme='dark'] .tt-glass__order-group-header,
+:root[data-theme='dark'] .tt-glass__line-item {
+  border-color: rgba(247, 224, 190, 0.10);
+}
+
+:root[data-theme='dark'] .tt-glass__order-group-header {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(247, 224, 190, 0.08), transparent 32%),
+    linear-gradient(180deg, rgba(29, 25, 21, 0.78), rgba(20, 17, 15, 0.62));
+}
+
+/* Rose glass primary actions: softer than solid TikTok pink, still clearly primary. */
+.tt-glass .tt-glass__btn--coral,
+.tt-glass__workspace .tt-glass__btn--coral,
+.tt-connect-native__cta,
+.tt-health-native__action-btn {
+  color: #9f284f;
+  border: 1px solid rgba(222, 76, 115, 0.26);
+  background:
+    radial-gradient(circle at 16% 0%, rgba(255, 255, 255, 0.92), transparent 34%),
+    radial-gradient(circle at 88% 18%, rgba(255, 106, 146, 0.20), transparent 38%),
+    linear-gradient(135deg, rgba(255, 248, 251, 0.84), rgba(255, 221, 233, 0.62));
+  backdrop-filter: blur(16px) saturate(145%);
+  -webkit-backdrop-filter: blur(16px) saturate(145%);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.62);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    inset 0 -1px 0 rgba(222, 76, 115, 0.12),
+    0 0 0 1px rgba(255, 255, 255, 0.26),
+    0 12px 24px -18px rgba(212, 58, 101, 0.46);
+}
+
+.tt-glass .tt-glass__btn--coral:hover:not(:disabled),
+.tt-glass__workspace .tt-glass__btn--coral:hover:not(:disabled),
+.tt-connect-native__cta:hover:not(:disabled),
+.tt-health-native__action-btn:hover:not(:disabled) {
+  color: #8e2146;
+  border-color: rgba(222, 76, 115, 0.34);
+  background:
+    radial-gradient(circle at 16% 0%, rgba(255, 255, 255, 0.96), transparent 34%),
+    radial-gradient(circle at 88% 18%, rgba(255, 92, 135, 0.26), transparent 38%),
+    linear-gradient(135deg, rgba(255, 250, 252, 0.90), rgba(255, 214, 228, 0.70));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    inset 0 -1px 0 rgba(222, 76, 115, 0.15),
+    0 0 0 1px rgba(255, 255, 255, 0.30),
+    0 14px 28px -18px rgba(212, 58, 101, 0.52);
+}
+
+.tt-glass .tt-glass__btn--coral:active:not(:disabled),
+.tt-glass__workspace .tt-glass__btn--coral:active:not(:disabled),
+.tt-connect-native__cta:active:not(:disabled),
+.tt-health-native__action-btn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 1px 2px rgba(156, 41, 78, 0.16),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.56),
+    0 8px 18px -16px rgba(212, 58, 101, 0.40);
+}
+
+.tt-glass .tt-glass__btn--coral svg,
+.tt-glass__workspace .tt-glass__btn--coral svg,
+.tt-connect-native__cta svg,
+.tt-health-native__action-btn svg {
+  color: currentColor;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.48));
+}
+
+:root[data-theme='dark'] .tt-glass .tt-glass__btn--coral,
+:root[data-theme='dark'] .tt-glass__workspace .tt-glass__btn--coral,
+:root[data-theme='dark'] .tt-connect-native__cta,
+:root[data-theme='dark'] .tt-health-native__action-btn {
+  color: #ffdbe4;
+  border-color: rgba(247, 224, 190, 0.15);
+  background:
+    radial-gradient(circle at 16% 0%, rgba(247, 224, 190, 0.18), transparent 34%),
+    radial-gradient(circle at 88% 18%, rgba(215, 119, 92, 0.24), transparent 38%),
+    linear-gradient(135deg, rgba(73, 36, 40, 0.78), rgba(39, 22, 26, 0.68));
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.32);
+  box-shadow:
+    inset 0 1px 0 rgba(247, 224, 190, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.34),
+    0 14px 28px -18px rgba(0, 0, 0, 0.80);
+}
+
+:root[data-theme='dark'] .tt-glass .tt-glass__btn--coral:hover:not(:disabled),
+:root[data-theme='dark'] .tt-glass__workspace .tt-glass__btn--coral:hover:not(:disabled),
+:root[data-theme='dark'] .tt-connect-native__cta:hover:not(:disabled),
+:root[data-theme='dark'] .tt-health-native__action-btn:hover:not(:disabled) {
+  color: #fff1f5;
+  border-color: rgba(215, 119, 92, 0.30);
+  background:
+    radial-gradient(circle at 16% 0%, rgba(247, 224, 190, 0.22), transparent 34%),
+    radial-gradient(circle at 88% 18%, rgba(215, 119, 92, 0.30), transparent 38%),
+    linear-gradient(135deg, rgba(83, 42, 45, 0.84), rgba(45, 25, 29, 0.74));
 }
