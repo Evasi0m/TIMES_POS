@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "patches": [
     {
+      "id": "2026-06-11-nav-glyphs-revert",
+      "date": "2026-06-11",
+      "title": "เมนูนำทาง — กลับไอคอน stroke เดิม",
+      "tags": ["ปรับปรุง", "UI"],
+      "items": [
+        "Sidebar + แท็บมือถือ + ปุ่มขาย (FAB) กลับใช้ stroke icon เดิม แทน Colorful Glyph SVG",
+        "คืนความกว้าง sidebar และ offset overlay sync TikTok เป็นแบบเดิม"
+      ]
+    },
+    {
       "id": "2026-06-11-nav-glyph-larger",
       "date": "2026-06-11",
       "title": "เมนูนำทาง — ไอคอนใหญ่ขึ้น 20%",
