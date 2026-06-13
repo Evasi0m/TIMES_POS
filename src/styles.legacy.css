@@ -3645,10 +3645,7 @@
      scrolls clear of the new bottom-attached tab bar (~76px) plus the
      iPhone home indicator (env(safe-area-inset-bottom)). Reset to 0 on
      desktop where the sidebar replaces the tab bar. */
-  .main-mobile-pb { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
-  @media (min-width: 1024px) {
-    .main-mobile-pb { padding-bottom: 0; }
-  }
+  /* main-mobile-pb — see mobile-shell.css (--mobile-clearance) */
 
   /* Square 44pt hit target for icon-only buttons (e.g. the filter
      toggle in SalesView header). Visible bounds can be smaller; the

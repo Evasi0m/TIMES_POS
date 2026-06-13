@@ -7,6 +7,7 @@ const METHOD_TONE = {
   card: 'indigo',
   paylater: 'green',
   cod: 'orange',
+  cash: 'green',
 };
 
 function PaymentMethodSvg({ method, size = 26 }) {
@@ -71,6 +72,20 @@ function PaymentMethodSvg({ method, size = 26 }) {
           <path d="M9 18h2.5M28.5 18h2.5" stroke="#3f7d33" strokeWidth="2" strokeLinecap="round" />
           <circle cx="34" cy="33" r="9" fill={`url(#${id}-clock)`} stroke="#fff7e0" strokeWidth="1.5" />
           <path d="M34 28v5l3 2" fill="none" stroke="#7a5a12" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case 'cash':
+      return (
+        <svg {...common} aria-hidden="true">
+          <defs>
+            <linearGradient id={`${id}-cash`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#9bd86f" />
+              <stop offset="100%" stopColor="#388e3c" />
+            </linearGradient>
+          </defs>
+          <rect x="4" y="10" width="40" height="22" rx="4" fill={`url(#${id}-cash)`} />
+          <circle cx="24" cy="21" r="7" fill="#2e7d32" opacity="0.35" />
+          <text x="24" y="24.5" textAnchor="middle" fontSize="10" fontWeight="800" fontFamily="system-ui, sans-serif" fill="#e8f5e9">฿</text>
         </svg>
       );
     case 'cod':

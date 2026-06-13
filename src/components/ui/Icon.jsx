@@ -53,6 +53,7 @@ const Icon = ({ name, size = 20, className = '', strokeWidth = 1.75, color }) =>
     case 'filter':       return <svg {...p}><path d="M4 4h16l-6 8v6l-4 2v-8L4 4z"/></svg>;
     case 'check':        return <svg {...p}><path d="m20 6-9 9-5-5"/></svg>;
     case 'alert':        return <svg {...p}><path d="M12 2 2 22h20L12 2z"/><path d="M12 9v6M12 17h.01"/></svg>;
+    case 'info':         return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M12 10v6M12 7h.01"/></svg>;
     case 'barcode':      return <svg {...p}><path d="M4 7v10"/><path d="M7 7v10"/><path d="M10 7v10"/><path d="M14 7v10"/><path d="M17 7v10"/><path d="M20 7v10"/></svg>;
     case 'credit-card':  return <svg {...p}><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 11h20"/></svg>;
     case 'trend-up':     return <svg {...p}><polyline points="4 17 9 12 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg>;

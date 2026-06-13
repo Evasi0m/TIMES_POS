@@ -1,10 +1,14 @@
+import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { isTikTokCancelledVoid } from '../../../lib/tiktok-cancel-return.js';
+import { useMountedToggle } from '../../../lib/use-mounted-toggle.js';
 import VoidStockStatusBadge from '../../sales/VoidStockStatusBadge.jsx';
 import Icon from '../../ui/Icon.jsx';
 import ExpandableImageThumb from '../../ui/ExpandableImageThumb.jsx';
 import TikTokStatusBadge from './TikTokStatusBadge.jsx';
 import { TikTokGlassBtn, TikTokGlassLineItem } from './glass/index.js';
 import { fmtTHB } from '../../../lib/format.js';
+import MobileIconButton from '../../ui/mobile/MobileIconButton.jsx';
 
 function SkuThumb({ url, alt }) {
   return (
@@ -124,23 +128,45 @@ function OrderBody({
         {lines.length === 0 ? (
           <div className="text-sm text-muted py-1">ไม่มีรายการสินค้า</div>
         ) : (
-          <ul className="tt-glass__line-list">
-            {lines.map((l, idx) => (
-              <TikTokGlassLineItem
-                key={l.id}
-                title={lineTitle(l)}
-                sku={l.seller_sku || undefined}
-                quantity={l.quantity}
-                isLast={idx === lines.length - 1}
-                thumb={(
-                  <SkuThumb
-                    url={l.sku_image_url || imageByProduct[l.product_id]}
-                    alt={lineTitle(l)}
-                  />
-                )}
-              />
-            ))}
-          </ul>
+          <>
+            <ul className="tt-glass__line-list hidden lg:block">
+              {lines.map((l, idx) => (
+                <TikTokGlassLineItem
+                  key={l.id}
+                  title={lineTitle(l)}
+                  sku={l.seller_sku || undefined}
+                  quantity={l.quantity}
+                  isLast={idx === lines.length - 1}
+                  thumb={(
+                    <SkuThumb
+                      url={l.sku_image_url || imageByProduct[l.product_id]}
+                      alt={lineTitle(l)}
+                    />
+                  )}
+                />
+              ))}
+            </ul>
+            <ul className="tt-glass__line-list lg:hidden">
+              {lines.slice(0, 2).map((l, idx, arr) => (
+                <TikTokGlassLineItem
+                  key={l.id}
+                  title={lineTitle(l)}
+                  sku={l.seller_sku || undefined}
+                  quantity={l.quantity}
+                  isLast={idx === arr.length - 1 && lines.length <= 2}
+                  thumb={(
+                    <SkuThumb
+                      url={l.sku_image_url || imageByProduct[l.product_id]}
+                      alt={lineTitle(l)}
+                    />
+                  )}
+                />
+              ))}
+              {lines.length > 2 && (
+                <li className="text-xs text-muted-soft py-1 pl-1">+{lines.length - 2} รายการ</li>
+              )}
+            </ul>
+          </>
         )}
       </div>
 
@@ -178,58 +204,188 @@ function OrderBody({
       </div>
 
       {order.status === 'active' && (
-        <div className="flex flex-col gap-2 w-full lg:items-end">
-          {canShip && (
-            <TikTokGlassBtn
-              variant="coral"
-              className="tt-glass__btn--lg w-full whitespace-nowrap"
-              disabled={shipBusy === order.id}
-              onClick={onShip}
-            >
-              {shipBusy === order.id ? <span className="spinner"/> : null}
-              เตรียมจัดส่ง+พิมพ์
-            </TikTokGlassBtn>
-          )}
+        <ActiveOrderActions
+          order={order}
+          canShip={canShip}
+          shipBusy={shipBusy}
+          labelBusy={labelBusy}
+          onShip={onShip}
+          onPrintLabel={onPrintLabel}
+          onPrintPackingSlip={onPrintPackingSlip}
+        />
+      )}
+
+      {isCancelledVoid && (
+        <CancelledOrderActions
+          order={order}
+          voidStockStatus={voidStockStatus}
+          onReturnGoods={onReturnGoods}
+        />
+      )}
+    </div>
+  );
+}
+
+function ActiveOrderActions({
+  order,
+  canShip,
+  shipBusy,
+  labelBusy,
+  onShip,
+  onPrintLabel,
+  onPrintPackingSlip,
+}) {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const { render: sheetRender, closing: sheetClosing } = useMountedToggle(moreOpen, 220);
+  const labelDisabled = labelBusy === order.id || order.tiktok_shipping_type === 'SELLER';
+
+  return (
+    <>
+      <div className="hidden lg:flex flex-col gap-2 w-full lg:items-end">
+        {canShip && (
+          <TikTokGlassBtn
+            variant="coral"
+            className="tt-glass__btn--lg w-full whitespace-nowrap"
+            disabled={shipBusy === order.id}
+            onClick={onShip}
+          >
+            {shipBusy === order.id ? <span className="spinner"/> : null}
+            เตรียมจัดส่ง+พิมพ์
+          </TikTokGlassBtn>
+        )}
+        <TikTokGlassBtn
+          variant="outline"
+          className="tt-glass__btn--lg w-full"
+          disabled={labelDisabled}
+          onClick={onPrintLabel}
+        >
+          {labelBusy === order.id ? <span className="spinner"/> : <Icon name="printer" size={16}/>}
+          ปริ้น label
+        </TikTokGlassBtn>
+        <TikTokGlassBtn
+          variant="ghost"
+          className="w-full !text-xs min-h-[44px]"
+          disabled={labelDisabled}
+          onClick={onPrintPackingSlip}
+        >
+          packing slip
+        </TikTokGlassBtn>
+      </div>
+
+      <div className="lg:hidden flex items-center gap-2 w-full">
+        {canShip ? (
+          <TikTokGlassBtn
+            variant="coral"
+            className="tt-glass__btn--lg flex-1 min-h-[44px] whitespace-nowrap"
+            disabled={shipBusy === order.id}
+            onClick={onShip}
+          >
+            {shipBusy === order.id ? <span className="spinner"/> : null}
+            ดำเนินการ
+          </TikTokGlassBtn>
+        ) : (
           <TikTokGlassBtn
             variant="outline"
-            className="tt-glass__btn--lg w-full"
-            disabled={labelBusy === order.id || order.tiktok_shipping_type === 'SELLER'}
+            className="tt-glass__btn--lg flex-1 min-h-[44px]"
+            disabled={labelDisabled}
             onClick={onPrintLabel}
           >
             {labelBusy === order.id ? <span className="spinner"/> : <Icon name="printer" size={16}/>}
             ปริ้น label
           </TikTokGlassBtn>
-          <TikTokGlassBtn
-            variant="ghost"
-            className="w-full !text-xs min-h-[44px]"
-            disabled={labelBusy === order.id || order.tiktok_shipping_type === 'SELLER'}
-            onClick={onPrintPackingSlip}
-          >
-            packing slip
-          </TikTokGlassBtn>
-        </div>
-      )}
+        )}
+        {canShip && (
+          <MobileIconButton
+            icon="printer"
+            label="ปริ้น label"
+            onClick={onPrintLabel}
+            disabled={labelDisabled}
+          />
+        )}
+        <MobileIconButton
+          icon="menu"
+          label="เพิ่มเติม"
+          onClick={() => setMoreOpen(true)}
+        />
+      </div>
 
-      {isCancelledVoid && (
-        <div className="flex flex-col gap-2 w-full lg:items-end">
-          <span className="badge-pill !bg-error/10 !text-error text-[10px] w-full text-center lg:text-right">
-            ยกเลิก TikTok
-          </span>
-          {voidStockStatus && (
-            <VoidStockStatusBadge status={voidStockStatus} className="w-full text-center lg:text-right"/>
-          )}
-          {onReturnGoods && (
-            <TikTokGlassBtn
-              variant="coral"
-              className="tt-glass__btn--lg w-full whitespace-nowrap"
-              onClick={() => onReturnGoods(order)}
+      {sheetRender && createPortal(
+        <div
+          className={'fixed inset-0 z-[140] flex items-end ' + (sheetClosing ? 'overlay-out' : 'overlay-in')}
+          onClick={() => setMoreOpen(false)}
+        >
+          <div className="absolute inset-0 modal-overlay" />
+          <div
+            className={'relative w-full glass-strong rounded-t-2xl border-t hairline p-4 pb-safe space-y-1 ' + (sheetClosing ? 'sheet-out' : 'sheet-anim')}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-10 h-1 rounded-full bg-muted-soft/40 mx-auto mb-3" aria-hidden="true" />
+            {canShip && (
+              <button
+                type="button"
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left text-sm font-medium text-ink"
+                onClick={() => { onPrintLabel?.(); setMoreOpen(false); }}
+                disabled={labelDisabled}
+              >
+                <Icon name="printer" size={20} />
+                ปริ้น label
+              </button>
+            )}
+            <button
+              type="button"
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left text-sm font-medium text-ink"
+              onClick={() => { onPrintPackingSlip?.(); setMoreOpen(false); }}
+              disabled={labelDisabled}
             >
-              <Icon name="package" size={16}/>
-              รับคืนสินค้า (เอกสาร)
-            </TikTokGlassBtn>
-          )}
-        </div>
+              <Icon name="file" size={20} />
+              packing slip
+            </button>
+          </div>
+        </div>,
+        document.body,
       )}
-    </div>
+    </>
+  );
+}
+
+function CancelledOrderActions({ order, voidStockStatus, onReturnGoods }) {
+  return (
+    <>
+      <div className="hidden lg:flex flex-col gap-2 w-full lg:items-end">
+        <span className="badge-pill !bg-error/10 !text-error text-[10px] w-full text-center lg:text-right">
+          ยกเลิก TikTok
+        </span>
+        {voidStockStatus && (
+          <VoidStockStatusBadge status={voidStockStatus} className="w-full text-center lg:text-right"/>
+        )}
+        {onReturnGoods && (
+          <TikTokGlassBtn
+            variant="coral"
+            className="tt-glass__btn--lg w-full whitespace-nowrap"
+            onClick={() => onReturnGoods(order)}
+          >
+            <Icon name="package" size={16}/>
+            รับคืนสินค้า (เอกสาร)
+          </TikTokGlassBtn>
+        )}
+      </div>
+
+      <div className="lg:hidden flex flex-col gap-2 w-full">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="badge-pill !bg-error/10 !text-error text-[10px]">ยกเลิก TikTok</span>
+          {voidStockStatus && <VoidStockStatusBadge status={voidStockStatus} />}
+        </div>
+        {onReturnGoods && (
+          <TikTokGlassBtn
+            variant="coral"
+            className="tt-glass__btn--lg w-full min-h-[44px]"
+            onClick={() => onReturnGoods(order)}
+          >
+            <Icon name="package" size={16}/>
+            รับคืนสินค้า
+          </TikTokGlassBtn>
+        )}
+      </div>
+    </>
   );
 }

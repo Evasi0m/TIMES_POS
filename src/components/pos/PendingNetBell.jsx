@@ -31,7 +31,19 @@ const fmtDate = (iso) => {
   } catch { return ''; }
 };
 
-export default function PendingNetBell({ toast, size = 44, floating = false, floatClassName = 'top-[30px] right-[40px]' }) {
+const isMobileViewport = () =>
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(max-width: 1023px)').matches;
+
+export default function PendingNetBell({
+  toast,
+  size = 44,
+  floating = false,
+  placement = floating ? 'floating' : 'inline',
+  floatClassName = 'top-[30px] right-[40px]',
+  className = '',
+}) {
   const [bills, setBills]     = useState([]);
   const [open, setOpen]       = useState(false);
   const [entry, setEntry]     = useState(null); // bill currently being filled
@@ -144,8 +156,8 @@ export default function PendingNetBell({ toast, size = 44, floating = false, flo
   // transformed ancestor (the page's .view-fade) can't capture its `fixed`
   // positioning and make it jump on mount.
   const bellRow = (
-      <div className="relative flex items-center gap-2.5">
-        <div className="pending-bubble hidden lg:block relative">
+      <div className={'relative flex items-center gap-2.5 ' + className}>
+        <div className={'pending-bubble relative ' + (placement === 'header' ? 'hidden' : 'hidden lg:block')}>
           <div className="imsg-bubble px-3.5 py-2 text-xs font-semibold whitespace-nowrap">
             มี {count} รายการยังไม่ได้ใส่ราคา
           </div>
@@ -194,25 +206,30 @@ export default function PendingNetBell({ toast, size = 44, floating = false, flo
       </div>
   );
 
+  const mobileSheet = isMobileViewport();
+  const modalShellClass = mobileSheet
+    ? 'fixed inset-0 z-[130] flex items-end justify-center px-0 pb-0'
+    : 'fixed inset-0 z-[130] flex items-start justify-center pt-[11vh] px-4';
+  const modalCardClass = mobileSheet
+    ? `pnb-card relative w-full max-w-lg glass-strong rounded-t-2xl border hairline overflow-hidden max-h-[90vh] ${closing ? 'sheet-out' : 'sheet-in'}`
+    : `pnb-card relative w-full max-w-md glass-strong rounded-3xl border hairline overflow-hidden ${closing ? 'holo-card-out' : 'holo-card-in'}`;
+
+  let bellMount = bellRow;
+  if (placement === 'floating') {
+    bellMount = createPortal(
+      <div className={`pending-float hidden lg:block fixed z-[60] ${floatClassName}`}>{bellRow}</div>,
+      document.body,
+    );
+  }
+
   return (
     <>
-      {floating
-        ? createPortal(
-            <div className={`pending-float hidden lg:block fixed z-[60] ${floatClassName}`}>{bellRow}</div>,
-            document.body
-          )
-        : bellRow}
+      {bellMount}
 
-      {/* One liquid-glass modal that morphs between the bill LIST and the
-          amount ENTRY for a chosen bill — never two stacked popovers. */}
       {open && createPortal(
-        <div className="fixed inset-0 z-[130] flex items-start justify-center pt-[11vh] px-4"
-             onClick={closeAll}>
+        <div className={modalShellClass} onClick={closeAll}>
           <div className={`absolute inset-0 modal-overlay ${closing ? 'holo-backdrop-out' : 'holo-backdrop-in'}`} />
-          <div
-            className={`pnb-card relative w-full max-w-md glass-strong rounded-3xl border hairline overflow-hidden ${closing ? 'holo-card-out' : 'holo-card-in'}`}
-            onClick={e => e.stopPropagation()}
-          >
+          <div className={modalCardClass} onClick={e => e.stopPropagation()}>
             {/* ── header ── */}
             <div className="relative flex items-center gap-2.5 px-4 py-3.5 border-b hairline">
               {entry ? (

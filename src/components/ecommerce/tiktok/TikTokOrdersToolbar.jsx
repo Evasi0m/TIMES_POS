@@ -31,8 +31,8 @@ export default function TikTokOrdersToolbar({
         </div>
       </div>
       <div className="tt-glass__toolbar">
-        <div className="tt-glass__toolbar-row">
-          <div className="flex flex-wrap items-stretch gap-2 flex-1 min-w-0">
+        <div className="tt-glass__toolbar-row tt-glass__toolbar-row--stack">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch gap-2 flex-1 min-w-0">
             <input
               type="text"
               value={singleId}

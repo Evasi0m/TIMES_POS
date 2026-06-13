@@ -6,6 +6,11 @@ import TikTokOrderConfirmPane from './TikTokOrderConfirmPane.jsx';
 import { fmtTHB, fmtTime } from './helpers.js';
 import { TTC_COPY } from './copy.js';
 
+const isMobileViewport = () =>
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(max-width: 1023px)').matches;
+
 export default function TikTokPendingModal({
   closing,
   onClose,
@@ -40,22 +45,33 @@ export default function TikTokPendingModal({
   toast,
 }) {
   const isConfirmView = Boolean(activeOrder);
+  const mobile = isMobileViewport();
 
   return (
     <div
-      className="fixed inset-0 z-[130] flex items-center justify-center p-3 sm:p-4"
+      className={
+        'fixed inset-0 z-[130] flex p-0 sm:p-4 ' +
+        (mobile ? 'items-end justify-center ' : 'items-center justify-center p-3 ') +
+        (closing ? 'overlay-out' : 'overlay-in')
+      }
       onClick={onClose}
     >
       <div className={`absolute inset-0 modal-overlay ${closing ? 'holo-backdrop-out' : 'holo-backdrop-in'}`} />
       <div
         className={
-          'ttc-pending-modal ttc-modal-card relative w-full glass-strong rounded-3xl border hairline overflow-hidden flex flex-col ' +
-          (isConfirmView ? 'max-w-[min(96vw,900px)]' : 'max-w-[min(96vw,640px)]') +
-          (isConfirmView ? ' max-h-[min(90vh,820px)] ' : ' h-[min(90vh,820px)] ') +
-          (closing ? 'holo-card-out' : 'holo-card-in')
+          'ttc-pending-modal ttc-modal-card relative w-full glass-strong border hairline overflow-hidden flex flex-col ' +
+          (mobile
+            ? 'rounded-t-2xl rounded-b-none max-h-[92vh] pb-safe ' + (closing ? 'sheet-out' : 'sheet-anim')
+            : 'rounded-3xl ' +
+              (isConfirmView ? 'max-w-[min(96vw,900px)]' : 'max-w-[min(96vw,640px)]') +
+              (isConfirmView ? ' max-h-[min(90vh,820px)] ' : ' h-[min(90vh,820px)] ') +
+              (closing ? 'holo-card-out' : 'holo-card-in'))
         }
         onClick={e => e.stopPropagation()}
       >
+        {mobile && (
+          <div className="w-10 h-1 rounded-full bg-muted-soft/40 mx-auto mt-2 shrink-0" aria-hidden="true" />
+        )}
         {/* Header */}
         <div className="ttc-modal-header ttc-brown-frame relative flex items-center gap-2.5 px-4 py-3 border-b border-white/15 shrink-0">
           {isConfirmView ? (

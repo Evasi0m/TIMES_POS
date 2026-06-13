@@ -86,6 +86,19 @@ import {
   salesCreditNoteLabel,
 } from './lib/vat-report.js';
 import { downloadStructuredCsv } from './lib/csv.js';
+import {
+  EXPORT_BRAND_OPTIONS,
+  filterByExportScope,
+  downloadProductStockCsv,
+  stockExportFilename,
+  exportScopeLabel,
+} from './lib/product-stock-export.js';
+import {
+  verifyCurrentUserPassword,
+  exporterDisplayName,
+  PRODUCTS_EXPORT_PENDING_KEY,
+} from './lib/export-auth.js';
+import { logStockExport, fetchStockExportLogs } from './lib/stock-export-log.js';
 import Icon from './components/ui/Icon.jsx';
 import Modal from './components/ui/Modal.jsx';
 import { useMountedToggle } from './lib/use-mounted-toggle.js';
@@ -106,6 +119,10 @@ import SalePickerForReturn from './components/movement/SalePickerForReturn.jsx';
 import VoidStockStatusBadge from './components/sales/VoidStockStatusBadge.jsx';
 import OrderStatusBadge from './components/sales/OrderStatusBadge.jsx';
 import PaymentMethodIcon from './components/sales/PaymentMethodIcon.jsx';
+import ChannelBadge from './components/ui/mobile/ChannelBadge.jsx';
+import MobileActionSheet from './components/ui/mobile/MobileActionSheet.jsx';
+import MobilePageBand from './components/ui/mobile/MobilePageBand.jsx';
+import MobileIconButton from './components/ui/mobile/MobileIconButton.jsx';
 import { PAYMENT_METHOD_LABELS as PAYMENT_LABELS } from './lib/payment-method-label.js';
 import { fetchVoidStockStatusMap } from './lib/sale-void-stock-status.js';
 import {
@@ -1536,10 +1553,10 @@ function AppSettingsModal({ open, onClose }) {
   //                    fully interactive for super_admin only
   // Order here = display order.
   const TABS = [
-    { id: 'display',  label: 'การแสดงผล',  icon: 'edit',       adminOnly: false },
-    { id: 'shop',     label: 'ข้อมูลร้าน',  icon: 'store',      adminOnly: true  },
-    { id: 'ai',       label: 'AI',           icon: 'scan',       adminOnly: true, superAdminOnly: true },
-    { id: 'paylater', label: 'สูตรคำนวณ',    icon: 'calculator', adminOnly: true, superAdminOnly: true },
+    { id: 'display',  label: 'การแสดงผล',  shortLabel: 'แสดงผล', icon: 'edit',       adminOnly: false },
+    { id: 'shop',     label: 'ข้อมูลร้าน',  shortLabel: 'ร้าน',   icon: 'store',      adminOnly: true  },
+    { id: 'ai',       label: 'AI',           shortLabel: 'AI',     icon: 'scan',       adminOnly: true, superAdminOnly: true },
+    { id: 'paylater', label: 'สูตรคำนวณ',    shortLabel: 'สูตร',   icon: 'calculator', adminOnly: true, superAdminOnly: true },
   ];
   // Visitor: only `display`. admin+: every tab (but superAdminOnly ones are
   // disabled at click time for admin — see below).
@@ -1569,7 +1586,7 @@ function AppSettingsModal({ open, onClose }) {
         {/* ── Tab nav ──
             On desktop: acts as a modern vertical sidebar on the right.
             On mobile: flows as a horizontal scrolling list at the top. */}
-        <div className="flex flex-row lg:flex-col gap-1 border-b lg:border-b-0 lg:border-l border-hairline/80 overflow-x-auto lg:overflow-x-visible pb-2 lg:pb-0 lg:pl-4 flex-shrink-0 lg:w-48" style={{ scrollbarWidth: 'none' }}>
+        <div className="flex flex-row lg:flex-col gap-1 border-b lg:border-b-0 lg:border-l border-hairline/80 overflow-x-auto lg:overflow-x-visible pb-2 lg:pb-0 lg:pl-4 flex-shrink-0 lg:w-48 settings-tabs-scroll" style={{ scrollbarWidth: 'none' }}>
           {visibleTabs.map(t => {
             const active = activeTab === t.id;
             const disabled = isTabDisabled(t);
@@ -1590,7 +1607,8 @@ function AppSettingsModal({ open, onClose }) {
                 }
               >
                 <Icon name={t.icon} size={15}/>
-                <span className="flex-1 text-left">{t.label}</span>
+                <span className="flex-1 text-left sm:hidden">{t.shortLabel || t.label}</span>
+                <span className="flex-1 text-left hidden sm:inline">{t.label}</span>
                 {disabled && <Icon name="lock" size={11} className="opacity-70 ml-1"/>}
               </button>
             );
@@ -1826,6 +1844,21 @@ function UserManagementModal({ open, onClose }) {
   // a successful create without remounting the inputs.
   const [draft, setDraft] = useState({ email: '', password: '', role: 'visitor', mfa_required: true });
   const [showCreate, setShowCreate] = useState(false);
+  const [activeSection, setActiveSection] = useState('users');
+  const [exportLogs, setExportLogs] = useState([]);
+  const [exportLogsLoading, setExportLogsLoading] = useState(false);
+
+  const loadExportLogs = useCallback(async () => {
+    setExportLogsLoading(true);
+    try {
+      const rows = await fetchStockExportLogs(100);
+      setExportLogs(rows);
+    } catch (e) {
+      toast.push('โหลดประวัติ Export ไม่สำเร็จ: ' + e.message, 'error');
+    } finally {
+      setExportLogsLoading(false);
+    }
+  }, [toast]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1842,13 +1875,18 @@ function UserManagementModal({ open, onClose }) {
   // Auto-load on open; clear when closed so reopening reflects any
   // out-of-band changes (e.g. another super_admin tweaking roles).
   useEffect(() => {
-    if (open) load();
-    else {
+    if (open) {
+      load();
+      loadExportLogs();
+      setActiveSection('users');
+    } else {
       setUsers([]);
+      setExportLogs([]);
       setShowCreate(false);
+      setActiveSection('users');
       setDraft({ email: '', password: '', role: 'visitor', mfa_required: true });
     }
-  }, [open, load]);
+  }, [open, load, loadExportLogs]);
 
   const handleToggleMfaRequired = async (u) => {
     setBusyId(u.id);
@@ -1961,6 +1999,81 @@ function UserManagementModal({ open, onClose }) {
     <Modal open={open} onClose={onClose} title="การตั้งค่า user" wide
       footer={<button className="btn-secondary" onClick={onClose}>ปิด</button>}>
 
+      <div className="flex gap-2 mb-4 border-b hairline pb-1">
+        <button
+          type="button"
+          className={'px-3 py-2 text-sm font-medium rounded-t-lg border-b-2 transition ' +
+            (activeSection === 'users'
+              ? 'border-primary text-ink'
+              : 'border-transparent text-muted hover:text-ink')}
+          onClick={() => setActiveSection('users')}
+        >
+          จัดการผู้ใช้
+        </button>
+        <button
+          type="button"
+          className={'px-3 py-2 text-sm font-medium rounded-t-lg border-b-2 transition inline-flex items-center gap-1.5 ' +
+            (activeSection === 'exports'
+              ? 'border-primary text-ink'
+              : 'border-transparent text-muted hover:text-ink')}
+          onClick={() => setActiveSection('exports')}
+        >
+          <Icon name="download" size={14}/> ประวัติ Export สต็อก
+        </button>
+      </div>
+
+      {activeSection === 'exports' ? (
+        <>
+          <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+            <div className="text-sm text-muted">
+              {exportLogsLoading
+                ? 'กำลังโหลด…'
+                : `ล่าสุด ${exportLogs.length.toLocaleString('th-TH')} รายการ`}
+            </div>
+            <button className="btn-ghost !py-1.5 !px-2.5 !text-xs"
+              onClick={loadExportLogs} disabled={exportLogsLoading} title="รีเฟรช">
+              <Icon name="refresh" size={14}/>
+            </button>
+          </div>
+          <div className="rounded-xl border hairline divide-y divide-hairline overflow-hidden max-h-[min(60vh,520px)] overflow-y-auto">
+            {exportLogsLoading && exportLogs.length === 0 && (
+              <div className="p-6 text-sm text-muted flex items-center gap-2 justify-center">
+                <span className="spinner"/> กำลังโหลดประวัติ…
+              </div>
+            )}
+            {!exportLogsLoading && exportLogs.length === 0 && (
+              <div className="p-6 text-sm text-muted text-center">ยังไม่มีประวัติ Export</div>
+            )}
+            {exportLogs.map((row) => (
+              <div key={row.id} className="p-3.5 flex items-start gap-3 flex-wrap">
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-sm truncate">
+                    {row.exporter_email}
+                    {row.exporter_name && row.exporter_name !== row.exporter_email && (
+                      <span className="text-muted font-normal"> · {row.exporter_name}</span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-muted-soft mt-0.5">
+                    {new Date(row.exported_at).toLocaleString('th-TH')}
+                    {' · '}
+                    ขอบเขต {row.scope_label || row.scope}
+                    {' · '}
+                    {Number(row.row_count || 0).toLocaleString('th-TH')} รายการ
+                    {row.shop_name ? ` · ${row.shop_name}` : ''}
+                  </div>
+                  <div className="text-[11px] font-mono text-muted mt-1 truncate" title={row.filename}>
+                    {row.filename}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 text-[11px] text-muted-soft leading-relaxed">
+            บันทึกทุกครั้งที่มีการดาวน์โหลด CSV สต็อกจากหน้าสินค้า — เฉพาะ Super Admin เห็นหน้านี้
+          </div>
+        </>
+      ) : (
+        <>
       {/* ── Header bar: count + create toggle ── */}
       <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <div className="text-sm text-muted">
@@ -2122,6 +2235,8 @@ function UserManagementModal({ open, onClose }) {
       <div className="mt-4 text-[11px] text-muted-soft leading-relaxed">
         <strong>หมายเหตุ:</strong> การเปลี่ยนสิทธิ์จะมีผลครั้งถัดไปที่ผู้ใช้คนนั้น refresh / sign in ใหม่
       </div>
+        </>
+      )}
     </Modal>
   );
 }
@@ -4339,25 +4454,41 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
 ========================================================= */
 function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserManagement, view, setView }) {
   const [openMenu, setOpenMenu] = useState(false);
+  const toast = useToast();
   const role = useRole();
   const isAdminPlus = role === 'admin' || role === 'super_admin';
   const isSuperAdmin = role === 'super_admin';
   const roleTag = role === 'super_admin' ? 'super admin' : role === 'admin' ? 'admin' : 'visitor';
   const roleColour = role === 'super_admin' ? 'text-gold-premium' : role === 'admin' ? 'text-primary' : 'text-muted-soft';
+  const drawerActive = view === 'dashboard' || isEcommerceView(view);
   const { render: drawerRender, closing: drawerClosing } = useMountedToggle(openMenu, 220);
   return (
     <>
     <header className="lg:hidden sticky top-0 z-40 mobile-topbar pt-safe">
-      <div className="flex items-center justify-between px-4 h-14">
-        <div className="flex items-center gap-2">
-          <AnimatedLogo size={38} mode="interactive" />
-          <div style={{fontFamily:"'Jost', sans-serif", fontWeight:600}} className="text-xl leading-none self-center">TIMES</div>
-          <div className="text-muted-soft mx-1">·</div>
-          <div className="text-sm text-muted">{title}</div>
+      <div className="flex items-center justify-between gap-2 px-3 h-14 min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+          <AnimatedLogo size={34} mode="interactive" />
+          <div style={{fontFamily:"'Jost', sans-serif", fontWeight:600}} className="text-lg leading-none self-center shrink-0">TIMES</div>
+          <div className="text-muted-soft shrink-0">·</div>
+          <div className="text-sm text-muted mobile-topbar__title" title={title}>{title}</div>
         </div>
-        <button className="btn-ghost icon-btn-44 !p-0" onClick={()=>setOpenMenu(true)} aria-label="menu">
-          <Icon name="menu" size={22}/>
-        </button>
+        <div className="mobile-topbar__actions">
+          {isAdminPlus && (
+            <>
+              <TikTokConfirmPanel toast={toast.push} />
+              <PendingNetBell toast={toast.push} size={40} placement="header" />
+            </>
+          )}
+          <button
+            type="button"
+            className="btn-ghost icon-btn-44 !p-0 mobile-menu-btn"
+            onClick={()=>setOpenMenu(true)}
+            aria-label="เมนูเพิ่มเติม"
+          >
+            <Icon name="menu" size={22}/>
+            {drawerActive && <span className="mobile-menu-btn__dot" aria-hidden="true" />}
+          </button>
+        </div>
       </div>
     </header>
     {drawerRender && (
@@ -4367,56 +4498,69 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
             <div className="font-display text-xl">เมนู</div>
             <button className="btn-ghost !p-2" onClick={()=>setOpenMenu(false)} aria-label="ปิดเมนู"><Icon name="x" size={20}/></button>
           </div>
-          <div className="p-4 space-y-4">
+          <div className="p-4 space-y-5 overflow-y-auto max-h-[calc(100vh-4rem)]">
             {isAdminPlus && (
-              <div>
-                <div className="text-xs uppercase tracking-wider text-muted mb-2">รายงาน</div>
-                <button
-                  type="button"
-                  className={
-                    'btn-secondary !justify-start !items-start gap-2 w-full min-w-0 !h-auto !py-2.5 !whitespace-normal text-left ' +
-                    (view === 'dashboard' ? '!border-primary !text-primary' : '')
-                  }
-                  onClick={() => { setView('dashboard'); setOpenMenu(false); }}
-                >
-                  <Icon name="dashboard" size={16} className="shrink-0 mt-0.5"/>
-                  <span className="min-w-0 leading-snug">ภาพรวม</span>
-                </button>
-                <div className="text-xs uppercase tracking-wider text-muted mb-2 mt-5 pt-1">E-Commerce</div>
-                {ECOMMERCE_PLATFORMS.map(p => (
-                  <button
-                    key={p.k}
-                    className={
-                      'btn-secondary !justify-start gap-2 w-full ' +
-                      (p.k !== 'tiktok' ? 'mt-2 ' : '') +
-                      (ecommercePlatformActive(view, p.k) ? '!border-primary !text-primary' : '')
-                    }
-                    onClick={() => { setView(p.defaultView); setOpenMenu(false); }}
-                  >
-                    <EcommerceBrandIcon brand={p.brand} size={18}/>
-                    {p.label}
+              <>
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-muted mb-2">รายงาน</div>
+                  <div className="mobile-drawer-nav">
+                    <button
+                      type="button"
+                      className={'mobile-drawer-item ' + (view === 'dashboard' ? 'active' : '')}
+                      onClick={() => { setView('dashboard'); setOpenMenu(false); }}
+                    >
+                      <Icon name="dashboard" size={18} className="shrink-0 mt-0.5"/>
+                      <span className="min-w-0">
+                        <span className="block font-medium">ภาพรวม</span>
+                        <span className="mobile-drawer-item__hint">แดชบอร์ด · กำไร · VAT</span>
+                      </span>
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-muted mb-2">E-Commerce</div>
+                  <div className="mobile-drawer-nav">
+                    {ECOMMERCE_PLATFORMS.map(p => (
+                      <button
+                        key={p.k}
+                        type="button"
+                        className={'mobile-drawer-item ' + (ecommercePlatformActive(view, p.k) ? 'active' : '')}
+                        onClick={() => { setView(p.defaultView); setOpenMenu(false); }}
+                      >
+                        <EcommerceBrandIcon brand={p.brand} size={20}/>
+                        <span className="min-w-0">
+                          <span className="block font-medium">{p.label}</span>
+                          {p.k === 'tiktok' && (
+                            <span className="mobile-drawer-item__hint">ออเดอร์ · ใบกำกับ · คืนสินค้า</span>
+                          )}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+            <div>
+              <div className="text-xs uppercase tracking-wider text-muted mb-2">ระบบ</div>
+              <div className="space-y-2">
+                {isSuperAdmin && (
+                  <button className="btn-settings-sidebar w-full" onClick={()=>{ setOpenMenu(false); onOpenUserManagement?.(); }}>
+                    <Icon name="crown" size={16}/> การตั้งค่า user
                   </button>
-                ))}
+                )}
+                <UpdateLogButton onDone={() => setOpenMenu(false)} />
+                <AppUpdateButton onDone={() => setOpenMenu(false)} />
+                <button className="btn-app-settings-sidebar w-full" onClick={()=>{ setOpenMenu(false); onOpenSettings?.(); }}>
+                  <Icon name="settings" size={16}/> การตั้งค่า
+                </button>
               </div>
-            )}
-            {/* User-management button — super_admin only, sits ABOVE the
-                regular settings button so it visually outranks it. */}
-            {isSuperAdmin && (
-              <button className="btn-settings-sidebar" onClick={()=>{ setOpenMenu(false); onOpenUserManagement?.(); }}>
-                <Icon name="crown" size={16}/> การตั้งค่า user
-              </button>
-            )}
-            <UpdateLogButton onDone={() => setOpenMenu(false)} />
-            <AppUpdateButton onDone={() => setOpenMenu(false)} />
-            <button className="btn-app-settings-sidebar" onClick={()=>{ setOpenMenu(false); onOpenSettings?.(); }}>
-              <Icon name="settings" size={16}/> การตั้งค่า
-            </button>
+            </div>
             <div>
               <div className="text-xs uppercase tracking-wider text-muted mb-2">บัญชี</div>
               <div className="text-sm text-ink truncate mb-3">
                 {userEmail} <span className={roleColour}>· {roleTag}</span>
               </div>
-              <button className="btn-danger-sidebar" onClick={onLogout}>
+              <button className="btn-danger-sidebar w-full" onClick={onLogout}>
                 <Icon name="logout" size={16}/> ออกจากระบบ
               </button>
             </div>
@@ -4436,69 +4580,83 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
 function MobileTabBar({ view, setView }) {
   const role = useRole();
   const all = navForRole(role);
-  // Pull POS out — it becomes the FAB. Everything else fills the bar halves.
   const posItem = all.find(it => it.k === 'pos');
-  // 'dashboard', 'ecommerce' moved to the MobileTopBar drawer menu.
   const others  = all.filter(it => it.k !== 'pos' && it.k !== 'dashboard' && it.k !== 'pnl' && it.k !== 'ecommerce');
-  // Split: balance left vs right (right takes the larger half if odd).
-  const leftCount = Math.floor(others.length / 2);
-  const left  = others.slice(0, leftCount);
-  const right = others.slice(leftCount);
+  const visibleOthers = others.filter(it => canNavigate(role, it));
+  const leftCount = Math.floor(visibleOthers.length / 2);
+  const left  = visibleOthers.slice(0, leftCount);
+  const right = visibleOthers.slice(leftCount);
 
-  // Subscribe to queue length so the FAB badge stays accurate while the cashier
-  // navigates around. `onQueueChange` fires once with the baseline on subscribe.
   const [queued, setQueued] = useState(0);
+  const [todaySalesCount, setTodaySalesCount] = useState(null);
+  const loadTodaySalesCount = useCallback(async () => {
+    const today = todayISO();
+    const { count, error } = await excludePendingTikTok(
+      sb.from('sale_orders')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'active')
+        .gte('sale_date', startOfDayBangkok(today))
+        .lte('sale_date', endOfDayBangkok(today)),
+    );
+    if (!error) setTodaySalesCount(count ?? 0);
+  }, []);
+  useEffect(() => {
+    if (role !== 'admin' && role !== 'super_admin') return;
+    loadTodaySalesCount();
+    const t = setInterval(loadTodaySalesCount, 60_000);
+    return () => clearInterval(t);
+  }, [loadTodaySalesCount, role]);
+  useRealtimeInvalidate(sb, ['sale_orders'], loadTodaySalesCount);
+
   useEffect(() => {
     const off = onQueueChange?.(setQueued);
     return () => off?.();
   }, []);
 
   const renderTab = (it) => {
-    // Visitor sees every tab in the bar but only `products` is interactive.
-    // Disabled tabs render with reduced opacity + no click handler so the
-    // bar shape stays consistent across roles.
     const allowed = canNavigate(role, it);
+    if (!allowed) return null;
+    const salesBadge = it.k === 'sales' && todaySalesCount > 0;
     return (
-      <button
-        key={it.k}
-        disabled={!allowed}
-        className={
-          "tab-btn pressable " +
-          (view===it.k && allowed ? "active " : "") +
-          (allowed ? "" : "opacity-40 cursor-not-allowed")
-        }
-        onClick={allowed ? (()=>setView(it.k)) : undefined}
-        aria-label={it.label}
-        aria-current={view===it.k ? "page" : undefined}
-        title={allowed ? it.label : 'ไม่มีสิทธิ์เข้าถึง'}
-      >
-        <Icon name={it.icon} size={20} strokeWidth={view===it.k && allowed ?2.2:1.8}/>
-        <span className="tab-label">{it.label}</span>
-      </button>
+      <div key={it.k} className="mobile-tab-btn-wrap">
+        <button
+          type="button"
+          className={'tab-btn pressable w-full ' + (view===it.k ? 'active ' : '')}
+          onClick={()=>setView(it.k)}
+          aria-label={it.label}
+          aria-current={view===it.k ? 'page' : undefined}
+          title={it.label}
+        >
+          <Icon name={it.icon} size={20} strokeWidth={view===it.k ? 2.2 : 1.8}/>
+          <span className="tab-label">{it.label}</span>
+        </button>
+        {salesBadge && (
+          <span className="nav-count-badge mobile-tab-count" title={`วันนี้ขายไปแล้ว ${todaySalesCount} บิล`}>
+            {todaySalesCount > 99 ? '99+' : todaySalesCount}
+          </span>
+        )}
+      </div>
     );
   };
 
-  // The center FAB is the POS button. Visitor can't enter POS, so the FAB
-  // becomes disabled too — keeping the bar shape but removing interactivity.
   const posAllowed = posItem ? canNavigate(role, posItem) : false;
 
   return (
     <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 mobile-tabbar-wrap" role="navigation" aria-label="หลัก">
       <div className="mobile-tabbar">
         {left.map(renderTab)}
-        {posItem && (
+        {posItem && posAllowed && (
           <button
-            disabled={!posAllowed}
+            type="button"
             className={
-              "mobile-fab " +
-              (view==='pos' && posAllowed ? "active " : "") +
-              (queued>0 ? "has-queue " : "") +
-              (posAllowed ? "" : "opacity-40 cursor-not-allowed")
+              'mobile-fab ' +
+              (view==='pos' ? 'active ' : '') +
+              (queued>0 ? 'has-queue ' : '')
             }
-            onClick={posAllowed ? (()=>setView('pos')) : undefined}
+            onClick={()=>setView('pos')}
             aria-label={posItem.labelLong || posItem.label}
-            aria-current={view==='pos' ? "page" : undefined}
-            title={posAllowed ? (posItem.labelLong || posItem.label) : 'ไม่มีสิทธิ์เข้าถึง'}
+            aria-current={view==='pos' ? 'page' : undefined}
+            title={posItem.labelLong || posItem.label}
           >
             <Icon name="cart" size={28} strokeWidth={2.4}/>
             {queued > 0 && (
@@ -5704,7 +5862,7 @@ function POSView() {
       </div>
 
       {/* MOBILE LAYOUT */}
-      <div className="lg:hidden px-4 py-4 pb-24">
+      <div className="lg:hidden px-4 py-4 pos-mobile-clearance">
         <div className="mb-3">{SearchInput}</div>
         {ResultsList}
       </div>
@@ -5714,7 +5872,7 @@ function POSView() {
           Using calc() so the gap stays consistent across all iPhones
           regardless of safe-area-inset-bottom value. */}
       {cart.length>0 && !cartOpen && (
-        <button className="lg:hidden fixed left-4 right-4 z-30 btn-primary !rounded-xl !py-4 !px-5 flex items-center justify-between fade-in" style={{ bottom: 'calc(84px + env(safe-area-inset-bottom))' }} onClick={()=>setCartOpen(true)}>
+        <button type="button" className="lg:hidden fixed left-4 right-4 z-30 btn-primary !rounded-xl !py-4 !px-5 flex items-center justify-between fade-in pos-cart-fab" onClick={()=>setCartOpen(true)}>
           <div className="flex items-center gap-3">
             <div className="relative">
               <Icon name="cart" size={24}/>
@@ -5865,11 +6023,12 @@ function POSView() {
                 <button type="button" onClick={()=>setBillExpanded(true)} className="cart-bill-collapsed" aria-expanded="false">
                   <div className="cart-bill-collapsed-summary">
                     <div className="text-[11px] uppercase tracking-[0.12em] text-muted-soft font-medium">รายละเอียดบิล</div>
-                    <div className="text-sm font-medium truncate mt-0.5">
-                      {CHANNEL_LABELS[channel]||channel} · {PAYMENTS.find(p=>p.v===payment)?.label||payment}
-                      {netPriceFilled && <span className="text-muted-soft"> · รับ {fmtTHB(Number(netPrice))}</span>}
-                      {taxInvoice && <span className="text-primary"> · ใบกำกับ</span>}
-                      {notes && <span className="text-muted-soft"> · มีหมายเหตุ</span>}
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <ChannelBadge channel={channel} iconOnly size={16} />
+                      <PaymentMethodIcon method={payment} size={24} />
+                      {netPriceFilled && <span className="text-xs text-muted-soft tabular-nums">รับ {fmtTHB(Number(netPrice))}</span>}
+                      {taxInvoice && <Icon name="receipt" size={14} className="text-primary" title="ใบกำกับภาษี" />}
+                      {notes && <Icon name="edit" size={14} className="text-muted-soft" title="มีหมายเหตุ" />}
                     </div>
                     {showErrors && !canSubmit && cart.length>0 && (
                       <div className="text-xs text-error mt-1 inline-flex items-center gap-1">
@@ -6003,9 +6162,12 @@ function POSView() {
                     </div>
                   )}
 
-                  {/* ตัวเลือกเสริม */}
-                  <div className="text-[11px] uppercase tracking-[0.12em] text-muted-soft font-medium mb-1.5">ตัวเลือกเสริม</div>
-                  <div className="flex gap-2 mb-2">
+                  <details className="mb-2 group">
+                  <summary className="text-[11px] uppercase tracking-[0.12em] text-muted-soft font-medium mb-1.5 cursor-pointer list-none flex items-center justify-between">
+                    <span>ตัวเลือกเพิ่มเติม</span>
+                    <Icon name="chevron-d" size={14} className="group-open:rotate-180 transition-transform" />
+                  </summary>
+                  <div className="flex gap-2 mb-2 mt-2">
                     <button type="button" onClick={()=>setTaxInvoiceModalOpen(true)}
                       className={"flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-2 rounded-md text-xs font-medium border transition " + (taxInvoice?"text-white":"bg-surface-strong text-muted border-hairline hover:text-ink hover:bg-surface-strong/90")}
                       style={taxInvoice ? { background: 'linear-gradient(180deg, rgba(204,120,92,0.85) 0%, rgba(184,100,72,0.92) 100%)', borderColor: 'rgba(255,255,255,0.18)', boxShadow: '0 2px 8px rgba(184,100,72,0.35), 0 1px 0 rgba(255,255,255,0.18) inset' } : {}}>
@@ -6035,6 +6197,7 @@ function POSView() {
                   {showNotes && (
                     <textarea className="input !py-2 !text-sm mb-2 fade-in" rows="2" placeholder="หมายเหตุบนบิล (เช่น ลูกค้ามีรอยขีดข่วน, รอของลอตต่อ)" value={notes} onChange={e=>setNotes(e.target.value)}/>
                   )}
+                  </details>
 
                   {/* VAT breakdown */}
                   <div className="border-t hairline pt-2 mt-1">
@@ -6178,6 +6341,7 @@ function POSView() {
 ========================================================= */
 function ProductsView() {
   const toast = useToast();
+  const { shop } = useShop();
   // Visitors can browse / filter / search the catalog but cannot open the
   // editor. We hand a no-op opener to the row-click handlers so the rows
   // still look interactive (hover, etc.) yet do nothing on click. Edit
@@ -6200,6 +6364,12 @@ function ProductsView() {
   // cost_price so the user can spot drift without opening each product.
   const [latestCostMap, setLatestCostMap] = useState({});
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [exportAuthOpen, setExportAuthOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportScope, setExportScope] = useState('all');
+  const [exportUserEmail, setExportUserEmail] = useState('');
+  const [exportUserName, setExportUserName] = useState('');
+  const [scannerOpen, setScannerOpen] = useState(false);
   // Render only the first N filtered rows; "ดูเพิ่ม" button bumps this. Keeps
   // initial paint fast even when the brand chip is "ทั้งหมด" (6k items).
   const [pageSize, setPageSize] = useState(200);
@@ -6320,6 +6490,22 @@ function ProductsView() {
 
   useEffect(() => { loadTaxonomy(); }, [loadTaxonomy]);
   useEffect(() => { loadProducts(); }, [loadProducts]);
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(PRODUCTS_EXPORT_PENDING_KEY) === '1') {
+        sessionStorage.removeItem(PRODUCTS_EXPORT_PENDING_KEY);
+        setExportOpen(true);
+      }
+    } catch { /* private mode */ }
+  }, []);
+  useEffect(() => {
+    if (!exportAuthOpen && !exportOpen) return;
+    sb.auth.getUser().then(({ data }) => {
+      const user = data?.user;
+      setExportUserEmail(user?.email || '');
+      setExportUserName(exporterDisplayName(user));
+    });
+  }, [exportAuthOpen, exportOpen]);
   // Realtime: another device imported a CSV, finished a sale, or adjusted
   // stock → re-run the loader so this tab sees the fresh catalog without
   // a manual refresh. Debounced to batch bulk inserts (CSV import).
@@ -6400,7 +6586,8 @@ function ProductsView() {
   // Badge count on the "ตัวกรอง" button (price + material + color + stock)
   const advancedCount = (filter.material ? 1 : 0) + (filter.color ? 1 : 0)
     + ((filter.minPrice > 0 || filter.maxPrice > 0) ? 1 : 0)
-    + (filter.inStockOnly ? 1 : 0);
+    + (filter.inStockOnly ? 1 : 0)
+    + (filter.series ? 1 : 0) + (filter.subType ? 1 : 0);
 
   const hasAnyFilter = !!filter.query || filter.brand !== 'all' || !!filter.series
     || !!filter.subType || !!filter.material || !!filter.color
@@ -6480,14 +6667,17 @@ function ProductsView() {
       <div className="flex flex-wrap sm:flex-nowrap items-stretch gap-2 mb-2 flex-shrink-0">
         <div className="relative flex-1 min-w-0 order-1">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted z-10"><Icon name="search" size={18} strokeWidth={2.25}/></span>
-          <input className="input !pl-10 w-full" placeholder="ชื่อรุ่น หรือ บาร์โค้ด"
+          <input className="input !pl-10 !pr-12 w-full" placeholder="ชื่อรุ่น หรือ บาร์โค้ด"
             value={queryInput} onChange={e=>setQueryInput(e.target.value)} autoFocus={!isMobileViewport()} />
           {queryInput && (
             <button type="button" onClick={()=>{ setQueryInput(''); setFilter(f=>({...f, query: ''})); }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-muted-soft hover:text-ink rounded-md">
+              className="absolute right-12 top-1/2 -translate-y-1/2 p-1.5 text-muted-soft hover:text-ink rounded-md">
               <Icon name="x" size={14}/>
             </button>
           )}
+          <button type="button" className="scan-inline-btn absolute right-1 top-1/2 -translate-y-1/2" onClick={()=>setScannerOpen(true)} aria-label="สแกนด้วยกล้อง">
+            <Icon name="camera" size={20}/>
+          </button>
         </div>
         <select className="input !py-2 !text-sm w-full sm:!w-auto order-3 sm:order-2" value={filter.sort}
           onChange={e=>setFilter(f=>({...f, sort: e.target.value}))}>
@@ -6517,6 +6707,12 @@ function ProductsView() {
             </span>
           )}
         </button>
+        <button type="button" className="btn-secondary !py-2 !text-sm sm:!w-auto icon-btn-44 !w-12 !h-12 sm:!w-auto sm:!h-auto order-4 sm:order-4 flex-shrink-0"
+          onClick={()=>setExportAuthOpen(true)} title="Export สต็อกเป็น CSV"
+          aria-label="Export สต็อกเป็น CSV">
+          <Icon name="download" size={22} className="sm:!w-[16px] sm:!h-[16px]"/>
+          <span className="hidden sm:inline sm:ml-1">Export</span>
+        </button>
       </div>
 
       {/* Brand chips (top-level facet) */}
@@ -6535,9 +6731,9 @@ function ProductsView() {
         })}
       </div>
 
-      {/* Series chips — only for CASIO */}
+      {/* Series chips — desktop only; mobile uses filter sheet */}
       {filter.brand === 'casio' && (
-        <div className="flex gap-1.5 mb-2 flex-shrink-0 overflow-x-auto pb-1 -mx-4 px-4 lg:mx-0 lg:px-0 scrollbar-thin">
+        <div className="hidden lg:flex gap-1.5 mb-2 flex-shrink-0 overflow-x-auto pb-1 scrollbar-thin">
           <button type="button" onClick={()=>setSeries('')} className={chipCls(!filter.series)}>
             ทุก Series <span className="opacity-60 tabular-nums">{seriesCounts.__total || 0}</span>
           </button>
@@ -6553,9 +6749,8 @@ function ProductsView() {
         </div>
       )}
 
-      {/* Sub-type chips — only when current series defines sub-types */}
       {filter.brand === 'casio' && filter.series && SERIES_SUBS[filter.series] && (
-        <div className="flex gap-1.5 mb-2 flex-shrink-0 overflow-x-auto pb-1 -mx-4 px-4 lg:mx-0 lg:px-0 scrollbar-thin">
+        <div className="hidden lg:flex gap-1.5 mb-2 flex-shrink-0 overflow-x-auto pb-1 scrollbar-thin">
           <button type="button" onClick={()=>setSubType('')} className={chipCls(!filter.subType)}>
             ทุกประเภท <span className="opacity-60 tabular-nums">{subTypeCounts.__total || 0}</span>
           </button>
@@ -6572,7 +6767,7 @@ function ProductsView() {
       )}
 
       {/* Active advanced-filter chips (price / material / color / stock) — closeable */}
-      {(filter.material || filter.color || activePricePreset || filter.minPrice > 0 || filter.maxPrice > 0 || filter.inStockOnly) && (
+      {(filter.material || filter.color || filter.series || filter.subType || activePricePreset || filter.minPrice > 0 || filter.maxPrice > 0 || filter.inStockOnly) && (
         <div className="flex flex-wrap gap-1.5 mb-2 items-center flex-shrink-0">
           {activePricePreset
             ? <button type="button" onClick={()=>setFilter(f=>({...f, minPrice:0, maxPrice:0}))}
@@ -6610,6 +6805,20 @@ function ProductsView() {
             <button type="button" onClick={()=>setFilter(f=>({...f, inStockOnly: false}))}
               className="px-2.5 py-1 rounded-full text-xs bg-primary/10 text-primary border border-primary/20 inline-flex items-center gap-1.5 hover:bg-primary/20">
               <Icon name="check" size={11}/> เฉพาะของพร้อมขาย
+              <Icon name="x" size={11} className="opacity-70"/>
+            </button>
+          )}
+          {filter.series && SERIES_RULES.find(s => s.id === filter.series) && (
+            <button type="button" onClick={()=>setSeries('')}
+              className="px-2.5 py-1 rounded-full text-xs bg-primary/10 text-primary border border-primary/20 inline-flex items-center gap-1.5 hover:bg-primary/20">
+              {SERIES_RULES.find(s => s.id === filter.series).label}
+              <Icon name="x" size={11} className="opacity-70"/>
+            </button>
+          )}
+          {filter.subType && filter.series && SERIES_SUBS[filter.series]?.find(s => s.id === filter.subType) && (
+            <button type="button" onClick={()=>setSubType('')}
+              className="px-2.5 py-1 rounded-full text-xs bg-primary/10 text-primary border border-primary/20 inline-flex items-center gap-1.5 hover:bg-primary/20">
+              {SERIES_SUBS[filter.series].find(s => s.id === filter.subType).label}
               <Icon name="x" size={11} className="opacity-70"/>
             </button>
           )}
@@ -6732,6 +6941,12 @@ function ProductsView() {
                   <span className="text-muted-soft leading-none">|</span>
                   <span className={"tabular-nums truncate " + (lc ? 'text-muted' : 'text-ink font-medium')}>ต้นทุน {roundMoney(lc ? lc.unit_price : p.cost_price).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
                 </div>
+                {p.barcode && (
+                  <div className="flex items-center gap-1 mt-1 text-[11px] text-muted-soft font-mono" title={p.barcode}>
+                    <Icon name="barcode" size={12} className="shrink-0"/>
+                    <span>···{String(p.barcode).slice(-4)}</span>
+                  </div>
+                )}
               </div>
               <div className={
                 'flex-shrink-0 flex items-center justify-center w-14 h-14 rounded-[10px] font-display text-2xl leading-none tabular-nums font-semibold ' +
@@ -6755,13 +6970,195 @@ function ProductsView() {
         onDeleted={()=>{ setEditing(null); loadProducts(); }}
         brands={brands} categories={categories} addBrand={addBrand} addCategory={addCategory} />
 
+      <ProductStockExportAuthModal
+        open={exportAuthOpen}
+        onClose={()=>setExportAuthOpen(false)}
+        email={exportUserEmail}
+        onSuccess={() => {
+          try { sessionStorage.setItem(PRODUCTS_EXPORT_PENDING_KEY, '1'); } catch { /* ignore */ }
+          setExportOpen(true);
+          setExportAuthOpen(false);
+        }}
+      />
+
+      <ProductStockExportModal
+        open={exportOpen}
+        onClose={()=>setExportOpen(false)}
+        scope={exportScope}
+        onScopeChange={setExportScope}
+        products={allRows}
+        latestCostMap={latestCostMap}
+        shopName={shop?.shop_name}
+        exporter={{ email: exportUserEmail, name: exportUserName }}
+        toast={toast}
+      />
+
       <ProductFilterSheet
         open={sheetOpen} onClose={()=>setSheetOpen(false)}
         filter={filter} setFilter={setFilter}
         materialCounts={materialCounts} colorCounts={colorCounts}
+        seriesCounts={seriesCounts} subTypeCounts={subTypeCounts}
+        setSeries={setSeries} setSubType={setSubType}
         showCasioFacets={filter.brand === 'casio'}
       />
+
+      <BarcodeScannerModal
+        open={scannerOpen}
+        onClose={()=>setScannerOpen(false)}
+        onScan={(code) => { setQueryInput(code); setScannerOpen(false); }}
+      />
     </div>
+  );
+}
+
+/* ProductStockExportAuthModal — password gate before opening export picker. */
+function ProductStockExportAuthModal({ open, onClose, email, onSuccess }) {
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    if (!open) {
+      setPassword('');
+      setErr('');
+      setBusy(false);
+    }
+  }, [open]);
+
+  const submit = async (e) => {
+    e?.preventDefault();
+    setErr('');
+    setBusy(true);
+    const res = await verifyCurrentUserPassword(password, email);
+    setBusy(false);
+    if (!res.ok) {
+      setErr(res.message);
+      return;
+    }
+    setPassword('');
+    onSuccess();
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="ยืนยันรหัสผ่านก่อน Export"
+      footer={
+        <>
+          <button type="button" className="btn-secondary" onClick={onClose} disabled={busy}>ยกเลิก</button>
+          <button type="button" className="btn-primary" onClick={submit} disabled={busy || !password}>
+            {busy ? <><span className="spinner"/> กำลังตรวจสอบ...</> : 'ยืนยัน'}
+          </button>
+        </>
+      }
+    >
+      <p className="text-sm text-muted mb-4">
+        กรุณายืนยันรหัสผ่านของคุณก่อนดาวน์โหลดไฟล์สต็อก
+      </p>
+      <div className="space-y-3">
+        <div>
+          <label className="text-xs uppercase tracking-wider text-muted font-medium">อีเมล</label>
+          <input type="email" className="input mt-1 bg-surface-soft" value={email} readOnly />
+        </div>
+        <div>
+          <label className="text-xs uppercase tracking-wider text-muted font-medium">รหัสผ่าน</label>
+          <input
+            type="password"
+            autoComplete="current-password"
+            className="input mt-1"
+            value={password}
+            onChange={(e)=>setPassword(e.target.value)}
+            onKeyDown={(e)=>{ if (e.key === 'Enter') submit(e); }}
+          />
+        </div>
+        {err && <div className="text-sm text-danger">{err}</div>}
+      </div>
+    </Modal>
+  );
+}
+
+/* ProductStockExportModal — pick brand scope and download structured stock CSV. */
+function ProductStockExportModal({ open, onClose, scope, onScopeChange, products, latestCostMap, shopName, exporter, toast }) {
+  const exportCount = filterByExportScope(products, scope).length;
+  const chipCls = (active) =>
+    'w-full text-left py-2.5 px-3 rounded-lg text-sm font-medium border transition-all ' +
+    (active
+      ? 'bg-ink text-canvas border-ink shadow-sm'
+      : 'bg-surface-strong text-ink border-hairline hover:bg-surface-strong/80');
+
+  const handleExport = async () => {
+    if (exportCount === 0) return;
+    const exportedAt = new Date();
+    const count = downloadProductStockCsv({
+      products,
+      latestCostMap,
+      scope,
+      shopName,
+      exportedAt,
+      exporter,
+    });
+    if (!count) {
+      toast.push('ไม่มีสินค้าในขอบเขตที่เลือก', 'info');
+      return;
+    }
+    try {
+      await logStockExport({
+        exporterEmail: exporter?.email,
+        exporterName: exporter?.name,
+        scope,
+        scopeLabel: exportScopeLabel(scope),
+        rowCount: count,
+        shopName,
+        filename: stockExportFilename(scope, exportedAt),
+      });
+    } catch {
+      toast.push('ดาวน์โหลดสำเร็จ แต่บันทึกประวัติไม่ได้', 'info');
+    }
+    toast.push(`ดาวน์โหลด CSV แล้ว (${count.toLocaleString('th-TH')} รายการ)`, 'success');
+    onClose();
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Export สต็อก CSV"
+      footer={
+        <>
+          <button type="button" className="btn-secondary" onClick={onClose}>ยกเลิก</button>
+          <button type="button" className="btn-primary" onClick={handleExport} disabled={exportCount === 0}>
+            <Icon name="download" size={16}/> ดาวน์โหลด CSV
+          </button>
+        </>
+      }
+    >
+      <p className="text-sm text-muted mb-4">
+        Export รายการสต็อกทั้งหมดในขอบเขตที่เลือก — จัดกลุ่มตามแบรนด์ พร้อมสรุปยอดแต่ละส่วน
+      </p>
+      <div className="text-xs uppercase tracking-wider text-muted mb-2">เลือกแบรนด์</div>
+      <div className="space-y-2">
+        {EXPORT_BRAND_OPTIONS.map((opt) => (
+          <button
+            key={opt.id}
+            type="button"
+            className={chipCls(scope === opt.id)}
+            onClick={()=>onScopeChange(opt.id)}
+          >
+            <span className="flex items-center justify-between gap-2">
+              <span>{opt.label}</span>
+              <span className="tabular-nums opacity-70 text-xs">
+                {filterByExportScope(products, opt.id).length.toLocaleString('th-TH')} รายการ
+              </span>
+            </span>
+          </button>
+        ))}
+      </div>
+      <div className="mt-4 p-3 rounded-lg bg-surface-soft border hairline text-sm text-muted">
+        จะ export <span className="font-medium text-ink tabular-nums">{exportCount.toLocaleString('th-TH')}</span> รายการ
+        {shopName ? <> · ร้าน <span className="text-ink">{shopName}</span></> : null}
+      </div>
+    </Modal>
   );
 }
 
@@ -6771,10 +7168,13 @@ function ProductsView() {
    trigger lives in ProductsView's top bar with a count badge.
    Material + color show counts in the *current* filtered context so users
    never see "0 results" facets unless they're already selected. */
-function ProductFilterSheet({ open, onClose, filter, setFilter, materialCounts, colorCounts, showCasioFacets }) {
+function ProductFilterSheet({ open, onClose, filter, setFilter, materialCounts, colorCounts, showCasioFacets, seriesCounts, subTypeCounts, setSeries, setSubType }) {
   if (!open) return null;
   const setMaterial = (m) => setFilter(f => ({ ...f, material: m === f.material ? '' : m, color: '' }));
   const setColor    = (c) => setFilter(f => ({ ...f, color: c === f.color ? '' : c }));
+  const chipCls = (active) =>
+    'py-1.5 px-3 rounded-full text-xs font-medium border inline-flex items-center gap-1.5 transition-all ' +
+    (active ? 'bg-ink text-canvas border-ink shadow-sm' : 'bg-surface-strong text-ink border-hairline hover:bg-surface-strong/80');
   const setPricePreset = (preset) => setFilter(f => {
     const same = f.minPrice === preset.min && f.maxPrice === preset.max;
     return { ...f, minPrice: same ? 0 : preset.min, maxPrice: same ? 0 : preset.max };
@@ -6833,9 +7233,49 @@ function ProductFilterSheet({ open, onClose, filter, setFilter, materialCounts, 
             </div>
           </div>
 
-          {/* CASIO-only facets — material + color */}
+          {/* CASIO-only facets — series / subtype / material / color */}
           {showCasioFacets && (
             <>
+              {Object.keys(seriesCounts).length > 0 && (
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-muted mb-2">Series</div>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={()=>setSeries?.('')} className={chipCls(!filter.series)}>
+                      ทุก Series <span className="opacity-60 tabular-nums">{seriesCounts.__total || 0}</span>
+                    </button>
+                    {SERIES_RULES.map(s => {
+                      const count = seriesCounts[s.id] || 0;
+                      if (count === 0 && filter.series !== s.id) return null;
+                      return (
+                        <button key={s.id} type="button" onClick={()=>setSeries?.(s.id)} className={chipCls(filter.series === s.id)}>
+                          {s.label} <span className="opacity-60 tabular-nums">{count}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {filter.series && SERIES_SUBS[filter.series] && (
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-muted mb-2">ประเภท</div>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={()=>setSubType?.('')} className={chipCls(!filter.subType)}>
+                      ทุกประเภท <span className="opacity-60 tabular-nums">{subTypeCounts?.__total || 0}</span>
+                    </button>
+                    {SERIES_SUBS[filter.series].map(s => {
+                      const count = subTypeCounts?.[s.id] || 0;
+                      if (count === 0 && filter.subType !== s.id) return null;
+                      return (
+                        <button key={s.id} type="button" onClick={()=>setSubType?.(s.id)} className={chipCls(filter.subType === s.id)}>
+                          {s.label} <span className="opacity-60 tabular-nums">{count}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {Object.keys(materialCounts).length > 0 && (
                 <div>
                   <div className="text-xs uppercase tracking-wider text-muted mb-2">วัสดุสาย</div>
@@ -6891,9 +7331,9 @@ function ProductFilterSheet({ open, onClose, filter, setFilter, materialCounts, 
           )}
         </div>
 
-        <div className="flex gap-2 px-4 py-3 border-t hairline bg-surface-soft">
+        <div className="flex gap-2 px-4 py-3 border-t hairline bg-surface-soft pb-safe">
           <button type="button" className="btn-ghost flex-1" onClick={()=>setFilter(f => ({
-            ...f, material: '', color: '', minPrice: 0, maxPrice: 0, inStockOnly: false,
+            ...f, series: '', subType: '', material: '', color: '', minPrice: 0, maxPrice: 0, inStockOnly: false,
           }))}>
             ล้างตัวกรอง
           </button>
@@ -7065,8 +7505,8 @@ function ProductCostHistory({ productId }) {
         </div>
       )}
 
-      {/* Table */}
-      <div className="max-h-[280px] overflow-y-auto">
+      {/* Table — desktop */}
+      <div className="max-h-[280px] overflow-y-auto hidden lg:block">
         {rows === null && (
           <div className="p-4 text-xs text-muted flex items-center gap-2"><span className="spinner"/>กำลังโหลด…</div>
         )}
@@ -7099,6 +7539,36 @@ function ProductCostHistory({ productId }) {
               ))}
             </tbody>
           </table>
+        )}
+      </div>
+
+      {/* Cards — mobile */}
+      <div className="max-h-[280px] overflow-y-auto lg:hidden">
+        {rows === null && (
+          <div className="p-4 text-xs text-muted flex items-center gap-2"><span className="spinner"/>กำลังโหลด…</div>
+        )}
+        {rows && rows.length === 0 && (
+          <div className="p-4 text-xs text-muted-soft">ยังไม่มีประวัติรับเข้า</div>
+        )}
+        {rows && rows.length > 0 && filtered.length === 0 && (
+          <div className="p-4 text-xs text-muted-soft text-center">ไม่พบรายการที่ตรงคำค้น</div>
+        )}
+        {rows && filtered.length > 0 && (
+          <div className="divide-y hairline-soft">
+            {filtered.map((r, i) => (
+              <div key={`${r.id}-${i}-m`} className="px-3 py-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs tabular-nums">{fmtThaiDateShort(r.date)}</span>
+                  <span className="text-sm font-medium tabular-nums">{fmtTHB(r.unit_price)}</span>
+                </div>
+                <div className="text-xs text-muted truncate mt-0.5" title={r.supplier}>{r.supplier || '—'}</div>
+                <div className="text-[10px] text-muted-soft font-mono mt-0.5 flex items-center justify-between">
+                  <span className="truncate" title={r.invoice}>{r.invoice || '—'}</span>
+                  <span className="tabular-nums shrink-0 ml-2">×{r.qty}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
@@ -8083,80 +8553,6 @@ function SalesView({ onGoPOS }) {
   const totalProfit = useMemo(()=> filteredOrders.reduce((s,o)=> s + (orderSummary[o.id]?.profit || 0), 0), [filteredOrders, orderSummary]);
   const totalProfitAfterVat = totalProfit / 1.07;
 
-  // Mini liquid-glass channel badge — card-cream visual recipe shrunk
-  // to a pill. Each channel gets its own tinted radial-gradient set so
-  // the row instantly tells the user where the sale came from.
-  const channelBadgeStyle = (ch) => {
-    const base = {
-      display: 'inline-block',
-      fontSize: '12px',
-      fontWeight: 500,
-      padding: '4px 12px',
-      borderRadius: '9999px',
-      whiteSpace: 'nowrap',
-      textAlign: 'center',
-      minWidth: '80px',
-      backdropFilter: 'blur(8px) saturate(140%)',
-      WebkitBackdropFilter: 'blur(8px) saturate(140%)',
-      lineHeight: 1.4,
-    };
-    const recipes = {
-      store: {
-        background: 'radial-gradient(circle at 14% 8%, rgba(76,175,80,0.18), transparent 34%), radial-gradient(circle at 90% 18%, rgba(129,199,132,0.16), transparent 32%), radial-gradient(circle at 50% 105%, rgba(232,245,233,0.50), transparent 44%), linear-gradient(135deg, rgba(200,230,201,0.92), rgba(165,214,167,0.78))',
-        border: '1px solid rgba(76,175,80,0.35)',
-        color: '#1b5e20',
-        boxShadow: '0 1px 0 rgba(255,255,255,0.85) inset, 0 -1px 0 rgba(76,175,80,0.10) inset, 0 4px 14px -4px rgba(20,20,19,0.08)',
-      },
-      shopee: {
-        background: 'radial-gradient(circle at 14% 8%, rgba(255,152,0,0.18), transparent 34%), radial-gradient(circle at 90% 18%, rgba(255,183,77,0.16), transparent 32%), radial-gradient(circle at 50% 105%, rgba(255,243,224,0.50), transparent 44%), linear-gradient(135deg, rgba(255,224,178,0.92), rgba(255,204,128,0.78))',
-        border: '1px solid rgba(255,152,0,0.35)',
-        color: '#e65100',
-        boxShadow: '0 1px 0 rgba(255,255,255,0.85) inset, 0 -1px 0 rgba(255,152,0,0.10) inset, 0 4px 14px -4px rgba(20,20,19,0.08)',
-      },
-      lazada: {
-        background: 'radial-gradient(circle at 14% 8%, rgba(63,81,181,0.18), transparent 34%), radial-gradient(circle at 90% 18%, rgba(121,134,203,0.16), transparent 32%), radial-gradient(circle at 50% 105%, rgba(232,234,246,0.50), transparent 44%), linear-gradient(135deg, rgba(197,202,233,0.92), rgba(159,168,218,0.78))',
-        border: '1px solid rgba(63,81,181,0.35)',
-        color: '#283593',
-        boxShadow: '0 1px 0 rgba(255,255,255,0.85) inset, 0 -1px 0 rgba(63,81,181,0.10) inset, 0 4px 14px -4px rgba(20,20,19,0.08)',
-      },
-      tiktok: {
-        background: 'radial-gradient(circle at 14% 8%, rgba(255,255,255,0.08), transparent 34%), radial-gradient(circle at 90% 18%, rgba(255,64,129,0.12), transparent 32%), radial-gradient(circle at 50% 105%, rgba(30,30,30,0.50), transparent 44%), linear-gradient(135deg, rgba(45,45,45,0.92), rgba(25,25,25,0.88))',
-        border: '1px solid rgba(255,255,255,0.18)',
-        color: '#ffffff',
-        boxShadow: '0 1px 0 rgba(255,255,255,0.15) inset, 0 -1px 0 rgba(0,0,0,0.25) inset, 0 4px 14px -4px rgba(0,0,0,0.20)',
-      },
-      // TikTok Shop API — same dark pill as TikTok with a subtle red wash.
-      tiktok_api: {
-        background: 'radial-gradient(circle at 12% 10%, rgba(254,44,85,0.38), transparent 38%), radial-gradient(circle at 88% 20%, rgba(255,80,120,0.22), transparent 34%), radial-gradient(circle at 50% 105%, rgba(30,30,30,0.52), transparent 44%), linear-gradient(135deg, rgba(58,28,36,0.94), rgba(28,22,26,0.90))',
-        border: '1px solid rgba(254,44,85,0.42)',
-        color: '#ffffff',
-        boxShadow: '0 1px 0 rgba(255,255,255,0.14) inset, 0 -1px 0 rgba(254,44,85,0.22) inset, 0 4px 14px -4px rgba(254,44,85,0.28)',
-      },
-      facebook: {
-        background: 'radial-gradient(circle at 14% 8%, rgba(33,150,243,0.18), transparent 34%), radial-gradient(circle at 90% 18%, rgba(100,181,246,0.16), transparent 32%), radial-gradient(circle at 50% 105%, rgba(227,242,253,0.50), transparent 44%), linear-gradient(135deg, rgba(187,222,251,0.92), rgba(144,202,249,0.78))',
-        border: '1px solid rgba(33,150,243,0.35)',
-        color: '#1565c0',
-        boxShadow: '0 1px 0 rgba(255,255,255,0.85) inset, 0 -1px 0 rgba(33,150,243,0.10) inset, 0 4px 14px -4px rgba(20,20,19,0.08)',
-      },
-    };
-    return { ...base, ...(recipes[ch] || recipes.store) };
-  };
-
-  /** One pill per row — TikTok API replaces the plain TikTok badge (no double badge). */
-  const channelBadgeForOrder = (order) => {
-    if (isApiImportedOrder(order)) {
-      return {
-        label: 'TikTok API',
-        style: channelBadgeStyle('tiktok_api'),
-        title: 'ดึงอัตโนมัติจาก TikTok Shop API — ไม่ต้องบันทึกซ้ำ',
-      };
-    }
-    return {
-      label: CHANNEL_LABELS[order.channel] || order.channel || '—',
-      style: channelBadgeStyle(order.channel),
-      title: undefined,
-    };
-  };
 
   const FilterControls = (
     <div className="space-y-3">
@@ -8249,7 +8645,9 @@ function SalesView({ onGoPOS }) {
       {/* PendingNetBell — `floating` portals it to <body> so the page's
           .view-fade transform can't capture its fixed position (which made
           it jump from mid-screen to the corner on entry). */}
-      <PendingNetBell toast={toast.push} size={50} floating floatClassName="top-[30px] right-[40px]"/>
+      <div className="hidden lg:block">
+        <PendingNetBell toast={toast.push} size={50} placement="floating" floatClassName="top-[30px] right-[40px]"/>
+      </div>
       {/* Summary cards — revenue (cream) + profit (Tiffany blue) split
           50/50 on sm+. Mobile stacks; filter button moves out of the
           revenue card to its own row above so the two summary tiles can
@@ -8351,7 +8749,6 @@ function SalesView({ onGoPOS }) {
             {/* Rows */}
             {g.list.map(o => {
               const sm = orderSummary[o.id];
-              const chBadge = channelBadgeForOrder(o);
               return (
               <div key={o.id} className={"grid grid-cols-12 px-4 py-3 items-center gap-x-2 border-b hairline last:border-0 hover:bg-surface-strong/40 cursor-pointer transition-colors " + (o.status==='voided'?'opacity-60':'') + (o.net_received_pending && o.status!=='voided' ? ' bg-error/5' : '')} onClick={()=>openDetail(o)}>
                 <div className="col-span-1 font-mono text-sm truncate flex justify-center items-center min-h-[34px]">
@@ -8366,7 +8763,7 @@ function SalesView({ onGoPOS }) {
                   <OrderStatusBadge order={o} hasSubstitution={sm?.hasSubstitution}/>
                 </div>
                 <div className="col-span-2 flex justify-center items-center min-h-[34px]">
-                  <span style={chBadge.style} title={chBadge.title}>{chBadge.label}</span>
+                  <ChannelBadge order={o} />
                 </div>
                 <div className="col-span-1 flex justify-center items-center min-h-[34px]">
                   <PaymentMethodIcon method={o.payment_method} />
@@ -8427,14 +8824,13 @@ function SalesView({ onGoPOS }) {
             <div className="space-y-2">
               {g.list.map(o => {
                 const sm = orderSummary[o.id];
-                const chBadge = channelBadgeForOrder(o);
                 return (
                 <div key={o.id} className={"card-canvas pressable p-3.5 flex items-center gap-3 " + (o.status==='voided'?'opacity-60':'') + (o.net_received_pending && o.status!=='voided' ? ' !bg-error/5' : '')} onClick={()=>openDetail(o)}>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-xs text-muted">#{o.id}</span>
                       <OrderStatusBadge order={o} hasSubstitution={sm?.hasSubstitution}/>
-                      <span style={chBadge.style} title={chBadge.title}>{chBadge.label}</span>
+                      <ChannelBadge order={o} iconOnly size={16} />
                     </div>
                     {sm && sm.itemCount > 0 && (
                       <div className="text-sm text-ink font-semibold mt-1 truncate" title={sm.productLabel}>{sm.productLabel}</div>
@@ -8442,7 +8838,7 @@ function SalesView({ onGoPOS }) {
                     <div className="text-xs text-muted mt-1 tabular-nums flex items-center gap-1.5 flex-wrap">
                       <span>{fmtTimeBangkok(o.sale_date)} น.</span>
                       <span className="text-muted-soft">·</span>
-                      <PaymentMethodIcon method={o.payment_method} />
+                      <PaymentMethodIcon method={o.payment_method} size={26} />
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">
@@ -8450,18 +8846,14 @@ function SalesView({ onGoPOS }) {
                     {ECOMMERCE_CHANNELS.has(o.channel) && o.net_received != null && (
                       <div className="text-xs text-muted-soft mt-0.5 tabular-nums">ได้รับ {fmtMoney(o.net_received)}</div>
                     )}
-                    {o.net_received_pending && o.status!=='voided' && (
-                      <div className="text-xs text-error font-medium mt-0.5">รอใส่ราคา</div>
-                    )}
-                    {sm && o.status !== 'voided' && (
-                      <>
-                        <div className={"text-xs tabular-nums mt-0.5 " + (sm.profit >= 0 ? 'text-success' : 'text-error')}>
-                          {sm.profit >= 0 ? '+' : ''}{fmtMoney(sm.profit)}
-                        </div>
-                        <div className="text-[11px] text-muted-soft tabular-nums mt-0.5">
-                          หลัง VAT {sm.profit/1.07 >= 0 ? '+' : ''}{fmtMoney(sm.profit/1.07)}
-                        </div>
-                      </>
+                    {isAdmin && sm && o.status !== 'voided' && (
+                      <div
+                        className={"text-xs tabular-nums mt-1 inline-flex items-center gap-0.5 " + (sm.profit >= 0 ? 'text-success' : 'text-error')}
+                        title={`กำไรหลัง VAT ${sm.profit/1.07 >= 0 ? '+' : ''}${fmtMoney(sm.profit/1.07)}`}
+                      >
+                        <Icon name={sm.profit >= 0 ? 'trend-up' : 'arrow-down'} size={12} />
+                        {sm.profit >= 0 ? '+' : ''}{fmtMoney(sm.profit)}
+                      </div>
                     )}
                   </div>
                   <Icon name="chevron-r" size={16} className="text-muted-soft"/>
@@ -8484,36 +8876,50 @@ function SalesView({ onGoPOS }) {
           </span>
         ) : ""}
         footer={<>
-          {/* When the admin is mid-edit, swap the whole footer for the
-              save / cancel pair so they can't accidentally hit
-              "ยกเลิกบิล" or "พิมพ์ใบเสร็จ" with pending unsaved changes. */}
           {editMode ? (<>
-            <button className="btn-secondary" onClick={cancelEditBill} disabled={savingEdit}>ยกเลิก</button>
-            <button className="btn-primary" onClick={saveEditBill} disabled={savingEdit}>
-              {savingEdit ? <span className="spinner"/> : <Icon name="check" size={16}/>} บันทึกการแก้ไข
-            </button>
+            <div className="flex flex-col-reverse sm:flex-row gap-2 w-full lg:w-auto lg:flex-row">
+              <button className="btn-secondary" onClick={cancelEditBill} disabled={savingEdit}>ยกเลิก</button>
+              <button className="btn-primary" onClick={saveEditBill} disabled={savingEdit}>
+                {savingEdit ? <span className="spinner"/> : <Icon name="check" size={16}/>} บันทึกการแก้ไข
+              </button>
+            </div>
           </>) : (<>
-            {detail?.order.status==='active' && isAdmin && (<>
-              <button className="btn-secondary btn-danger-modal whitespace-nowrap flex-shrink-0" onClick={voidSale} disabled={voiding}>
-                <Icon name="trash" size={16}/>{voiding?'กำลังยกเลิก...':'ยกเลิกบิล'}
-              </button>
-              <button className="btn-print-blue whitespace-nowrap flex-shrink-0" onClick={startEditBill}
-                title="แก้ไขจำนวน / ช่องทาง / วิธีชำระ — ทุกการแก้ไขถูกบันทึกใน audit log">
-                <Icon name="edit" size={16}/> แก้ไขบิล
-              </button>
-            </>)}
-            {detail && (
-              <button className="btn-print-receipt whitespace-nowrap flex-shrink-0" onClick={()=>{ setReprintVariant(undefined); setReprintId(detail.order.id); }}>
-                <Icon name="receipt" size={16}/> พิมพ์ใบเสร็จ
-              </button>
-            )}
-            {detail && isAdmin && detail.order.status!=='voided' && (
-              <button className="btn-print-gold whitespace-nowrap flex-shrink-0" onClick={openIssueInvoice}
-                title="ออก/อัปเดตข้อมูลผู้ซื้อ แล้วพิมพ์ใบกำกับภาษีแบบเต็มรูป (A4)">
-                <Icon name="receipt" size={16}/> ใบกำกับเต็มรูป
-              </button>
-            )}
-            <button className="btn-secondary whitespace-nowrap flex-shrink-0" onClick={()=>setDetail(null)}>ปิด</button>
+            <div className="hidden lg:flex flex-wrap gap-2 justify-end w-full">
+              {detail?.order.status==='active' && isAdmin && (<>
+                <button className="btn-secondary btn-danger-modal whitespace-nowrap flex-shrink-0" onClick={voidSale} disabled={voiding}>
+                  <Icon name="trash" size={16}/>{voiding?'กำลังยกเลิก...':'ยกเลิกบิล'}
+                </button>
+                <button className="btn-print-blue whitespace-nowrap flex-shrink-0" onClick={startEditBill}
+                  title="แก้ไขจำนวน / ช่องทาง / วิธีชำระ — ทุกการแก้ไขถูกบันทึกใน audit log">
+                  <Icon name="edit" size={16}/> แก้ไขบิล
+                </button>
+              </>)}
+              {detail && (
+                <button className="btn-print-receipt whitespace-nowrap flex-shrink-0" onClick={()=>{ setReprintVariant(undefined); setReprintId(detail.order.id); }}>
+                  <Icon name="receipt" size={16}/> พิมพ์ใบเสร็จ
+                </button>
+              )}
+              {detail && isAdmin && detail.order.status!=='voided' && (
+                <button className="btn-print-gold whitespace-nowrap flex-shrink-0" onClick={openIssueInvoice}
+                  title="ออก/อัปเดตข้อมูลผู้ซื้อ แล้วพิมพ์ใบกำกับภาษีแบบเต็มรูป (A4)">
+                  <Icon name="receipt" size={16}/> ใบกำกับเต็มรูป
+                </button>
+              )}
+              <button className="btn-secondary whitespace-nowrap flex-shrink-0" onClick={()=>setDetail(null)}>ปิด</button>
+            </div>
+            <MobileActionSheet
+              onClose={()=>setDetail(null)}
+              actions={[
+                ...(detail ? [{ id: 'print', icon: 'receipt', label: 'พิมพ์ใบเสร็จ', onClick: () => { setReprintVariant(undefined); setReprintId(detail.order.id); } }] : []),
+                ...(detail?.order.status === 'active' && isAdmin ? [
+                  { id: 'edit', icon: 'edit', label: 'แก้ไขบิล', onClick: startEditBill },
+                  { id: 'void', icon: 'trash', label: voiding ? 'กำลังยกเลิก...' : 'ยกเลิกบิล', onClick: voidSale, variant: 'danger', disabled: voiding },
+                ] : []),
+                ...(detail && isAdmin && detail.order.status !== 'voided' ? [
+                  { id: 'a4', icon: 'file', label: 'ใบกำกับเต็มรูป', onClick: openIssueInvoice },
+                ] : []),
+              ]}
+            />
           </>)}
         </>}>
         {detail && (
@@ -9018,12 +9424,12 @@ function ReceiveView() {
       </header>
 
       <div className="px-4 py-4 lg:px-10 lg:py-8">
-        {/* Mobile controls */}
-        <div className="flex items-center justify-between gap-3 mb-5 lg:hidden">
-          {TabGroup}
-          {ActionButtons}
-        </div>
-        <div className="text-xs text-muted mb-4 ml-1">{tabs.find(t=>t.k===tab).hint}</div>
+        <MobilePageBand actions={ActionButtons} className="mb-3 -mx-4">
+          <div className="min-w-0 overflow-x-auto">{TabGroup}</div>
+        </MobilePageBand>
+        <p className="text-xs text-muted mb-4 lg:hidden truncate" title={tabs.find(t=>t.k===tab).hint}>
+          {tabs.find(t=>t.k===tab).hint}
+        </p>
         {tab === 'bulk_receive' ? (
           // Bulk receive flow owns its own state (multi-image upload,
           // wizard review, sequential submit). Mounting under a stable
@@ -9075,10 +9481,13 @@ function ReturnView()  {
       </header>
 
       <div className="px-4 py-4 lg:px-10 lg:py-8">
+        <MobilePageBand actions={HistoryBtn} className="mb-3 -mx-4 lg:hidden">
+          <span className="text-sm font-medium text-ink truncate">รับคืนจากลูกค้า</span>
+        </MobilePageBand>
         {/* On mobile, dock the history button inline with the form's
             search row via the `headerAction` prop instead of giving it
             its own row. Desktop keeps the button in the page header. */}
-        <StockMovementForm kind="return" headerAction={HistoryBtn}/>
+        <StockMovementForm kind="return"/>
         <MovementHistoryModal open={historyOpen} onClose={()=>setHistoryOpen(false)} kind="return"/>
       </div>
     </div>
@@ -9221,49 +9630,53 @@ function BillPickerPopup({ open, product, onPick, onClose }) {
                 key={r.id} type="button"
                 disabled={isBlocked || picking}
                 onClick={() => handlePick(r)}
-                className={"w-full text-left px-4 py-3 border-b hairline last:border-0 flex items-center gap-3 transition-colors " +
+                className={"w-full text-left px-4 py-3 border-b hairline last:border-0 transition-colors " +
                   (isBlocked ? "opacity-50 cursor-not-allowed bg-error/5" : "hover:bg-surface-strong/50 cursor-pointer")}
               >
-                <div className="flex-shrink-0 w-24">
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      fontFamily: 'monospace',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      padding: '4px 12px',
-                      borderRadius: '9999px',
-                      whiteSpace: 'nowrap',
-                      textAlign: 'center',
-                      minWidth: '80px',
-                      backdropFilter: 'blur(8px) saturate(140%)',
-                      WebkitBackdropFilter: 'blur(8px) saturate(140%)',
-                      lineHeight: '1.4',
-                      background: 'radial-gradient(circle at 14% 8%, rgba(255, 255, 255, 0.08), transparent 34%), radial-gradient(circle at 90% 18%, rgba(255, 64, 129, 0.12), transparent 32%), radial-gradient(circle at 50% 105%, rgba(30, 30, 30, 0.5), transparent 44%), linear-gradient(135deg, rgba(45, 45, 45, 0.92), rgba(25, 25, 25, 0.88))',
-                      border: '1px solid rgba(255, 255, 255, 0.18)',
-                      color: '#ffffff',
-                      boxShadow: 'rgba(255, 255, 255, 0.15) 0px 1px 0px inset, rgba(0, 0, 0, 0.25) 0px -1px 0px inset, rgba(0, 0, 0, 0.2) 0px 4px 14px -4px',
-                    }}
-                  >
-                    #{r.id}
-                  </span>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm">{fmtThaiDateShort(r.sale_date)}</div>
-                  <div className="text-xs text-muted mt-0.5">
-                    {CHANNEL_LABELS[r.channel] || r.channel} · {r.totalQty.toLocaleString('th-TH')} ชิ้น · {fmtTHB(r.lastUnitPrice)}/ชิ้น
-                    {r.isTikTokCancelledVoid && (
-                      <span className="badge-pill !bg-error/10 !text-error !text-[10px] ml-1">ยกเลิก TikTok</span>
+                {/* Desktop row */}
+                <div className="hidden lg:flex items-center gap-3">
+                  <div className="flex-shrink-0 w-24">
+                    <span className="font-mono text-xs font-semibold">#{r.id}</span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm">{fmtThaiDateShort(r.sale_date)}</div>
+                    <div className="text-xs text-muted mt-0.5 flex items-center gap-1.5 flex-wrap">
+                      <ChannelBadge channel={r.channel} iconOnly size={14} />
+                      <span>{r.totalQty.toLocaleString('th-TH')} ชิ้น · {fmtTHB(r.lastUnitPrice)}/ชิ้น</span>
+                      {r.isTikTokCancelledVoid && (
+                        <span className="badge-pill !bg-error/10 !text-error !text-[10px]">ยกเลิก TikTok</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className="text-sm font-medium tabular-nums">{fmtTHB(r.grand_total)}</div>
+                    {isBlocked && (
+                      <span className="badge-pill !bg-error/10 !text-error mt-0.5 text-[10px]">มีรายการคืนแล้ว</span>
                     )}
                   </div>
+                  {!isBlocked && <Icon name="chevron-r" size={16} className="text-muted-soft flex-shrink-0"/>}
                 </div>
-                <div className="text-right flex-shrink-0">
-                  <div className="text-sm font-medium tabular-nums">{fmtTHB(r.grand_total)}</div>
-                  {isBlocked && (
-                    <span className="badge-pill !bg-error/10 !text-error mt-0.5 text-[10px]">มีรายการคืนแล้ว</span>
-                  )}
+                {/* Mobile stacked card */}
+                <div className="lg:hidden flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-sm font-semibold">#{r.id}</span>
+                      <span className="text-sm font-medium tabular-nums">{fmtTHB(r.grand_total)}</span>
+                    </div>
+                    <div className="text-xs text-muted mt-1">{fmtThaiDateShort(r.sale_date)}</div>
+                    <div className="text-xs text-muted-soft mt-0.5 flex items-center gap-1.5 flex-wrap">
+                      <ChannelBadge channel={r.channel} iconOnly size={14} />
+                      <span>{r.totalQty.toLocaleString('th-TH')} ชิ้น · {fmtTHB(r.lastUnitPrice)}/ชิ้น</span>
+                      {r.isTikTokCancelledVoid && (
+                        <span className="badge-pill !bg-error/10 !text-error !text-[10px]">ยกเลิก TikTok</span>
+                      )}
+                      {isBlocked && (
+                        <span className="badge-pill !bg-error/10 !text-error !text-[10px]">มีรายการคืนแล้ว</span>
+                      )}
+                    </div>
+                  </div>
+                  {!isBlocked && <Icon name="chevron-r" size={16} className="text-muted-soft flex-shrink-0"/>}
                 </div>
-                {!isBlocked && <Icon name="chevron-r" size={16} className="text-muted-soft flex-shrink-0"/>}
               </button>
             );
           })}
@@ -11411,8 +11824,8 @@ function DashboardView({ embedded = false, dateRange: dateRangeProp, onDateRange
       <div key={`${dateRange.from}_${dateRange.to}`}
            className="px-4 lg:px-10 pb-8 cascade space-y-4 lg:space-y-6">
 
-        {/* Quick range presets */}
-        <div style={{ '--i': 0 }} className="flex items-center justify-between gap-3 flex-wrap fade-in stagger">
+        {/* Quick range presets — hidden on mobile when embedded (Overview header shows them) */}
+        <div style={{ '--i': 0 }} className={'flex items-center justify-between gap-3 flex-wrap fade-in stagger ' + (embedded ? 'hidden lg:flex' : '')}>
           <RangePresets dateRange={dateRange} setDateRange={setDateRange}/>
           <div className="flex items-center gap-2 text-xs text-muted-soft tabular-nums">
             {refreshing && !loading && <span className="spinner shrink-0" title="กำลังอัปเดต"/>}
@@ -12048,17 +12461,18 @@ function OverviewView() {
             disabled={disabled}
             onClick={disabled ? undefined : () => setTab(t.k)}
             title={disabled ? 'เฉพาะ super admin เท่านั้น' : undefined}
+            aria-label={t.label}
             className={
-              'px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-all ' +
+              'px-2.5 sm:px-4 py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-1.5 transition-all flex-1 sm:flex-none ' +
               (disabled
                 ? 'text-muted-soft opacity-40 cursor-not-allowed'
                 : active
                   ? 'bg-surface-strong text-ink shadow-md ring-1 ring-hairline'
                   : 'text-muted hover:text-ink hover:bg-surface-strong/40')
             }>
-            <Icon name={t.icon} size={16} />
-            {t.label}
-            {disabled && <Icon name="lock" size={11} className="opacity-70"/>}
+            <Icon name={t.icon} size={18} />
+            <span className="hidden sm:inline">{t.label}</span>
+            {disabled && <Icon name="lock" size={11} className="opacity-70 hidden sm:inline"/>}
           </button>
         );
       })}
@@ -12108,16 +12522,19 @@ function OverviewView() {
       {/* Mobile header — MobileTopBar already shows the page title, so
           here we surface segment + date picker (dashboard / VAT). */}
       <div className="lg:hidden px-4 pt-3 space-y-2">
-        <Segment className="w-full !flex" />
+        <Segment className="w-full !flex overflow-x-auto" />
         {(tab === 'dashboard' || tab === 'vat') && (() => {
           const val = tab === 'vat' ? vatDateRange : dateRange;
           const setVal = tab === 'vat' ? setVatDateRange : setDateRange;
           return (
-            <div className="flex items-center gap-3">
-              <Icon name="calendar" size={18} className="text-muted flex-shrink-0"/>
-              <DatePicker mode="range" value={val} onChange={setVal}
-                placeholder="เลือกช่วงวันที่" className="flex-1" />
-            </div>
+            <>
+              <div className="flex items-center gap-3">
+                <Icon name="calendar" size={18} className="text-muted flex-shrink-0"/>
+                <DatePicker mode="range" value={val} onChange={setVal}
+                  placeholder="เลือกช่วงวันที่" className="flex-1" />
+              </div>
+              <RangePresets dateRange={val} setDateRange={setVal} className="w-full !flex overflow-x-auto" />
+            </>
           );
         })()}
       </div>
@@ -12528,7 +12945,7 @@ function ProfitLossView({ embedded = false }) {
 
       {/* Quick range presets — same component used by Dashboard, lives
           inside the pane so it can re-key the cascade on tap. */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+      <div className={'flex items-center justify-between gap-3 flex-wrap ' + (embedded ? 'hidden lg:flex' : '')}>
         <RangePresets dateRange={dateRange} setDateRange={setDateRange}/>
         <div className="text-xs text-muted-soft tabular-nums">{rangeLabel}</div>
       </div>

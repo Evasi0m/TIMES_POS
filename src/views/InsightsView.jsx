@@ -24,6 +24,7 @@ import { fetchAll } from '../lib/sb-paginate.js';
 import { ECOMMERCE_CHANNELS, excludePendingTikTok } from '../lib/ecommerce-channels.js';
 import { fmtTHB, fmtPct, fmtNum } from '../lib/format.js';
 import Icon from '../components/ui/Icon.jsx';
+import MobileDataCard from '../components/ui/mobile/MobileDataCard.jsx';
 
 import { buildHeatmap, peakCell, WEEKDAY_LABELS_TH } from '../lib/analytics/heatmap.js';
 import { velocityByProduct } from '../lib/analytics/velocity.js';
@@ -171,9 +172,36 @@ function Heatmap({ result }) {
     return `color-mix(in srgb, rgb(var(--c-surface-card)) ${Math.round(78 - 38 * t)}%, rgb(var(--c-primary)))`;
   };
   const peak = peakCell(result);
+  const topPeaks = useMemo(() => {
+    const cells = [];
+    matrix.forEach((row, d) => {
+      row.forEach((v, h) => {
+        if (v > 0) cells.push({ dow: d, hour: h, revenue: v });
+      });
+    });
+    return cells.sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+  }, [matrix]);
   return (
     <div>
-      <div className="overflow-x-auto -mx-4 lg:mx-0 px-4 lg:px-0">
+      {/* Mobile — top peak hours as scroll chips */}
+      <div className="lg:hidden space-y-2 mb-3">
+        {peak && (
+          <div className="text-xs text-muted">
+            ช่วงขายดีสุด:&nbsp;
+            <span className="font-medium text-ink">
+              {WEEKDAY_LABELS_TH[peak.dow]} {String(peak.hour).padStart(2, '0')}:00 · {fmtTHB(peak.revenue)}
+            </span>
+          </div>
+        )}
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+          {topPeaks.map((p) => (
+            <span key={`${p.dow}-${p.hour}`} className="px-2.5 py-1 rounded-full text-xs bg-surface-strong border hairline shrink-0 tabular-nums whitespace-nowrap">
+              {WEEKDAY_LABELS_TH[p.dow]} {String(p.hour).padStart(2, '0')}:00 · {fmtTHB(p.revenue)}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className="hidden lg:block overflow-x-auto -mx-4 lg:mx-0 px-4 lg:px-0">
         <table className="text-[10px] tabular-nums border-collapse min-w-[640px]">
           <thead>
             <tr>
@@ -202,7 +230,7 @@ function Heatmap({ result }) {
         </table>
       </div>
       {peak && (
-        <div className="text-xs text-muted mt-3">
+        <div className="hidden lg:block text-xs text-muted mt-3">
           ช่วงขายดีสุด:&nbsp;
           <span className="font-medium text-ink">
             {WEEKDAY_LABELS_TH[peak.dow]} {String(peak.hour).padStart(2, '0')}:00 · {fmtTHB(peak.revenue)}
@@ -378,37 +406,58 @@ function DeadStockTable({ rows, threshold, onChangeThreshold, onExport }) {
        rows.length === 0 ? (
          <div className="text-sm text-muted py-6 text-center">ไม่มีสินค้าที่ค้างเกินเกณฑ์ 🎉</div>
        ) : (
-        <div className="overflow-x-auto -mx-4 lg:mx-0">
-          <table className="w-full text-sm min-w-[560px]">
-            <thead className="text-[11px] uppercase tracking-wider text-muted">
-              <tr className="border-b hairline">
-                <th className="text-left px-3 py-2">สินค้า</th>
-                <th className="text-right px-3 py-2">สต็อก</th>
-                <th className="text-right px-3 py-2">ไม่ขายมา</th>
-                <th className="text-right px-3 py-2">มูลค่าจม</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.slice(0, 30).map((r) => (
-                <tr key={r.id} className="border-b hairline last:border-0">
-                  <td className="px-3 py-2 truncate max-w-[220px]" title={r.name}>{r.name}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmtNum(r.current_stock)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-muted">
-                    {r.days_since_sold === Infinity ? 'ไม่เคยขาย' : `${r.days_since_sold} วัน`}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums font-medium">{fmtTHB(r.locked_value)}</td>
-                </tr>
-              ))}
-            </tbody>
+        <>
+          <div className="lg:hidden space-y-2">
+            {rows.slice(0, 30).map((r) => (
+              <MobileDataCard
+                key={r.id}
+                showChevron={false}
+                right={<span className="font-medium text-sm">{fmtTHB(r.locked_value)}</span>}
+              >
+                <div className="text-sm font-medium truncate" title={r.name}>{r.name}</div>
+                <div className="text-xs text-muted mt-1 tabular-nums">
+                  สต็อก {fmtNum(r.current_stock)} · {r.days_since_sold === Infinity ? 'ไม่เคยขาย' : `ไม่ขาย ${r.days_since_sold} วัน`}
+                </div>
+              </MobileDataCard>
+            ))}
             {rows.length > 30 && (
-              <tfoot>
-                <tr><td colSpan={4} className="text-[11px] text-muted-soft text-center py-2">
-                  แสดง 30 จาก {rows.length} รายการ · export CSV ดูทั้งหมด
-                </td></tr>
-              </tfoot>
+              <div className="text-[11px] text-muted-soft text-center py-2">
+                แสดง 30 จาก {rows.length} รายการ · export CSV ดูทั้งหมด
+              </div>
             )}
-          </table>
-        </div>
+          </div>
+          <div className="hidden lg:block overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
+              <thead className="text-[11px] uppercase tracking-wider text-muted">
+                <tr className="border-b hairline">
+                  <th className="text-left px-3 py-2">สินค้า</th>
+                  <th className="text-right px-3 py-2">สต็อก</th>
+                  <th className="text-right px-3 py-2">ไม่ขายมา</th>
+                  <th className="text-right px-3 py-2">มูลค่าจม</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.slice(0, 30).map((r) => (
+                  <tr key={r.id} className="border-b hairline last:border-0">
+                    <td className="px-3 py-2 truncate max-w-[220px]" title={r.name}>{r.name}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtNum(r.current_stock)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-muted">
+                      {r.days_since_sold === Infinity ? 'ไม่เคยขาย' : `${r.days_since_sold} วัน`}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums font-medium">{fmtTHB(r.locked_value)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              {rows.length > 30 && (
+                <tfoot>
+                  <tr><td colSpan={4} className="text-[11px] text-muted-soft text-center py-2">
+                    แสดง 30 จาก {rows.length} รายการ · export CSV ดูทั้งหมด
+                  </td></tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </>
       )}
     </div>
   );
@@ -426,34 +475,51 @@ function ReorderTable({ rows, onExport }) {
        rows.length === 0 ? (
         <div className="text-sm text-muted py-6 text-center">ยังไม่มีสินค้าใกล้หมดที่ควรสั่งเพิ่ม</div>
        ) : (
-        <div className="overflow-x-auto -mx-4 lg:mx-0">
-          <table className="w-full text-sm min-w-[620px]">
-            <thead className="text-[11px] uppercase tracking-wider text-muted">
-              <tr className="border-b hairline">
-                <th className="text-left px-3 py-2">สินค้า</th>
-                <th className="text-right px-3 py-2">สต็อก</th>
-                <th className="text-right px-3 py-2">ขาย/วัน</th>
-                <th className="text-right px-3 py-2">พอ ~</th>
-                <th className="text-right px-3 py-2">แนะนำสั่ง</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.slice(0, 30).map((r) => (
-                <tr key={r.id} className="border-b hairline last:border-0">
-                  <td className="px-3 py-2 truncate max-w-[240px]" title={r.name}>{r.name}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmtNum(r.current_stock)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{r.avgPerDay.toFixed(1)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-muted">
-                    {Number.isFinite(r.daysOfStockLeft) ? `${Math.floor(r.daysOfStockLeft)} วัน` : '—'}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums font-semibold text-primary">
-                    +{fmtNum(r.suggestedReorder)}
-                  </td>
+        <>
+          <div className="lg:hidden space-y-2">
+            {rows.slice(0, 30).map((r) => (
+              <MobileDataCard
+                key={r.id}
+                showChevron={false}
+                right={<span className="font-semibold text-primary text-sm">+{fmtNum(r.suggestedReorder)}</span>}
+              >
+                <div className="text-sm font-medium truncate" title={r.name}>{r.name}</div>
+                <div className="text-xs text-muted mt-1 tabular-nums">
+                  สต็อก {fmtNum(r.current_stock)} · {r.avgPerDay.toFixed(1)}/วัน
+                  {Number.isFinite(r.daysOfStockLeft) ? ` · พอ ~${Math.floor(r.daysOfStockLeft)} วัน` : ''}
+                </div>
+              </MobileDataCard>
+            ))}
+          </div>
+          <div className="hidden lg:block overflow-x-auto">
+            <table className="w-full text-sm min-w-[620px]">
+              <thead className="text-[11px] uppercase tracking-wider text-muted">
+                <tr className="border-b hairline">
+                  <th className="text-left px-3 py-2">สินค้า</th>
+                  <th className="text-right px-3 py-2">สต็อก</th>
+                  <th className="text-right px-3 py-2">ขาย/วัน</th>
+                  <th className="text-right px-3 py-2">พอ ~</th>
+                  <th className="text-right px-3 py-2">แนะนำสั่ง</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {rows.slice(0, 30).map((r) => (
+                  <tr key={r.id} className="border-b hairline last:border-0">
+                    <td className="px-3 py-2 truncate max-w-[240px]" title={r.name}>{r.name}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtNum(r.current_stock)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{r.avgPerDay.toFixed(1)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-muted">
+                      {Number.isFinite(r.daysOfStockLeft) ? `${Math.floor(r.daysOfStockLeft)} วัน` : '—'}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums font-semibold text-primary">
+                      +{fmtNum(r.suggestedReorder)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

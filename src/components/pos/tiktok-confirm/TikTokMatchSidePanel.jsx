@@ -62,31 +62,35 @@ function MatchedCompactCard({
             : 'border-[#0a7a43]/25 bg-[#e6f7ed]/60')
       }
     >
-      <div className="flex items-center gap-2 min-w-0">
-        <SkuThumb url={item.sku_image_url} sizeClass="w-10 h-10" iconSize={18}/>
-        <div className="min-w-0 flex-1">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">{TTC_COPY.colTiktok}</div>
-          <div className="font-mono text-sm font-medium truncate" title={tiktokSku}>{tiktokSku}</div>
-        </div>
-        <Icon name="chevron-r" size={16} className="text-muted shrink-0"/>
-        <div className="min-w-0 flex-1">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">{TTC_COPY.colStore}</div>
-          <div className="font-mono text-sm font-semibold text-[#0a5a32] truncate" title={pick?.name}>
-            {pick?.name || '—'}
-          </div>
-          <div className="text-[11px] text-muted tabular-nums mt-0.5">
-            {stock != null ? TTC_COPY.stock(stock) : TTC_COPY.stockUnknown}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 sm:flex-1">
+          <SkuThumb url={item.sku_image_url} sizeClass="w-10 h-10" iconSize={18}/>
+          <div className="min-w-0 flex-1">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">{TTC_COPY.colTiktok}</div>
+            <div className="font-mono text-sm font-medium truncate" title={tiktokSku}>{tiktokSku}</div>
           </div>
         </div>
-        {!shortfall && resolved && (
-          <Icon name="check" size={18} className="text-[#0a7a43] shrink-0"/>
-        )}
-        {needsResolution && !shortfall && !resolved && (
-          <Icon name="alert" size={18} className="text-amber-700 shrink-0"/>
-        )}
-        {!shortfall && !needsResolution && !resolved && (
-          <Icon name="check" size={18} className="text-[#0a7a43] shrink-0"/>
-        )}
+        <Icon name="chevron-r" size={16} className="text-muted shrink-0 hidden sm:block rotate-90 sm:rotate-0 self-center"/>
+        <div className="flex items-center gap-2 min-w-0 sm:flex-1">
+          <div className="min-w-0 flex-1">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">{TTC_COPY.colStore}</div>
+            <div className="font-mono text-sm font-semibold text-[#0a5a32] truncate" title={pick?.name}>
+              {pick?.name || '—'}
+            </div>
+            <div className="text-[11px] text-muted tabular-nums mt-0.5">
+              {stock != null ? TTC_COPY.stock(stock) : TTC_COPY.stockUnknown}
+            </div>
+          </div>
+          {!shortfall && resolved && (
+            <Icon name="check" size={18} className="text-[#0a7a43] shrink-0"/>
+          )}
+          {needsResolution && !shortfall && !resolved && (
+            <Icon name="alert" size={18} className="text-amber-700 shrink-0"/>
+          )}
+          {!shortfall && !needsResolution && !resolved && (
+            <Icon name="check" size={18} className="text-[#0a7a43] shrink-0"/>
+          )}
+        </div>
       </div>
       {suffixOk && (
         <div className="text-xs text-[#0a5a32] mt-2 leading-relaxed flex items-start gap-1.5">

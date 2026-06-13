@@ -8,6 +8,7 @@ import { todayISO } from '../../lib/server-clock.js';
 import { fullBuyerValid } from '../../lib/tax-buyer.js';
 import FullTaxInvoiceA4 from '../invoice/FullTaxInvoiceA4.jsx';
 import Icon from '../ui/Icon.jsx';
+import MobileDataCard from '../ui/mobile/MobileDataCard.jsx';
 import TikTokSection from './tiktok/TikTokSection.jsx';
 import {
   TikTokGlassBadge,
@@ -203,7 +204,37 @@ export default function TikTokInvoiceSection({ orders, itemsByOrder, toast, onOr
           onSelect={setInvoiceFilter}
         />
       </div>
-      <div className="tt-glass__table">
+      <div className="lg:hidden space-y-2">
+        {visibleOrders.length === 0 && (
+          <div className="tt-glass__table-empty">ไม่มีออเดอร์</div>
+        )}
+        {visibleOrders.map((o) => (
+          <MobileDataCard
+            key={o.id}
+            showChevron={false}
+            onClick={() => openEdit(o)}
+            right={o.tax_invoice_no ? (
+              <span className="font-mono text-[10px] text-success">{o.tax_invoice_no}</span>
+            ) : null}
+          >
+            <div className="font-mono text-xs font-semibold text-ink">{o.tiktok_order_id || `#${o.id}`}</div>
+            <div className="text-sm truncate mt-0.5">{o.buyer_name || o.shipping_recipient_name || '—'}</div>
+            <div className="mt-1">
+              {buyerReady(o)
+                ? <TikTokGlassBadge tone="ok" context="surface">พร้อมพิมพ์</TikTokGlassBadge>
+                : <TikTokGlassBadge tone="warn" context="surface">รอ Tax ID</TikTokGlassBadge>}
+            </div>
+            <div className="flex gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
+              <TikTokGlassBtn variant="outline" className="flex-1" onClick={() => openEdit(o)}>แก้/ออกใบ</TikTokGlassBtn>
+              <TikTokGlassBtn variant="outline" className="flex-1" disabled={!buyerReady(o)} onClick={() => printOne(o)}>
+                พิมพ์ A4
+              </TikTokGlassBtn>
+            </div>
+          </MobileDataCard>
+        ))}
+      </div>
+
+      <div className="tt-glass__table hidden lg:block">
         <div className={'tt-glass__table-head grid ' + INVOICE_GRID}>
           <span>TikTok Order</span>
           <span>ผู้ซื้อ</span>

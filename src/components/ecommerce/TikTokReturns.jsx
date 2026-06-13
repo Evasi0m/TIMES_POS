@@ -4,6 +4,7 @@ import { sb } from '../../lib/supabase-client.js';
 import { mapError } from '../../lib/error-map.js';
 import { fmtTHB } from '../../lib/format.js';
 import Icon from '../ui/Icon.jsx';
+import MobileDataCard from '../ui/mobile/MobileDataCard.jsx';
 import TikTokSection from './tiktok/TikTokSection.jsx';
 import { TikTokGlassBadge, TikTokGlassBtn } from './tiktok/glass/index.js';
 
@@ -111,7 +112,41 @@ export default function TikTokReturns({ toast }) {
         <strong className="text-ink">รับคืนจากลูกค้า</strong>{' '}
         เพื่อ sync สต็อก POS ↔ TikTok อัตโนมัติ — ปุ่ม &quot;ออกใบลดหนี้&quot; ด้านล่างออกเอกสารอย่างเดียว ไม่ mirror สต็อก
       </div>
-      <div className="tt-glass__table overflow-x-auto">
+      <div className="lg:hidden space-y-2">
+        {rows.length === 0 && !loading && (
+          <div className="tt-glass__table-empty">ไม่มีรายการคืน</div>
+        )}
+        {rows.map((r) => {
+          const meta = returnStatusMeta(r.return_status);
+          return (
+            <MobileDataCard
+              key={r.id}
+              showChevron={false}
+              right={r.refund_amount != null ? fmtTHB(r.refund_amount) : '—'}
+            >
+              <div className="font-mono text-xs font-semibold text-ink">{r.tiktok_order_id || '—'}</div>
+              <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                <TikTokGlassBadge tone={meta.tone} context="surface">{meta.label}</TikTokGlassBadge>
+                {r.return_type && <span className="text-[10px] text-muted-soft">{r.return_type}</span>}
+              </div>
+              <div className="text-[10px] text-muted-soft mt-1">
+                {r.return_order_id ? 'ออกใบลดหนี้แล้ว' : 'ยังไม่ออกใบลดหนี้'}
+              </div>
+              <TikTokGlassBtn
+                variant="outline"
+                className="mt-2 w-full"
+                disabled={!r.sale_order_id || !!r.return_order_id || busy === r.id}
+                onClick={() => issueCreditNote(r)}
+                title={!r.sale_order_id ? 'ยังไม่ผูกกับออเดอร์ POS' : ''}
+              >
+                {busy === r.id ? <span className="spinner"/> : 'ออกใบลดหนี้'}
+              </TikTokGlassBtn>
+            </MobileDataCard>
+          );
+        })}
+      </div>
+
+      <div className="tt-glass__table overflow-x-auto hidden lg:block">
         <div className={'tt-glass__table-head grid ' + RETURNS_GRID + ' min-w-[720px]'}>
           <span>TikTok Order</span>
           <span>ประเภท</span>
