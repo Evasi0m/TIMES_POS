@@ -11,6 +11,7 @@
 @import './styles/sale-bill-glass.css';
 @import './styles/glass-hover-tip.css';
 @import './styles/mobile-shell.css';
+@import './styles/sidebar-collapsible.css';
 @import './styles/order-status-dot.css';
 @import './styles/payment-method-icon.css';
 
@@ -2406,7 +2407,7 @@
 }
 @media (min-width: 1024px) {
   .ttc-sync-overlay--page-backdrop {
-    left: 16rem;
+    left: var(--sidebar-w, 16rem);
   }
 }
 .ttc-sync-overlay--page-ring {
@@ -2428,7 +2429,7 @@
 }
 @media (min-width: 1024px) {
   .ttc-sync-overlay--page-ring {
-    left: 16rem;
+    left: var(--sidebar-w, 16rem);
   }
 }
 .ttc-sync-overlay--in {

@@ -440,6 +440,42 @@ function useFontSize() {
   }, []);
   return [id, setSize];
 }
+
+/* =========================================================
+   SIDEBAR START — desktop rail vs full-width preference
+   - Persisted in localStorage (`ux.sidebarStart`).
+   - `collapsed` (default): icon rail on load, hover to expand.
+   - `expanded`: full width on load, manual collapse button on sidebar.
+========================================================= */
+const SIDEBAR_START_KEY = 'ux.sidebarStart';
+const SIDEBAR_START_MODES = [
+  { id: 'collapsed', label: 'ย่อเหลือไอคอน' },
+  { id: 'expanded',  label: 'แสดงเต็ม' },
+];
+const getSidebarStart = () => {
+  try {
+    const v = localStorage.getItem(SIDEBAR_START_KEY);
+    return SIDEBAR_START_MODES.some(m => m.id === v) ? v : 'collapsed';
+  } catch { return 'collapsed'; }
+};
+const applySidebarStart = (id) => {
+  const mode = SIDEBAR_START_MODES.some(m => m.id === id) ? id : 'collapsed';
+  if (typeof document !== 'undefined') {
+    document.documentElement.dataset.sidebarStart = mode;
+  }
+};
+applySidebarStart(getSidebarStart());
+function useSidebarStart() {
+  const [id, setId] = useState(getSidebarStart);
+  const setMode = useCallback((next) => {
+    const mode = SIDEBAR_START_MODES.some(m => m.id === next) ? next : 'collapsed';
+    try { localStorage.setItem(SIDEBAR_START_KEY, mode); } catch {}
+    applySidebarStart(mode);
+    setId(mode);
+  }, []);
+  return [id, setMode];
+}
+
 // Compact 3-button picker. Pass `align="start|center"` to control wrap.
 function FontSizePicker() {
   const [size, setSize] = useFontSize();
@@ -1471,7 +1507,7 @@ function SystemDiagnosticsSection({ toast }) {
   );
 }
 
-function AppSettingsModal({ open, onClose }) {
+function AppSettingsModal({ open, onClose, onSidebarStartChange }) {
   const toast = useToast();
   const { shop, refreshShop } = useShop();
   const role = useRole();
@@ -1642,6 +1678,15 @@ function AppSettingsModal({ open, onClose }) {
                   <div className="text-[11px] text-muted-soft mb-2.5">ปรับใช้กับระบบโดยรวม (ยกเว้นเฉพาะการพิมพ์ใบเสร็จ)</div>
                   <FontPickerInline />
                 </div>
+                <div className="border-t hairline-soft pt-4">
+                  <div className="text-sm text-ink mb-1 font-medium flex items-center gap-1.5">
+                    <Icon name="menu" size={15} className="text-primary"/> เมนูด้านข้าง (คอมพิวเตอร์)
+                  </div>
+                  <div className="text-[11px] text-muted-soft mb-2.5">
+                    ย่อเหลือไอคอน — hover ขยายชั่วคราว · แสดงเต็ม — แถบเมนูเต็มตลอด
+                  </div>
+                  <SidebarStartPickerInline onModeChange={onSidebarStartChange} />
+                </div>
               </div>
               {isSuperAdmin && (
                 <div className="border-t hairline-soft pt-4">
@@ -1774,6 +1819,31 @@ function FontSizePickerInline() {
           style={{ fontSize: s.px === 16 ? '13px' : s.px === 18 ? '15px' : '17px' }}
         >
           {s.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+function SidebarStartPickerInline({ onModeChange }) {
+  const [mode, setMode] = useSidebarStart();
+  return (
+    <div className="flex gap-2">
+      {SIDEBAR_START_MODES.map(m => (
+        <button
+          key={m.id}
+          type="button"
+          onClick={() => {
+            setMode(m.id);
+            onModeChange?.(m.id);
+          }}
+          aria-pressed={mode === m.id}
+          className={"flex-1 py-2.5 rounded-lg font-medium transition text-sm " + (
+            mode === m.id
+              ? "lg-tile-primary"
+              : "lg-tile text-muted hover:text-ink"
+          )}
+        >
+          {m.label}
         </button>
       ))}
     </div>
@@ -4267,7 +4337,7 @@ function AppUpdateButton({ className = 'btn-update-sidebar', onDone }) {
   );
 }
 
-function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagement }) {
+function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagement, onSidebarMouseEnter, onSidebarMouseLeave, onSidebarFocus, onSidebarBlur }) {
   const role = useRole();
   const isSuperAdmin = role === 'super_admin';
   const items = navForRole(role);
@@ -4310,7 +4380,13 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
                    : role === 'admin'       ? 'text-primary'
                    : 'text-muted-soft';
   return (
-    <aside className="sidebar hidden lg:flex w-64 flex-col">
+    <aside
+      className="sidebar hidden lg:flex flex-col"
+      onMouseEnter={onSidebarMouseEnter}
+      onMouseLeave={onSidebarMouseLeave}
+      onFocusCapture={onSidebarFocus}
+      onBlurCapture={onSidebarBlur}
+    >
       {/* Hidden SVG defs — one-shot linearGradient referenced by
           `.nav-item-ai > svg { stroke: url(#ai-icon-gradient) }` so
           AI-flagged nav icons inherit the same orange→red→purple sweep
@@ -4329,7 +4405,12 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
       </svg>
       <div className="sidebar-header px-6 py-6 flex items-center gap-3 border-b">
         <AnimatedLogo size={49} mode="interactive" />
-        <div style={{fontFamily:"'Jost', sans-serif", fontWeight:600}} className="text-2xl leading-none self-center">TIMES</div>
+        <div
+          style={{fontFamily:"'Jost', sans-serif", fontWeight:600}}
+          className="sidebar-expand-only text-2xl leading-none self-center"
+        >
+          TIMES
+        </div>
       </div>
       <nav className="p-3 flex-1 overflow-y-auto" aria-label="เมนูหลัก">
         {items.map(it => {
@@ -4354,18 +4435,18 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
                   aria-expanded={ecomExpanded}
                 >
                   <Icon name={it.icon} size={22} strokeWidth={ecomActive && allowed ? 2.1 : 1.85}/>
-                  <span className="flex-1 truncate">{it.labelLong || it.label}</span>
+                  <span className="sidebar-expand-only flex-1 truncate">{it.labelLong || it.label}</span>
                   {allowed && (
                     <Icon
                       name="chevron-d"
                       size={14}
-                      className={'shrink-0 transition-transform ' + (ecomExpanded ? 'rotate-180' : '')}
+                      className={'sidebar-expand-only shrink-0 transition-transform ' + (ecomExpanded ? 'rotate-180' : '')}
                     />
                   )}
-                  {!allowed && <Icon name="lock" size={13} className="opacity-70 shrink-0"/>}
+                  {!allowed && <Icon name="lock" size={13} className="sidebar-expand-only opacity-70 shrink-0"/>}
                 </button>
                 {ecomExpanded && allowed && (
-                  <div className="pl-3 ml-4 border-l hairline space-y-0.5 mt-0.5 mb-1">
+                  <div className="sidebar-expand-only sidebar-subnav pl-3 ml-4 border-l hairline space-y-0.5 mt-0.5 mb-1">
                     {ECOMMERCE_PLATFORMS.map(p => {
                       const platActive = ecommercePlatformActive(view, p.k);
                       return (
@@ -4407,7 +4488,7 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
               title={allowed ? undefined : 'ไม่มีสิทธิ์เข้าถึง'}
             >
               <Icon name={it.icon} size={22} strokeWidth={view===it.k && allowed ?2.1:1.85}/>
-              <span className="flex-1">
+              <span className="sidebar-expand-only flex-1">
                 {it.labelLong}
                 {it.ai && <span className="ai-tab-badge ml-1.5 align-middle">AI</span>}
                 {it.k === 'sales' && allowed && (role === 'admin' || role === 'super_admin') && todaySalesCount > 0 && (
@@ -4419,7 +4500,7 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
                   </span>
                 )}
               </span>
-              {!allowed && <Icon name="lock" size={13} className="opacity-70"/>}
+              {!allowed && <Icon name="lock" size={13} className="sidebar-expand-only opacity-70"/>}
             </button>
           );
         })}
@@ -4438,7 +4519,7 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
         <button className="btn-app-settings-sidebar" onClick={onOpenSettings}>
           <Icon name="settings" size={16}/> การตั้งค่า
         </button>
-        <div className="sidebar-email text-xs truncate pt-1">
+        <div className="sidebar-expand-only sidebar-email text-xs truncate pt-1">
           {userEmail} <span className={roleColour}>· {roleTag}</span>
         </div>
         <button className="btn-danger-sidebar" onClick={()=>sb.auth.signOut()}>
@@ -14723,6 +14804,59 @@ function App() {
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [userMgmtOpen, setUserMgmtOpen] = useState(false);
+  const [sidebarStart, setSidebarStartRaw] = useSidebarStart();
+  const [sidebarHover, setSidebarHover] = useState(false);
+  const [sidebarFocused, setSidebarFocused] = useState(false);
+  const [sidebarIsAnimating, setSidebarIsAnimating] = useState(false);
+  const sidebarLeaveTimerRef = useRef(null);
+  const sidebarWidePrevRef = useRef(false);
+  const sidebarWide = sidebarStart === 'expanded' || sidebarHover || sidebarFocused;
+  const setSidebarStart = useCallback((id) => {
+    setSidebarStartRaw(id);
+    setSidebarHover(false);
+    setSidebarFocused(false);
+  }, [setSidebarStartRaw]);
+  const handleSidebarMouseEnter = useCallback(() => {
+    if (sidebarStart === 'expanded') return;
+    if (sidebarLeaveTimerRef.current) {
+      clearTimeout(sidebarLeaveTimerRef.current);
+      sidebarLeaveTimerRef.current = null;
+    }
+    setSidebarHover(true);
+  }, [sidebarStart]);
+  const handleSidebarMouseLeave = useCallback(() => {
+    if (sidebarStart === 'expanded') return;
+    if (sidebarLeaveTimerRef.current) clearTimeout(sidebarLeaveTimerRef.current);
+    sidebarLeaveTimerRef.current = setTimeout(() => {
+      setSidebarHover(false);
+      sidebarLeaveTimerRef.current = null;
+    }, 80);
+  }, [sidebarStart]);
+  const handleSidebarFocus = useCallback(() => {
+    if (sidebarStart === 'expanded') return;
+    setSidebarFocused(true);
+  }, [sidebarStart]);
+  const handleSidebarBlur = useCallback((e) => {
+    if (sidebarStart === 'expanded') return;
+    if (!e.currentTarget.contains(e.relatedTarget)) setSidebarFocused(false);
+  }, [sidebarStart]);
+  const handleSpacerTransitionEnd = useCallback((e) => {
+    if (e.propertyName === 'width') setSidebarIsAnimating(false);
+  }, []);
+  useEffect(() => {
+    if (sidebarWidePrevRef.current !== sidebarWide) {
+      setSidebarIsAnimating(true);
+      sidebarWidePrevRef.current = sidebarWide;
+    }
+  }, [sidebarWide]);
+  useEffect(() => {
+    if (!sidebarIsAnimating) return;
+    const t = setTimeout(() => setSidebarIsAnimating(false), 400);
+    return () => clearTimeout(t);
+  }, [sidebarIsAnimating]);
+  useEffect(() => () => {
+    if (sidebarLeaveTimerRef.current) clearTimeout(sidebarLeaveTimerRef.current);
+  }, []);
   // MFA gate state:
   //   'checking'  → still resolving aal + factor list (show splash)
   //   'ok'        → user can use the app
@@ -14871,11 +15005,31 @@ function App() {
       <ShopProvider>
         <AppUpdateBanner />
         <OfflineBanner />
-        <div className="lg:flex">
-          <Sidebar view={view} setView={setView} userEmail={session.user?.email}
+        <div
+          className={
+            'sidebar-layout lg:flex' +
+            (sidebarWide ? ' sidebar-is-wide' : '') +
+            (sidebarIsAnimating ? ' sidebar-is-animating' : '')
+          }
+          data-sidebar-start={sidebarStart}
+        >
+          <div
+            className="sidebar-spacer hidden lg:block"
+            aria-hidden="true"
+            onTransitionEnd={handleSpacerTransitionEnd}
+          />
+          <Sidebar
+            view={view}
+            setView={setView}
+            userEmail={session.user?.email}
             onOpenSettings={()=>setSettingsOpen(true)}
-            onOpenUserManagement={()=>setUserMgmtOpen(true)} />
-          <main className="flex-1 min-h-screen lg:pl-64 main-mobile-pb">
+            onOpenUserManagement={()=>setUserMgmtOpen(true)}
+            onSidebarMouseEnter={handleSidebarMouseEnter}
+            onSidebarMouseLeave={handleSidebarMouseLeave}
+            onSidebarFocus={handleSidebarFocus}
+            onSidebarBlur={handleSidebarBlur}
+          />
+          <main className="sidebar-main flex-1 min-h-screen main-mobile-pb">
             <MobileTopBar title={mobilePageTitle} userEmail={session.user?.email}
               onLogout={()=>sb.auth.signOut()}
               onOpenSettings={()=>setSettingsOpen(true)}
@@ -14900,7 +15054,11 @@ function App() {
           </main>
         </div>
         <MobileTabBar view={view} setView={setView} />
-        <AppSettingsModal open={settingsOpen} onClose={()=>setSettingsOpen(false)} />
+        <AppSettingsModal
+          open={settingsOpen}
+          onClose={()=>setSettingsOpen(false)}
+          onSidebarStartChange={setSidebarStart}
+        />
         {/* User-management modal — only mounts when super_admin opens it.
             The button is gated in Sidebar/MobileTopBar so non-super-admins
             never see the trigger; the gate here is belt-and-braces. */}

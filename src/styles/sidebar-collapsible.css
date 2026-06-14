@@ -1,0 +1,340 @@
+/* Desktop sidebar rail — JS-driven .sidebar-is-wide + spacer layout
+ * Width driven by --sidebar-w; hover state set in main.jsx (not :has(:hover)). */
+
+@media (min-width: 1024px) {
+  .sidebar-layout {
+    --sidebar-w-collapsed: 4rem;
+    --sidebar-w-expanded: 16rem;
+    --sidebar-w: var(--sidebar-w-collapsed);
+    --sidebar-ease-expand: cubic-bezier(0.22, 1, 0.36, 1);
+    --sidebar-ease-collapse: cubic-bezier(0.4, 0, 0.2, 1);
+    --sidebar-dur-expand: 0.32s;
+    --sidebar-dur-collapse: 0.26s;
+  }
+
+  .sidebar-layout.sidebar-is-wide {
+    --sidebar-w: var(--sidebar-w-expanded);
+  }
+
+  /* Spacer reserves horizontal space — main flexes without padding-left reflow */
+  .sidebar-spacer {
+    flex-shrink: 0;
+    width: var(--sidebar-w);
+    transition: width var(--sidebar-dur-expand) var(--sidebar-ease-expand);
+  }
+
+  .sidebar-layout:not(.sidebar-is-wide) .sidebar-spacer {
+    transition-duration: var(--sidebar-dur-collapse);
+    transition-timing-function: var(--sidebar-ease-collapse);
+  }
+
+  .sidebar {
+    width: var(--sidebar-w);
+    overflow-x: hidden;
+    isolation: isolate;
+    transition: width var(--sidebar-dur-expand) var(--sidebar-ease-expand);
+  }
+
+  .sidebar-layout:not(.sidebar-is-wide) .sidebar {
+    transition-duration: var(--sidebar-dur-collapse);
+    transition-timing-function: var(--sidebar-ease-collapse);
+  }
+
+  .sidebar-layout.sidebar-is-animating .sidebar,
+  .sidebar-layout.sidebar-is-animating .sidebar-spacer {
+    will-change: width;
+  }
+
+  .sidebar-main {
+    padding-left: 0;
+    min-width: 0;
+  }
+
+  /* ── Glass bloom layers (opacity only — no backdrop-filter transition) ── */
+  .sidebar::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 2px;
+    pointer-events: none;
+    z-index: 3;
+    opacity: 0;
+    background: linear-gradient(
+      180deg,
+      transparent 0%,
+      rgb(var(--c-on-primary) / 0.22) 42%,
+      rgb(var(--c-on-primary) / 0.38) 50%,
+      rgb(var(--c-on-primary) / 0.22) 58%,
+      transparent 100%
+    );
+    transition: opacity 0.34s ease;
+  }
+
+  .sidebar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0;
+    backdrop-filter: blur(16px) saturate(118%);
+    -webkit-backdrop-filter: blur(16px) saturate(118%);
+    transition: opacity var(--sidebar-dur-expand) ease;
+  }
+
+  .sidebar-layout.sidebar-is-wide .sidebar::before,
+  .sidebar-layout.sidebar-is-wide .sidebar::after {
+    opacity: 1;
+  }
+
+  .sidebar-layout:not(.sidebar-is-wide) .sidebar::before,
+  .sidebar-layout:not(.sidebar-is-wide) .sidebar::after {
+    transition-duration: 0.14s;
+  }
+
+  /* Rail — flat base (light) */
+  :root:not([data-theme="dark"]) .sidebar-layout:not(.sidebar-is-wide) .sidebar {
+    background: linear-gradient(180deg, rgba(255, 253, 248, 0.96), rgba(244, 238, 228, 0.94));
+    border-right-color: rgb(var(--c-hairline) / 0.55);
+    box-shadow: 2px 0 14px -4px rgb(var(--shadow-rgb) / 0.08);
+  }
+
+  /* Wide — glass bloom (light); base gradient static, blur via ::after opacity */
+  :root:not([data-theme="dark"]) .sidebar-layout.sidebar-is-wide .sidebar {
+    background:
+      radial-gradient(ellipse 85% 38% at 18% 0%, rgb(var(--c-primary) / 0.10), transparent 68%),
+      linear-gradient(180deg, rgb(var(--c-surface-card) / 0.82), rgb(var(--c-canvas) / 0.68));
+    border-right-color: rgb(var(--c-hairline) / 0.48);
+    box-shadow:
+      6px 0 28px -4px rgb(var(--shadow-rgb) / 0.16),
+      14px 0 48px -10px rgb(var(--shadow-rgb) / 0.10),
+      inset -1px 0 0 rgb(var(--c-on-primary) / 0.10);
+    transition:
+      width var(--sidebar-dur-expand) var(--sidebar-ease-expand),
+      box-shadow 0.36s ease;
+  }
+
+  :root:not([data-theme="dark"]) .sidebar-layout:not(.sidebar-is-wide) .sidebar {
+    transition:
+      width var(--sidebar-dur-collapse) var(--sidebar-ease-collapse),
+      box-shadow 0.2s ease;
+  }
+
+  /* Rail — dark */
+  :root[data-theme="dark"] .sidebar-layout:not(.sidebar-is-wide) .sidebar {
+    background: rgb(var(--c-canvas));
+    border-right-color: rgba(247, 224, 190, 0.08);
+    box-shadow: 2px 0 16px -4px rgb(0 0 0 / 0.45);
+  }
+
+  /* Wide — dark */
+  :root[data-theme="dark"] .sidebar-layout.sidebar-is-wide .sidebar {
+    background:
+      radial-gradient(ellipse 85% 38% at 18% 0%, rgb(var(--c-primary) / 0.12), transparent 68%),
+      linear-gradient(180deg, rgb(var(--c-surface-card) / 0.78), rgb(var(--c-canvas) / 0.62));
+    border-right-color: rgba(247, 224, 190, 0.14);
+    box-shadow:
+      8px 0 32px -4px rgb(0 0 0 / 0.55),
+      18px 0 56px -12px rgb(0 0 0 / 0.35),
+      inset -1px 0 0 rgba(247, 224, 190, 0.08);
+    transition:
+      width var(--sidebar-dur-expand) var(--sidebar-ease-expand),
+      box-shadow 0.36s ease;
+  }
+
+  :root[data-theme="dark"] .sidebar-layout.sidebar-is-wide .sidebar::before {
+    background: linear-gradient(
+      180deg,
+      transparent 0%,
+      rgba(247, 224, 190, 0.10) 42%,
+      rgba(247, 224, 190, 0.22) 50%,
+      rgba(247, 224, 190, 0.10) 58%,
+      transparent 100%
+    );
+  }
+
+  /* Keep sidebar children above glass ::after */
+  .sidebar > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── Labels — opacity sync with panel ── */
+  .sidebar-expand-only {
+    opacity: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    transition: opacity var(--sidebar-dur-expand) ease;
+  }
+
+  .sidebar-layout[data-sidebar-start="expanded"] .sidebar-expand-only {
+    opacity: 1;
+    width: auto;
+    max-width: none;
+    flex: unset;
+    transition: none;
+  }
+
+  .sidebar-layout:not(.sidebar-is-wide) .sidebar-expand-only {
+    opacity: 0;
+    width: 0;
+    max-width: 0;
+    flex: 0 0 0;
+    margin: 0;
+    padding: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+  }
+
+  .sidebar-layout.sidebar-is-wide .sidebar-expand-only {
+    opacity: 1;
+    width: auto;
+    max-width: 20rem;
+    pointer-events: auto;
+    transition: opacity var(--sidebar-dur-expand) ease;
+  }
+
+  .sidebar-layout.sidebar-is-wide .sidebar-expand-only.flex-1,
+  .sidebar-layout.sidebar-is-wide .sidebar-expand-only.truncate {
+    flex: 1 1 auto;
+  }
+
+  .sidebar-layout.sidebar-is-wide .sidebar-expand-only.shrink-0 {
+    flex: 0 0 auto;
+    width: auto;
+    max-width: none;
+  }
+
+  /* ── Layout chrome transitions ── */
+  .sidebar-header {
+    transition:
+      justify-content var(--sidebar-dur-expand) var(--sidebar-ease-expand),
+      padding var(--sidebar-dur-expand) var(--sidebar-ease-expand),
+      gap var(--sidebar-dur-expand) var(--sidebar-ease-expand);
+  }
+
+  .sidebar-layout:not(.sidebar-is-wide) .sidebar-header {
+    justify-content: center;
+    padding-inline: 0.75rem;
+    gap: 0.25rem;
+    flex-wrap: nowrap;
+    transition-duration: var(--sidebar-dur-collapse);
+    transition-timing-function: var(--sidebar-ease-collapse);
+  }
+
+  .sidebar-header .animated-logo {
+    transition: transform var(--sidebar-dur-expand) var(--sidebar-ease-expand);
+  }
+
+  .sidebar-layout:not(.sidebar-is-wide) .sidebar-header .animated-logo {
+    transform: scale(0.82);
+    transform-origin: center;
+    transition-duration: var(--sidebar-dur-collapse);
+    transition-timing-function: var(--sidebar-ease-collapse);
+  }
+
+  .nav-item {
+    transition:
+      padding var(--sidebar-dur-expand) var(--sidebar-ease-expand),
+      gap var(--sidebar-dur-expand) var(--sidebar-ease-expand),
+      justify-content var(--sidebar-dur-expand) var(--sidebar-ease-expand);
+  }
+
+  .sidebar-layout:not(.sidebar-is-wide) .nav-item {
+    justify-content: center;
+    gap: 0;
+    padding-inline: 0;
+    transition-duration: var(--sidebar-dur-collapse);
+    transition-timing-function: var(--sidebar-ease-collapse);
+  }
+
+  .sidebar-footer {
+    transition: padding var(--sidebar-dur-expand) var(--sidebar-ease-expand);
+  }
+
+  .sidebar-layout:not(.sidebar-is-wide) .sidebar-footer {
+    padding-inline: 0.5rem;
+    transition-duration: var(--sidebar-dur-collapse);
+    transition-timing-function: var(--sidebar-ease-collapse);
+  }
+
+  .sidebar-footer button {
+    transition:
+      width var(--sidebar-dur-expand) var(--sidebar-ease-expand),
+      min-width var(--sidebar-dur-expand) var(--sidebar-ease-expand),
+      padding var(--sidebar-dur-expand) var(--sidebar-ease-expand),
+      font-size 0.2s ease,
+      gap var(--sidebar-dur-expand) ease,
+      margin var(--sidebar-dur-expand) ease;
+  }
+
+  .sidebar-layout:not(.sidebar-is-wide) .sidebar-footer button {
+    font-size: 0;
+    gap: 0;
+    width: 2.5rem;
+    min-width: 2.5rem;
+    padding-inline: 0;
+    margin-inline: auto;
+    transition-duration: var(--sidebar-dur-collapse);
+    transition-timing-function: var(--sidebar-ease-collapse);
+  }
+
+  .sidebar-layout:not(.sidebar-is-wide) .sidebar-footer button svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+  }
+
+  .sidebar-subnav {
+    overflow: hidden;
+    transition: opacity var(--sidebar-dur-expand) ease, max-height var(--sidebar-dur-expand) ease;
+  }
+
+  .sidebar-layout.sidebar-is-wide .sidebar-subnav {
+    opacity: 1;
+    max-height: 24rem;
+    pointer-events: auto;
+  }
+
+  .sidebar-layout:not(.sidebar-is-wide) .sidebar-subnav {
+    opacity: 0;
+    max-height: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+    pointer-events: none;
+    transition-duration: 0.12s;
+  }
+}
+
+@media (max-width: 1023px) {
+  .sidebar-spacer {
+    display: none;
+  }
+  .sidebar-main {
+    padding-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @media (min-width: 1024px) {
+    .sidebar,
+    .sidebar-spacer,
+    .sidebar-expand-only,
+    .sidebar-header,
+    .sidebar-header .animated-logo,
+    .nav-item,
+    .sidebar-footer,
+    .sidebar-footer button,
+    .sidebar::before,
+    .sidebar::after {
+      transition: none !important;
+    }
+    .sidebar-layout.sidebar-is-animating .sidebar,
+    .sidebar-layout.sidebar-is-animating .sidebar-spacer {
+      will-change: auto;
+    }
+  }
+}
