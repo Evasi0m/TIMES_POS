@@ -2,6 +2,18 @@
   "schemaVersion": 1,
   "patches": [
     {
+      "id": "2026-06-14-super-admin-stock-adjust",
+      "date": "2026-06-14",
+      "title": "Super Admin — ปรับสต็อกจากหน้าแก้ไขสินค้า",
+      "tags": ["ฟีเจอร์ใหม่", "สต็อก", "ความปลอดภัย"],
+      "items": [
+        "ปุ่ม ปรับสต็อก ในหน้าแก้ไขสินค้า (Super Admin เท่านั้น) — บวก/ลบจำนวนพร้อมเหตุผล",
+        "ยืนยันรหัสผ่านก่อนบันทึกทุกครั้ง · บันทึก audit ใน stock_movements (reason manual_adjust)",
+        "ประวัติสต็อกแสดงรายละเอียดการปรับ + reload หลังบันทึก",
+        "Migration 070: RPC create_manual_stock_adjust + RLS"
+      ]
+    },
+    {
       "id": "2026-06-18-cmg-bill-arithmetic-validation",
       "date": "2026-06-18",
       "title": "รับเข้า ×10 — ตรวจเลขบิล CMG หลัง AI อ่าน",
