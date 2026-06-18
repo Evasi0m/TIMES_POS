@@ -1,4 +1,4 @@
-// CMG bill parser v7 — multi-key pool + model cascade + per-item needs_review.
+// CMG bill parser v8 — arithmetic fields + CE/CB prefix strip + per-item needs_review.
 //
 // Accepts one OR many base64-encoded photos of Central Trading (CMG)
 // supplier invoices, sends them to Gemini in ONE request with a strict
@@ -44,7 +44,8 @@
 // Response (200):
 //   {
 //     bills: [
-//       { is_cmg_bill, supplier_invoice_no, items: [{model_code,quantity,unit_cost}] },
+//       { is_cmg_bill, supplier_invoice_no, bill_subtotal, total_qty, vat_amount, grand_total,
+//         items: [{model_code,quantity,unit_cost,line_amount,needs_review}] },
 //       ...
 //     ],
 //     usage: { prompt_tokens, output_tokens, total_tokens,
@@ -98,20 +99,26 @@ const MODELS = [
 ];
 const USD_TO_THB = 36;
 
-const PROMPT = `You are reading one or more Thai supplier invoices from "Central Trading Co., Ltd." (CMG / บริษัท เซ็นทรัลเทรดดิ้ง จำกัด). Each input image is a separate bill. Extract them into a JSON array — one entry per image — matching the schema.
+const PROMPT = `You are reading one or more Thai supplier invoices from "Central Trading Co., Ltd." (CMG / บริษัท เซ็นทรัลเทรดดิ้ง จำกัด). Each input image is a separate bill. Extract them into a JSON array — one entry per image — matching the schema. Bills are dot-matrix printed; watch for 0/O, 1/7, 8/B confusion.
 
 Rules:
 1. For each bill, confirm the bill header includes "Central Trading" or "เซ็นทรัลเทรดดิ้ง". If it does NOT, set is_cmg_bill=false for that bill and return an empty items array for it.
 2. Read each bill's invoice number from the "เลขที่:" field at the top-right (10-digit code, NOT the barcode or SKU).
 3. For each product row inside a bill, extract:
-   - model_code: the รหัสสินค้า / รุ่น text. STRIP any leading "CE " prefix (CMG prepends it but our database stores models without it). Example: "CE LTP-1302DS-4AVDF" → "LTP-1302DS-4AVDF".
-   - quantity:   integer in the จำนวน column (the printed number, ignore handwritten checkmarks).
-   - unit_cost:  the ราคา/หน่วย column. Numbers use comma thousands separator — parse "1,138.32" as 1138.32. This is the PRE-VAT cost per single piece.
-4. IGNORE any handwritten pen/pencil marks overlaying the printed numbers — only read printed values.
-5. NEVER calculate or infer numbers. Always return your best reading of the printed value. Use 0 ONLY when there is truly no printed number to read at all.
-6. For EACH item set needs_review=true when you are NOT confident about model_code, quantity, or unit_cost — e.g. the print is blurry/cut off, a handwritten mark overlaps the digits, glare obscures it, or you had to guess between similar characters (0/O, 1/7, 8/B). Otherwise set needs_review=false. Still return your best reading either way; needs_review just flags it for a human to double-check.
-7. The number of rows per bill MUST equal the number of printed item rows on that bill.
-8. The output array MUST have exactly one entry per input image, in the SAME ORDER as the images were provided. Do NOT reorder, merge, or drop bills.
+   - model_code: the watch model from the "รายการสินค้า" / Description column (NOT the 13-digit barcode in รหัสสินค้า). STRIP any leading "CE " or "CB " prefix. Example: "CE LTP-1302DS-4AVDF" → "LTP-1302DS-4AVDF", "CB W-738H-1BVDF" → "W-738H-1BVDF".
+   - quantity:   integer in the จำนวน column (the printed number only — ignore handwritten checkmarks/ticks beside it).
+   - unit_cost:  the ราคาต่อหน่วย / ราคา/หน่วย column. Numbers use comma thousands separator — parse "1,138.32" as 1138.32. This is the PRE-VAT cost per single piece.
+   - line_amount: the จำนวนเงิน / Amount column for that row (pre-VAT line total). Parse commas the same way.
+4. At bill level (footer, if readable), extract:
+   - bill_subtotal: ราคารวม (sum of line amounts before VAT)
+   - total_qty: the printed total under the จำนวน column (if shown)
+   - vat_amount: บวก VAT 7% amount
+   - grand_total: จำนวนเงินรวม
+5. IGNORE any handwritten pen/pencil marks overlaying the printed numbers — only read printed values.
+6. NEVER calculate or infer numbers. Always return your best reading of the printed value. Use 0 ONLY when there is truly no printed number to read at all.
+7. For EACH item set needs_review=true when you are NOT confident about model_code, quantity, unit_cost, or line_amount — e.g. blurry/cut off print, handwritten mark overlaps digits, glare, or guessing between similar characters. Otherwise set needs_review=false.
+8. The number of rows per bill MUST equal the number of printed item rows on that bill.
+9. The output array MUST have exactly one entry per input image, in the SAME ORDER as the images were provided. Do NOT reorder, merge, or drop bills.
 
 Return JSON matching the schema. No prose.`;
 
@@ -125,6 +132,10 @@ const RESPONSE_SCHEMA = {
         properties: {
           is_cmg_bill:         { type: 'BOOLEAN' },
           supplier_invoice_no: { type: 'STRING' },
+          bill_subtotal:       { type: 'NUMBER' },
+          total_qty:           { type: 'INTEGER' },
+          vat_amount:          { type: 'NUMBER' },
+          grand_total:         { type: 'NUMBER' },
           items: {
             type: 'ARRAY',
             items: {
@@ -133,13 +144,14 @@ const RESPONSE_SCHEMA = {
                 model_code:   { type: 'STRING' },
                 quantity:     { type: 'INTEGER' },
                 unit_cost:    { type: 'NUMBER' },
+                line_amount:  { type: 'NUMBER' },
                 needs_review: { type: 'BOOLEAN' },
               },
-              required: ['model_code', 'quantity', 'unit_cost', 'needs_review'],
+              required: ['model_code', 'quantity', 'unit_cost', 'line_amount', 'needs_review'],
             },
           },
         },
-        required: ['is_cmg_bill', 'supplier_invoice_no', 'items'],
+        required: ['is_cmg_bill', 'supplier_invoice_no', 'bill_subtotal', 'total_qty', 'vat_amount', 'grand_total', 'items'],
       },
     },
   },
@@ -166,6 +178,15 @@ function j(status: number, body: unknown) {
     status,
     headers: { ...CORS, 'Content-Type': 'application/json' },
   });
+}
+
+function stripCmgModelPrefix(code: string): string {
+  return String(code || '').trim().replace(/^(CE|CB)\s+/i, '');
+}
+
+function numField(v: unknown): number {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
 // Outcomes from a single Gemini attempt.
@@ -488,14 +509,19 @@ Deno.serve(async (req: Request) => {
       const bills = images.map((_, idx) => {
         const b = billsRaw[idx] || {};
         const items = Array.isArray(b.items) ? b.items.map((x: any) => ({
-          model_code:   String(x?.model_code ?? '').trim(),
+          model_code:   stripCmgModelPrefix(String(x?.model_code ?? '')),
           quantity:     Math.max(0, Math.round(Number(x?.quantity) || 0)),
           unit_cost:    Math.max(0, Number(x?.unit_cost) || 0),
+          line_amount:  Math.max(0, Number(x?.line_amount) || 0),
           needs_review: Boolean(x?.needs_review),
         })).filter((x: any) => x.model_code) : [];
         return {
           is_cmg_bill:         Boolean(b.is_cmg_bill),
           supplier_invoice_no: String(b.supplier_invoice_no ?? '').trim(),
+          bill_subtotal:       numField(b.bill_subtotal),
+          total_qty:           Math.max(0, Math.round(Number(b.total_qty) || 0)),
+          vat_amount:          numField(b.vat_amount),
+          grand_total:         numField(b.grand_total),
           items,
         };
       });

@@ -4,6 +4,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../ui/Icon.jsx';
 import { classifyMatch, normalizeCode } from '../../lib/fuzzy-match.js';
+import { validateCmgBill } from '../../lib/cmg-bill-validate.js';
 import ReceiveMatchPanel from './ReceiveMatchPanel.jsx';
 import BillItemsListCard from './BillItemsListCard.jsx';
 import {
@@ -30,14 +31,22 @@ export function makeRowUid() {
   return `r${Date.now().toString(36)}${_rowUidCounter}`;
 }
 
-export function buildRowFromAi(it, catalog) {
+export function buildRowFromAi(it, catalog, opts = {}) {
+  const {
+    forceReview = false,
+    validationIssues = [],
+    validationDetail = null,
+  } = opts;
   const match = classifyMatch(it.model_code, catalog || []);
   return {
     uid: makeRowUid(),
     model_code: it.model_code,
     quantity:   Math.max(0, Math.round(Number(it.quantity) || 0)),
     unit_cost:  Math.max(0, Number(it.unit_cost) || 0),
-    needsReview: Boolean(it.needs_review),
+    line_amount: Math.max(0, Number(it.line_amount) || 0),
+    needsReview: Boolean(it.needs_review) || forceReview,
+    validationIssues: Array.isArray(validationIssues) ? validationIssues : [],
+    validationDetail: validationDetail || null,
     status:     match.status,
     product:    match.product || null,
     matchScore: typeof match.score === 'number' ? match.score : null,
@@ -46,6 +55,28 @@ export function buildRowFromAi(it, catalog) {
     tiktok_skip: false,
     tiktok_sku: null,
     tiktok_mapping: null,
+  };
+}
+
+/** Apply arithmetic validation and build review rows from a parsed bill. */
+export function materializeParsedBill(parsed, catalog) {
+  const validation = validateCmgBill(parsed);
+  const itemsRaw = Array.isArray(parsed?.items) ? parsed.items : [];
+  const rows = itemsRaw.map((it, j) => {
+    const rowResult = validation.rows.find((r) => r.index === j);
+    return buildRowFromAi(it, catalog, {
+      forceReview: Boolean(validation.rowFlags[j]),
+      validationIssues: rowResult?.issues || [],
+      validationDetail: rowResult?.detail || null,
+    });
+  });
+  return {
+    rows,
+    validation,
+    bill_subtotal: Number(parsed?.bill_subtotal) || 0,
+    total_qty: Math.max(0, Math.round(Number(parsed?.total_qty) || 0)),
+    vat_amount: Number(parsed?.vat_amount) || 0,
+    grand_total: Number(parsed?.grand_total) || 0,
   };
 }
 

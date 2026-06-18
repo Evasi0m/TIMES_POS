@@ -4,9 +4,9 @@
 //
 //   1. EMPTY  — landing state. User taps the upload button which opens
 //               BulkBillUploadModal to pick 1–10 bill images.
-//   2. PARSING — chunked fetches to cmg-bill-parse. Keeping chunks small
-//               prevents one slow Gemini request from hitting the Edge
-//               Function 150s gateway timeout.
+//   2. PARSING — one bill per cmg-bill-parse request (chunk size 1) for
+//               accuracy on dense dot-matrix tables; trade-off is ~2× API
+//               calls vs paired batches.
 //   3. REVIEW — wizard with stepper. One bill visible at a time; user
 //               resolves any unmatched rows in the BillReviewPanel,
 //               navigates with ← / → between bills, then taps "บันทึก
@@ -32,7 +32,7 @@ import { buildReceiveItems, receiveTotals, grossUnitCost } from '../../lib/ai-re
 import { startOfDayBangkok } from '../../lib/date.js';
 import { todayISO } from '../../lib/server-clock.js';
 import Icon from '../ui/Icon.jsx';
-import BillReviewPanel, { buildRowFromAi, makeRowUid } from './BillReviewPanel.jsx';
+import BillReviewPanel, { materializeParsedBill, makeRowUid } from './BillReviewPanel.jsx';
 import BulkBillUploadModal from './BulkBillUploadModal.jsx';
 import BillImageLightbox from './BillImageLightbox.jsx';
 import AIErrorCard, { parseAIError } from './AIErrorCard.jsx';
@@ -50,6 +50,7 @@ import {
   msgDupCheckStart,
   msgEdgeConnect,
   msgMatchSummary,
+  msgValidationSummary,
   msgParseError,
   msgPrepImages,
   msgResponseOk,
@@ -74,7 +75,7 @@ import {
   persistTiktokMatchMapping,
 } from '../../lib/tiktok-inventory-sync.js';
 
-const AI_PARSE_CHUNK_SIZE = 2;
+const AI_PARSE_CHUNK_SIZE = 1;
 
 function aggregateAiUsage(usages) {
   const valid = (usages || []).filter(Boolean);
@@ -540,6 +541,11 @@ export default function BulkReceiveView({ toast }) {
         is_cmg_bill: false,
         supplier_invoice_no: '',
         has_vat: true,
+        bill_subtotal: 0,
+        total_qty: 0,
+        vat_amount: 0,
+        grand_total: 0,
+        validation: null,
         rows: [],
         parseState: 'pending', // pending | parsing | parsed | failed
         parseError: null,
@@ -633,12 +639,17 @@ export default function BulkReceiveView({ toast }) {
           const itemsRaw = Array.isArray(bill?.items) ? bill.items : [];
           const invoiceNo = String(bill?.supplier_invoice_no || '').trim();
           appendParseLog(msgBillSuccess(billNo, itemsRaw.length, invoiceNo));
-          const rows = itemsRaw.map((it) => buildRowFromAi(it, catalog));
+          const materialized = materializeParsedBill(bill, catalog);
+          const { rows, validation } = materialized;
           const auto = rows.filter((r) => r.status === 'auto' || r.status === 'new').length;
           const pick = rows.filter((r) => r.status === 'suggestions').length;
           const none = rows.filter((r) => r.status === 'none').length;
           appendParseLog(msgMatchSummary(billNo, auto, pick, none));
-          if (originalIndex >= 0) parsedByIndex.set(originalIndex, bill || {});
+          const valLine = msgValidationSummary(billNo, validation);
+          if (valLine) appendParseLog(valLine);
+          if (originalIndex >= 0) {
+            parsedByIndex.set(originalIndex, { bill, materialized });
+          }
         });
         const metaLine = msgChunkMeta(data.usage);
         if (metaLine) appendParseLog(metaLine);
@@ -648,15 +659,19 @@ export default function BulkReceiveView({ toast }) {
         setUsage((prev) => aggregateAiUsage([prev, data.usage]));
         setBills((prev) =>
           prev.map((b, i) => {
-            const parsed = parsedByIndex.get(i);
-            if (!parsed) return b;
-            const itemsRaw = Array.isArray(parsed.items) ? parsed.items : [];
-            const rows = itemsRaw.map((it) => buildRowFromAi(it, catalog));
+            const entry = parsedByIndex.get(i);
+            if (!entry) return b;
+            const { bill: parsed, materialized } = entry;
             return {
               ...b,
               is_cmg_bill: Boolean(parsed.is_cmg_bill),
               supplier_invoice_no: String(parsed.supplier_invoice_no || '').trim(),
-              rows,
+              bill_subtotal: materialized.bill_subtotal,
+              total_qty: materialized.total_qty,
+              vat_amount: materialized.vat_amount,
+              grand_total: materialized.grand_total,
+              validation: materialized.validation,
+              rows: materialized.rows,
               parseState: 'parsed',
               parseError: null,
             };
@@ -673,7 +688,7 @@ export default function BulkReceiveView({ toast }) {
       // B2: flag bills whose invoice number was already received from CMG
       // (the "I scanned the same paper bill twice" case). Non-blocking.
       const invoiceNos = [...parsedByIndex.values()]
-        .map((pb) => String(pb?.supplier_invoice_no || '').trim())
+        .map((pb) => String(pb?.bill?.supplier_invoice_no || '').trim())
         .filter(Boolean);
       if (invoiceNos.length) pushParseLogs(msgDupCheckStart(invoiceNos.length));
       findExistingCmgInvoices(invoiceNos).then(setDupInvoices).catch(() => {});
@@ -1725,6 +1740,8 @@ function BillCard({
   const reviewRows = (!isNonCmg && !isEmpty)
     ? bill.rows.filter((r) => r.needsReview).length
     : 0;
+  const validationBillWarnings = bill.validation?.bill?.warnings?.length || 0;
+  const validationRowIssues = bill.validation?.rows?.length || 0;
 
   return (
     <div className="brv-bill-card ttc-bento rounded-2xl border overflow-hidden">
@@ -1809,7 +1826,7 @@ function BillCard({
           </label>
         </div>
 
-          {(dup || isNonCmg || isEmpty || unresolved > 0 || incompleteRows > 0 || reviewRows > 0 || bill.saveState === 'failed') && (
+          {(dup || isNonCmg || isEmpty || unresolved > 0 || incompleteRows > 0 || reviewRows > 0 || validationBillWarnings > 0 || validationRowIssues > 0 || bill.saveState === 'failed') && (
             <div className="brv-bill-head__alerts">
           {dup && (
             <div className="brv-bill-alert brv-bill-alert--error">
@@ -1856,6 +1873,26 @@ function BillCard({
               </div>
             ) : null;
           })()}
+          {validationBillWarnings > 0 && (
+            <button
+              type="button"
+              onClick={() => bill.previewUrl && onZoom?.(bill.previewUrl)}
+              className="brv-bill-alert brv-bill-alert--warn brv-bill-alert--click"
+            >
+              <Icon name="alert" size={12}/>
+              ผลรวมบิลไม่ตรง footer ({validationBillWarnings} จุด) — แตะดูรูปเทียบ
+            </button>
+          )}
+          {validationRowIssues > 0 && (
+            <button
+              type="button"
+              onClick={() => bill.previewUrl && onZoom?.(bill.previewUrl)}
+              className="brv-bill-alert brv-bill-alert--warn brv-bill-alert--click"
+            >
+              <Icon name="alert" size={12}/>
+              {validationRowIssues} แถวเลขไม่ตรงบิล — แตะดูรูปเทียบ
+            </button>
+          )}
           {reviewRows > 0 && (
             <button
               type="button"

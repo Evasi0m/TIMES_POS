@@ -188,6 +188,11 @@ function isSoftMatch(row) {
   );
 }
 
+function hasRowMathMismatch(row) {
+  return Array.isArray(row?.validationIssues)
+    && row.validationIssues.includes('row_math_mismatch');
+}
+
 export function getRowDisplayState(row, tiktokMirrorEnabled = false) {
   if (!row) return DISPLAY_STATE_META.missing;
 
@@ -202,6 +207,15 @@ export function getRowDisplayState(row, tiktokMirrorEnabled = false) {
 
   if (isTiktokPending(row, tiktokMirrorEnabled)) {
     return DISPLAY_STATE_META.tiktok;
+  }
+
+  if (hasRowMathMismatch(row)) {
+    return {
+      ...DISPLAY_STATE_META.soft,
+      key: 'math',
+      label: 'เลขไม่ตรงบิล',
+      subline: row.validationDetail || 'qty × ราคา ≠ จำนวนเงินบิล',
+    };
   }
 
   if (isSoftMatch(row)) return DISPLAY_STATE_META.soft;
@@ -254,6 +268,7 @@ export function rowNeedsAttention(row, tiktokMirrorEnabled = false) {
     qtyIncomplete ||
     costIncomplete ||
     row.needsReview ||
+    hasRowMathMismatch(row) ||
     isSoftMatch(row) ||
     isTiktokPending(row, tiktokMirrorEnabled)
   );

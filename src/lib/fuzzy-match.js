@@ -23,14 +23,14 @@
 
 /** Normalize a model code for comparison.
  *  - Uppercase
- *  - Strip "CE " prefix (CMG bills always prepend it)
+ *  - Strip "CE " / "CB " prefix (CMG bills prepend distributor codes)
  *  - Strip whitespace + dashes (dashes are structural but inconsistent
  *    between OCR and our DB — "W-218H-8BVDF" vs "W218H8BVDF")
  */
 export function normalizeCode(s) {
   return String(s || '')
     .toUpperCase()
-    .replace(/^CE\s+/, '')      // strip leading "CE "
+    .replace(/^(CE|CB)\s+/, '')
     .replace(/\s+/g, '')        // strip all whitespace
     .replace(/-/g, '');         // strip dashes
 }

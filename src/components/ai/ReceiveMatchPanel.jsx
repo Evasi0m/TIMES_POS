@@ -196,7 +196,15 @@ function StageAside({
         {duplicate && (
           <span className="air-chip air-chip--dup" title="model นี้มีมากกว่าหนึ่งบรรทัดในบิล">ซ้ำ?</span>
         )}
-        {row.needsReview && (
+        {row.validationIssues?.includes('row_math_mismatch') && (
+          <span
+            className="ai-review-chip ai-review-chip--math"
+            title={row.validationDetail || 'qty × ราคา ≠ จำนวนเงินบิล'}
+          >
+            <Icon name="alert" size={10}/> เลขไม่ตรง
+          </span>
+        )}
+        {row.needsReview && !row.validationIssues?.includes('row_math_mismatch') && (
           <span className="ai-review-chip"><Icon name="alert" size={10}/> AI ตรวจ</span>
         )}
       </div>
@@ -469,7 +477,13 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
                         ความมั่นใจ {Math.round(row.matchScore * 100)}% — ตรวจว่ารุ่นตรงไหม
                       </div>
                     )}
-                    {row.needsReview && (
+                    {row.validationIssues?.includes('row_math_mismatch') && (
+                      <div className="text-xs text-amber-800 bg-amber-50/80 border border-amber-200/60 rounded-lg px-3 py-2 flex items-center gap-2">
+                        <Icon name="alert" size={14} className="shrink-0"/>
+                        {row.validationDetail || 'qty × ราคา ≠ จำนวนเงินบิล — ตรวจกับรูป'}
+                      </div>
+                    )}
+                    {row.needsReview && !row.validationIssues?.includes('row_math_mismatch') && (
                       <div className="text-xs text-amber-800 bg-amber-50/80 border border-amber-200/60 rounded-lg px-3 py-2 flex items-center gap-2">
                         <Icon name="alert" size={14} className="shrink-0"/>
                         AI ไม่มั่นใจ — ตรวจรุ่นและตัวเลขกับรูปบิล

@@ -91,7 +91,7 @@ function Impl({ onClose, onConfirm, closing }) {
         }
         try {
           const result = await prepareBillImage(file, {
-            batchOptimized: thumbs.length + files.length > 3,
+            batchOptimized: false,
           });
           const previewBlob = base64ToBlob(result.base64, result.mime);
           const previewUrl = URL.createObjectURL(previewBlob);

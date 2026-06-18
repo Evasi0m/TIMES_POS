@@ -90,6 +90,19 @@ export function msgMatchSummary(billNo, auto, pick, none) {
   );
 }
 
+export function msgValidationSummary(billNo, validation) {
+  if (!validation) return null;
+  const rowCount = validation.rows?.length || 0;
+  const billCount = validation.bill?.warnings?.length || 0;
+  if (rowCount === 0 && billCount === 0) {
+    return makeLogLine(`$   บิล ${billNo}: ตรวจเลขผ่าน`, 'dim');
+  }
+  const parts = [];
+  if (rowCount > 0) parts.push(`${rowCount} แถวเลขไม่ตรง`);
+  if (billCount > 0) parts.push(`footer ${billCount} จุด`);
+  return makeLogLine(`$   บิล ${billNo}: ตรวจเลข — ${parts.join(', ')}`, 'warn');
+}
+
 export function msgDupCheckStart(n) {
   return makeLogLine(`$ ตรวจเลขบิลซ้ำ ${n} ใบ...`, 'dim');
 }

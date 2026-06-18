@@ -2,6 +2,18 @@
   "schemaVersion": 1,
   "patches": [
     {
+      "id": "2026-06-18-cmg-bill-arithmetic-validation",
+      "date": "2026-06-18",
+      "title": "รับเข้า ×10 — ตรวจเลขบิล CMG หลัง AI อ่าน",
+      "tags": ["ปรับปรุง", "AI", "รับเข้า"],
+      "items": [
+        "AI ดึงจำนวนเงินต่อแถว + ยอดรวม footer จากบิล CMG แล้วตรวจ qty × ราคา ≈ จำนวนเงิน",
+        "แถวที่เลขไม่ตรงขึ้น chip \"เลขไม่ตรง\" และบังคับให้ตรวจก่อนบันทึก — footer ไม่ตรงเป็น warning ไม่ block",
+        "ส่ง 1 บิลต่อ request · strip prefix CE/CB · ไม่บีบ quality รูป batch",
+        "cmg-bill-parse v8: schema ใหม่ + prompt สำหรับบิล dot-matrix CamScanner"
+      ]
+    },
+    {
       "id": "2026-06-12-sidebar-collapsible",
       "date": "2026-06-12",
       "title": "เมนูด้านข้าง — ย่อ/ขยาย + ตั้งค่าได้",
