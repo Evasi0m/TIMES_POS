@@ -5,6 +5,10 @@ import {
   extractProductImageUrl,
   extractSkuImageUrl,
 } from './tiktok-catalog-images.ts';
+import {
+  extractDescriptionFromProduct,
+  unwrapProductDetail,
+} from './tiktok-product-description.ts';
 
 export const AUTH_BASE = 'https://auth.tiktok-shops.com';
 export const API_BASE = 'https://open-api.tiktokglobalshop.com';
@@ -633,13 +637,20 @@ export async function searchTikTokProducts(
   return merged;
 }
 
-/** Unwrap product detail payload (API may nest under `product`). */
-function unwrapProductDetail(data: Record<string, unknown>): Record<string, unknown> {
-  const nested = data?.product;
-  if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
-    return nested as Record<string, unknown>;
-  }
-  return data;
+/** Fetch raw product description from TikTok Product Detail API. */
+export async function fetchTikTokProductDescription(
+  accessToken: string,
+  shopCipher: string,
+  tiktokProductId: string,
+): Promise<string | null> {
+  const raw = await apiGet(
+    `/product/202309/products/${tiktokProductId}`,
+    {},
+    accessToken,
+    shopCipher,
+  );
+  const data = unwrapProductDetail(raw as Record<string, unknown>);
+  return extractDescriptionFromProduct(data);
 }
 
 /** Fetch product detail and resolve image URL for a mapped SKU. */

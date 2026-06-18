@@ -2389,6 +2389,160 @@
   }
 }
 
+@keyframes wccPendingGlow {
+  0%, 100% {
+    box-shadow:
+      0 2px 6px rgba(139, 58, 40, 0.28),
+      0 8px 22px -8px rgba(139, 58, 40, 0.35),
+      0 1px 0 rgba(255, 255, 255, 0.55) inset,
+      0 0 14px 0 rgba(224, 122, 95, 0.22);
+  }
+  50% {
+    box-shadow:
+      0 2px 8px rgba(139, 58, 40, 0.38),
+      0 10px 28px -6px rgba(224, 122, 95, 0.42),
+      0 1px 0 rgba(255, 255, 255, 0.62) inset,
+      0 0 22px 2px rgba(224, 122, 95, 0.38);
+  }
+}
+
+.wcc-pending-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  height: 3rem;
+  padding: 0 1.125rem 0 0.375rem;
+  border-radius: 0.75rem;
+  font-family: 'Taviraj', serif;
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+  text-shadow: 0 1px 2px rgba(90, 40, 28, 0.45);
+  cursor: pointer;
+  flex-shrink: 0;
+  user-select: none;
+  transition: transform 0.22s ease;
+  animation: wccPendingGlow 3.6s ease-in-out infinite;
+  background:
+    radial-gradient(circle at 22% 18%, rgba(255, 220, 200, 0.45) 0%, transparent 58%),
+    radial-gradient(circle at 82% 28%, rgba(224, 122, 95, 0.35) 0%, transparent 55%),
+    linear-gradient(135deg, #e07a5f 0%, #c45c4a 46%, #8b3a28 100%);
+  border: 1px solid rgba(255, 240, 230, 0.35);
+}
+.wcc-pending-badge:hover { transform: scale(1.025); }
+.wcc-pending-badge:active { transform: scale(0.985); }
+
+.wcc-pending-badge__count {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.25rem;
+  height: 2.25rem;
+  padding: 0 0.375rem;
+  border-radius: 0.625rem;
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255, 240, 230, 0.55) 0%, transparent 58%),
+    linear-gradient(180deg, #fff8f4 0%, #f5ddd4 52%, #e8b8a8 100%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    inset 0 -2px 4px rgba(139, 58, 40, 0.18),
+    0 2px 6px rgba(139, 58, 40, 0.22);
+}
+.wcc-pending-badge__count-num {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #8b3a28;
+  -webkit-text-fill-color: #8b3a28;
+  text-shadow: none;
+}
+.wcc-pending-badge__label {
+  white-space: nowrap;
+  padding-right: 0.125rem;
+}
+
+.wcc-coral-frame {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 220, 200, 0.28);
+  background:
+    radial-gradient(circle at 18% 0%, rgba(255, 235, 225, 0.32), transparent 46%),
+    linear-gradient(180deg, #e07a5f 0%, #c45c4a 52%, #8b3a28 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 240, 0.42),
+    inset 0 -1px 0 rgba(70, 28, 18, 0.32),
+    0 4px 14px -6px rgba(139, 58, 40, 0.38);
+}
+.wcc-coral-frame::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent 42%);
+}
+
+:root:not([data-theme="dark"]) .wcc-modal-card.glass-strong {
+  border-width: 2px !important;
+  border-color: rgba(196, 92, 74, 0.55) !important;
+  box-shadow:
+    0 4px 20px -6px rgba(139, 58, 40, 0.22),
+    0 16px 48px -12px rgba(139, 58, 40, 0.28),
+    0 0 72px -16px rgba(224, 122, 95, 0.18);
+}
+
+.wcc-modal-header {
+  color: #fff;
+  border-bottom-color: rgba(255, 255, 255, 0.14) !important;
+}
+.wcc-modal-header > * { position: relative; z-index: 1; }
+.wcc-modal-header__title,
+.wcc-modal-header__sub,
+.wcc-modal-header__text { color: #fff; }
+.wcc-modal-header .pnb-iconbtn {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+.wcc-modal-header .pnb-iconbtn:hover {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wcc-pending-badge {
+    transition: none;
+    animation: none;
+  }
+  .wcc-pending-badge:hover,
+  .wcc-pending-badge:active {
+    transform: none;
+  }
+}
+
+:root[data-theme="dark"] .wcc-pending-badge {
+  background:
+    radial-gradient(circle at 22% 18%, rgba(255, 200, 180, 0.22) 0%, transparent 58%),
+    radial-gradient(circle at 82% 28%, rgba(139, 58, 40, 0.42) 0%, transparent 55%),
+    linear-gradient(135deg, #9a4a38 0%, #6b2e22 50%, #3a1810 100%);
+  border-color: rgba(255, 220, 200, 0.18);
+}
+:root[data-theme="dark"] .wcc-pending-badge__count {
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255, 210, 190, 0.35) 0%, transparent 58%),
+    linear-gradient(180deg, #e07a5f 0%, #c45c4a 52%, #8b3a28 100%);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+:root[data-theme="dark"] .wcc-pending-badge__count-num {
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+}
+
 /* Sync overlay — align blur with shell token (see tiktok-glass.css) */
 .ttc-sync-overlay {
   --ttc-sync-blur: var(--tt-blur-shell, 36px);

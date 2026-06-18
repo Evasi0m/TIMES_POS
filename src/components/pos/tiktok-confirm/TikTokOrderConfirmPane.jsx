@@ -35,6 +35,7 @@ export default function TikTokOrderConfirmPane({
   catalogError,
   onRetryCatalog,
   toast,
+  summaryVariant = 'tiktok',
 }) {
   const [activeItemId, setActiveItemId] = useState(null);
   const [viewMode, setViewMode] = useState('match');
@@ -171,7 +172,7 @@ export default function TikTokOrderConfirmPane({
       />
 
       <div className="px-4 pt-2.5 pb-1.5 shrink-0">
-        <TikTokOrderSummaryCard order={order}/>
+        <TikTokOrderSummaryCard order={order} variant={summaryVariant}/>
       </div>
 
       {viewMode === 'match' && items.length > 1 && (

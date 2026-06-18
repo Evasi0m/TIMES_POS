@@ -1,9 +1,18 @@
+/** Convert TikTok internal image URI to HTTPS (SG seller CDN). */
+function tiktokUriToHttps(uri: string): string | undefined {
+  const trimmed = uri.trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (!trimmed || trimmed.startsWith('data:')) return undefined;
+  return `https://p16-oec-sg.ibyteimg.com/${trimmed}~tplv-aphluv4xwc-origin-jpeg.jpeg`;
+}
+
 /** Pick first HTTP(S) URL from TikTok API image fields (string, object, or array). */
 export function pickFirstUrl(value: unknown): string | undefined {
   if (value == null) return undefined;
   if (typeof value === 'string') {
     const s = value.trim();
-    return /^https?:\/\//i.test(s) ? s : undefined;
+    if (/^https?:\/\//i.test(s)) return s;
+    return tiktokUriToHttps(s);
   }
   if (Array.isArray(value)) {
     for (const item of value) {
@@ -15,9 +24,9 @@ export function pickFirstUrl(value: unknown): string | undefined {
   if (typeof value === 'object') {
     const o = value as Record<string, unknown>;
     return pickFirstUrl(o.url)
-      || pickFirstUrl(o.uri)
       || pickFirstUrl(o.urls)
       || pickFirstUrl(o.url_list)
+      || pickFirstUrl(o.uri)
       || pickFirstUrl(o.thumb_url)
       || pickFirstUrl(o.thumb_urls)
       || pickFirstUrl(o.image_url)

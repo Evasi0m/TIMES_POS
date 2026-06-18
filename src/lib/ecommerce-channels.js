@@ -24,6 +24,12 @@ export function isTikTokApiOrder(row) {
   return Boolean(row.tiktok_order_id);
 }
 
+/** True when the row is a Web Shop order (Hybrid B). */
+export function isWebShopOrder(row) {
+  if (!row) return false;
+  return row.channel === 'web' && Boolean(row.web_order_number);
+}
+
 /**
  * True for Sales History badge — only orders the cashier confirmed at POS
  * (post go-live workflow). Legacy API imports without `confirmed_at` are

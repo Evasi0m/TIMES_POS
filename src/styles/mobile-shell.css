@@ -30,12 +30,14 @@
 }
 
 .mobile-topbar__actions .pending-bell button,
-.mobile-topbar__actions .ttc-pending-badge {
+.mobile-topbar__actions .ttc-pending-badge,
+.mobile-topbar__actions .wcc-pending-badge {
   transform: scale(0.82);
   transform-origin: center;
 }
 
-.mobile-topbar__actions .ttc-pending-badge__label {
+.mobile-topbar__actions .ttc-pending-badge__label,
+.mobile-topbar__actions .wcc-pending-badge__label {
   display: none;
 }
 
@@ -179,5 +181,55 @@
   .overlay-in,
   .overlay-out {
     animation: none !important;
+  }
+}
+
+/* Products toolbar — camera button inset inside search field */
+@media (max-width: 1023px) {
+  .products-toolbar .scan-inline-btn--in-field {
+    position: absolute;
+    top: 50%;
+    right: 0.375rem;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.625rem;
+    transform: translateY(-50%);
+  }
+  .products-toolbar .scan-inline-btn--in-field:hover {
+    filter: brightness(1.06);
+    transform: translateY(calc(-50% - 1px));
+    box-shadow:
+      0 6px 16px -2px rgba(204, 120, 92, 0.48),
+      0 1px 0 rgba(255, 255, 255, 0.22) inset;
+  }
+  .products-toolbar .scan-inline-btn--in-field:active {
+    transform: translateY(-50%) scale(0.94);
+    filter: brightness(0.95);
+  }
+}
+
+/* Products page toolbar — 2-row grid on phones, equal 48px controls */
+@media (max-width: 639px) {
+  .products-toolbar .input,
+  .products-toolbar select.input {
+    min-height: 3rem;
+  }
+  .products-toolbar .btn-secondary.icon-btn-44 {
+    width: 3rem;
+    height: 3rem;
+    padding: 0 !important;
+  }
+}
+
+/* Sales history — mobile date + filter row: full-width trigger, 48px tall */
+@media (max-width: 1023px) {
+  .sales-date-toolbar .relative > button.input {
+    width: 100%;
+    min-height: 3rem;
+  }
+  .sales-date-toolbar .btn-secondary.icon-btn-44 {
+    width: 100%;
+    height: 3rem;
+    padding: 0 !important;
   }
 }
