@@ -77,6 +77,7 @@ import { bahtText } from './lib/baht-text.js';
 import { fullBuyerValid } from './lib/tax-buyer.js';
 import { ECOMMERCE_CHANNELS, excludePendingTikTok, isApiImportedOrder } from './lib/ecommerce-channels.js';
 import { findPendingTikTokOverlap, formatOverlapWarning } from './lib/tiktok-checkout-guard.js';
+import { findPendingWebOverlap, formatWebOverlapWarning } from './lib/web-checkout-guard.js';
 import {
   vatFromGross,
   inputVatFromGross,
@@ -142,6 +143,7 @@ import BulkReceiveView from './components/ai/BulkReceiveView.jsx';
 import PendingNetBell from './components/pos/PendingNetBell.jsx';
 import DeferNetButton from './components/pos/DeferNetButton.jsx';
 import TikTokConfirmPanel from './components/pos/TikTokConfirmPanel.jsx';
+import WebConfirmPanel from './components/pos/WebConfirmPanel.jsx';
 import { useTikTokMirrorCatalog } from './hooks/useTikTokMirrorCatalog.js';
 import { useTikTokProductMappings } from './hooks/useTikTokProductMappings.js';
 import {
@@ -4557,6 +4559,7 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
           {isAdminPlus && (
             <>
               <TikTokConfirmPanel toast={toast.push} />
+              <WebConfirmPanel toast={toast.push} />
               <PendingNetBell toast={toast.push} size={40} placement="header" />
             </>
           )}
@@ -4938,6 +4941,7 @@ function POSView() {
   const [taxInvoiceModalOpen, setTaxInvoiceModalOpen] = useState(false);
   // Warn when manual TikTok checkout overlaps pending API orders (double stock risk).
   const [tiktokOverlap, setTiktokOverlap] = useState(null);
+  const [webOverlap, setWebOverlap] = useState(null);
   const posTiktokProductIds = useMemo(
     () => [...new Set([
       ...results.map(p => p.id),
@@ -5220,7 +5224,7 @@ function POSView() {
     });
   };
 
-  const submit = async ({ skipTikTokOverlapGuard = false } = {}) => {
+  const submit = async ({ skipTikTokOverlapGuard = false, skipWebOverlapGuard = false } = {}) => {
     if (submitLockRef.current) return; // hard guard against double-submit
     if (!cart.length) { toast.push("ไม่มีสินค้าในตะกร้า", "error"); return; }
     if (!netPriceFilled) { toast.push("กรุณากรอก 'ราคาที่ลูกค้าจ่าย'", "error"); return; }
@@ -5238,6 +5242,16 @@ function POSView() {
         const overlaps = findPendingTikTokOverlap(pending || [], cart);
         if (overlaps.length) {
           setTiktokOverlap(overlaps);
+          return;
+        }
+      }
+
+      if (!skipWebOverlapGuard && cart.some(l => l.product_id)) {
+        const { data: webPending, error: webPendingErr } = await sb.rpc('get_pending_web_orders', { p_limit: 100 });
+        if (webPendingErr) throw webPendingErr;
+        const webOverlaps = findPendingWebOverlap(webPending || [], cart);
+        if (webOverlaps.length) {
+          setWebOverlap(webOverlaps);
           return;
         }
       }
@@ -5348,6 +5362,11 @@ function POSView() {
   const confirmTikTokOverlapProceed = () => {
     setTiktokOverlap(null);
     submit({ skipTikTokOverlapGuard: true });
+  };
+
+  const confirmWebOverlapProceed = () => {
+    setWebOverlap(null);
+    submit({ skipWebOverlapGuard: true });
   };
 
   const SearchInput = (
@@ -5904,6 +5923,29 @@ function POSView() {
           &quot;ออเดอร์ TikTok รอยืนยัน&quot; ด้านบน — การ key-in manual ซ้ำจะตัดสต็อกและนับยอดขายสองครั้ง
         </p>
       </Modal>
+      <Modal
+        open={Boolean(webOverlap?.length)}
+        onClose={() => setWebOverlap(null)}
+        title="ออเดอร์ Web Shop รอยืนยัน"
+        footer={
+          <div className="flex gap-2 justify-end">
+            <button type="button" className="btn-ghost" onClick={() => setWebOverlap(null)}>
+              ยกเลิก — ไปยืนยัน Web
+            </button>
+            <button type="button" className="btn-ruby-premium" onClick={confirmWebOverlapProceed}>
+              บันทึกต่อ (manual)
+            </button>
+          </div>
+        }
+      >
+        <p className="text-sm text-muted mb-3">
+          {formatWebOverlapWarning(webOverlap || [])}
+        </p>
+        <p className="text-sm">
+          หากเป็นออเดอร์เดียวกับ Web Shop ให้กด <strong>ยกเลิก</strong> แล้วเปิด
+          &quot;Order Web รอยืนยัน&quot; ด้านบน — การ key-in manual ซ้ำจะตัดสต็อกและนับยอดขายสองครั้ง
+        </p>
+      </Modal>
       {/* Desktop page header — owned by POSView (not App) so we can drop
           the live cart-count glow badge into the header's `right` slot
           without lifting cart state up. App skips the global header for
@@ -5911,7 +5953,7 @@ function POSView() {
       <PageHeader
         title="ขายสินค้า"
         subtitle="POS"
-        right={<div className="flex items-center gap-3"><CartGlowBadge count={totalQty}/><TikTokConfirmPanel toast={toast.push} onConfirmed={setReceiptOrderId}/></div>}
+        right={<div className="flex items-center gap-3"><CartGlowBadge count={totalQty}/><TikTokConfirmPanel toast={toast.push} onConfirmed={setReceiptOrderId}/><WebConfirmPanel toast={toast.push} onConfirmed={setReceiptOrderId}/></div>}
         farRight={<PendingNetBell toast={toast.push} size={50}/>}
       />
       {/* DESKTOP LAYOUT */}
@@ -7672,6 +7714,7 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
   const [customPctStr, setCustomPctStr] = useState(''); // raw string in custom input
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
   const isSuperAdmin = useIsSuperAdmin();
   const barcodeRef = useRef(null);
   const askPrompt = usePrompt();
@@ -7684,6 +7727,11 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
     setAutoPct(null);
     setCustomPctStr('');
   }, [editing]);
+  useEffect(() => {
+    sb.auth.getSession().then(({ data }) => {
+      setUserEmail(data.session?.user?.email || '');
+    });
+  }, []);
   if (!draft) return null;
   const set = (k,v)=> setDraft(d=>({...d,[k]:v}));
 
@@ -8066,8 +8114,6 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
         )}
       </div>
     </Modal>
-    {/* Camera scanner — single-shot. Editing existing products requires the
-        explicit "แก้ไข Barcode" gate first to avoid accidental overwrites. */}
     <BarcodeScannerModal
       open={scannerOpen}
       onClose={()=>setScannerOpen(false)}
@@ -8637,12 +8683,10 @@ function SalesView({ onGoPOS }) {
 
   const FilterControls = (
     <div className="space-y-3">
-      {/* Two filter controls side-by-side at sm+ — explicit w-full on
-          the DatePicker wrapper and matching min-height on both so the
-          range button and the channel select read as a single, balanced
-          pair (same width AND same visual height).                     */}
+      {/* Two filter controls side-by-side at sm+ — date is lg-only here;
+          mobile shows date + filter toggle in a dedicated row above. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 hidden lg:block">
           <label className="text-xs uppercase tracking-wider text-muted">ช่วงวันที่</label>
           <DatePicker mode="range" value={range} onChange={handleRangeChange}
             placeholder="เลือกช่วงวันที่" className="mt-1 w-full"/>
@@ -8730,21 +8774,7 @@ function SalesView({ onGoPOS }) {
         <PendingNetBell toast={toast.push} size={50} placement="floating" floatClassName="top-[30px] right-[40px]"/>
       </div>
       {/* Summary cards — revenue (cream) + profit (Tiffany blue) split
-          50/50 on sm+. Mobile stacks; filter button moves out of the
-          revenue card to its own row above so the two summary tiles can
-          claim full width on phones (was cramped sharing space with the
-          icon button). */}
-      <div className="lg:hidden flex justify-end mb-2">
-        <button
-          type="button"
-          className="icon-btn-44 btn-secondary !p-0"
-          onClick={()=>setFilterOpen(o=>!o)}
-          aria-label="ตัวกรอง"
-          aria-expanded={filterOpen}
-        >
-          <Icon name="filter" size={20}/>
-        </button>
-      </div>
+          50/50 on sm+. Mobile: date + filter toggle sit below cards. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:gap-4 mb-4">
         {/* Revenue (cream) */}
         <div className="card-cream p-4 lg:p-5">
@@ -8767,6 +8797,29 @@ function SalesView({ onGoPOS }) {
           <div className="text-xs text-white/75 mt-1 tabular-nums">
             หลังหัก VAT {totalProfitAfterVat >= 0 ? '+' : '−'}{fmtTHB(Math.abs(totalProfitAfterVat))}
           </div>
+        </div>
+      </div>
+
+      {/* Mobile — date range always visible; filter icon toggles the rest */}
+      <div className="lg:hidden mb-3 sales-date-toolbar">
+        <label className="text-xs uppercase tracking-wider text-muted">ช่วงวันที่</label>
+        <div className="grid grid-cols-2 gap-2 items-stretch mt-1">
+          <DatePicker
+            mode="range"
+            value={range}
+            onChange={handleRangeChange}
+            placeholder="เลือกช่วงวันที่"
+            className="min-w-0 w-full"
+          />
+          <button
+            type="button"
+            className="icon-btn-44 btn-secondary !p-0 !w-full !h-12"
+            onClick={()=>setFilterOpen(o=>!o)}
+            aria-label="ตัวกรอง"
+            aria-expanded={filterOpen}
+          >
+            <Icon name="filter" size={20}/>
+          </button>
         </div>
       </div>
 
@@ -13928,7 +13981,7 @@ function VatView({ embedded = false, dateRange: dateRangeProp, onDateRangeChange
     sale: 'ขายออก', sale_void: 'ยกเลิกการขาย', sale_edit: 'แก้ไขการขาย',
     receive: 'รับเข้า', receive_void: 'ยกเลิกรับเข้า',
     return_in: 'รับคืนจากลูกค้า', return_void: 'ยกเลิกรับคืน',
-    manual_adjust: 'ปรับปรุงยอด', stock_reconcile: 'ปรับสต็อก TikTok', initial: 'ยอดยกมา',
+    manual_adjust: 'ปรับสต็อก (มือ)', stock_reconcile: 'ปรับสต็อก TikTok', initial: 'ยอดยกมา',
     supplier_claim: 'ส่งคืนผู้ขาย', supplier_claim_void: 'ยกเลิกส่งคืน',
   };
   const exportGoodsCsv = () => {

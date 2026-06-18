@@ -2,6 +2,18 @@
   "schemaVersion": 1,
   "patches": [
     {
+      "id": "2026-06-18-web-shop-pos",
+      "date": "2026-06-18",
+      "title": "Web Shop — ยืนยันออเดอร์ใน POS + guard ขายซ้ำ",
+      "tags": ["ฟีเจอร์ใหม่", "E-Commerce", "POS"],
+      "items": [
+        "แผง Order Web รอยืนยัน บน POS (desktop + mobile) — ยืนยัน/ยกเลิกออเดอร์จากร้านออนไลน์",
+        "Guard ตะกร้า: ถ้ามี Web order รอที่ SKU ซ้ำ จะเตือนก่อนบันทึกขาย manual",
+        "Migration 071–076: storefront catalog, RPC pending web, ยืนยัน/ยกเลิก",
+        "Edge functions shop-get-catalog / shop-sync-catalog + channel badge web"
+      ]
+    },
+    {
       "id": "2026-06-18-cmg-bill-arithmetic-validation",
       "date": "2026-06-18",
       "title": "รับเข้า ×10 — ตรวจเลขบิล CMG หลัง AI อ่าน",

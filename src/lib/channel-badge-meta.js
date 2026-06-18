@@ -3,6 +3,7 @@ import { isApiImportedOrder } from './ecommerce-channels.js';
 export const CHANNEL_LABELS = {
   store: 'หน้าร้าน',
   tiktok: 'TikTok',
+  web: 'Web Shop',
   shopee: 'Shopee',
   lazada: 'Lazada',
   facebook: 'Facebook',
@@ -74,6 +75,12 @@ export function channelBadgeStyle(ch) {
       border: '1px solid rgba(254,44,85,0.42)',
       color: '#ffffff',
       boxShadow: '0 1px 0 rgba(255,255,255,0.14) inset, 0 -1px 0 rgba(254,44,85,0.22) inset, 0 4px 14px -4px rgba(254,44,85,0.28)',
+    },
+    web: {
+      background: 'radial-gradient(circle at 14% 8%, rgba(224,122,95,0.20), transparent 34%), radial-gradient(circle at 90% 18%, rgba(244,194,178,0.18), transparent 32%), radial-gradient(circle at 50% 105%, rgba(255,248,243,0.52), transparent 44%), linear-gradient(135deg, rgba(255,235,228,0.94), rgba(250,210,195,0.82))',
+      border: '1px solid rgba(224,122,95,0.38)',
+      color: '#8b3a28',
+      boxShadow: '0 1px 0 rgba(255,255,255,0.85) inset, 0 -1px 0 rgba(224,122,95,0.12) inset, 0 4px 14px -4px rgba(20,20,19,0.08)',
     },
     facebook: {
       background: 'radial-gradient(circle at 14% 8%, rgba(33,150,243,0.18), transparent 34%), radial-gradient(circle at 90% 18%, rgba(100,181,246,0.16), transparent 32%), radial-gradient(circle at 50% 105%, rgba(227,242,253,0.50), transparent 44%), linear-gradient(135deg, rgba(187,222,251,0.92), rgba(144,202,249,0.78))',

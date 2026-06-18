@@ -35,10 +35,13 @@ export function resolveSaleOrderDisplayStatus(order, opts = {}) {
   }
 
   if (order.status === 'pending') {
+    const isWeb = order.channel === 'web';
     return {
       code: DISPLAY_STATUS.PENDING_CONFIRM,
       label: 'รอยืนยัน',
-      title: 'รอแคชเชียร์ยืนยันออเดอร์ TikTok',
+      title: isWeb
+        ? 'รอแคชเชียร์ยืนยันออเดอร์ Web Shop'
+        : 'รอแคชเชียร์ยืนยันออเดอร์ TikTok',
       tone: 'amber',
     };
   }
