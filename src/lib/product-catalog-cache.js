@@ -6,6 +6,10 @@ import { findSkuCandidates } from './fuzzy-match.js';
 
 export const PRODUCT_CATALOG_SELECT = 'id, name, barcode, retail_price, current_stock';
 
+/** ProductsView list/filter/editor — all columns needed without select('*'). */
+export const PRODUCT_LIST_SELECT =
+  'id, name, barcode, retail_price, cost_price, current_stock, brand_id, category_id, created_at';
+
 let _cache = null;
 let _loading = null;
 

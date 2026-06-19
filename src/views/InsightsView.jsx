@@ -52,6 +52,9 @@ const CHART_TOOLTIP = {
 const MS_PER_DAY = 86400000;
 const BKK_OFFSET_MIN = 7 * 60;
 
+/** Session cache — skip re-fetching 365d orders when navigating back to Insights. */
+let insightsSessionCache = null;
+
 /** Bangkok-local YYYY-MM-DD from an epoch ms. */
 function isoBangkok(ts) {
   return new Date(ts + BKK_OFFSET_MIN * 60000).toISOString().slice(0, 10);
@@ -164,14 +167,8 @@ function TrendChart({ buckets }) {
    Heatmap
 ========================================================= */
 function Heatmap({ result }) {
-  if (!result) return <div className="skeleton h-64 rounded" />;
-  const { matrix, maxCell } = result;
-  const cellColor = (v) => {
-    if (maxCell === 0 || v === 0) return 'rgb(var(--c-surface-soft) / 0.72)';
-    const t = v / maxCell;
-    return `color-mix(in srgb, rgb(var(--c-surface-card)) ${Math.round(78 - 38 * t)}%, rgb(var(--c-primary)))`;
-  };
-  const peak = peakCell(result);
+  const matrix = result?.matrix ?? [];
+  const maxCell = result?.maxCell ?? 0;
   const topPeaks = useMemo(() => {
     const cells = [];
     matrix.forEach((row, d) => {
@@ -181,6 +178,13 @@ function Heatmap({ result }) {
     });
     return cells.sort((a, b) => b.revenue - a.revenue).slice(0, 5);
   }, [matrix]);
+  if (!result) return <div className="skeleton h-64 rounded" />;
+  const cellColor = (v) => {
+    if (maxCell === 0 || v === 0) return 'rgb(var(--c-surface-soft) / 0.72)';
+    const t = v / maxCell;
+    return `color-mix(in srgb, rgb(var(--c-surface-card)) ${Math.round(78 - 38 * t)}%, rgb(var(--c-primary)))`;
+  };
+  const peak = peakCell(result);
   return (
     <div>
       {/* Mobile — top peak hours as scroll chips */}
@@ -566,6 +570,20 @@ export default function InsightsView({ embedded = false } = {}) {
   const [allSalesForAnalytics, setAllSalesForAnalytics] = useState(null);
 
   useEffect(() => {
+    if (insightsSessionCache) {
+      const c = insightsSessionCache;
+      setMom(c.mom);
+      setWeeklyTrend(c.weeklyTrend);
+      setHeatmap(c.heatmap);
+      setChannelMix(c.channelMix);
+      setReorder(c.reorder);
+      setAllSalesForAnalytics(c.allSalesForAnalytics);
+      setTopMovers(c.topMovers);
+      setBottomMovers(c.bottomMovers);
+      setLoading(false);
+      return undefined;
+    }
+
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -762,8 +780,21 @@ export default function InsightsView({ embedded = false } = {}) {
           pct: pQ === 0 ? null : ((cQ - pQ) / pQ) * 100,
         });
       }
-      setTopMovers([...movers].sort((a, b) => b.delta - a.delta).filter((m) => m.delta > 0));
-      setBottomMovers([...movers].sort((a, b) => a.delta - b.delta).filter((m) => m.delta < 0));
+      const topM = [...movers].sort((a, b) => b.delta - a.delta).filter((m) => m.delta > 0);
+      const bottomM = [...movers].sort((a, b) => a.delta - b.delta).filter((m) => m.delta < 0);
+      setTopMovers(topM);
+      setBottomMovers(bottomM);
+
+      insightsSessionCache = {
+        mom: momCompare(cur, prev),
+        weeklyTrend: weeklyBuckets(tradeRows, { weeks: 13, now }),
+        heatmap: buildHeatmap(tradeRows.filter((r) => new Date(r.sale_date).getTime() >= start90)),
+        channelMix: mixArr,
+        reorder: reorderRows,
+        allSalesForAnalytics: { products: products || [], lastSoldMap },
+        topMovers: topM,
+        bottomMovers: bottomM,
+      };
 
       setLoading(false);
     })().catch((err) => {

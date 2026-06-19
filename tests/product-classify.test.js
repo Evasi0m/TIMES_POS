@@ -14,6 +14,8 @@ import {
   getEffectivePrice,
   filterProducts,
   sortProducts,
+  versionedImageUrl,
+  productImageUrl,
 } from '../src/lib/product-classify.js';
 
 describe('classifyBrand', () => {
@@ -341,5 +343,41 @@ describe('schema integrity', () => {
       // max=0 means "no upper bound"
       if (p.max !== 0) expect(p.max).toBeGreaterThanOrEqual(p.min);
     });
+  });
+});
+
+describe('versionedImageUrl', () => {
+  it('returns url unchanged when no updatedAt', () => {
+    expect(versionedImageUrl('https://cdn.example/a.png', null)).toBe('https://cdn.example/a.png');
+  });
+
+  it('appends stable v= from updated_at', () => {
+    const url = 'https://x.supabase.co/storage/v1/object/public/product-images/1.png';
+    const v = versionedImageUrl(url, '2026-06-19T10:00:00.000Z');
+    expect(v).toBe(url + '?v=' + new Date('2026-06-19T10:00:00.000Z').getTime());
+    expect(versionedImageUrl(v, '2026-06-19T10:00:00.000Z')).toBe(v);
+  });
+
+  it('uses & when url already has query params', () => {
+    const url = 'https://cdn.example/a.png?token=abc';
+    expect(versionedImageUrl(url, '2026-06-19T10:00:00.000Z')).toMatch(/^https:\/\/cdn\.example\/a\.png\?token=abc&v=\d+$/);
+  });
+});
+
+describe('productImageUrl', () => {
+  it('versiones found rows with updated_at', () => {
+    const url = productImageUrl({
+      _imageRow: {
+        status: 'found',
+        image_url: 'https://cdn.example/a.png',
+        updated_at: '2026-06-19T10:00:00.000Z',
+      },
+    });
+    expect(url).toContain('?v=');
+  });
+
+  it('returns null for not_found or missing url', () => {
+    expect(productImageUrl({ _imageRow: { status: 'not_found', image_url: null } })).toBeNull();
+    expect(productImageUrl({})).toBeNull();
   });
 });

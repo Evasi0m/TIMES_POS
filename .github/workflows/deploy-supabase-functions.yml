@@ -7,7 +7,7 @@
 #   1. Create a Supabase access token: https://supabase.com/dashboard/account/tokens
 #   2. Repo → Settings → Secrets → Actions:
 #        SUPABASE_ACCESS_TOKEN  = your token
-#        SUPABASE_PROJECT_REF   = zrymhhkqdcttqsdczfcr
+#        SUPABASE_PROJECT_REF   = pxenybeudcsddsnkduaj
 #   3. Actions → "Deploy Supabase Edge Functions" → Run workflow
 #
 # Deploy all TikTok functions (matches docs/TIKTOK_INTEGRATION.md):

@@ -2,9 +2,17 @@
 // Avoids the old sale_order_items ⨝ sale_orders scan that hit statement_timeout.
 
 import { fetchAll } from './sb-paginate.js';
+import { versionedImageUrl } from './product-classify.js';
 
 /** Most recent N TikTok orders to load into the panel (UI paginates locally). */
 export const TIKTOK_ORDERS_LOAD_CAP = 3000;
+
+/** Columns used by TikTokPanel / invoices / order cards — not select('*'). */
+export const TIKTOK_ORDER_SELECT =
+  'id, sale_date, status, channel, grand_total, net_received, net_received_pending, payment_method, ' +
+  'tiktok_order_id, tiktok_order_status, tiktok_shipping_type, tracking_number, ' +
+  'buyer_name, buyer_address, buyer_tax_id, buyer_branch, ' +
+  'shipping_recipient_name, shipping_address, tax_invoice_no, vat_amount, void_reason';
 
 const ORDER_ID_CHUNK = 150;
 
@@ -39,7 +47,7 @@ export async function fetchItemsByOrderIds(sb, orderIds) {
 export async function fetchRecentTikTokOrders(sb, { limit = TIKTOK_ORDERS_LOAD_CAP } = {}) {
   return sb
     .from('sale_orders')
-    .select('*')
+    .select(TIKTOK_ORDER_SELECT)
     .eq('channel', 'tiktok')
     .not('tiktok_order_id', 'is', null)
     .order('sale_date', { ascending: false })
@@ -57,12 +65,12 @@ export async function fetchProductImageMap(sb, productIds) {
   for (let i = 0; i < productIds.length; i += 500) {
     const chunk = productIds.slice(i, i + 500);
     const { data: imgs, error } = await sb.from('product_images')
-      .select('product_id, image_url')
+      .select('product_id, image_url, updated_at')
       .in('product_id', chunk)
       .not('image_url', 'is', null);
     if (error) throw error;
     for (const r of imgs || []) {
-      if (r.image_url) imgMap[r.product_id] = r.image_url;
+      if (r.image_url) imgMap[r.product_id] = versionedImageUrl(r.image_url, r.updated_at);
     }
   }
   return imgMap;

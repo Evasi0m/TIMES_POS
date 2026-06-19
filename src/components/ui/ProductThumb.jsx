@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import Icon from './Icon.jsx';
 import ExpandableImageThumb from './ExpandableImageThumb.jsx';
 import { productImageUrl, classifyBrand } from '../../lib/product-classify.js';
@@ -37,14 +37,6 @@ export default function ProductThumb({ product, size = 'md', className = '' }) {
   // previous load failure so the new image re-shows its skeleton.
   useEffect(() => { setBroken(false); }, [url]);
 
-  // Cache-buster: the shop wants product photos fetched fresh, never served from
-  // the browser's HTTP cache. A per-mount token (stable across re-renders, new on
-  // each mount or url change) appends a unique query so the URL is always "new".
-  const cacheBustedUrl = useMemo(() => {
-    if (!url) return null;
-    return url + (url.includes('?') ? '&' : '?') + 'cb=' + Date.now();
-  }, [url]);
-
   // Photo tile — solid bg + hairline border (avoid ring-* at rounded corners).
   const photoTile =
     'flex-shrink-0 inline-flex items-center justify-center overflow-hidden ' +
@@ -66,7 +58,7 @@ export default function ProductThumb({ product, size = 'md', className = '' }) {
   if (url && !broken) {
     return (
       <ExpandableImageThumb
-        src={cacheBustedUrl}
+        src={url}
         alt={product?.name || ''}
         className={photoTile}
         style={{ width: px, height: px }}

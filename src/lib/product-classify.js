@@ -150,10 +150,22 @@ export function parseCasioModel(m) {
  * Tolerates both PostgREST embed shapes: an object (unique FK) or a 1-element
  * array, plus a pre-merged `_imageRow` (used by ProductsView's Map merge).
  */
+/** Append a stable cache key when the image row was updated (not per-mount). */
+export function versionedImageUrl(url, updatedAt) {
+  if (!url) return null;
+  const base = url.replace(/([?&])v=\d+/g, '$1').replace(/\?&/, '?').replace(/[?&]$/, '');
+  if (!updatedAt) return base;
+  const v = new Date(updatedAt).getTime();
+  if (!v || Number.isNaN(v)) return base;
+  return base + (base.includes('?') ? '&' : '?') + 'v=' + v;
+}
+
 export function productImageUrl(p) {
   const pi = p?._imageRow ?? p?.product_images;
   const row = Array.isArray(pi) ? pi[0] : pi;
-  if (row && row.status === 'found' && row.image_url) return row.image_url;
+  if (row && row.status === 'found' && row.image_url) {
+    return versionedImageUrl(row.image_url, row.updated_at);
+  }
   return null;
 }
 

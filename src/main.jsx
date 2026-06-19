@@ -27,7 +27,7 @@ import {
 } from './lib/app-update.js';
 import AppUpdateBanner from './components/ui/AppUpdateBanner.jsx';
 import UpdateLogButton from './components/ui/UpdateLogButton.jsx';
-import { fetchAll } from './lib/sb-paginate.js';
+import { fetchAll, fetchAllFromTable } from './lib/sb-paginate.js';
 import { sb } from './lib/supabase-client.js';
 import {
   dateISOBangkok,
@@ -99,6 +99,8 @@ import {
   PRODUCTS_EXPORT_PENDING_KEY,
 } from './lib/export-auth.js';
 import { logStockExport, fetchStockExportLogs } from './lib/stock-export-log.js';
+import { parseManualAdjustNotes } from './lib/stock-manual-adjust.js';
+import StockAdjustModal from './components/products/StockAdjustModal.jsx';
 import Icon from './components/ui/Icon.jsx';
 import Modal from './components/ui/Modal.jsx';
 import { useMountedToggle } from './lib/use-mounted-toggle.js';
@@ -106,7 +108,10 @@ import TikTokMatchPromptModal from './components/ecommerce/TikTokMatchPromptModa
 import TikTokReceiveMatchCard from './components/ecommerce/TikTokReceiveMatchCard.jsx';
 import TikTokLinkedBadge from './components/ecommerce/TikTokLinkedBadge.jsx';
 import ProductThumb from './components/ui/ProductThumb.jsx';
-import { useRealtimeInvalidate } from './lib/use-realtime-invalidate.js';
+import { useRealtimeInvalidate, createDebouncedInvalidate } from './lib/use-realtime-invalidate.js';
+import { subscribeTable } from './lib/realtime-bus.js';
+import { fetchLatestReceiveCostMap, fetchReceiveCostTimeline } from './lib/receive-cost.js';
+import { PRODUCT_LIST_SELECT, invalidateProductCatalogCache } from './lib/product-catalog-cache.js';
 import { useNumberTween } from './lib/use-number-tween.js';
 import { useBarcodeScanner, getPreferredFacing, setPreferredFacing } from './lib/use-barcode-scanner.js';
 import { playScanBeep, playScanError, vibrateScan, vibrateError } from './lib/barcode-feedback.js';
@@ -5000,7 +5005,7 @@ function POSView() {
         if (!cancelled) { addToCart(barcodeHit[0]); setSearch(''); setSearching(false); }
         return;
       }
-      const { data, error } = await sb.from('products').select('*, product_images(image_url,status)').ilike('name', `%${q}%`).limit(20);
+      const { data, error } = await sb.from('products').select('*, product_images(image_url,status,updated_at)').ilike('name', `%${q}%`).limit(20);
       if (!error) rows = data || [];
       rows.sort((a,b) => (Number(b.current_stock)||0) - (Number(a.current_stock)||0));
       if (!cancelled) { setResults(rows); setSearching(false); }
@@ -6499,25 +6504,27 @@ function ProductsView() {
     setCategories(c.data || []);
   }, []);
 
+  const loadLatestCosts = useCallback(async () => {
+    try {
+      const { map, error } = await fetchLatestReceiveCostMap(sb);
+      if (!error) setLatestCostMap(map);
+    } catch { /* non-fatal — table still renders without "ทุนล่าสุด" */ }
+  }, []);
+
   const loadProducts = useCallback(async () => {
     setLoading(true);
-    // PostgREST enforces a server-side max-rows cap (1000 by default in
-    // Supabase) that .range() cannot override — it just truncates silently.
-    // fetchAll() paginates in 1000-row chunks until a short page comes back.
-    const { data: all, error } = await fetchAll((from, to) =>
-      sb.from('products').select('*').order('id', { ascending: false }).range(from, to)
-    );
+    const { data: all, error } = await fetchAllFromTable(sb, 'products', {
+      select: PRODUCT_LIST_SELECT,
+      orderColumn: 'id',
+      ascending: false,
+    });
     if (error) toast.push('โหลดสินค้าไม่ได้: ' + (error.message || mapError(error)), 'error');
 
-    // Product images: only a tiny slice of the catalog has one (status='found'),
-    // so a single targeted fetch + client-side Map merge is far cheaper than a
-    // 6,040-row nested embed. Failures are non-fatal — products just render the
-    // brand-monogram placeholder.
     const imgMap = new Map();
     try {
       const { data: imgs } = await sb
         .from('product_images')
-        .select('product_id, image_url, status')
+        .select('product_id, image_url, status, updated_at')
         .eq('status', 'found');
       for (const r of imgs || []) if (r.image_url) imgMap.set(r.product_id, r);
     } catch { /* placeholder fallback covers this */ }
@@ -6526,8 +6533,6 @@ function ProductsView() {
     setAllRows(enriched);
     setLoading(false);
 
-    // Diagnostic: surface products that didn't match any brand rule. Helps
-    // expand BRAND_RULES later without silently bucketing them as "อื่น ๆ".
     const orphans = enriched.filter(p => p._brand === 'other');
     if (orphans.length) {
       // eslint-disable-next-line no-console
@@ -6535,36 +6540,10 @@ function ProductsView() {
         orphans.length, orphans.slice(0, 20).map(p => p.name));
     }
 
-    // Latest receive cost per product (chunked because IN() can hold ~1000 ids)
-    const ids = enriched.map(p => p.id).filter(Boolean);
-    if (ids.length) {
-      try {
-        const map = {};
-        for (let i = 0; i < ids.length; i += 500) {
-          const chunk = ids.slice(i, i + 500);
-          // Each chunk can still return > 1000 receive rows (a 500-product
-          // window with deep history easily produces thousands), so paginate
-          // *within* the chunk too — IN() caps URL length, fetchAll caps rows.
-          const { data: rd } = await fetchAll((fromIdx, toIdx) =>
-            sb.from('receive_order_items')
-              .select('product_id, unit_price, receive_orders!inner(receive_date, voided_at)')
-              .in('product_id', chunk)
-              .is('receive_orders.voided_at', null)
-              .range(fromIdx, toIdx)
-          );
-          (rd || []).forEach(r => {
-            const date = r.receive_orders?.receive_date;
-            if (!date) return;
-            const ts = new Date(date).getTime();
-            const cur = map[r.product_id];
-            if (!cur || ts > cur.ts) {
-              map[r.product_id] = { unit_price: Number(r.unit_price) || 0, receive_date: date, ts };
-            }
-          });
-        }
-        setLatestCostMap(map);
-      } catch { /* non-fatal — table still renders without "ทุนล่าสุด" */ }
-    } else {
+    try {
+      const { map, error: costErr } = await fetchLatestReceiveCostMap(sb);
+      setLatestCostMap(costErr ? {} : map);
+    } catch {
       setLatestCostMap({});
     }
   }, [toast]);
@@ -6587,10 +6566,57 @@ function ProductsView() {
       setExportUserName(exporterDisplayName(user));
     });
   }, [exportAuthOpen, exportOpen]);
-  // Realtime: another device imported a CSV, finished a sale, or adjusted
-  // stock → re-run the loader so this tab sees the fresh catalog without
-  // a manual refresh. Debounced to batch bulk inserts (CSV import).
-  useRealtimeInvalidate(sb, ['products'], loadProducts);
+  // Realtime: stock-only UPDATE patches one row in memory; INSERT/DELETE or
+  // catalog field changes debounce a full reload. Receive docs refresh only
+  // latestCostMap (~6k rows via RPC, not 27k receive lines).
+  useEffect(() => {
+    const { schedule: scheduleReload, dispose } = createDebouncedInvalidate({
+      debounceMs: 300,
+      minIntervalMs: 5000,
+      onInvalidate: () => {
+        invalidateProductCatalogCache();
+        loadProducts();
+      },
+    });
+    const { schedule: scheduleCost, dispose: disposeCost } = createDebouncedInvalidate({
+      debounceMs: 300,
+      onInvalidate: () => loadLatestCosts(),
+    });
+
+    const patchStockIfOnlyChange = (payload) => {
+      const n = payload?.new;
+      const o = payload?.old;
+      if (!n?.id || payload.eventType !== 'UPDATE') return false;
+      const ignore = new Set(['current_stock', 'updated_at']);
+      const keys = new Set([...Object.keys(n), ...Object.keys(o || {})]);
+      for (const k of keys) {
+        if (ignore.has(k)) continue;
+        if (String(n[k] ?? '') !== String(o?.[k] ?? '')) return false;
+      }
+      if (n.current_stock === o?.current_stock) return false;
+      setAllRows(rows => rows.map(p => (p.id === n.id
+        ? enrichProduct({ ...p, current_stock: n.current_stock })
+        : p)));
+      return true;
+    };
+
+    const unsubs = [
+      subscribeTable(sb, 'products', (payload) => {
+        if (payload.eventType === 'INSERT' || payload.eventType === 'DELETE') {
+          scheduleReload();
+          return;
+        }
+        if (!patchStockIfOnlyChange(payload)) scheduleReload();
+      }),
+      subscribeTable(sb, 'receive_orders', () => scheduleCost()),
+      subscribeTable(sb, 'receive_order_items', () => scheduleCost()),
+    ];
+    return () => {
+      dispose();
+      disposeCost();
+      unsubs.forEach(u => u());
+    };
+  }, [loadProducts, loadLatestCosts]);
 
   const brandName = (id) => brands.find(b => b.id === id)?.name;
   const catName   = (id) => categories.find(c => c.id === id)?.name;
@@ -6707,6 +6733,7 @@ function ProductsView() {
         toast.push("เพิ่มสินค้าสำเร็จ — ไปหน้า \"รับเข้า\" เพื่อเพิ่มสต็อก", "success");
       }
       setEditing(null);
+      invalidateProductCatalogCache();
       loadProducts();
     } catch (e) {
       toast.push("บันทึกไม่ได้: " + e.message, "error");
@@ -6736,50 +6763,42 @@ function ProductsView() {
 
   return (
     <div className="px-4 py-4 lg:px-10 lg:py-6 lg:h-[calc(100vh-180px)] lg:flex lg:flex-col">
-      {/* Top bar: search + sort + advanced filter button.
-          Layout strategy:
-          - Mobile (`< sm`): search input stays full-width on row 1 with
-            the filter icon button beside it (one tap to refine). Sort
-            dropdown lives on row 2 since it's a 5-option menu that's
-            painful when squeezed. This keeps "search + filter" together
-            (the user's primary intent) without orphaning the filter
-            button on its own row.
-          - Desktop (`sm+`): everything sits inline as before. */}
-      <div className="flex flex-wrap sm:flex-nowrap items-stretch gap-2 mb-2 flex-shrink-0">
-        <div className="relative flex-1 min-w-0 order-1">
+      {/* Top bar: search + sort + filter + export.
+          Mobile (< sm): 2-row grid — row1 search+filter, row2 sort+export.
+          Desktop (sm+): single inline flex row (unchanged order). */}
+      <div className="products-toolbar grid grid-cols-[1fr_3rem] gap-2 mb-2 flex-shrink-0 sm:flex sm:flex-nowrap sm:items-stretch">
+        <div className="relative min-w-0 col-start-1 row-start-1 sm:col-auto sm:row-auto sm:flex-1 sm:order-1">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted z-10"><Icon name="search" size={18} strokeWidth={2.25}/></span>
-          <input className="input !pl-10 !pr-12 w-full" placeholder="ชื่อรุ่น หรือ บาร์โค้ด"
+          <input className="input !pl-10 !pr-11 !h-12 w-full" placeholder="ชื่อรุ่น หรือ บาร์โค้ด"
             value={queryInput} onChange={e=>setQueryInput(e.target.value)} autoFocus={!isMobileViewport()} />
           {queryInput && (
             <button type="button" onClick={()=>{ setQueryInput(''); setFilter(f=>({...f, query: ''})); }}
-              className="absolute right-12 top-1/2 -translate-y-1/2 p-1.5 text-muted-soft hover:text-ink rounded-md">
+              className="absolute right-11 top-1/2 -translate-y-1/2 p-1.5 text-muted-soft hover:text-ink rounded-md">
               <Icon name="x" size={14}/>
             </button>
           )}
-          <button type="button" className="scan-inline-btn absolute right-1 top-1/2 -translate-y-1/2" onClick={()=>setScannerOpen(true)} aria-label="สแกนด้วยกล้อง">
-            <Icon name="camera" size={20}/>
+          <button type="button" className="scan-inline-btn scan-inline-btn--in-field" onClick={()=>setScannerOpen(true)} aria-label="สแกนด้วยกล้อง">
+            <Icon name="camera" size={18}/>
           </button>
         </div>
-        <select className="input !py-2 !text-sm w-full sm:!w-auto order-3 sm:order-2" value={filter.sort}
-          onChange={e=>setFilter(f=>({...f, sort: e.target.value}))}>
+        <select
+          className="input !py-2 !text-sm !h-12 w-full col-start-1 row-start-2 sm:col-auto sm:row-auto sm:order-2 sm:!w-auto"
+          value={filter.sort}
+          onChange={e=>setFilter(f=>({...f, sort: e.target.value}))}
+        >
           <option value="newest">ใหม่ล่าสุด</option>
           <option value="oldest">เก่าสุด</option>
           <option value="price-asc">ราคา ต่ำ → สูง</option>
           <option value="price-desc">ราคา สูง → ต่ำ</option>
           <option value="name">ชื่อรุ่น A-Z</option>
         </select>
-        {/* Mobile: icon-only 44pt square. Desktop: icon + text + count
-            chip. The count badge stays on both layouts so the user can
-            see active filters without opening the sheet. */}
-        {/* `.input` is ~48px tall on mobile (12px padding + 22px line + 2px border),
-            so the filter chip needs to be 48×48 — not 44 — to align with the
-            search input's bottom edge. `sm:!w-auto` resets on desktop where
-            the button gains its text label. */}
-        <button type="button" className="btn-secondary !py-2 !text-sm sm:!w-auto relative icon-btn-44 !w-12 !h-12 sm:!w-auto sm:!h-auto order-2 sm:order-3 flex-shrink-0"
-          onClick={()=>setSheetOpen(true)} title="ตัวกรองขั้นสูง (วัสดุ / สี / ราคา / สต็อก)"
-          aria-label="ตัวกรองขั้นสูง">
-          {/* Bigger icon on mobile so the filter glyph dominates the 44pt
-              chip; desktop keeps the original 16px to sit beside text. */}
+        <button
+          type="button"
+          className="btn-secondary !py-2 !text-sm relative icon-btn-44 !w-12 !h-12 flex-shrink-0 col-start-2 row-start-1 sm:col-auto sm:row-auto sm:order-3 sm:!w-auto sm:!h-auto"
+          onClick={()=>setSheetOpen(true)}
+          title="ตัวกรองขั้นสูง (วัสดุ / สี / ราคา / สต็อก)"
+          aria-label="ตัวกรองขั้นสูง"
+        >
           <Icon name="filter" size={22} className="sm:!w-[16px] sm:!h-[16px]"/>
           <span className="hidden sm:inline sm:ml-1">ตัวกรอง</span>
           {advancedCount > 0 && (
@@ -6788,9 +6807,13 @@ function ProductsView() {
             </span>
           )}
         </button>
-        <button type="button" className="btn-secondary !py-2 !text-sm sm:!w-auto icon-btn-44 !w-12 !h-12 sm:!w-auto sm:!h-auto order-4 sm:order-4 flex-shrink-0"
-          onClick={()=>setExportAuthOpen(true)} title="Export สต็อกเป็น CSV"
-          aria-label="Export สต็อกเป็น CSV">
+        <button
+          type="button"
+          className="btn-secondary !py-2 !text-sm icon-btn-44 !w-12 !h-12 flex-shrink-0 col-start-2 row-start-2 sm:col-auto sm:row-auto sm:order-4 sm:!w-auto sm:!h-auto"
+          onClick={()=>setExportAuthOpen(true)}
+          title="Export สต็อกเป็น CSV"
+          aria-label="Export สต็อกเป็น CSV"
+        >
           <Icon name="download" size={22} className="sm:!w-[16px] sm:!h-[16px]"/>
           <span className="hidden sm:inline sm:ml-1">Export</span>
         </button>
@@ -7434,14 +7457,14 @@ const STOCK_REASON_LABELS = {
   receive_void:        { label: "ยกเลิกรับเข้า",     tone: "red"   },
   return_in:           { label: "คืนเข้า",           tone: "green" },
   return_void:         { label: "ยกเลิกรับคืน",      tone: "red"   },
-  manual_adjust:       { label: "แก้ไขเอง",          tone: "gray"  },
+  manual_adjust:       { label: "ปรับสต็อก (มือ)",   tone: "gray"  },
   stock_reconcile:     { label: "ปรับสต็อก TikTok", tone: "gray"  },
   initial:             { label: "ตั้งต้น",            tone: "gray"  },
   supplier_claim:      { label: "ส่งเคลม/คืนบริษัท", tone: "red"   },
   supplier_claim_void: { label: "ยกเลิกส่งเคลม",     tone: "green" },
 };
 
-function StockHistoryPanel({ productId }) {
+function StockHistoryPanel({ productId, reloadToken = 0 }) {
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -7454,6 +7477,16 @@ function StockHistoryPanel({ productId }) {
     setRows(data || []);
     setLoading(false);
   };
+
+  useEffect(() => {
+    if (!productId) return;
+    setRows(null);
+  }, [productId, reloadToken]);
+
+  useEffect(() => {
+    if (!productId || !open) return;
+    load();
+  }, [productId, reloadToken, open]);
 
   const toggle = () => {
     if (!open && rows === null) load();
@@ -7477,16 +7510,25 @@ function StockHistoryPanel({ productId }) {
           {!loading && rows && rows.map(m => {
             const meta = STOCK_REASON_LABELS[m.reason] || { label: m.reason, tone: "gray" };
             const isPos = m.qty_delta > 0;
+            const manualMeta = m.reason === 'manual_adjust' ? parseManualAdjustNotes(m.notes) : null;
             return (
               <div key={m.id} className="flex items-center gap-3 py-2 border-b hairline-soft last:border-0">
                 <div className={"w-14 text-right font-mono font-medium tabular-nums " + (isPos?"text-success":"text-error")}>
                   {isPos?"+":""}{m.qty_delta}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm flex items-center gap-2">
+                  <div className="text-sm flex items-center gap-2 flex-wrap">
                     <span className={"badge-pill !text-xs " + (meta.tone==='red'?'!bg-error/10 !text-error':meta.tone==='green'?'!bg-success/15 !text-[#2c6b3a]':'')}>{meta.label}</span>
-                    {m.ref_table && m.ref_id && <span className="text-xs text-muted-soft font-mono">{m.ref_table.replace('_orders','')}#{m.ref_id}</span>}
+                    {manualMeta?.subreasonLabel && (
+                      <span className="badge-pill !text-xs !bg-surface-strong text-muted">{manualMeta.subreasonLabel}</span>
+                    )}
+                    {m.ref_table && m.ref_id && m.reason !== 'manual_adjust' && (
+                      <span className="text-xs text-muted-soft font-mono">{m.ref_table.replace('_orders','')}#{m.ref_id}</span>
+                    )}
                   </div>
+                  {manualMeta?.note && (
+                    <div className="text-xs text-muted mt-0.5 leading-snug">{manualMeta.note}</div>
+                  )}
                   <div className="text-xs text-muted mt-0.5">{fmtDateTime(m.created_at)}</div>
                 </div>
                 <div className="text-xs text-muted-soft tabular-nums">→ {m.balance_after}</div>
@@ -7672,6 +7714,9 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
   const [customPctStr, setCustomPctStr] = useState(''); // raw string in custom input
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [stockAdjustOpen, setStockAdjustOpen] = useState(false);
+  const [stockHistoryReload, setStockHistoryReload] = useState(0);
+  const [userEmail, setUserEmail] = useState('');
   const isSuperAdmin = useIsSuperAdmin();
   const barcodeRef = useRef(null);
   const askPrompt = usePrompt();
@@ -7683,7 +7728,13 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
     setManualApproved(false);
     setAutoPct(null);
     setCustomPctStr('');
+    setStockAdjustOpen(false);
   }, [editing]);
+  useEffect(() => {
+    sb.auth.getSession().then(({ data }) => {
+      setUserEmail(data.session?.user?.email || '');
+    });
+  }, []);
   if (!draft) return null;
   const set = (k,v)=> setDraft(d=>({...d,[k]:v}));
 
@@ -8037,15 +8088,34 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
                 </div>
                 <div>
                   <label className={fieldLabel}>คงเหลือ</label>
-                  <div className="mt-1 input !flex items-center justify-between !cursor-not-allowed opacity-80 bg-surface-soft">
-                    <span className="font-display text-lg tabular-nums">{draft.current_stock||0}</span>
-                    <span className="text-xs text-muted-soft">read-only</span>
-                  </div>
+                  {isSuperAdmin ? (
+                    <div className="mt-1 flex gap-2 items-stretch">
+                      <div className="input !flex items-center flex-1 min-w-0 bg-surface-soft">
+                        <span className="font-display text-lg tabular-nums">{draft.current_stock||0}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-secondary !px-3 !text-sm whitespace-nowrap flex-shrink-0"
+                        onClick={()=>setStockAdjustOpen(true)}
+                      >
+                        <Icon name="edit" size={16}/> ปรับสต็อก
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mt-1 input !flex items-center justify-between !cursor-not-allowed opacity-80 bg-surface-soft">
+                      <span className="font-display text-lg tabular-nums">{draft.current_stock||0}</span>
+                      <span className="text-xs text-muted-soft">read-only</span>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="text-xs text-muted-soft leading-snug flex items-center gap-1.5">
                 <Icon name="info" size={13} className="text-muted-soft shrink-0"/>
-                <span>ปรับสต็อกผ่านหน้า <span className="font-medium">รับเข้า / ส่งเคลม / คืน</span></span>
+                <span>
+                  {isSuperAdmin
+                    ? <>ปรับสต็อกด้วยปุ่ม <span className="font-medium">ปรับสต็อก</span> (บันทึก audit) หรือผ่านหน้า <span className="font-medium">รับเข้า / ส่งเคลม / คืน</span></>
+                    : <>ปรับสต็อกผ่านหน้า <span className="font-medium">รับเข้า / ส่งเคลม / คืน</span></>}
+                </span>
               </div>
             </div>
           )}
@@ -8061,11 +8131,24 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
         {/* ── ประวัติสต็อก — edit mode only ── */}
         {draft.id && (
           <div className="lg:col-span-6 rounded-xl border hairline bg-surface-soft p-4">
-            <StockHistoryPanel productId={draft.id}/>
+            <StockHistoryPanel productId={draft.id} reloadToken={stockHistoryReload}/>
           </div>
         )}
       </div>
     </Modal>
+    <StockAdjustModal
+      open={stockAdjustOpen}
+      onClose={()=>setStockAdjustOpen(false)}
+      product={draft}
+      userEmail={userEmail}
+      toast={tryToast}
+      onSuccess={(data) => {
+        if (data?.stock_after != null) {
+          setDraft(d => d ? { ...d, current_stock: data.stock_after } : d);
+        }
+        setStockHistoryReload(n => n + 1);
+      }}
+    />
     {/* Camera scanner — single-shot. Editing existing products requires the
         explicit "แก้ไข Barcode" gate first to avoid accidental overwrites. */}
     <BarcodeScannerModal
@@ -8176,24 +8259,15 @@ function SalesView({ onGoPOS }) {
           const items = itemsData || [];
           const pids = [...new Set(items.map(i => i.product_id).filter(Boolean))];
 
-          let recvRows = [];
+          let recvMap = {};
           if (pids.length) {
-            const { data: rd } = await fetchAll((fromIdx, toIdx) =>
-              sb.from('receive_order_items')
-                .select('product_id, unit_price, receive_orders!inner(receive_date, voided_at)')
-                .in('product_id', pids).is('receive_orders.voided_at', null)
-                .range(fromIdx, toIdx)
+            const { map, error: recvErr } = await fetchReceiveCostTimeline(
+              sb, pids, endOfDayBangkok(to),
             );
             if (gen !== loadGenRef.current) return;
-            recvRows = rd || [];
+            if (recvErr) recvMap = {};
+            else recvMap = map;
           }
-          const recvMap = {};
-          recvRows.forEach(r => {
-            const date = r.receive_orders?.receive_date;
-            if (!date) return;
-            (recvMap[r.product_id] ||= []).push({ date: new Date(date).getTime(), unit_price: Number(r.unit_price)||0 });
-          });
-          Object.values(recvMap).forEach(arr => arr.sort((a,b)=>b.date-a.date));
 
           const prodMap = {};
           if (pids.length) {
@@ -8637,12 +8711,10 @@ function SalesView({ onGoPOS }) {
 
   const FilterControls = (
     <div className="space-y-3">
-      {/* Two filter controls side-by-side at sm+ — explicit w-full on
-          the DatePicker wrapper and matching min-height on both so the
-          range button and the channel select read as a single, balanced
-          pair (same width AND same visual height).                     */}
+      {/* Two filter controls side-by-side at sm+ — date is lg-only here;
+          mobile shows date + filter toggle in a dedicated row above. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 hidden lg:block">
           <label className="text-xs uppercase tracking-wider text-muted">ช่วงวันที่</label>
           <DatePicker mode="range" value={range} onChange={handleRangeChange}
             placeholder="เลือกช่วงวันที่" className="mt-1 w-full"/>
@@ -8730,21 +8802,7 @@ function SalesView({ onGoPOS }) {
         <PendingNetBell toast={toast.push} size={50} placement="floating" floatClassName="top-[30px] right-[40px]"/>
       </div>
       {/* Summary cards — revenue (cream) + profit (Tiffany blue) split
-          50/50 on sm+. Mobile stacks; filter button moves out of the
-          revenue card to its own row above so the two summary tiles can
-          claim full width on phones (was cramped sharing space with the
-          icon button). */}
-      <div className="lg:hidden flex justify-end mb-2">
-        <button
-          type="button"
-          className="icon-btn-44 btn-secondary !p-0"
-          onClick={()=>setFilterOpen(o=>!o)}
-          aria-label="ตัวกรอง"
-          aria-expanded={filterOpen}
-        >
-          <Icon name="filter" size={20}/>
-        </button>
-      </div>
+          50/50 on sm+. Mobile: date + filter toggle sit below cards. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:gap-4 mb-4">
         {/* Revenue (cream) */}
         <div className="card-cream p-4 lg:p-5">
@@ -8767,6 +8825,29 @@ function SalesView({ onGoPOS }) {
           <div className="text-xs text-white/75 mt-1 tabular-nums">
             หลังหัก VAT {totalProfitAfterVat >= 0 ? '+' : '−'}{fmtTHB(Math.abs(totalProfitAfterVat))}
           </div>
+        </div>
+      </div>
+
+      {/* Mobile — date range always visible; filter icon toggles the rest */}
+      <div className="lg:hidden mb-3 sales-date-toolbar">
+        <label className="text-xs uppercase tracking-wider text-muted">ช่วงวันที่</label>
+        <div className="grid grid-cols-2 gap-2 items-stretch mt-1">
+          <DatePicker
+            mode="range"
+            value={range}
+            onChange={handleRangeChange}
+            placeholder="เลือกช่วงวันที่"
+            className="min-w-0 w-full"
+          />
+          <button
+            type="button"
+            className="icon-btn-44 btn-secondary !p-0 !w-full !h-12"
+            onClick={()=>setFilterOpen(o=>!o)}
+            aria-label="ตัวกรอง"
+            aria-expanded={filterOpen}
+          >
+            <Icon name="filter" size={20}/>
+          </button>
         </div>
       </div>
 
@@ -11837,7 +11918,7 @@ function DashboardView({ embedded = false, dateRange: dateRangeProp, onDateRange
   // Realtime: when another device records a sale or changes stock, refresh
   // the dashboard so the manager watching it from the back doesn't see
   // stale numbers. Products listens for low-stock badge updates.
-  useRealtimeInvalidate(sb, ['sale_orders', 'sale_order_items', 'products'],
+  useRealtimeInvalidate(sb, ['sale_orders', 'sale_order_items'],
     () => setReloadTick(t => t + 1),
     { minIntervalMs: 2000 });
 
@@ -12708,26 +12789,14 @@ function ProfitLossView({ embedded = false }) {
 
       const pids = [...new Set(items.map(i=>i.product_id).filter(Boolean))];
 
-      // 3) Receive history (only active i.e. voided_at IS NULL) — chunked
-      let recvRows = [];
+      // 3) Receive history (only active i.e. voided_at IS NULL) — via RPC
+      let recvMap = {};
       if (pids.length) {
-        const { data } = await fetchAll((fromIdx, toIdx) =>
-          sb.from('receive_order_items')
-            .select('product_id, unit_price, receive_orders!inner(receive_date, voided_at)')
-            .in('product_id', pids)
-            .is('receive_orders.voided_at', null)
-            .range(fromIdx, toIdx)
+        const { map, error: recvErr } = await fetchReceiveCostTimeline(
+          sb, pids, endOfDayBangkok(to),
         );
-        recvRows = data || [];
+        if (!recvErr) recvMap = map;
       }
-      // Map: product_id -> sorted [{date, unit_price}] desc
-      const recvMap = {};
-      recvRows.forEach(r => {
-        const date = r.receive_orders?.receive_date;
-        if (!date) return;
-        (recvMap[r.product_id] ||= []).push({ date: new Date(date).getTime(), unit_price: Number(r.unit_price)||0 });
-      });
-      Object.values(recvMap).forEach(arr => arr.sort((a,b)=>b.date-a.date));
 
       // 4) Products fallback — chunked
       let prodMap = {};
@@ -13928,7 +13997,7 @@ function VatView({ embedded = false, dateRange: dateRangeProp, onDateRangeChange
     sale: 'ขายออก', sale_void: 'ยกเลิกการขาย', sale_edit: 'แก้ไขการขาย',
     receive: 'รับเข้า', receive_void: 'ยกเลิกรับเข้า',
     return_in: 'รับคืนจากลูกค้า', return_void: 'ยกเลิกรับคืน',
-    manual_adjust: 'ปรับปรุงยอด', stock_reconcile: 'ปรับสต็อก TikTok', initial: 'ยอดยกมา',
+    manual_adjust: 'ปรับสต็อก (มือ)', stock_reconcile: 'ปรับสต็อก TikTok', initial: 'ยอดยกมา',
     supplier_claim: 'ส่งคืนผู้ขาย', supplier_claim_void: 'ยกเลิกส่งคืน',
   };
   const exportGoodsCsv = () => {

@@ -1,0 +1,78 @@
+---
+description: TikTok Shop E-Commerce UI — liquid glass design system and page layout (June 2026 refresh)
+globs: src/components/ecommerce/**,src/components/settings/TikTok*,src/styles/tiktok-glass.css,src/views/ECommerceView.jsx
+alwaysApply: false
+---
+
+# TikTok Shop UI — Liquid Glass (current state)
+
+When editing TikTok E-Commerce pages, follow this design system. Do **not** revert to flat `space-y-*` stacks or legacy section wrappers without reason.
+
+## Design tokens (`src/styles/tiktok-glass.css`)
+
+Parent shell: `.tt-glass` on [`ECommerceView.jsx`](src/views/ECommerceView.jsx) TikTok tab.
+
+| Token | Value / role |
+|-------|----------------|
+| `--tt-coral` | `#f42f68` — active accent, warn KPI left bar |
+| `--tt-cyan` | `#0cbfba` — ok/live badges |
+| `--tt-amber` | `#b7791f` — secondary warn |
+| Touch targets | **44px** min (`tt-glass__tabs--toolbar`, `tt-glass__btn--lg`) |
+| Active tab | coral **inset left bar** (not cyan) |
+
+## Glass component kit (`src/components/ecommerce/tiktok/glass/`)
+
+Reuse primitives — do not invent one-off styles:
+
+- `TikTokGlassShell`, `TikTokGlassSection`, `TikTokGlassHero`
+- `TikTokGlassTabs` — variants: `nav` (dark section nav), `toolbar` (filters), `status` (order status = nav + toolbar + scroll)
+- `TikTokGlassBtn` — `coral`, `outline`, `hero`, `ghost`, `surface`
+- `TikTokGlassStat` — KPI tiles; optional `tone` (`warn`/`ok`/`muted`) for metric cards
+- `TikTokGlassBadge` — table status chips (`context="surface"`)
+
+## Page layout — [`TikTokPanel.jsx`](src/components/ecommerce/TikTokPanel.jsx)
+
+Root: `tt-glass__workspace`. Each section is a **group** with English title + Thai caption:
+
+| Section key | Group title | Contents |
+|-------------|-------------|----------|
+| `orders` | **Overview** | `TikTokConnectionStrip` (compact) + `TikTokStatStrip` in `tt-glass__overview-grid` |
+| `orders` | **Command Center** | `TikTokOrdersToolbar` + `TikTokBulkActionBar` in `tt-glass__command-panel` |
+| `orders` | **Work Queue** | status tabs in `tt-glass__filter-rail` + `TikTokOrderList` |
+| `invoices` | **Tax Documents** | invoice bulk + filter tabs |
+| `returns` | **Returns Desk** | returns table |
+| `matching` | **Matching Queue** | SKU matching (super admin) |
+| `stock` | **Stock Control** | stock reconcile (super admin) |
+
+## Section-specific notes
+
+### Orders overview
+- Connection strip uses `compact` prop → [`TikTokSettings`](src/components/settings/TikTokSettings.jsx) renders `tt-glass--compact-connect`
+- Stat strip: `tt-glass__stat-grid--bento`; first card gets `tt-glass__stat--primary`
+- Order list sections use `heroClassName="tt-glass__hero--light"` (light hero, not dark band)
+
+### Toolbar
+- `TikTokOrdersToolbar` uses `tt-glass__toolbar-surface` (not `TikTokGlassSection` wrapper)
+
+### Status tabs
+- `TikTokStatusTabs` → `variant="status"` (dark glass, 44px, horizontal scroll, coral active)
+
+### Invoices ([`TikTokInvoiceBulk.jsx`](src/components/ecommerce/TikTokInvoiceBulk.jsx))
+- Summary row: `tt-glass__invoice-summary` with 3 `TikTokGlassStat` tones
+- Filter tabs: `variant="toolbar"` — ทั้งหมด / รอ Tax ID / พร้อมพิมพ์ / พิมพ์แล้ว
+- Table status: `TikTokGlassBadge` instead of plain text
+
+### Returns ([`TikTokReturns.jsx`](src/components/ecommerce/TikTokReturns.jsx))
+- `RETURN_STATUS` maps to `{ label, tone }`; render with `TikTokGlassBadge`
+
+## Conventions when adding UI
+
+1. Wrap new blocks in `tt-glass__group` + heading if it is a distinct operational zone
+2. Use existing glass CSS classes before adding new ones
+3. Keep `--tt-r-control` / `--tt-r-panel` fallbacks on elements outside `.tt-glass`
+4. Prefer `outline`/`hero` button variants on light surfaces; `coral` for primary actions
+5. Order load capped at 3000 via [`tiktok-orders-load.js`](src/lib/tiktok-orders-load.js) — do not remove cap without index migration
+
+## Out of scope for this tab
+
+POS TikTok confirm flow lives in `src/components/pos/tiktok-confirm/` — separate UX (4-step: จับคู่ → ตรวจสอบ → กรอกเงิน → ยืนยัน).
