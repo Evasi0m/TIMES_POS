@@ -45,6 +45,10 @@ on:
           - tiktok-returns-sync
           - tiktok-invoice-submit
           - all-tiktok
+          - telegram-send
+          - telegram-webhook
+          - daily-telegram-summary
+          - all-telegram
 
 jobs:
   deploy:
@@ -95,9 +99,13 @@ jobs:
             deploy_one tiktok-stock-reconcile-apply
             deploy_one tiktok-mapping-backfill
             deploy_one tiktok-product-image-backfill
+          elif [ "$FN" = "all-telegram" ]; then
+            deploy_one telegram-send
+            deploy_one telegram-webhook --no-verify-jwt
+            deploy_one daily-telegram-summary
           else
             case "$FN" in
-              tiktok-auth|tiktok-webhook|tiktok-invoice-submit)
+              tiktok-auth|tiktok-webhook|tiktok-invoice-submit|telegram-webhook)
                 deploy_one "$FN" --no-verify-jwt
                 ;;
               *)

@@ -156,6 +156,7 @@ import {
 } from './lib/tiktok-cancel-return.js';
 import InsightsView from './views/InsightsView.jsx';
 import AISettings from './components/settings/AISettings.jsx';
+import TelegramSettings from './components/settings/TelegramSettings.jsx';
 import InvoiceRequestView from './views/InvoiceRequestView.jsx';
 import ECommerceView from './views/ECommerceView.jsx';
 import FullTaxInvoiceA4 from './components/invoice/FullTaxInvoiceA4.jsx';
@@ -1612,6 +1613,7 @@ function AppSettingsModal({ open, onClose, onSidebarStartChange }) {
   const TABS = [
     { id: 'display',  label: 'การแสดงผล',  shortLabel: 'แสดงผล', icon: 'edit',       adminOnly: false },
     { id: 'shop',     label: 'ข้อมูลร้าน',  shortLabel: 'ร้าน',   icon: 'store',      adminOnly: true  },
+    { id: 'telegram', label: 'Telegram',     shortLabel: 'TG',     icon: 'bell',       adminOnly: true, superAdminOnly: true },
     { id: 'ai',       label: 'AI',           shortLabel: 'AI',     icon: 'scan',       adminOnly: true, superAdminOnly: true },
     { id: 'paylater', label: 'สูตรคำนวณ',    shortLabel: 'สูตร',   icon: 'calculator', adminOnly: true, superAdminOnly: true },
   ];
@@ -1757,6 +1759,12 @@ function AppSettingsModal({ open, onClose, onSidebarStartChange }) {
           )}
 
           {/* ── Tab: AI ── */}
+          {activeTab === 'telegram' && isSuperAdmin && (
+            <div className="fade-in">
+              <TelegramSettings toast={toast} />
+            </div>
+          )}
+
           {activeTab === 'ai' && isAdmin && (
             <div className="fade-in">
               <AISettings toast={toast} />

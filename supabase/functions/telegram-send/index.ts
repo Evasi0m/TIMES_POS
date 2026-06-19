@@ -39,7 +39,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 interface ReqBody {
-  action?: 'send' | 'preview' | 'test' | 'install_webhook' | 'delete_webhook' | 'webhook_status';
+  action?: 'send' | 'preview' | 'test' | 'install_webhook' | 'delete_webhook' | 'webhook_status' | 'list_chats';
   kind?: 'daily' | 'monthly' | 'range' | 'cron';
   date?: string;          // YYYY-MM-DD, target day for daily
   yyyymm?: string;        // YYYY-MM,    target month for monthly
@@ -123,6 +123,29 @@ async function deleteWebhook(token: string): Promise<any> {
 async function getWebhookInfo(token: string): Promise<any> {
   const res = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
   return res.json();
+}
+
+/** Unique chats from recent getUpdates — for Settings UI chat picker. */
+async function listTelegramChats(token: string) {
+  const res = await fetch(`https://api.telegram.org/bot${token}/getUpdates?limit=50`);
+  const body = await res.json();
+  if (!body.ok) throw new Error(`Telegram getUpdates: ${JSON.stringify(body)}`);
+  const byId = new Map<number, { id: number; type?: string; title?: string; first_name?: string; last_name?: string; username?: string }>();
+  for (const u of body.result || []) {
+    const chat = u.message?.chat || u.edited_message?.chat;
+    if (!chat?.id) continue;
+    if (!byId.has(chat.id)) {
+      byId.set(chat.id, {
+        id: chat.id,
+        type: chat.type,
+        title: chat.title,
+        first_name: chat.first_name,
+        last_name: chat.last_name,
+        username: chat.username,
+      });
+    }
+  }
+  return Array.from(byId.values()).sort((a, b) => a.id - b.id);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -259,6 +282,16 @@ Deno.serve(async (req: Request) => {
   if (body.action === 'webhook_status') {
     if (!token) return json({ ok: false, error: 'missing bot token' }, 400);
     return json(await getWebhookInfo(token));
+  }
+
+  if (body.action === 'list_chats') {
+    if (!token) return json({ ok: false, error: 'missing bot token — บันทึก token ก่อน' }, 400);
+    try {
+      const chats = await listTelegramChats(token);
+      return json({ ok: true, chats });
+    } catch (err) {
+      return json({ ok: false, error: String(err) }, 502);
+    }
   }
 
   // ── Test ping ───────────────────────────────────────────────────────

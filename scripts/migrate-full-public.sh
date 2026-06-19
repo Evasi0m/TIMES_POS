@@ -92,8 +92,11 @@ export SUPABASE_ACCESS_TOKEN
 cd "$ROOT"
 /Users/j3da1/.supabase/bin/supabase db query --linked -f supabase-migrations/072_cron_project_url_new_project.sql
 
-echo "Applying post-migrate grants (073 ó fix authenticated schema access)..."
+echo "Applying post-migrate grants (073 ù fix authenticated schema access)..."
 /Users/j3da1/.supabase/bin/supabase db query --linked -f supabase-migrations/073_fix_post_restore_grants.sql
+
+echo "Applying post-migrate telegram cron fix (074)..."
+/Users/j3da1/.supabase/bin/supabase db query --linked -f supabase-migrations/074_telegram_cron_v2_fix.sql
 
 echo "Vault service_role_keyù"
 "$PSQL" <<EOSQL

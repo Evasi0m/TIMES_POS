@@ -9,7 +9,7 @@
 pg_cron ─────────────────▶ public.invoke_daily_telegram_summary()
                             │
                             ▼ http_post (pg_net)
-                  Edge Function: daily-telegram-summary
+                  Edge Function: telegram-send  (kind: cron)
                             │
                             ▼ select shop_secrets / sale_orders / items / shop_expenses
                             ▼
@@ -51,7 +51,7 @@ select name from vault.secrets where name = 'service_role_key';
 
 ### 3. ตั้งค่าใน UI
 
-เข้า TIMES POS → ⚙️ การตั้งค่า → **Telegram — สรุปยอดอัตโนมัติ** (admin only):
+เข้า TIMES POS → ⚙️ การตั้งค่า → **Telegram** (super admin only):
 
 1. วาง **Bot Token**
 2. กด **"ดู Chat ID จาก bot"** → เลือก chat ที่ต้องการ

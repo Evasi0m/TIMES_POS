@@ -2,6 +2,18 @@
   "schemaVersion": 1,
   "patches": [
     {
+      "id": "2026-06-19-telegram-settings-ui",
+      "date": "2026-06-19",
+      "title": "Telegram — หน้าตั้งค่า + cron ครบ",
+      "tags": ["ฟีเจอร์", "ปรับปรุง"],
+      "items": [
+        "การตั้งค่า → Telegram (super admin): token, chat ID, ส่งรายวัน/รายเดือน, ทดสอบส่ง",
+        "ติด webhook + คำสั่ง /today /yesterday /sales /lowstock ในแชท",
+        "Migration 074: cron ชี้ telegram-send (kind:cron) บน project ใหม่",
+        "Deploy workflow: all-telegram (telegram-send, telegram-webhook, daily-telegram-summary)"
+      ]
+    },
+    {
       "id": "2026-06-19-sales-session-cache",
       "date": "2026-06-19",
       "title": "หน้าประวัติขาย — session cache ลด egress",
