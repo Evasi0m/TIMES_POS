@@ -20,7 +20,7 @@
 // server. Subscribers are only notified when the *combined* status flips.
 
 const SUPABASE_HEALTH_URL =
-  'https://zrymhhkqdcttqsdczfcr.supabase.co/auth/v1/health';
+  'https://pxenybeudcsddsnkduaj.supabase.co/auth/v1/health';
 const PROBE_THROTTLE_MS = 10_000;   // cache probe result for 10s
 const PROBE_TIMEOUT_MS  = 4_000;    // each probe gives up after 4s
 

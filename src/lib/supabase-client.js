@@ -6,8 +6,8 @@
 // identical to how main.jsx originally created the client.
 import { createClient } from '@supabase/supabase-js';
 
-export const SUPABASE_URL  = 'https://zrymhhkqdcttqsdczfcr.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpyeW1oaGtxZGN0dHFzZGN6ZmNyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3MjYzNDUsImV4cCI6MjA5MzMwMjM0NX0.M414TfDx_nxJRa3hEWMiY7FAsevj5f0HIGQAp-H-8jM';
+export const SUPABASE_URL  = 'https://pxenybeudcsddsnkduaj.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4ZW55YmV1ZGNzZGRzbmtkdWFqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4NjM1NjMsImV4cCI6MjA5NzQzOTU2M30.llZzz-FYENFgf5ew32S9k5ysTrG5HGAfDb8nW-r0mrg';
 
 const REMEMBER_KEY = 'pos.remember';
 const isRemember = () => localStorage.getItem(REMEMBER_KEY) !== 'false';
