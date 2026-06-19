@@ -1,4 +1,4 @@
-// Telegram bot settings — token, chat, schedules, webhook, test/preview.
+// Telegram bot settings  token, chat, schedules, webhook, test/preview.
 // super_admin only (tab gated in AppSettingsModal).
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -7,6 +7,48 @@ import { mapError } from '../../lib/error-map.js';
 import Icon from '../ui/Icon.jsx';
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
+
+const MSG = {
+  loadFail: '\u0e42\u0e2b\u0e25\u0e14 Telegram \u0e44\u0e21\u0e48\u0e44\u0e14\u0e49: ',
+  saved: '\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01 Telegram \u0e41\u0e25\u0e49\u0e27',
+  saveFail: '\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49: ',
+  needToken: '\u0e43\u0e2a\u0e48 Bot Token \u0e41\u0e25\u0e49\u0e27\u0e01\u0e14\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e01\u0e48\u0e2d\u0e19',
+  noChats: '\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e41\u0e0a\u0e17 \u2014 \u0e2a\u0e48\u0e07\u0e02\u0e49\u0e2d\u0e04\u0e27\u0e32\u0e21\u0e43\u0e2b\u0e49 bot \u0e01\u0e48\u0e2d\u0e19 1 \u0e04\u0e23\u0e31\u0e49\u0e07 \u0e41\u0e25\u0e49\u0e27\u0e25\u0e2d\u0e07\u0e43\u0e2b\u0e21\u0e48',
+  chatFail: '\u0e14\u0e36\u0e07 Chat ID \u0e44\u0e21\u0e48\u0e44\u0e14\u0e49: ',
+  testOk: '\u0e2a\u0e48\u0e07\u0e02\u0e49\u0e2d\u0e04\u0e27\u0e32\u0e21\u0e17\u0e14\u0e2a\u0e2d\u0e1a\u0e41\u0e25\u0e49\u0e27 \u2014 \u0e14\u0e39\u0e43\u0e19 Telegram',
+  testFail: '\u0e17\u0e14\u0e2a\u0e2d\u0e1a\u0e2a\u0e48\u0e07\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49: ',
+  previewFail: '\u0e14\u0e39\u0e15\u0e31\u0e27\u0e2d\u0e22\u0e48\u0e32\u0e07\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49: ',
+  webhookOk: '\u0e15\u0e34\u0e14 webhook \u0e41\u0e25\u0e49\u0e27 \u2014 \u0e43\u0e0a\u0e49\u0e04\u0e33\u0e2a\u0e31\u0e48\u0e07 /today \u0e43\u0e19 Telegram \u0e44\u0e14\u0e49',
+  webhookFail: '\u0e15\u0e34\u0e14 webhook \u0e44\u0e21\u0e48\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08',
+  webhookErr: '\u0e15\u0e34\u0e14 webhook \u0e44\u0e21\u0e48\u0e44\u0e14\u0e49: ',
+  webhookCheckErr: '\u0e15\u0e23\u0e27\u0e08 webhook \u0e44\u0e21\u0e48\u0e44\u0e14\u0e49: ',
+  loading: '\u0e01\u0e33\u0e25\u0e31\u0e07\u0e42\u0e2b\u0e25\u0e14\u2026',
+  intro: '\u0e2a\u0e48\u0e07\u0e2a\u0e23\u0e38\u0e1b\u0e22\u0e2d\u0e14\u0e2d\u0e31\u0e15\u0e42\u0e19\u0e21\u0e31\u0e15\u0e34 + \u0e15\u0e2d\u0e1a\u0e04\u0e33\u0e2a\u0e31\u0e48\u0e07\u0e43\u0e19 Telegram (/today, /yesterday, /sales, /lowstock)',
+  connectBot: '\u0e40\u0e0a\u0e37\u0e48\u0e2d\u0e21\u0e15\u0e48\u0e2d Bot',
+  fromBotFather: '\u0e08\u0e32\u0e01 @BotFather',
+  pickChat: '\u2014 \u0e40\u0e25\u0e37\u0e2d\u0e01\u0e41\u0e0a\u0e17 \u2014',
+  save: '\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01',
+  testSend: '\u0e17\u0e14\u0e2a\u0e2d\u0e1a\u0e2a\u0e48\u0e07',
+  preview: '\u0e14\u0e39\u0e15\u0e31\u0e27\u0e2d\u0e22\u0e48\u0e32\u0e07\u0e22\u0e2d\u0e14\u0e40\u0e21\u0e37\u0e48\u0e2d\u0e27\u0e32\u0e19',
+  schedule: '\u0e01\u0e32\u0e23\u0e2a\u0e48\u0e07\u0e2d\u0e31\u0e15\u0e42\u0e19\u0e21\u0e31\u0e15\u0e34 (\u0e40\u0e27\u0e25\u0e32 \u0e01\u0e17\u0e21.)',
+  daily: '\u0e2a\u0e23\u0e38\u0e1b\u0e23\u0e32\u0e22\u0e27\u0e31\u0e19 (\u0e40\u0e21\u0e37\u0e48\u0e2d\u0e27\u0e32\u0e19)',
+  dailyHour: '\u0e40\u0e27\u0e25\u0e32\u0e2a\u0e48\u0e07\u0e23\u0e32\u0e22\u0e27\u0e31\u0e19',
+  monthly: '\u0e2a\u0e23\u0e38\u0e1b\u0e23\u0e32\u0e22\u0e40\u0e14\u0e37\u0e2d\u0e19 (\u0e27\u0e31\u0e19\u0e17\u0e35\u0e48 1 \u0e02\u0e2d\u0e07\u0e40\u0e14\u0e37\u0e2d\u0e19)',
+  monthlyHour: '\u0e40\u0e27\u0e25\u0e32\u0e2a\u0e48\u0e07\u0e23\u0e32\u0e22\u0e40\u0e14\u0e37\u0e2d\u0e19',
+  lowStock: '\u0e40\u0e01\u0e13\u0e11\u0e36\u0e2a\u0e15\u0e47\u0e2d\u0e01\u0e15\u0e48\u0e33 (/lowstock)',
+  twoWay: 'Bot \u0e2a\u0e2d\u0e07\u0e17\u0e32\u0e07 (\u0e04\u0e33\u0e2a\u0e31\u0e48\u0e07\u0e43\u0e19\u0e41\u0e0a\u0e17)',
+  installWebhook: '\u0e15\u0e34\u0e14 webhook',
+  checkWebhook: '\u0e15\u0e23\u0e27\u0e08\u0e2a\u0e16\u0e32\u0e19\u0e30 webhook',
+  lastDaily: '\u0e2a\u0e48\u0e07\u0e23\u0e32\u0e22\u0e27\u0e31\u0e19\u0e25\u0e48\u0e32\u0e2a\u0e38\u0e14:',
+  lastMonthly: '\u0e2a\u0e48\u0e07\u0e23\u0e32\u0e22\u0e40\u0e14\u0e37\u0e2d\u0e19\u0e25\u0e48\u0e32\u0e2a\u0e38\u0e14:',
+  lastErr: '\u0e02\u0e49\u0e2d\u0e1c\u0e34\u0e14\u0e1e\u0e25\u0e32\u0e14\u0e25\u0e48\u0e32\u0e2a\u0e38\u0e14:',
+  previewTitle: '\u0e15\u0e31\u0e27\u0e2d\u0e22\u0e48\u0e32\u0e07\u0e02\u0e49\u0e2d\u0e04\u0e27\u0e32\u0e21',
+  viewChatId: '\u0e14\u0e39 Chat ID',
+  hourSuffix: ' \u0e19.',
+  chatDefault: '\u0e41\u0e0a\u0e17',
+  typePrivate: '\u0e2a\u0e48\u0e27\u0e19\u0e15\u0e31\u0e27',
+  typeGroup: '\u0e01\u0e25\u0e38\u0e48\u0e21',
+};
 
 function fmtDateTime(iso) {
   if (!iso) return '-';
@@ -20,8 +62,8 @@ function chatLabel(c) {
   if (c.title) parts.push(c.title);
   else if (c.first_name) parts.push([c.first_name, c.last_name].filter(Boolean).join(' '));
   else if (c.username) parts.push(`@${c.username}`);
-  else parts.push('chat');
-  const type = c.type === 'private' ? 'private' : c.type === 'group' ? 'group' : c.type || '';
+  else parts.push(MSG.chatDefault);
+  const type = c.type === 'private' ? MSG.typePrivate : c.type === 'group' ? MSG.typeGroup : c.type || '';
   return `${parts.join(' ')} (${type}) / ${c.id}`;
 }
 
@@ -52,7 +94,7 @@ export default function TelegramSettings({ toast }) {
       .maybeSingle();
     setLoading(false);
     if (error) {
-      toast?.push('???? Telegram ??????: ' + mapError(error), 'error');
+      toast?.push(MSG.loadFail + mapError(error), 'error');
       return;
     }
     setDraft({
@@ -94,10 +136,10 @@ export default function TelegramSettings({ toast }) {
         daily_summary_hour: Number(draft.daily_hour) || 21,
       }).eq('id', 1);
       if (error) throw error;
-      toast?.push('?????? Telegram ????', 'success');
+      toast?.push(MSG.saved, 'success');
       await load();
     } catch (e) {
-      toast?.push('????????????: ' + mapError(e), 'error');
+      toast?.push(MSG.saveFail + mapError(e), 'error');
     } finally {
       setBusy(false);
     }
@@ -105,7 +147,7 @@ export default function TelegramSettings({ toast }) {
 
   const fetchChats = async () => {
     if (!draft?.telegram_bot_token?.trim()) {
-      toast?.push('??? Bot Token ????????????????', 'error');
+      toast?.push(MSG.needToken, 'error');
       return;
     }
     setBusy(true);
@@ -114,10 +156,10 @@ export default function TelegramSettings({ toast }) {
       const data = await invoke({ action: 'list_chats' });
       setChats(data.chats || []);
       if (!data.chats?.length) {
-        toast?.push('??????????? — ????????????? bot ???? 1 ????? ???????????', 'info');
+        toast?.push(MSG.noChats, 'info');
       }
     } catch (e) {
-      toast?.push('??? Chat ID ??????: ' + mapError(e), 'error');
+      toast?.push(MSG.chatFail + mapError(e), 'error');
     } finally {
       setBusy(false);
     }
@@ -128,10 +170,10 @@ export default function TelegramSettings({ toast }) {
     try {
       await save();
       await invoke({ action: 'test' });
-      toast?.push('??????????????????? — ???? Telegram', 'success');
+      toast?.push(MSG.testOk, 'success');
       await load();
     } catch (e) {
-      toast?.push('??????????????: ' + mapError(e), 'error');
+      toast?.push(MSG.testFail + mapError(e), 'error');
     } finally {
       setBusy(false);
     }
@@ -144,7 +186,7 @@ export default function TelegramSettings({ toast }) {
       const data = await invoke({ action: 'preview', kind: 'daily' });
       setPreviewText(data.text || '');
     } catch (e) {
-      toast?.push('????????????????: ' + mapError(e), 'error');
+      toast?.push(MSG.previewFail + mapError(e), 'error');
     } finally {
       setBusy(false);
     }
@@ -155,10 +197,10 @@ export default function TelegramSettings({ toast }) {
     try {
       await save();
       const data = await invoke({ action: 'install_webhook' });
-      if (data?.ok) toast?.push('??? webhook ???? — ????????? /today ?? Telegram ???', 'success');
-      else toast?.push('??? webhook ?????????', 'error');
+      if (data?.ok) toast?.push(MSG.webhookOk, 'success');
+      else toast?.push(MSG.webhookFail, 'error');
     } catch (e) {
-      toast?.push('??? webhook ??????: ' + mapError(e), 'error');
+      toast?.push(MSG.webhookErr + mapError(e), 'error');
     } finally {
       setBusy(false);
     }
@@ -170,7 +212,7 @@ export default function TelegramSettings({ toast }) {
       const data = await invoke({ action: 'webhook_status' });
       setWebhookInfo(data?.result || data);
     } catch (e) {
-      toast?.push('???? webhook ??????: ' + mapError(e), 'error');
+      toast?.push(MSG.webhookCheckErr + mapError(e), 'error');
     } finally {
       setBusy(false);
     }
@@ -179,7 +221,7 @@ export default function TelegramSettings({ toast }) {
   if (loading || !draft) {
     return (
       <div className="flex items-center gap-2 text-sm text-muted py-8 justify-center">
-        <span className="spinner"/> ?????????…
+        <span className="spinner"/> {MSG.loading}
       </div>
     );
   }
@@ -189,24 +231,24 @@ export default function TelegramSettings({ toast }) {
   return (
     <div className="space-y-5 fade-in">
       <div className="text-xs text-muted-soft bg-surface-soft rounded-lg px-3.5 py-2.5 border hairline">
-        ??????????????????? + ??????????? Telegram (/today, /yesterday, /sales, /lowstock)
+        {MSG.intro}
       </div>
 
       <div className="bg-surface-soft rounded-xl p-4 border hairline space-y-3">
         <div className="text-sm font-medium text-ink flex items-center gap-1.5">
-          <Icon name="link" size={15} className="text-primary"/> ????????? Bot
+          <Icon name="link" size={15} className="text-primary"/> {MSG.connectBot}
         </div>
         <div>
           <label className="text-xs uppercase tracking-wider text-muted">Bot Token</label>
           <input
             type="password"
             className="input mt-1 w-full font-mono text-sm"
-            placeholder="123456789:ABC…"
+            placeholder="123456789:ABC..."
             value={draft.telegram_bot_token}
             onChange={(e) => set('telegram_bot_token', e.target.value)}
             autoComplete="off"
           />
-          <div className="text-[11px] text-muted-soft mt-1">??? @BotFather</div>
+          <div className="text-[11px] text-muted-soft mt-1">{MSG.fromBotFather}</div>
         </div>
         <div>
           <label className="text-xs uppercase tracking-wider text-muted">Chat ID</label>
@@ -219,7 +261,7 @@ export default function TelegramSettings({ toast }) {
               onChange={(e) => set('telegram_chat_id', e.target.value)}
             />
             <button type="button" className="btn-secondary !py-2 !px-3 text-sm whitespace-nowrap" onClick={fetchChats} disabled={busy}>
-              ?? Chat ID
+              {MSG.viewChatId}
             </button>
           </div>
           {chats.length > 0 && (
@@ -228,7 +270,7 @@ export default function TelegramSettings({ toast }) {
               value={draft.telegram_chat_id}
               onChange={(e) => set('telegram_chat_id', e.target.value)}
             >
-              <option value="">— ???????? —</option>
+              <option value="">{MSG.pickChat}</option>
               {chats.map((c) => (
                 <option key={c.id} value={String(c.id)}>{chatLabel(c)}</option>
               ))}
@@ -238,52 +280,52 @@ export default function TelegramSettings({ toast }) {
         <div className="flex flex-wrap gap-2 pt-1">
           <button type="button" className="btn-primary !py-2 !px-4 text-sm" onClick={save} disabled={busy}>
             {busy ? <span className="spinner"/> : <Icon name="check" size={14}/>}
-            ??????
+            {MSG.save}
           </button>
           <button type="button" className="btn-secondary !py-2 !px-3 text-sm" onClick={testSend} disabled={busy}>
-            ????????
+            {MSG.testSend}
           </button>
           <button type="button" className="btn-secondary !py-2 !px-3 text-sm" onClick={previewYesterday} disabled={busy}>
-            ?????????????????????
+            {MSG.preview}
           </button>
         </div>
       </div>
 
       <div className="bg-surface-soft rounded-xl p-4 border hairline space-y-4">
-        <div className="text-sm font-medium text-ink">??????????????? (???? ???.)</div>
+        <div className="text-sm font-medium text-ink">{MSG.schedule}</div>
 
         <label className="flex items-center justify-between gap-3 cursor-pointer">
-          <span className="text-sm">?????????? (????????)</span>
+          <span className="text-sm">{MSG.daily}</span>
           <input type="checkbox" checked={draft.daily_enabled} onChange={(e) => set('daily_enabled', e.target.checked)} />
         </label>
         {draft.daily_enabled && (
           <div>
-            <label className="text-xs text-muted">?????????????</label>
+            <label className="text-xs text-muted">{MSG.dailyHour}</label>
             <select className="input mt-1 w-full" value={draft.daily_hour} onChange={(e) => set('daily_hour', Number(e.target.value))}>
               {HOURS.map((h) => (
-                <option key={h} value={h}>{String(h).padStart(2, '0')}:00 ?.</option>
+                <option key={h} value={h}>{String(h).padStart(2, '0')}:00{MSG.hourSuffix}</option>
               ))}
             </select>
           </div>
         )}
 
         <label className="flex items-center justify-between gap-3 cursor-pointer border-t hairline-soft pt-3">
-          <span className="text-sm">???????????? (?????? 1 ????????)</span>
+          <span className="text-sm">{MSG.monthly}</span>
           <input type="checkbox" checked={draft.monthly_enabled} onChange={(e) => set('monthly_enabled', e.target.checked)} />
         </label>
         {draft.monthly_enabled && (
           <div>
-            <label className="text-xs text-muted">???????????????</label>
+            <label className="text-xs text-muted">{MSG.monthlyHour}</label>
             <select className="input mt-1 w-full" value={draft.monthly_hour} onChange={(e) => set('monthly_hour', Number(e.target.value))}>
               {HOURS.map((h) => (
-                <option key={h} value={h}>{String(h).padStart(2, '0')}:00 ?.</option>
+                <option key={h} value={h}>{String(h).padStart(2, '0')}:00{MSG.hourSuffix}</option>
               ))}
             </select>
           </div>
         )}
 
         <div>
-          <label className="text-xs text-muted">????????????? (/lowstock)</label>
+          <label className="text-xs text-muted">{MSG.lowStock}</label>
           <input
             type="number"
             min={0}
@@ -296,16 +338,16 @@ export default function TelegramSettings({ toast }) {
       </div>
 
       <div className="bg-surface-soft rounded-xl p-4 border hairline space-y-3">
-        <div className="text-sm font-medium text-ink">Bot ?????? (???????????)</div>
+        <div className="text-sm font-medium text-ink">{MSG.twoWay}</div>
         <div className="text-[11px] text-muted-soft">
           /today /yesterday /month /lastmonth /sales 7 /lowstock /help
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" className="btn-secondary !py-2 !px-3 text-sm" onClick={installWebhook} disabled={busy}>
-            ??? webhook
+            {MSG.installWebhook}
           </button>
           <button type="button" className="btn-secondary !py-2 !px-3 text-sm" onClick={checkWebhook} disabled={busy}>
-            ????????? webhook
+            {MSG.checkWebhook}
           </button>
         </div>
         {webhookInfo && (
@@ -316,16 +358,16 @@ export default function TelegramSettings({ toast }) {
       </div>
 
       <div className="text-[11px] text-muted space-y-1 font-mono">
-        <div>???????????????: {fmtDateTime(draft.last_summary_sent_at)}</div>
-        <div>?????????????????: {fmtDateTime(draft.last_monthly_sent_at)}</div>
+        <div>{MSG.lastDaily} {fmtDateTime(draft.last_summary_sent_at)}</div>
+        <div>{MSG.lastMonthly} {fmtDateTime(draft.last_monthly_sent_at)}</div>
         {draft.last_summary_error && (
-          <div className="text-error break-all">????????????????: {draft.last_summary_error}</div>
+          <div className="text-error break-all">{MSG.lastErr} {draft.last_summary_error}</div>
         )}
       </div>
 
       {previewText && (
         <div className="bg-surface-soft rounded-xl p-4 border hairline">
-          <div className="text-xs uppercase tracking-wider text-muted mb-2">???????????????</div>
+          <div className="text-xs uppercase tracking-wider text-muted mb-2">{MSG.previewTitle}</div>
           <pre className="text-xs whitespace-pre-wrap font-sans text-ink leading-relaxed">{previewText.replace(/<[^>]+>/g, '')}</pre>
         </div>
       )}

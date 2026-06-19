@@ -2,6 +2,15 @@
   "schemaVersion": 1,
   "patches": [
     {
+      "id": "2026-06-19-telegram-thai-encoding-fix",
+      "date": "2026-06-19",
+      "title": "แก้ข้อความ Telegram settings แสดงเป็น ?",
+      "tags": ["แก้ไข"],
+      "items": [
+        "หน้าตั้งค่า Telegram แสดงภาษาไทยถูกต้องแล้ว (แก้ encoding ที่เสียตอนสร้างไฟล์)"
+      ]
+    },
+    {
       "id": "2026-06-19-telegram-settings-ui",
       "date": "2026-06-19",
       "title": "Telegram — หน้าตั้งค่า + cron ครบ",
