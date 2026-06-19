@@ -337,7 +337,7 @@ export default function BulkReceiveView({ toast }) {
     (async () => {
       const { data } = await sb
         .from('product_images')
-        .select('product_id, image_url, status')
+        .select('product_id, image_url, status, updated_at')
         .in('product_id', ids)
         .eq('status', 'found');
       if (cancelled) return;

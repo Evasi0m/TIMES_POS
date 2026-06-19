@@ -2,6 +2,20 @@
   "schemaVersion": 1,
   "patches": [
     {
+      "id": "2026-06-19-supabase-egress-optimization",
+      "date": "2026-06-19",
+      "title": "ลด Supabase egress — โหลดเร็วขึ้น",
+      "tags": ["ปรับปรุง", "ประสิทธิภาพ"],
+      "items": [
+        "หน้าสินค้า: RPC ดึงทุนล่าสุดแทนสแกน receive 27k แถว · select เฉพาะคอลัมน์ที่ใช้",
+        "Realtime ฉลาดขึ้น — อัปเดตสต็อกใน memory, reload เต็มเฉพาะ INSERT/DELETE",
+        "รายงานขาย/กำไรขาดทุน + TikTok orders ใช้ query เล็กลง",
+        "Insights เก็บ session cache — กลับแท็บแล้วไม่ fetch 365 วันซ้ำ",
+        "รูปสินค้า: เอา cache-buster ต่อ mount ออก — browser cache ได้, อัปเดตเมื่อรูปเปลี่ยนจริง",
+        "Migration 071: get_product_latest_receive_costs + get_receive_cost_timeline"
+      ]
+    },
+    {
       "id": "2026-06-14-super-admin-stock-adjust",
       "date": "2026-06-14",
       "title": "Super Admin — ปรับสต็อกจากหน้าแก้ไขสินค้า",

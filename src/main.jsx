@@ -27,7 +27,7 @@ import {
 } from './lib/app-update.js';
 import AppUpdateBanner from './components/ui/AppUpdateBanner.jsx';
 import UpdateLogButton from './components/ui/UpdateLogButton.jsx';
-import { fetchAll } from './lib/sb-paginate.js';
+import { fetchAll, fetchAllFromTable } from './lib/sb-paginate.js';
 import { sb } from './lib/supabase-client.js';
 import {
   dateISOBangkok,
@@ -108,7 +108,10 @@ import TikTokMatchPromptModal from './components/ecommerce/TikTokMatchPromptModa
 import TikTokReceiveMatchCard from './components/ecommerce/TikTokReceiveMatchCard.jsx';
 import TikTokLinkedBadge from './components/ecommerce/TikTokLinkedBadge.jsx';
 import ProductThumb from './components/ui/ProductThumb.jsx';
-import { useRealtimeInvalidate } from './lib/use-realtime-invalidate.js';
+import { useRealtimeInvalidate, createDebouncedInvalidate } from './lib/use-realtime-invalidate.js';
+import { subscribeTable } from './lib/realtime-bus.js';
+import { fetchLatestReceiveCostMap, fetchReceiveCostTimeline } from './lib/receive-cost.js';
+import { PRODUCT_LIST_SELECT, invalidateProductCatalogCache } from './lib/product-catalog-cache.js';
 import { useNumberTween } from './lib/use-number-tween.js';
 import { useBarcodeScanner, getPreferredFacing, setPreferredFacing } from './lib/use-barcode-scanner.js';
 import { playScanBeep, playScanError, vibrateScan, vibrateError } from './lib/barcode-feedback.js';
@@ -5002,7 +5005,7 @@ function POSView() {
         if (!cancelled) { addToCart(barcodeHit[0]); setSearch(''); setSearching(false); }
         return;
       }
-      const { data, error } = await sb.from('products').select('*, product_images(image_url,status)').ilike('name', `%${q}%`).limit(20);
+      const { data, error } = await sb.from('products').select('*, product_images(image_url,status,updated_at)').ilike('name', `%${q}%`).limit(20);
       if (!error) rows = data || [];
       rows.sort((a,b) => (Number(b.current_stock)||0) - (Number(a.current_stock)||0));
       if (!cancelled) { setResults(rows); setSearching(false); }
@@ -6501,25 +6504,27 @@ function ProductsView() {
     setCategories(c.data || []);
   }, []);
 
+  const loadLatestCosts = useCallback(async () => {
+    try {
+      const { map, error } = await fetchLatestReceiveCostMap(sb);
+      if (!error) setLatestCostMap(map);
+    } catch { /* non-fatal — table still renders without "ทุนล่าสุด" */ }
+  }, []);
+
   const loadProducts = useCallback(async () => {
     setLoading(true);
-    // PostgREST enforces a server-side max-rows cap (1000 by default in
-    // Supabase) that .range() cannot override — it just truncates silently.
-    // fetchAll() paginates in 1000-row chunks until a short page comes back.
-    const { data: all, error } = await fetchAll((from, to) =>
-      sb.from('products').select('*').order('id', { ascending: false }).range(from, to)
-    );
+    const { data: all, error } = await fetchAllFromTable(sb, 'products', {
+      select: PRODUCT_LIST_SELECT,
+      orderColumn: 'id',
+      ascending: false,
+    });
     if (error) toast.push('โหลดสินค้าไม่ได้: ' + (error.message || mapError(error)), 'error');
 
-    // Product images: only a tiny slice of the catalog has one (status='found'),
-    // so a single targeted fetch + client-side Map merge is far cheaper than a
-    // 6,040-row nested embed. Failures are non-fatal — products just render the
-    // brand-monogram placeholder.
     const imgMap = new Map();
     try {
       const { data: imgs } = await sb
         .from('product_images')
-        .select('product_id, image_url, status')
+        .select('product_id, image_url, status, updated_at')
         .eq('status', 'found');
       for (const r of imgs || []) if (r.image_url) imgMap.set(r.product_id, r);
     } catch { /* placeholder fallback covers this */ }
@@ -6528,8 +6533,6 @@ function ProductsView() {
     setAllRows(enriched);
     setLoading(false);
 
-    // Diagnostic: surface products that didn't match any brand rule. Helps
-    // expand BRAND_RULES later without silently bucketing them as "อื่น ๆ".
     const orphans = enriched.filter(p => p._brand === 'other');
     if (orphans.length) {
       // eslint-disable-next-line no-console
@@ -6537,36 +6540,10 @@ function ProductsView() {
         orphans.length, orphans.slice(0, 20).map(p => p.name));
     }
 
-    // Latest receive cost per product (chunked because IN() can hold ~1000 ids)
-    const ids = enriched.map(p => p.id).filter(Boolean);
-    if (ids.length) {
-      try {
-        const map = {};
-        for (let i = 0; i < ids.length; i += 500) {
-          const chunk = ids.slice(i, i + 500);
-          // Each chunk can still return > 1000 receive rows (a 500-product
-          // window with deep history easily produces thousands), so paginate
-          // *within* the chunk too — IN() caps URL length, fetchAll caps rows.
-          const { data: rd } = await fetchAll((fromIdx, toIdx) =>
-            sb.from('receive_order_items')
-              .select('product_id, unit_price, receive_orders!inner(receive_date, voided_at)')
-              .in('product_id', chunk)
-              .is('receive_orders.voided_at', null)
-              .range(fromIdx, toIdx)
-          );
-          (rd || []).forEach(r => {
-            const date = r.receive_orders?.receive_date;
-            if (!date) return;
-            const ts = new Date(date).getTime();
-            const cur = map[r.product_id];
-            if (!cur || ts > cur.ts) {
-              map[r.product_id] = { unit_price: Number(r.unit_price) || 0, receive_date: date, ts };
-            }
-          });
-        }
-        setLatestCostMap(map);
-      } catch { /* non-fatal — table still renders without "ทุนล่าสุด" */ }
-    } else {
+    try {
+      const { map, error: costErr } = await fetchLatestReceiveCostMap(sb);
+      setLatestCostMap(costErr ? {} : map);
+    } catch {
       setLatestCostMap({});
     }
   }, [toast]);
@@ -6589,10 +6566,57 @@ function ProductsView() {
       setExportUserName(exporterDisplayName(user));
     });
   }, [exportAuthOpen, exportOpen]);
-  // Realtime: another device imported a CSV, finished a sale, or adjusted
-  // stock → re-run the loader so this tab sees the fresh catalog without
-  // a manual refresh. Debounced to batch bulk inserts (CSV import).
-  useRealtimeInvalidate(sb, ['products'], loadProducts);
+  // Realtime: stock-only UPDATE patches one row in memory; INSERT/DELETE or
+  // catalog field changes debounce a full reload. Receive docs refresh only
+  // latestCostMap (~6k rows via RPC, not 27k receive lines).
+  useEffect(() => {
+    const { schedule: scheduleReload, dispose } = createDebouncedInvalidate({
+      debounceMs: 300,
+      minIntervalMs: 5000,
+      onInvalidate: () => {
+        invalidateProductCatalogCache();
+        loadProducts();
+      },
+    });
+    const { schedule: scheduleCost, dispose: disposeCost } = createDebouncedInvalidate({
+      debounceMs: 300,
+      onInvalidate: () => loadLatestCosts(),
+    });
+
+    const patchStockIfOnlyChange = (payload) => {
+      const n = payload?.new;
+      const o = payload?.old;
+      if (!n?.id || payload.eventType !== 'UPDATE') return false;
+      const ignore = new Set(['current_stock', 'updated_at']);
+      const keys = new Set([...Object.keys(n), ...Object.keys(o || {})]);
+      for (const k of keys) {
+        if (ignore.has(k)) continue;
+        if (String(n[k] ?? '') !== String(o?.[k] ?? '')) return false;
+      }
+      if (n.current_stock === o?.current_stock) return false;
+      setAllRows(rows => rows.map(p => (p.id === n.id
+        ? enrichProduct({ ...p, current_stock: n.current_stock })
+        : p)));
+      return true;
+    };
+
+    const unsubs = [
+      subscribeTable(sb, 'products', (payload) => {
+        if (payload.eventType === 'INSERT' || payload.eventType === 'DELETE') {
+          scheduleReload();
+          return;
+        }
+        if (!patchStockIfOnlyChange(payload)) scheduleReload();
+      }),
+      subscribeTable(sb, 'receive_orders', () => scheduleCost()),
+      subscribeTable(sb, 'receive_order_items', () => scheduleCost()),
+    ];
+    return () => {
+      dispose();
+      disposeCost();
+      unsubs.forEach(u => u());
+    };
+  }, [loadProducts, loadLatestCosts]);
 
   const brandName = (id) => brands.find(b => b.id === id)?.name;
   const catName   = (id) => categories.find(c => c.id === id)?.name;
@@ -6709,6 +6733,7 @@ function ProductsView() {
         toast.push("เพิ่มสินค้าสำเร็จ — ไปหน้า \"รับเข้า\" เพื่อเพิ่มสต็อก", "success");
       }
       setEditing(null);
+      invalidateProductCatalogCache();
       loadProducts();
     } catch (e) {
       toast.push("บันทึกไม่ได้: " + e.message, "error");
@@ -8234,24 +8259,15 @@ function SalesView({ onGoPOS }) {
           const items = itemsData || [];
           const pids = [...new Set(items.map(i => i.product_id).filter(Boolean))];
 
-          let recvRows = [];
+          let recvMap = {};
           if (pids.length) {
-            const { data: rd } = await fetchAll((fromIdx, toIdx) =>
-              sb.from('receive_order_items')
-                .select('product_id, unit_price, receive_orders!inner(receive_date, voided_at)')
-                .in('product_id', pids).is('receive_orders.voided_at', null)
-                .range(fromIdx, toIdx)
+            const { map, error: recvErr } = await fetchReceiveCostTimeline(
+              sb, pids, endOfDayBangkok(to),
             );
             if (gen !== loadGenRef.current) return;
-            recvRows = rd || [];
+            if (recvErr) recvMap = {};
+            else recvMap = map;
           }
-          const recvMap = {};
-          recvRows.forEach(r => {
-            const date = r.receive_orders?.receive_date;
-            if (!date) return;
-            (recvMap[r.product_id] ||= []).push({ date: new Date(date).getTime(), unit_price: Number(r.unit_price)||0 });
-          });
-          Object.values(recvMap).forEach(arr => arr.sort((a,b)=>b.date-a.date));
 
           const prodMap = {};
           if (pids.length) {
@@ -11902,7 +11918,7 @@ function DashboardView({ embedded = false, dateRange: dateRangeProp, onDateRange
   // Realtime: when another device records a sale or changes stock, refresh
   // the dashboard so the manager watching it from the back doesn't see
   // stale numbers. Products listens for low-stock badge updates.
-  useRealtimeInvalidate(sb, ['sale_orders', 'sale_order_items', 'products'],
+  useRealtimeInvalidate(sb, ['sale_orders', 'sale_order_items'],
     () => setReloadTick(t => t + 1),
     { minIntervalMs: 2000 });
 
@@ -12773,26 +12789,14 @@ function ProfitLossView({ embedded = false }) {
 
       const pids = [...new Set(items.map(i=>i.product_id).filter(Boolean))];
 
-      // 3) Receive history (only active i.e. voided_at IS NULL) — chunked
-      let recvRows = [];
+      // 3) Receive history (only active i.e. voided_at IS NULL) — via RPC
+      let recvMap = {};
       if (pids.length) {
-        const { data } = await fetchAll((fromIdx, toIdx) =>
-          sb.from('receive_order_items')
-            .select('product_id, unit_price, receive_orders!inner(receive_date, voided_at)')
-            .in('product_id', pids)
-            .is('receive_orders.voided_at', null)
-            .range(fromIdx, toIdx)
+        const { map, error: recvErr } = await fetchReceiveCostTimeline(
+          sb, pids, endOfDayBangkok(to),
         );
-        recvRows = data || [];
+        if (!recvErr) recvMap = map;
       }
-      // Map: product_id -> sorted [{date, unit_price}] desc
-      const recvMap = {};
-      recvRows.forEach(r => {
-        const date = r.receive_orders?.receive_date;
-        if (!date) return;
-        (recvMap[r.product_id] ||= []).push({ date: new Date(date).getTime(), unit_price: Number(r.unit_price)||0 });
-      });
-      Object.values(recvMap).forEach(arr => arr.sort((a,b)=>b.date-a.date));
 
       // 4) Products fallback — chunked
       let prodMap = {};

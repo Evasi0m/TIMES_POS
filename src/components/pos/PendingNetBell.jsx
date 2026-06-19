@@ -4,6 +4,7 @@ import { sb } from '../../lib/supabase-client.js';
 import { excludePendingTikTok } from '../../lib/ecommerce-channels.js';
 import Icon from '../ui/Icon.jsx';
 import ProductThumb from '../ui/ProductThumb.jsx';
+import { versionedImageUrl } from '../../lib/product-classify.js';
 
 /**
  * Notification bell for e-commerce sales rung up with "ใส่ทีหลัง" — i.e. bills
@@ -81,10 +82,12 @@ export default function PendingNetBell({
     const imgMap = {};
     if (productIds.length) {
       const { data: imgs } = await sb.from('product_images')
-        .select('product_id, image_url, status')
+        .select('product_id, image_url, status, updated_at')
         .in('product_id', productIds)
         .eq('status', 'found');
-      (imgs || []).forEach(r => { imgMap[r.product_id] = r.image_url; });
+      (imgs || []).forEach(r => {
+        imgMap[r.product_id] = versionedImageUrl(r.image_url, r.updated_at);
+      });
     }
 
     const byOrder = {};
