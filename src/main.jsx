@@ -117,6 +117,17 @@ import {
   patchProductStockInCache,
   refreshLatestCostsInCache,
 } from './lib/product-catalog-cache.js';
+import {
+  getSalesHistoryBundle,
+  getCachedSalesHistoryBundle,
+  patchOrderInCache,
+  removeOrderFromCache,
+  invalidateSalesHistoryCache,
+} from './lib/sales-history-cache.js';
+import {
+  SALE_ORDER_ITEM_DETAIL_SELECT,
+  SALE_ORDER_ITEM_SUMMARY_SELECT,
+} from './lib/sale-query-select.js';
 import { useNumberTween } from './lib/use-number-tween.js';
 import { useBarcodeScanner, getPreferredFacing, setPreferredFacing } from './lib/use-barcode-scanner.js';
 import { playScanBeep, playScanError, vibrateScan, vibrateError } from './lib/barcode-feedback.js';
@@ -8221,134 +8232,38 @@ function SalesView({ onGoPOS }) {
 
   const filterKey = `${from}_${to}_${channel}_${excludeVoided}`;
 
-  const load = useCallback(async () => {
+  const applySalesBundle = useCallback((bundle) => {
+    setOrders(bundle.orders);
+    setOrderSummary(bundle.orderSummary);
+    setVoidStockStatus(bundle.voidStockStatus);
+  }, []);
+
+  const load = useCallback(async ({ force = false } = {}) => {
     const isFirstForFilter = loadedFilterRef.current !== filterKey;
     const gen = ++loadGenRef.current;
+
+    if (!force) {
+      const cached = getCachedSalesHistoryBundle(filterKey);
+      if (cached) {
+        applySalesBundle(cached);
+        loadedFilterRef.current = filterKey;
+        return;
+      }
+    }
+
     if (isFirstForFilter) setLoading(true);
     else setRefreshing(true);
 
     try {
-      const { data, error } = await fetchAll((fromIdx, toIdx) => {
-        let q = excludePendingTikTok(sb.from('sale_orders').select('*'))
-          .gte('sale_date', startOfDayBangkok(from))
-          .lte('sale_date', endOfDayBangkok(to))
-          .order('sale_date', { ascending: false })
-          .range(fromIdx, toIdx);
-        if (channel) q = q.eq('channel', channel);
-        if (excludeVoided) q = q.eq('status', 'active');
-        return q;
+      const { bundle, error } = await getSalesHistoryBundle(sb, {
+        from, to, channel, excludeVoided, force,
       });
       if (gen !== loadGenRef.current) return;
-      if (error) toast.push("โหลดไม่ได้", "error");
-      const ordersList = data || [];
-      setOrders(ordersList);
-
-      if (ordersList.length) {
-        try {
-          const orderIds = ordersList.map(o => o.id);
-          const { data: itemsData } = await fetchAll((fromIdx, toIdx) =>
-            sb.from('sale_order_items').select('*')
-              .in('sale_order_id', orderIds).range(fromIdx, toIdx)
-          );
-          if (gen !== loadGenRef.current) return;
-          const items = itemsData || [];
-          const pids = [...new Set(items.map(i => i.product_id).filter(Boolean))];
-
-          let recvMap = {};
-          if (pids.length) {
-            const { map, error: recvErr } = await fetchReceiveCostTimeline(
-              sb, pids, endOfDayBangkok(to),
-            );
-            if (gen !== loadGenRef.current) return;
-            if (recvErr) recvMap = {};
-            else recvMap = map;
-          }
-
-          const prodMap = {};
-          if (pids.length) {
-            const { data: prods } = await fetchAll((fromIdx, toIdx) =>
-              sb.from('products').select('id, cost_price').in('id', pids).range(fromIdx, toIdx)
-            );
-            if (gen !== loadGenRef.current) return;
-            (prods||[]).forEach(p => { prodMap[p.id] = Number(p.cost_price)||0; });
-          }
-
-          const itemsByOrder = {};
-          items.forEach(it => { (itemsByOrder[it.sale_order_id] ||= []).push(it); });
-
-          const summary = {};
-          for (const o of ordersList) {
-            const lines = itemsByOrder[o.id] || [];
-            const lineRevenues = lines.map(it => applyDiscounts(
-              it.unit_price, it.quantity,
-              it.discount1_value, it.discount1_type,
-              it.discount2_value, it.discount2_type,
-            ));
-            const subtotalCalc = lineRevenues.reduce((s,x)=>s+x, 0);
-            const revenueBase = (ECOMMERCE_CHANNELS.has(o.channel) && o.net_received != null)
-              ? Number(o.net_received)
-              : Number(o.grand_total) || 0;
-            const ratio = subtotalCalc > 0 ? revenueBase / subtotalCalc : 1;
-            const saleTs = new Date(o.sale_date).getTime();
-            let totalProfit = 0;
-            let costApprox = false;
-            lines.forEach((it, idx) => {
-              const qty = Number(it.quantity)||0;
-              const lineRev = lineRevenues[idx] * ratio;
-              let unitCost = 0;
-              if (it.cost_price != null) {
-                const snap = Number(it.cost_price) || 0;
-                const list = it.product_id ? recvMap[it.product_id] : null;
-                const peer = (list && list.length) ? list.find(r => r.date <= saleTs) : null;
-                unitCost = normalizeCostToGross(snap, peer ? peer.unit_price : 0);
-              } else if (it.product_id) {
-                const list = recvMap[it.product_id];
-                if (list && list.length) {
-                  const found = list.find(r => r.date <= saleTs);
-                  if (found) unitCost = found.unit_price;
-                  else { unitCost = prodMap[it.product_id] || 0; costApprox = true; }
-                } else {
-                  unitCost = prodMap[it.product_id] || 0;
-                  costApprox = true;
-                }
-              }
-              totalProfit += lineRev - unitCost * qty;
-            });
-            const productLabel = lines.length === 0 ? '—'
-              : lines.length === 1 ? saleLineSku(lines[0])
-              : `${saleLineSku(lines[0])} +${lines.length - 1}`;
-            summary[o.id] = {
-              productLabel,
-              allProductNames: lines.map(l => saleLineSearchText(l)),
-              profit: (o.status === 'voided' || o.net_received_pending) ? 0 : totalProfit,
-              itemCount: lines.length,
-              costApprox,
-              hasSubstitution: o.has_substitution ?? lines.some(l => saleLineIsSubstitution(l)),
-            };
-          }
-          setOrderSummary(summary);
-        } catch (e) {
-          console.error('orderSummary load failed', e);
-          setOrderSummary({});
-        }
-      } else {
-        setOrderSummary({});
+      if (error) {
+        toast.push('โหลดไม่ได้', 'error');
+        return;
       }
-
-      if (gen !== loadGenRef.current) return;
-
-      const voidedIds = ordersList.filter(o => o.status === 'voided').map(o => o.id);
-      if (voidedIds.length) {
-        try {
-          setVoidStockStatus(await fetchVoidStockStatusMap(sb, voidedIds));
-        } catch (e) {
-          console.error('voidStockStatus load failed', e);
-          setVoidStockStatus({});
-        }
-      } else {
-        setVoidStockStatus({});
-      }
-
+      if (bundle) applySalesBundle(bundle);
       loadedFilterRef.current = filterKey;
     } catch (e) {
       console.error('sales load failed', e);
@@ -8359,7 +8274,7 @@ function SalesView({ onGoPOS }) {
         setRefreshing(false);
       }
     }
-  }, [from, to, channel, excludeVoided, filterKey, toast]);
+  }, [from, to, channel, excludeVoided, filterKey, toast, applySalesBundle]);
 
   // When active-only list hides a voided bill the user searched by ID, offer shortcut.
   useEffect(() => {
@@ -8456,17 +8371,73 @@ function SalesView({ onGoPOS }) {
   }, [sortedOrders, profitSort]);
 
   useEffect(()=>{ load(); }, [load]);
-  // Realtime: new sale on another device → refresh the list. sale_order_items
-  // is included so "รายการถูกแก้" (e.g. void line) also triggers a refresh.
-  useRealtimeInvalidate(sb, ['sale_orders', 'sale_order_items'], load,
-    { minIntervalMs: 2000 });
+  // Realtime: patch lightweight order fields in cache; debounce full reload for
+  // INSERT/DELETE and sale_order_items changes (profit must recompute).
+  useEffect(() => {
+    const { schedule: scheduleReload, dispose } = createDebouncedInvalidate({
+      debounceMs: 300,
+      minIntervalMs: 5000,
+      onInvalidate: () => load({ force: true }),
+    });
+
+    const patchOrderFieldsIfOnlyChange = (payload) => {
+      const n = payload?.new;
+      const o = payload?.old;
+      if (!n?.id || payload.eventType !== 'UPDATE') return false;
+      const ignore = new Set([
+        'net_received', 'net_received_pending', 'status', 'updated_at',
+        'has_edits', 'has_substitution', 'grand_total', 'subtotal',
+        'total_after_discount', 'vat_amount', 'tax_invoice_no',
+        'buyer_name', 'buyer_tax_id', 'buyer_address', 'buyer_branch',
+        'void_reason', 'voided_at',
+      ]);
+      const keys = new Set([...Object.keys(n), ...Object.keys(o || {})]);
+      for (const k of keys) {
+        if (ignore.has(k)) continue;
+        if (String(n[k] ?? '') !== String(o?.[k] ?? '')) return false;
+      }
+      const partial = {};
+      for (const k of ignore) {
+        if (k === 'updated_at') continue;
+        if (n[k] !== o?.[k]) partial[k] = n[k];
+      }
+      if (!Object.keys(partial).length) return false;
+      if (!patchOrderInCache(n.id, partial, { filterKey })) return false;
+      setOrders(list => list.map(row => (row.id === n.id ? { ...row, ...partial } : row)));
+      if (partial.net_received != null || partial.net_received_pending != null || partial.status != null) {
+        const cached = getCachedSalesHistoryBundle(filterKey);
+        if (cached?.orderSummary[n.id]) {
+          setOrderSummary(prev => ({ ...prev, [n.id]: cached.orderSummary[n.id] }));
+        }
+      }
+      if (detail?.order?.id === n.id) {
+        setDetail(d => d ? { ...d, order: { ...d.order, ...partial } } : d);
+      }
+      return true;
+    };
+
+    const unsubs = [
+      subscribeTable(sb, 'sale_orders', (payload) => {
+        if (payload.eventType === 'INSERT' || payload.eventType === 'DELETE') {
+          scheduleReload();
+          return;
+        }
+        if (!patchOrderFieldsIfOnlyChange(payload)) scheduleReload();
+      }),
+      subscribeTable(sb, 'sale_order_items', () => scheduleReload()),
+    ];
+    return () => {
+      dispose();
+      unsubs.forEach(u => u());
+    };
+  }, [load, filterKey, detail]);
 
   const showSkeleton = loading && loadedFilterRef.current !== filterKey;
   const showTable = loadedFilterRef.current === filterKey && !showSkeleton;
 
   const openDetail = async (order) => {
     const [iRes, hRes] = await Promise.all([
-      sb.from('sale_order_items').select('*').eq('sale_order_id', order.id),
+      sb.from('sale_order_items').select(SALE_ORDER_ITEM_DETAIL_SELECT).eq('sale_order_id', order.id),
       sb.from('sale_order_edits').select('*').eq('sale_order_id', order.id).order('edited_at', { ascending: false }),
     ]);
     setDetail({ order, items: iRes.data || [] });
@@ -8537,7 +8508,7 @@ function SalesView({ onGoPOS }) {
       if (error) throw error;
       // Refresh items + audit log so the modal mirrors the new state.
       const [iRes, hRes] = await Promise.all([
-        sb.from('sale_order_items').select('*').eq('sale_order_id', detail.order.id),
+        sb.from('sale_order_items').select(SALE_ORDER_ITEM_DETAIL_SELECT).eq('sale_order_id', detail.order.id),
         sb.from('sale_order_edits').select('*').eq('sale_order_id', detail.order.id).order('edited_at', { ascending: false }),
       ]);
       const editedProductIds = itemsPayload
@@ -8558,7 +8529,8 @@ function SalesView({ onGoPOS }) {
       // Auto-show the history panel so the admin can see their edit landed.
       setHistoryOpen(true);
       toast.push("บันทึกการแก้ไขแล้ว", "success");
-      load();
+      invalidateSalesHistoryCache(filterKey);
+      load({ force: true });
     } catch (e) {
       toast.push("บันทึกไม่ได้: " + mapError(e), "error");
     } finally { setSavingEdit(false); }
@@ -8610,8 +8582,14 @@ function SalesView({ onGoPOS }) {
         .update({ net_received: value, net_received_pending: false }).eq('id', detail.order.id);
       if (error) throw error;
       toast.push(value == null ? "ลบค่าเงินที่ได้รับแล้ว" : `บันทึกเงินที่ได้รับ ${fmtTHB(value)}`, 'success');
-      setDetail(d => d ? { ...d, order: { ...d.order, net_received: value, net_received_pending: false } } : d);
-      setOrders(list => list.map(o => o.id === detail.order.id ? { ...o, net_received: value, net_received_pending: false } : o));
+      const partial = { net_received: value, net_received_pending: false };
+      patchOrderInCache(detail.order.id, partial, { filterKey });
+      setDetail(d => d ? { ...d, order: { ...d.order, ...partial } } : d);
+      setOrders(list => list.map(o => o.id === detail.order.id ? { ...o, ...partial } : o));
+      const cached = getCachedSalesHistoryBundle(filterKey);
+      if (cached?.orderSummary[detail.order.id]) {
+        setOrderSummary(prev => ({ ...prev, [detail.order.id]: cached.orderSummary[detail.order.id] }));
+      }
       setEditNet(false);
       window.dispatchEvent(new Event('pending-net-changed'));
     } catch (e) {
@@ -8645,7 +8623,18 @@ function SalesView({ onGoPOS }) {
         productIds: voidProductIds,
       }).catch((e) => logMirrorBackgroundError('sale-void', e));
       setDetail(null);
-      load();
+      if (excludeVoided) {
+        removeOrderFromCache(voidOrderId, { filterKey });
+        setOrders(list => list.filter(o => o.id !== voidOrderId));
+        setOrderSummary(prev => {
+          const next = { ...prev };
+          delete next[voidOrderId];
+          return next;
+        });
+      } else {
+        invalidateSalesHistoryCache(filterKey);
+        load({ force: true });
+      }
     } catch (e) {
       toast.push("ยกเลิกบิลไม่ได้: " + mapError(e), 'error');
     } finally { setVoiding(false); voidLockRef.current = false; }
@@ -8685,6 +8674,7 @@ function SalesView({ onGoPOS }) {
       if (error) throw error;
       // Reflect the updated row in the open detail panel + the list.
       setDetail(d => d ? { ...d, order: { ...d.order, ...data } } : d);
+      patchOrderInCache(data.id, data, { filterKey });
       setOrders(list => list.map(o => o.id === data.id ? { ...o, ...data } : o));
       toast.push(`ออกใบกำกับภาษีเลขที่ ${data.tax_invoice_no}`, 'success');
       setIssueOpen(false);
@@ -12777,7 +12767,7 @@ function ProfitLossView({ embedded = false }) {
       const orderIds = ordersList.map(o=>o.id);
       // 2) Items — also chunked (orders × items easily > 1000 in a wide range)
       const { data: itemsData } = await fetchAll((fromIdx, toIdx) =>
-        sb.from('sale_order_items').select('*')
+        sb.from('sale_order_items').select(SALE_ORDER_ITEM_SUMMARY_SELECT)
           .in('sale_order_id', orderIds).range(fromIdx, toIdx)
       );
       const items = itemsData || [];

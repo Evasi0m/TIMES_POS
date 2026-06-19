@@ -2,6 +2,18 @@
   "schemaVersion": 1,
   "patches": [
     {
+      "id": "2026-06-19-sales-session-cache",
+      "date": "2026-06-19",
+      "title": "หน้าประวัติขาย — session cache ลด egress",
+      "tags": ["ปรับปรุง", "ประสิทธิภาพ"],
+      "items": [
+        "โหลดบิล+สรุปกำไรครั้งเดียวต่อ filter (วันที่/ช่องทาง) — สลับ tab กลับมาไม่ fetch ซ้ำ",
+        "Query เฉพาะคอลัมน์ที่ใช้ (orders + items) แทน select('*')",
+        "Realtime ฉลาดขึ้น — patch net_received ใน cache · reload เต็มเฉพาะ INSERT/DELETE/items",
+        "Insights ใช้ product catalog cache ร่วม · TikTok/P&L item select เล็กลง"
+      ]
+    },
+    {
       "id": "2026-06-19-product-session-cache",
       "date": "2026-06-19",
       "title": "หน้าสินค้า — session cache ลด egress",

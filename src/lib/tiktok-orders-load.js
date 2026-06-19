@@ -3,6 +3,9 @@
 
 import { fetchAll } from './sb-paginate.js';
 import { versionedImageUrl } from './product-classify.js';
+import { TIKTOK_ITEM_SELECT } from './sale-query-select.js';
+
+export { TIKTOK_ITEM_SELECT } from './sale-query-select.js';
 
 /** Most recent N TikTok orders to load into the panel (UI paginates locally). */
 export const TIKTOK_ORDERS_LOAD_CAP = 3000;
@@ -28,7 +31,7 @@ export async function fetchItemsByOrderIds(sb, orderIds) {
     const chunk = orderIds.slice(i, i + ORDER_ID_CHUNK);
     const { data, error } = await fetchAll((fromIdx, toIdx) =>
       sb.from('sale_order_items')
-        .select('*')
+        .select(TIKTOK_ITEM_SELECT)
         .in('sale_order_id', chunk)
         .order('id', { ascending: true })
         .range(fromIdx, toIdx),

@@ -21,6 +21,7 @@ import {
 
 import { sb } from '../lib/supabase-client.js';
 import { fetchAll } from '../lib/sb-paginate.js';
+import { getProductListBundle } from '../lib/product-catalog-cache.js';
 import { ECOMMERCE_CHANNELS, excludePendingTikTok } from '../lib/ecommerce-channels.js';
 import { fmtTHB, fmtPct, fmtNum } from '../lib/format.js';
 import Icon from '../components/ui/Icon.jsx';
@@ -615,10 +616,14 @@ export default function InsightsView({ embedded = false } = {}) {
         items = data || [];
       }
 
-      // --- Products (all) for dead-stock + reorder ---
-      const { data: products } = await fetchAll((fromIdx, toIdx) =>
-        sb.from('products').select('id, name, current_stock, cost_price').range(fromIdx, toIdx)
-      );
+      // --- Products (all) for dead-stock + reorder — reuse session catalog cache ---
+      const { bundle } = await getProductListBundle(sb);
+      const products = (bundle?.products || []).map((p) => ({
+        id: p.id,
+        name: p.name,
+        current_stock: p.current_stock,
+        cost_price: p.cost_price,
+      }));
 
       if (cancelled) return;
 
