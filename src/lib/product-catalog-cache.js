@@ -1,8 +1,9 @@
-// Session cache for the POS product catalog — used by TikTok confirm matching.
-// Avoids re-fetching 6k+ rows every time the cashier opens an order.
+// Session cache for the POS product catalog — ProductsView, TikTok matching,
+// Bulk Receive. One bundle fetch per browser session unless invalidated.
 
 import { fetchAllFromTable } from './sb-paginate.js';
 import { findSkuCandidates } from './fuzzy-match.js';
+import { fetchLatestReceiveCostMap } from './receive-cost.js';
 
 export const PRODUCT_CATALOG_SELECT = 'id, name, barcode, retail_price, current_stock';
 
@@ -10,26 +11,84 @@ export const PRODUCT_CATALOG_SELECT = 'id, name, barcode, retail_price, current_
 export const PRODUCT_LIST_SELECT =
   'id, name, barcode, retail_price, cost_price, current_stock, brand_id, category_id, created_at';
 
-let _cache = null;
+/** @typedef {{ products: object[], imageByProductId: Map<number, object>, latestCostMap: object }} ProductListBundle */
+
+/** @type {ProductListBundle | null} */
+let _bundle = null;
+/** @type {Promise<{ bundle: ProductListBundle | null, error: Error | null }> | null} */
 let _loading = null;
 
-/** Full catalog fetch (paginated). Cached for the browser session. */
-export async function getProductCatalog(sb, { force = false } = {}) {
-  if (!force && _cache) return { data: _cache, error: null };
-  if (!force && _loading) return _loading;
+function buildImageMap(imgs) {
+  const map = new Map();
+  for (const r of imgs || []) {
+    if (r?.product_id && r.image_url) map.set(r.product_id, r);
+  }
+  return map;
+}
 
-  _loading = fetchAllFromTable(sb, 'products', {
-    select: PRODUCT_CATALOG_SELECT,
-    orderColumn: 'id',
-    ascending: true,
-  }).then((res) => {
+async function fetchProductImages(sb) {
+  const { data, error } = await sb
+    .from('product_images')
+    .select('product_id, image_url, status, updated_at')
+    .eq('status', 'found');
+  if (error) throw error;
+  return data || [];
+}
+
+async function loadBundleFromNetwork(sb) {
+  const [productsRes, imgs, costRes] = await Promise.all([
+    fetchAllFromTable(sb, 'products', {
+      select: PRODUCT_LIST_SELECT,
+      orderColumn: 'id',
+      ascending: true,
+    }),
+    fetchProductImages(sb).catch(() => []),
+    fetchLatestReceiveCostMap(sb),
+  ]);
+
+  if (productsRes.error) {
+    return { bundle: null, error: productsRes.error };
+  }
+
+  const bundle = {
+    products: productsRes.data || [],
+    imageByProductId: buildImageMap(imgs),
+    latestCostMap: costRes.error ? {} : (costRes.map || {}),
+  };
+  return { bundle, error: null };
+}
+
+/**
+ * Full catalog bundle (products + images + latest receive costs).
+ * Cached for the browser session; dedupes concurrent in-flight loads.
+ *
+ * @returns {Promise<{ bundle: ProductListBundle | null, error: Error | null, fromCache: boolean }>}
+ */
+export async function getProductListBundle(sb, { force = false } = {}) {
+  if (!force && _bundle) {
+    return { bundle: _bundle, error: null, fromCache: true };
+  }
+  if (!force && _loading) {
+    const res = await _loading;
+    return { ...res, fromCache: false };
+  }
+
+  _loading = loadBundleFromNetwork(sb).then((res) => {
     _loading = null;
     if (res.error) return res;
-    _cache = res.data || [];
-    return { data: _cache, error: null };
+    _bundle = res.bundle;
+    return res;
   });
 
-  return _loading;
+  const res = await _loading;
+  return { ...res, fromCache: false };
+}
+
+/** Narrow catalog for TikTok SKU matching — shares the list bundle. */
+export async function getProductCatalog(sb, { force = false } = {}) {
+  const { bundle, error } = await getProductListBundle(sb, { force });
+  if (error) return { data: bundle?.products || [], error };
+  return { data: bundle?.products || [], error: null };
 }
 
 /** Narrow server search when full catalog is unavailable — enough for SKU matching. */
@@ -49,8 +108,28 @@ export async function fetchSkuPrefilter(sb, skuKey) {
   return findSkuCandidates(key, data, { limit: 8, minScore: 0.5 });
 }
 
-/** Clear cache (e.g. after bulk product import). */
+/** Realtime stock-only patch — keeps cache aligned without a full refetch. */
+export function patchProductStockInCache(productId, currentStock) {
+  if (!_bundle || productId == null) return;
+  const row = _bundle.products.find((p) => p.id === productId);
+  if (row) row.current_stock = currentStock;
+}
+
+/** Refresh latest receive costs only (after receive docs change). */
+export async function refreshLatestCostsInCache(sb) {
+  const { map, error } = await fetchLatestReceiveCostMap(sb);
+  if (error || !_bundle) return { map: map || {}, error };
+  _bundle.latestCostMap = map || {};
+  return { map: _bundle.latestCostMap, error: null };
+}
+
+/** Clear cache (e.g. after bulk product import or catalog edit). */
 export function invalidateProductCatalogCache() {
-  _cache = null;
+  _bundle = null;
   _loading = null;
+}
+
+/** @internal Test-only reset */
+export function _resetProductCatalogCacheForTests() {
+  invalidateProductCatalogCache();
 }

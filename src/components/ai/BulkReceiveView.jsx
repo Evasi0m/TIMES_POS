@@ -25,7 +25,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { sb } from '../../lib/supabase-client.js';
-import { fetchAllFromTable } from '../../lib/sb-paginate.js';
+import { getProductListBundle } from '../../lib/product-catalog-cache.js';
 import { mapError } from '../../lib/error-map.js';
 import { VAT_RATE_DEFAULT, fmtTHB } from '../../lib/money.js';
 import { buildReceiveItems, receiveTotals, grossUnitCost } from '../../lib/ai-receive.js';
@@ -471,10 +471,11 @@ export default function BulkReceiveView({ toast }) {
       // Catalog isn't persisted (too large) — refetch so the search /
       // resolve UI works. Matches/candidates from the draft still render
       // immediately; this just rehydrates `products` for new searches.
-      fetchAllFromTable(sb, 'products', {
-        select: 'id, name, barcode, retail_price, cost_price, current_stock',
-        orderColumn: 'id',
-      }).then((res) => setProducts(res?.data || [])).catch(() => {});
+      getProductListBundle(sb)
+        .then(({ bundle, error }) => {
+          if (!error && bundle?.products) setProducts(bundle.products);
+        })
+        .catch(() => {});
       // Refresh the duplicate-invoice guard for the restored bills.
       const invoiceNos = restoredBills
         .map((b) => String(b.supplier_invoice_no || '').trim())
@@ -565,14 +566,11 @@ export default function BulkReceiveView({ toast }) {
       // later chunk fails, earlier parsed bills remain available.
       pushParseLogs(msgCatalogStart());
       const catalogStartedAt = Date.now();
-      const catalogRes = await fetchAllFromTable(sb, 'products', {
-        select: 'id, name, barcode, retail_price, cost_price, current_stock',
-        orderColumn: 'id',
-      });
-      const catalog = catalogRes?.data || [];
+      const { bundle, error: catalogError } = await getProductListBundle(sb);
+      const catalog = bundle?.products || [];
       const catalogMs = Date.now() - catalogStartedAt;
-      if (catalogRes?.error) {
-        console.warn('[BulkReceiveView] catalog load issue:', catalogRes.error);
+      if (catalogError) {
+        console.warn('[BulkReceiveView] catalog load issue:', catalogError);
         pushParseLogs(msgCatalogWarn());
       } else {
         pushParseLogs(msgCatalogDone(catalog.length, catalogMs));

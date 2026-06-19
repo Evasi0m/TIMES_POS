@@ -110,8 +110,13 @@ import TikTokLinkedBadge from './components/ecommerce/TikTokLinkedBadge.jsx';
 import ProductThumb from './components/ui/ProductThumb.jsx';
 import { useRealtimeInvalidate, createDebouncedInvalidate } from './lib/use-realtime-invalidate.js';
 import { subscribeTable } from './lib/realtime-bus.js';
-import { fetchLatestReceiveCostMap, fetchReceiveCostTimeline } from './lib/receive-cost.js';
-import { PRODUCT_LIST_SELECT, invalidateProductCatalogCache } from './lib/product-catalog-cache.js';
+import { fetchReceiveCostTimeline } from './lib/receive-cost.js';
+import {
+  getProductListBundle,
+  invalidateProductCatalogCache,
+  patchProductStockInCache,
+  refreshLatestCostsInCache,
+} from './lib/product-catalog-cache.js';
 import { useNumberTween } from './lib/use-number-tween.js';
 import { useBarcodeScanner, getPreferredFacing, setPreferredFacing } from './lib/use-barcode-scanner.js';
 import { playScanBeep, playScanError, vibrateScan, vibrateError } from './lib/barcode-feedback.js';
@@ -6506,31 +6511,27 @@ function ProductsView() {
 
   const loadLatestCosts = useCallback(async () => {
     try {
-      const { map, error } = await fetchLatestReceiveCostMap(sb);
+      const { map, error } = await refreshLatestCostsInCache(sb);
       if (!error) setLatestCostMap(map);
     } catch { /* non-fatal — table still renders without "ทุนล่าสุด" */ }
   }, []);
 
-  const loadProducts = useCallback(async () => {
-    setLoading(true);
-    const { data: all, error } = await fetchAllFromTable(sb, 'products', {
-      select: PRODUCT_LIST_SELECT,
-      orderColumn: 'id',
-      ascending: false,
-    });
-    if (error) toast.push('โหลดสินค้าไม่ได้: ' + (error.message || mapError(error)), 'error');
+  const loadProducts = useCallback(async ({ force = false } = {}) => {
+    const { bundle, error, fromCache } = await getProductListBundle(sb, { force });
+    if (!fromCache) setLoading(true);
+    if (error) {
+      toast.push('โหลดสินค้าไม่ได้: ' + (error.message || mapError(error)), 'error');
+      setLoading(false);
+      return;
+    }
 
-    const imgMap = new Map();
-    try {
-      const { data: imgs } = await sb
-        .from('product_images')
-        .select('product_id, image_url, status, updated_at')
-        .eq('status', 'found');
-      for (const r of imgs || []) if (r.image_url) imgMap.set(r.product_id, r);
-    } catch { /* placeholder fallback covers this */ }
-
-    const enriched = (all || []).map(p => enrichProduct({ ...p, _imageRow: imgMap.get(p.id) || null }));
+    const imgMap = bundle.imageByProductId;
+    const enriched = (bundle.products || []).map(p => enrichProduct({
+      ...p,
+      _imageRow: imgMap.get(p.id) || null,
+    }));
     setAllRows(enriched);
+    setLatestCostMap(bundle.latestCostMap || {});
     setLoading(false);
 
     const orphans = enriched.filter(p => p._brand === 'other');
@@ -6538,13 +6539,6 @@ function ProductsView() {
       // eslint-disable-next-line no-console
       console.info('[ProductsView] %d products fell into "อื่น ๆ" — sample names:',
         orphans.length, orphans.slice(0, 20).map(p => p.name));
-    }
-
-    try {
-      const { map, error: costErr } = await fetchLatestReceiveCostMap(sb);
-      setLatestCostMap(costErr ? {} : map);
-    } catch {
-      setLatestCostMap({});
     }
   }, [toast]);
 
@@ -6575,7 +6569,7 @@ function ProductsView() {
       minIntervalMs: 5000,
       onInvalidate: () => {
         invalidateProductCatalogCache();
-        loadProducts();
+        loadProducts({ force: true });
       },
     });
     const { schedule: scheduleCost, dispose: disposeCost } = createDebouncedInvalidate({
@@ -6594,6 +6588,7 @@ function ProductsView() {
         if (String(n[k] ?? '') !== String(o?.[k] ?? '')) return false;
       }
       if (n.current_stock === o?.current_stock) return false;
+      patchProductStockInCache(n.id, n.current_stock);
       setAllRows(rows => rows.map(p => (p.id === n.id
         ? enrichProduct({ ...p, current_stock: n.current_stock })
         : p)));
@@ -6734,7 +6729,7 @@ function ProductsView() {
       }
       setEditing(null);
       invalidateProductCatalogCache();
-      loadProducts();
+      loadProducts({ force: true });
     } catch (e) {
       toast.push("บันทึกไม่ได้: " + e.message, "error");
     }
@@ -7071,7 +7066,7 @@ function ProductsView() {
       </div>
 
       <ProductEditor editing={editing} onClose={()=>setEditing(null)} onSave={save}
-        onDeleted={()=>{ setEditing(null); loadProducts(); }}
+        onDeleted={()=>{ setEditing(null); invalidateProductCatalogCache(); loadProducts({ force: true }); }}
         brands={brands} categories={categories} addBrand={addBrand} addCategory={addCategory} />
 
       <ProductStockExportAuthModal

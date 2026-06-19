@@ -2,6 +2,18 @@
   "schemaVersion": 1,
   "patches": [
     {
+      "id": "2026-06-19-product-session-cache",
+      "date": "2026-06-19",
+      "title": "หน้าสินค้า — session cache ลด egress",
+      "tags": ["ปรับปรุง", "ประสิทธิภาพ"],
+      "items": [
+        "โหลด catalog 6k+ ครั้งเดียวต่อ session — สลับ tab กลับหน้าสินค้าไม่ fetch ซ้ำ",
+        "รวม products + รูป + ทุนล่าสุด ใน bundle cache เดียว (TikTok / Bulk Receive แชร์ cache)",
+        "Realtime อัปเดตสต็อกใน cache · รับสินค้า refresh ทุนล่าสุดอย่างเดียว ไม่โหลด catalog ใหม่",
+        "Migration 073: แก้ GRANT หลัง pg_restore (permission denied for schema public)"
+      ]
+    },
+    {
       "id": "2026-06-19-supabase-egress-optimization",
       "date": "2026-06-19",
       "title": "ลด Supabase egress — โหลดเร็วขึ้น",
