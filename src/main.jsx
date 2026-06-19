@@ -22,9 +22,11 @@ import {
   setSwRegistration,
   startUpdatePolling,
   checkForUpdate,
+  checkStaleAfterReset,
   applyAppUpdate,
   onUpdateStateChange,
 } from './lib/app-update.js';
+import { refreshUpdateLogState } from './lib/update-log.js';
 import AppUpdateBanner from './components/ui/AppUpdateBanner.jsx';
 import UpdateLogButton from './components/ui/UpdateLogButton.jsx';
 import { fetchAll, fetchAllFromTable } from './lib/sb-paginate.js';
@@ -203,7 +205,8 @@ registerSW({
     setInterval(bump, 30 * 60 * 1000);
   },
 });
-startUpdatePolling();
+startUpdatePolling(undefined, () => { refreshUpdateLogState().catch(() => {}); });
+checkStaleAfterReset().catch(() => {});
 
 // Self-heal: if the previously-installed SW is broken (e.g. the May 2026
 // `bad-precaching-response` incident, where a hardcoded `/` precache entry
@@ -4348,7 +4351,7 @@ function AppUpdateButton({ className = 'btn-update-sidebar', onDone }) {
     try {
       const { available: fresh } = await checkForUpdate();
       if (fresh || available) {
-        await applyAppUpdate({ manualReset: window._manualReset });
+        await applyAppUpdate();
       }
     } finally {
       setBusy(false);

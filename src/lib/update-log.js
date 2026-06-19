@@ -1,4 +1,4 @@
-// Fetch + unread state for the manual update log (รายการอัปเดต).
+import { runtimeFetch } from './runtime-fetch.js';
 // Source: src/data/updates.json → dist/updates.json at build time.
 
 const LAST_SEEN_KEY = 'pos.updateLog.lastSeen';
@@ -40,7 +40,7 @@ export function computeUnread(log) {
 }
 
 export async function fetchUpdateLog() {
-  const res = await fetch('./updates.json', { cache: 'no-store' });
+  const res = await runtimeFetch('updates.json');
   if (!res.ok) throw new Error(`updates.json HTTP ${res.status}`);
   const data = await res.json();
   if (!data || !Array.isArray(data.patches)) {

@@ -23,7 +23,7 @@ export default function AppUpdateBanner() {
   const isError = status === 'error';
 
   const handleApply = () => {
-    applyAppUpdate({ manualReset: window._manualReset }).catch(() => {});
+    applyAppUpdate().catch(() => {});
   };
 
   return (

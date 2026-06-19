@@ -34,7 +34,7 @@ export default defineConfig({
     // build time. We control the runtime caching — the auto strategies
     // are too aggressive for a POS where stale data = wrong stock counts.
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.js',

@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "patches": [
     {
+      "id": "2026-06-19-app-update-hard-reset",
+      "date": "2026-06-19",
+      "title": "อัปเดตแอป — กดครั้งเดียวได้ patch ล่าสุด",
+      "tags": ["แก้ไข", "ปรับปรุง"],
+      "items": [
+        "กด อัปเดตแอป แล้วล้าง Service Worker + cache อัตโนมัติ — ไม่ต้องล้าง cookie เอง",
+        "ตรวจเวอร์ชันใหม่ทุก 1 นาที + ตอนกลับมาเปิดแท็บ; รายการ patch sync ตาม deploy"
+      ]
+    },
+    {
       "id": "2026-06-19-telegram-thai-encoding-fix",
       "date": "2026-06-19",
       "title": "แก้ข้อความ Telegram settings แสดงเป็น ?",

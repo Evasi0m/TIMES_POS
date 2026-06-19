@@ -75,6 +75,11 @@ async function swFileReachable() {
 }
 
 async function fullUnregister() {
+  await clearSwAndCaches();
+}
+
+/** Unregister all SW registrations and delete Cache Storage (not IndexedDB). */
+export async function clearSwAndCaches() {
   try {
     const regs = await navigator.serviceWorker.getRegistrations();
     await Promise.all(regs.map((r) => r.unregister().catch(() => {})));
@@ -83,6 +88,15 @@ async function fullUnregister() {
     const keys = await caches.keys();
     await Promise.all(keys.map((k) => caches.delete(k).catch(() => {})));
   } catch {}
+}
+
+/** Navigate to a cache-busted index.html to bypass CDN/browser cache keys. */
+export function hardReload(bust = true) {
+  if (typeof location === 'undefined') return;
+  const url = bust
+    ? './index.html?_v=' + Date.now()
+    : './index.html';
+  location.replace(url);
 }
 
 /**
@@ -137,10 +151,8 @@ export async function runSelfHeal(opts = {}) {
   // eslint-disable-next-line no-console
   console.warn('[sw-heal] healing — file:', file, 'ver:', ver);
   markHealed();
-  await fullUnregister();
-  // Hard reload to fetch a fresh sw.js + boot without the bad controller.
-  // Use replace() so the heal doesn't pollute history.
-  location.replace(location.href);
+  await clearSwAndCaches();
+  hardReload();
   return { healed: true };
 }
 

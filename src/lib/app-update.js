@@ -2,19 +2,22 @@
 // dist/version.json (written at build time, never precached by the SW).
 //
 // Flow:
-//   checkForUpdate()  → fetch ./version.json (cache: no-store)
-//   applyAppUpdate()  → reg.update(), SKIP_WAITING on waiting worker,
-//                       wait for controllerchange (≤5s), reload
-//   fallback          → manualReset() when no waiting worker (stuck SW)
+//   checkForUpdate()  → fetch version.json (cache-busted)
+//   applyAppUpdate()  → reg.update() (best-effort), clearSwAndCaches(),
+//                       hardReload() — always bypasses SW precache + CDN
 
 /* global __APP_BUILD_ID__ */
+
+import { runtimeFetch } from './runtime-fetch.js';
+import { clearSwAndCaches, hardReload } from './sw-self-heal.js';
 
 export const APP_BUILD_ID =
   typeof __APP_BUILD_ID__ !== 'undefined' ? __APP_BUILD_ID__ : 'dev';
 
 const SNOOZE_KEY = 'pos.appUpdate.snoozedUntil';
 const SNOOZE_MS = 30 * 60 * 1000;
-const DEFAULT_POLL_MS = 5 * 60 * 1000;
+const DEFAULT_POLL_MS = 60 * 1000;
+const STALE_AFTER_RESET_KEY = 'pos.appUpdate.staleAfterReset';
 
 /** @type {import('vite-plugin-pwa').RegisterSWOptions extends never ? ServiceWorkerRegistration : ServiceWorkerRegistration | null} */
 let _registration = null;
@@ -62,34 +65,12 @@ function isSnoozed() {
 }
 
 async function fetchRemoteBuildId() {
-  const res = await fetch('./version.json', { cache: 'no-store' });
+  const res = await runtimeFetch('version.json');
   if (!res.ok) throw new Error(`version.json HTTP ${res.status}`);
   const data = await res.json();
   const id = data.buildId ?? data.version ?? null;
   if (!id) throw new Error('version.json missing buildId');
   return String(id);
-}
-
-function waitForControllerChange(timeoutMs = 5000) {
-  return new Promise((resolve) => {
-    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
-      resolve(false);
-      return;
-    }
-    let done = false;
-    const finish = (changed) => {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      resolve(changed);
-    };
-    const timer = setTimeout(() => finish(false), timeoutMs);
-    navigator.serviceWorker.addEventListener(
-      'controllerchange',
-      () => finish(true),
-      { once: true },
-    );
-  });
 }
 
 async function getQueueCount() {
@@ -126,6 +107,50 @@ export async function canApplyUpdateSafely() {
   );
 }
 
+function waitForInstalling(reg, timeoutMs = 3000) {
+  if (!reg?.installing) return Promise.resolve();
+  return new Promise((resolve) => {
+    const worker = reg.installing;
+    const timer = setTimeout(resolve, timeoutMs);
+    worker.addEventListener('statechange', () => {
+      if (worker.state !== 'installing') {
+        clearTimeout(timer);
+        resolve();
+      }
+    });
+  });
+}
+
+async function triggerSwUpdateCheck() {
+  try {
+    let reg = _registration;
+    if (!reg && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      reg = await navigator.serviceWorker.getRegistration();
+    }
+    if (!reg) return;
+    await Promise.race([
+      reg.update().then(() => waitForInstalling(reg)),
+      new Promise((r) => setTimeout(r, 3000)),
+    ]);
+  } catch { /* best-effort */ }
+}
+
+/** After hard reload, warn once if CDN still serves the old build. */
+export async function checkStaleAfterReset() {
+  try {
+    if (sessionStorage.getItem(STALE_AFTER_RESET_KEY) !== '1') return;
+    sessionStorage.removeItem(STALE_AFTER_RESET_KEY);
+    const remote = await fetchRemoteBuildId();
+    if (isUpdateAvailable(APP_BUILD_ID, remote)) {
+      setState({
+        status: 'error',
+        remoteBuildId: remote,
+        error: 'เซิร์ฟเวอร์ยัง serve เวอร์ชันเก่า — รอ 1–2 นาทีแล้วกดอัปเดตอีกครั้ง',
+      });
+    }
+  } catch { /* ignore */ }
+}
+
 export async function checkForUpdate() {
   if (isSnoozed()) {
     setState({ status: 'idle', remoteBuildId: null, error: null });
@@ -143,7 +168,7 @@ export async function checkForUpdate() {
     return { available, remoteBuildId: remote };
   } catch (e) {
     const msg = e?.message || String(e);
-    setState({ error: msg });
+    setState({ status: 'error', error: msg });
     return { available: false, error: msg };
   }
 }
@@ -159,68 +184,52 @@ export function snoozeUpdate() {
 }
 
 /**
- * @param {{ manualReset?: () => Promise<unknown> }} [opts]
+ * Hard reset + cache-busted reload so one click always fetches fresh shell.
  */
-export async function applyAppUpdate(opts = {}) {
-  const { manualReset } = opts;
-
+export async function applyAppUpdate() {
   if (!(await canApplyUpdateSafely())) {
+    setState({ status: 'available', error: null });
     return { ok: false, reason: 'cancelled' };
   }
 
   setState({ status: 'applying', error: null });
 
   try {
-    let reg = _registration;
-    if (!reg && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-      reg = await navigator.serviceWorker.getRegistration();
-    }
-
-    if (reg) {
-      await reg.update();
-      const waiting = reg.waiting;
-      if (waiting) {
-        waiting.postMessage({ type: 'SKIP_WAITING' });
-        await waitForControllerChange(5000);
-        location.reload();
-        return { ok: true };
-      }
-    }
-
-    if (typeof manualReset === 'function') {
-      await manualReset();
-      return { ok: true };
-    }
-
-    location.reload();
+    await triggerSwUpdateCheck();
+    try { sessionStorage.setItem(STALE_AFTER_RESET_KEY, '1'); } catch { /* ignore */ }
+    await clearSwAndCaches();
+    hardReload();
     return { ok: true };
   } catch (e) {
     const msg = e?.message || String(e);
     setState({ status: 'error', error: msg });
-
-    if (typeof manualReset === 'function') {
-      try {
-        await manualReset();
-        return { ok: true, fallback: true };
-      } catch (resetErr) {
-        return { ok: false, error: resetErr?.message || msg };
-      }
+    try {
+      await clearSwAndCaches();
+      hardReload();
+      return { ok: true, fallback: true };
+    } catch (resetErr) {
+      return { ok: false, error: resetErr?.message || msg };
     }
-
-    return { ok: false, error: msg };
   }
 }
 
-/** Poll version.json + subscribe to window focus. Returns cleanup fn. */
-export function startUpdatePolling(intervalMs = DEFAULT_POLL_MS) {
-  checkForUpdate().catch(() => {});
-  const timer = setInterval(() => {
+/** Poll version.json + subscribe to focus/visibility. Returns cleanup fn. */
+export function startUpdatePolling(intervalMs = DEFAULT_POLL_MS, onPoll) {
+  const poll = () => {
     checkForUpdate().catch(() => {});
-  }, intervalMs);
-  const onFocus = () => { checkForUpdate().catch(() => {}); };
+    onPoll?.();
+  };
+  poll();
+  const timer = setInterval(poll, intervalMs);
+  const onFocus = () => { poll(); };
   window.addEventListener('focus', onFocus);
+  const onVis = () => {
+    if (document.visibilityState === 'visible') poll();
+  };
+  document.addEventListener('visibilitychange', onVis);
   return () => {
     clearInterval(timer);
     window.removeEventListener('focus', onFocus);
+    document.removeEventListener('visibilitychange', onVis);
   };
 }
