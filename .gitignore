@@ -6,6 +6,8 @@ __pycache__/
 .env.migrate
 .migrate-data-public.sql
 .migrate-data-auth.sql
+.migrate-full-public.sql
+.migrate-auth.sql
 
 # Internal reference + data — contains service_role key and source CSVs
 TIMES-POS-Architecture/
