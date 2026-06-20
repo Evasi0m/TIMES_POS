@@ -159,10 +159,9 @@ export default function UpdateLogModal({ open, closing, onClose }) {
       className="fixed inset-0 z-[130] flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto overscroll-contain"
       onClick={onClose}
     >
-      <div className={'absolute inset-0 modal-overlay ' + (closing ? 'holo-backdrop-out' : 'holo-backdrop-in')}/>
       <div
         className={
-          'ul-modal relative w-full max-w-[min(96vw,640px)] my-auto ' +
+          'ul-modal relative z-[2] w-full max-w-[min(96vw,640px)] my-auto ' +
           'glass-strong rounded-3xl border hairline overflow-hidden flex flex-col ' +
           (closing ? 'holo-card-out' : 'holo-card-in')
         }
@@ -229,6 +228,10 @@ export default function UpdateLogModal({ open, closing, onClose }) {
           )}
         </div>
       </div>
+      <div
+        className={'absolute inset-0 z-[1] modal-overlay ' + (closing ? 'holo-backdrop-out' : 'holo-backdrop-in')}
+        aria-hidden="true"
+      />
     </div>,
     document.body,
   );

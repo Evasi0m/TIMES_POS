@@ -29,6 +29,7 @@ import {
 import { refreshUpdateLogState } from './lib/update-log.js';
 import AppUpdateBanner from './components/ui/AppUpdateBanner.jsx';
 import UpdateLogButton from './components/ui/UpdateLogButton.jsx';
+import UpdateLogModal from './components/ui/UpdateLogModal.jsx';
 import { fetchAll, fetchAllFromTable } from './lib/sb-paginate.js';
 import { sb } from './lib/supabase-client.js';
 import {
@@ -4568,6 +4569,8 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
 ========================================================= */
 function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserManagement, view, setView }) {
   const [openMenu, setOpenMenu] = useState(false);
+  const [updateLogOpen, setUpdateLogOpen] = useState(false);
+  const [updateLogClosing, setUpdateLogClosing] = useState(false);
   const toast = useToast();
   const role = useRole();
   const isAdminPlus = role === 'admin' || role === 'super_admin';
@@ -4576,6 +4579,16 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
   const roleColour = role === 'super_admin' ? 'text-gold-premium' : role === 'admin' ? 'text-primary' : 'text-muted-soft';
   const drawerActive = view === 'dashboard' || isEcommerceView(view);
   const { render: drawerRender, closing: drawerClosing } = useMountedToggle(openMenu, 220);
+
+  const closeUpdateLog = useCallback(() => {
+    if (updateLogClosing) return;
+    setUpdateLogClosing(true);
+    setTimeout(() => {
+      setUpdateLogOpen(false);
+      setUpdateLogClosing(false);
+    }, 240);
+  }, [updateLogClosing]);
+
   return (
     <>
     <header className="lg:hidden sticky top-0 z-40 mobile-topbar pt-safe">
@@ -4662,7 +4675,11 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
                     <Icon name="crown" size={16}/> การตั้งค่า user
                   </button>
                 )}
-                <UpdateLogButton onDone={() => setOpenMenu(false)} />
+                <UpdateLogButton
+                  controlled
+                  onOpenRequest={() => setUpdateLogOpen(true)}
+                  onDone={() => setOpenMenu(false)}
+                />
                 <AppUpdateButton onDone={() => setOpenMenu(false)} />
                 <button className="btn-app-settings-sidebar w-full" onClick={()=>{ setOpenMenu(false); onOpenSettings?.(); }}>
                   <Icon name="settings" size={16}/> การตั้งค่า
@@ -4681,6 +4698,13 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
           </div>
         </div>
       </div>
+    )}
+    {updateLogOpen && (
+      <UpdateLogModal
+        open={updateLogOpen}
+        closing={updateLogClosing}
+        onClose={closeUpdateLog}
+      />
     )}
     </>
   );

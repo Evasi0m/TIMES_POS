@@ -3,7 +3,19 @@ import Icon from './Icon.jsx';
 import UpdateLogModal from './UpdateLogModal.jsx';
 import { onUpdateLogChange, refreshUpdateLogState } from '../../lib/update-log.js';
 
-export default function UpdateLogButton({ className = 'btn-patch-log-sidebar', onDone }) {
+/**
+ * @param {object} props
+ * @param {string} [props.className]
+ * @param {() => void} [props.onDone] — e.g. close mobile drawer after open
+ * @param {boolean} [props.controlled] — parent renders UpdateLogModal (survives drawer unmount)
+ * @param {() => void} [props.onOpenRequest] — required when controlled
+ */
+export default function UpdateLogButton({
+  className = 'btn-patch-log-sidebar',
+  onDone,
+  controlled = false,
+  onOpenRequest,
+}) {
   const [open, setOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   const [unread, setUnread] = useState(false);
@@ -23,7 +35,11 @@ export default function UpdateLogButton({ className = 'btn-patch-log-sidebar', o
   }, [closing]);
 
   const handleOpen = () => {
-    setOpen(true);
+    if (controlled) {
+      onOpenRequest?.();
+    } else {
+      setOpen(true);
+    }
     onDone?.();
   };
 
@@ -41,7 +57,7 @@ export default function UpdateLogButton({ className = 'btn-patch-log-sidebar', o
           <span className="ul-sidebar-badge" aria-label="มีอัปเดตใหม่"/>
         )}
       </button>
-      {open && (
+      {!controlled && open && (
         <UpdateLogModal open={open} closing={closing} onClose={closeModal}/>
       )}
     </>
