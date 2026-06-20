@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   resolvePickStock,
+  buildProductNeedMap,
   stockShortfall,
   orderHasStockIssue,
 } from '../src/components/pos/tiktok-confirm/helpers.js';
@@ -53,5 +54,37 @@ describe('orderHasStockIssue', () => {
     const items = [{ id: 10, quantity: 1 }];
     const picks = { 10: { id: 2 } };
     expect(orderHasStockIssue(items, picks, catalog)).toBe(false);
+  });
+
+  it('aggregates qty across lines sharing the same product', () => {
+    const items = [
+      { id: 10, quantity: 1 },
+      { id: 11, quantity: 1 },
+      { id: 12, quantity: 1 },
+    ];
+    const picks = { 10: { id: 2 }, 11: { id: 2 }, 12: { id: 2 } };
+    expect(orderHasStockIssue(items, picks, catalog)).toBe(false);
+  });
+
+  it('blocks when aggregate need exceeds stock (duplicate TikTok lines)', () => {
+    const items = Array.from({ length: 14 }, (_, i) => ({ id: 100 + i, quantity: 1 }));
+    const picks = Object.fromEntries(items.map(it => [it.id, { id: 2 }]));
+    expect(orderHasStockIssue(items, picks, catalog)).toBe(true);
+    const orderCtx = { items, picks };
+    expect(stockShortfall(items[0], picks[items[0].id], catalog, orderCtx)).toEqual({
+      stock: 4,
+      need: 14,
+    });
+  });
+
+  it('checks each product independently in mixed orders', () => {
+    const items = [
+      { id: 10, quantity: 2 },
+      { id: 11, quantity: 1 },
+    ];
+    const picks = { 10: { id: 1 }, 11: { id: 2 } };
+    expect(orderHasStockIssue(items, picks, catalog)).toBe(true);
+    expect(buildProductNeedMap(items, picks).get(1)).toBe(2);
+    expect(buildProductNeedMap(items, picks).get(2)).toBe(1);
   });
 });

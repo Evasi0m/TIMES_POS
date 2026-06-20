@@ -10,6 +10,7 @@ import { TTC_COPY } from './copy.js';
 export default function TikTokOrderReviewPane({
   items,
   picks,
+  orderCtx,
   catalog,
   substitutionMeta,
   matchConfirmed,
@@ -55,6 +56,7 @@ export default function TikTokOrderReviewPane({
             item={it}
             pick={picks[it.id]}
             catalog={catalog}
+            orderCtx={orderCtx}
             substitutionMeta={substitutionMeta}
             matchConfirmed={matchConfirmed}
             disabled={disabled}

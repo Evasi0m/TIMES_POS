@@ -11,8 +11,8 @@ import {
 } from './helpers.js';
 import { TTC_COPY, displayTiktokSkuLabel } from './copy.js';
 
-function statusOf(item, pick, catalog, meta, matchConfirmed = {}) {
-  if (stockShortfall(item, pick, catalog)) return 'stock';
+function statusOf(item, pick, catalog, meta, matchConfirmed = {}, orderCtx) {
+  if (stockShortfall(item, pick, catalog, orderCtx)) return 'stock';
   if (meta?.substitute === true) return 'subst-ok';
   if (matchConfirmed[item.id] && isGenericTikTokSku(item)) return 'match-confirmed';
   if (lineNeedsSubstitutionAck(item, pick, meta, matchConfirmed)) return 'subst';
@@ -31,6 +31,7 @@ export default function TikTokReviewLineCard({
   item,
   pick,
   catalog,
+  orderCtx,
   substitutionMeta,
   matchConfirmed,
   disabled,
@@ -40,8 +41,8 @@ export default function TikTokReviewLineCard({
   const meta = substitutionMeta?.[item.id];
   const tiktokSku = displayTiktokSkuLabel(extractTikTokSkuKey(item));
   const stock = resolvePickStock(pick, catalog);
-  const shortfall = stockShortfall(item, pick, catalog);
-  const status = statusOf(item, pick, catalog, meta, matchConfirmed);
+  const shortfall = stockShortfall(item, pick, catalog, orderCtx);
+  const status = statusOf(item, pick, catalog, meta, matchConfirmed, orderCtx);
   const sm = STATUS_META[status];
   const showSubst = status === 'subst' || status === 'subst-ok';
   const substitute = meta?.substitute === true;

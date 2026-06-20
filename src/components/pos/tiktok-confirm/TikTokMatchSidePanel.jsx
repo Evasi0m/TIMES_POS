@@ -186,6 +186,7 @@ export default function TikTokMatchSidePanel({
   item,
   matched,
   pick,
+  orderCtx,
   disabled,
   catalog,
   catalogLoading,
@@ -212,7 +213,7 @@ export default function TikTokMatchSidePanel({
 
   const skuName = item.sku_name || item.product_name || '—';
   const skuKey = displayTiktokSkuLabel(extractTikTokSkuKey(item));
-  const shortfall = matched ? stockShortfall(item, pick, catalog) : null;
+  const shortfall = matched ? stockShortfall(item, pick, catalog, orderCtx) : null;
   const stock = matched ? resolvePickStock(pick, catalog) : null;
   const canReview = allMatched && !resolutionBlocked;
 

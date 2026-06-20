@@ -65,18 +65,51 @@ export function resolvePickStock(pick, catalog) {
   return n != null && n !== '' ? Number(n) : null;
 }
 
+/** Sum matched line qty per POS product_id (TikTok may split one SKU into many lines). */
+export function buildProductNeedMap(items, picks) {
+  const map = new Map();
+  for (const it of items || []) {
+    const productId = picks[it.id]?.id;
+    if (!productId) continue;
+    const qty = Number(it?.quantity) || 1;
+    map.set(productId, (map.get(productId) || 0) + qty);
+  }
+  return map;
+}
+
+function resolveStockNeed(item, pick, orderCtx, productNeed) {
+  const productId = pick?.id;
+  if (productNeed && productId != null) {
+    const total = productNeed.get(productId);
+    if (total != null) return total;
+  }
+  if (orderCtx?.items && orderCtx?.picks && productId != null) {
+    return buildProductNeedMap(orderCtx.items, orderCtx.picks).get(productId)
+      ?? (Number(item?.quantity) || 1);
+  }
+  return Number(item?.quantity) || 1;
+}
+
 /** null = sufficient stock | { stock, need } = cannot confirm without going negative. */
-export function stockShortfall(item, pick, catalog) {
+export function stockShortfall(item, pick, catalog, orderCtx) {
+  const productId = pick?.id;
+  if (!productId) return null;
   const stock = resolvePickStock(pick, catalog);
-  const need = Number(item?.quantity) || 1;
+  const productNeed = orderCtx?.productNeed
+    ?? (orderCtx?.items && orderCtx?.picks
+      ? buildProductNeedMap(orderCtx.items, orderCtx.picks)
+      : null);
+  const need = resolveStockNeed(item, pick, orderCtx, productNeed);
   if (stock == null || !Number.isFinite(stock)) return null;
   if (stock < need) return { stock, need };
   return null;
 }
 
 export function orderHasStockIssue(items, picks, catalog) {
+  const orderCtx = { items, picks };
+  const productNeed = buildProductNeedMap(items, picks);
   return (items || []).some(
-    it => picks[it.id]?.id && stockShortfall(it, picks[it.id], catalog),
+    it => picks[it.id]?.id && stockShortfall(it, picks[it.id], catalog, { ...orderCtx, productNeed }),
   );
 }
 

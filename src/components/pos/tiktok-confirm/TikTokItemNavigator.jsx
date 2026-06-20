@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import Icon from '../../ui/Icon.jsx';
 import SkuThumb from './SkuThumb.jsx';
 import {
@@ -12,6 +12,7 @@ export default function TikTokItemNavigator({
   items,
   activeItemId,
   picks,
+  orderCtx,
   catalog,
   substitutionMeta,
   matchConfirmed,
@@ -19,10 +20,18 @@ export default function TikTokItemNavigator({
   onClear,
   disabled,
 }) {
+  const chipRefs = useRef({});
+
+  useEffect(() => {
+    if (!activeItemId) return;
+    const el = chipRefs.current[activeItemId];
+    el?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+  }, [activeItemId, items.length]);
+
   if (!items.length) return null;
 
   return (
-    <div className="ttc-focus-nav shrink-0">
+    <div className="ttc-focus-nav shrink-0 min-w-0">
       <div className="text-[10px] font-semibold uppercase tracking-wider text-muted mb-1.5 inline-flex items-center gap-1.5">
         <Icon name="link" size={11}/> {TTC_COPY.navMatchItems(items.length)}
       </div>
@@ -32,7 +41,7 @@ export default function TikTokItemNavigator({
           const matched = Boolean(pick?.id);
           const active = activeItemId === it.id;
           const skuName = it.sku_name || it.product_name || '—';
-          const shortfall = matched ? stockShortfall(it, pick, catalog) : null;
+          const shortfall = matched ? stockShortfall(it, pick, catalog, orderCtx) : null;
           const stock = matched ? resolvePickStock(pick, catalog) : null;
           const needsResolution = matched && lineNeedsSubstitutionAck(it, pick, substitutionMeta?.[it.id], matchConfirmed);
           const substOk = substitutionMeta?.[it.id]?.substitute === true;
@@ -48,6 +57,10 @@ export default function TikTokItemNavigator({
           return (
             <div
               key={it.id}
+              ref={(node) => {
+                if (node) chipRefs.current[it.id] = node;
+                else delete chipRefs.current[it.id];
+              }}
               className={
                 'ttc-focus-chip' +
                 (active ? ' ttc-focus-chip--active' : '') +

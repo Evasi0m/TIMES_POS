@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import TikTokStepProgress from './TikTokStepProgress.jsx';
 import TikTokOrderSummaryCard from './TikTokOrderSummaryCard.jsx';
 import TikTokItemNavigator from './TikTokItemNavigator.jsx';
@@ -41,6 +41,7 @@ export default function TikTokOrderConfirmPane({
   const [matchConfirmBusy, setMatchConfirmBusy] = useState(null);
 
   const items = order?.items || [];
+  const orderCtx = useMemo(() => ({ items, picks }), [items, picks]);
 
   useEffect(() => {
     if (!order?.id) return;
@@ -175,11 +176,12 @@ export default function TikTokOrderConfirmPane({
       </div>
 
       {viewMode === 'match' && items.length > 1 && (
-        <div className="px-4 pb-1.5 shrink-0">
+        <div className="px-4 pb-1.5 shrink-0 min-w-0">
           <TikTokItemNavigator
             items={items}
             activeItemId={activeItemId}
             picks={picks}
+            orderCtx={orderCtx}
             catalog={catalog}
             substitutionMeta={substitutionMeta}
             matchConfirmed={matchConfirmed}
@@ -196,6 +198,7 @@ export default function TikTokOrderConfirmPane({
             <TikTokOrderReviewPane
               items={items}
               picks={picks}
+              orderCtx={orderCtx}
               catalog={catalog}
               substitutionMeta={substitutionMeta}
               matchConfirmed={matchConfirmed}
@@ -209,6 +212,7 @@ export default function TikTokOrderConfirmPane({
               item={activeItem}
               matched={activeMatched}
               pick={activePick}
+              orderCtx={orderCtx}
               disabled={saving}
               catalog={catalog}
               catalogLoading={catalogLoading}
