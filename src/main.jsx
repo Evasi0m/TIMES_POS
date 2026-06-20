@@ -8564,6 +8564,10 @@ function SalesView({ onGoPOS }) {
       sb.from('sale_order_items').select(SALE_ORDER_ITEM_DETAIL_SELECT).eq('sale_order_id', order.id),
       sb.from('sale_order_edits').select('*').eq('sale_order_id', order.id).order('edited_at', { ascending: false }),
     ]);
+    if (iRes.error) {
+      toast.push('โหลดรายการสินค้าไม่สำเร็จ — ' + iRes.error.message, 'error');
+      return;
+    }
     setDetail({ order, items: iRes.data || [] });
     setEditHistory(hRes.data || []);
     setEditMode(false);

@@ -14,7 +14,7 @@ export const SALE_ORDER_ITEM_SUMMARY_SELECT =
 
 /** Detail modal, edit bill, print, TikTok panel / invoices. */
 export const SALE_ORDER_ITEM_DETAIL_SELECT =
-  `${SALE_ORDER_ITEM_SUMMARY_SELECT}, display_unit_price, sku_image_url, tiktok_order_id`;
+  `${SALE_ORDER_ITEM_SUMMARY_SELECT}, display_unit_price, sku_image_url`;
 
 /** TikTok orders panel — same columns as detail (invoice + line cards). */
 export const TIKTOK_ITEM_SELECT = SALE_ORDER_ITEM_DETAIL_SELECT;

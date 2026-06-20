@@ -2,6 +2,17 @@
   "schemaVersion": 1,
   "patches": [
     {
+      "id": "2026-06-20-sale-bill-items-empty",
+      "date": "2026-06-20",
+      "title": "แก้ modal บิลขายไม่แสดงรายการสินค้า",
+      "tags": ["แก้ไข"],
+      "items": [
+        "เปิดรายละเอียดบิลใน Sales แล้วเห็นรายการสินค้าครบอีกครั้ง",
+        "แก้ query ที่อ้างคอลัมน์ tiktok_order_id ใน sale_order_items (ไม่มีในตาราง)",
+        "ถ้าโหลดรายการล้มเหลว จะแจ้ง toast แทนการเปิด modal ว่าง"
+      ]
+    },
+    {
       "id": "2026-06-20-tiktok-line-dedupe",
       "date": "2026-06-20",
       "title": "แก้บิล TikTok นับสินค้าเกิน (บรรทัดซ้ำ)",
