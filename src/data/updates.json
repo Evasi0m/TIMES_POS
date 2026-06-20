@@ -2,6 +2,17 @@
   "schemaVersion": 1,
   "patches": [
     {
+      "id": "2026-06-20-tiktok-line-dedupe",
+      "date": "2026-06-20",
+      "title": "แก้บิล TikTok นับสินค้าเกิน (บรรทัดซ้ำ)",
+      "tags": ["แก้ไข", "TikTok"],
+      "items": [
+        "กัน resync สร้าง sale_order_items ซ้ำ tiktok_line_id — มี unique index แล้ว",
+        "ยืนยันขายตัดสต็อกรวมต่อ product ไม่ใช่ต่อบรรทัดซ้ำ",
+        "ซ่อมบิล 127990 / 128055 แล้ว — ลบบรรทัดซ้ำและคืนสต็อกส่วนเกิน (sale_edit)"
+      ]
+    },
+    {
       "id": "2026-06-20-tiktok-confirm-nav-scroll",
       "date": "2026-06-20",
       "title": "TikTok ยืนยันขาย — เลือกรายการบน PC ได้ครบ",

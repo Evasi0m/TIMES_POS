@@ -120,6 +120,23 @@ export function extractLineItems(order: Record<string, unknown>): Record<string,
   return Array.isArray(raw) ? raw as Record<string, unknown>[] : [];
 }
 
+/** One TikTok line id → one POS row (first wins). Lines without id pass through. */
+export function dedupeMappedItems(
+  items: Record<string, unknown>[],
+): Record<string, unknown>[] {
+  const byLineId = new Map<string, Record<string, unknown>>();
+  const noLineId: Record<string, unknown>[] = [];
+  for (const it of items) {
+    const lid = it.tiktok_line_id ? String(it.tiktok_line_id).trim() : '';
+    if (lid) {
+      if (!byLineId.has(lid)) byLineId.set(lid, it);
+    } else {
+      noLineId.push(it);
+    }
+  }
+  return [...byLineId.values(), ...noLineId];
+}
+
 export function mapLineItem(li: Record<string, unknown>): Record<string, unknown> {
   const skuId = String(li.sku_id || li.id || '');
   const sellerSku = String(li.seller_sku || '').trim();
@@ -244,6 +261,7 @@ export async function importTikTokOrder(
       discount2_type: 'amount',
     });
   }
+  const dedupedItems = dedupeMappedItems(items);
 
   const saleDate = parseSaleDate(order);
   const fulfillment = buildFulfillmentHeader(order, status);
@@ -271,7 +289,7 @@ export async function importTikTokOrder(
 
   const { data, error } = await supa.rpc('import_tiktok_sale_order', {
     p_header: header,
-    p_items: items,
+    p_items: dedupedItems,
   });
   if (error) throw new Error(error.message);
 
