@@ -9646,9 +9646,9 @@ function ReceiveView() {
   // StockMovementForm. AI scanning lives ONLY on this tab now; the
   // regular receive tab is purely manual.
   const tabs = [
-    { k: 'receive',      label: 'รับเข้า',        icon: 'package-in',  hint: 'รับสินค้าจากบริษัท · เพิ่มสต็อก' },
-    { k: 'bulk_receive', label: 'รับเข้า ×10',    icon: 'scan',        hint: 'สแกนบิล CMG หลายใบในครั้งเดียวด้วย AI', ai: true },
-    { k: 'claim',        label: 'ส่งเคลม / คืน',  icon: 'package-out', hint: 'ส่งสินค้าคืนบริษัท · หักสต็อก', divideBefore: true },
+    { k: 'receive',      label: 'รับเข้า',        shortLabel: 'รับเข้า', icon: 'package-in',  hint: 'รับสินค้าจากบริษัท · เพิ่มสต็อก' },
+    { k: 'bulk_receive', label: 'รับเข้า ×10',    shortLabel: '×10',     icon: 'scan',        hint: 'สแกนบิล CMG หลายใบในครั้งเดียวด้วย AI', ai: true },
+    { k: 'claim',        label: 'ส่งเคลม / คืน',  shortLabel: 'เคลม',    icon: 'package-out', hint: 'ส่งสินค้าคืนบริษัท · หักสต็อก', divideBefore: true },
   ];
   const TabGroup = <KindTabs tabs={tabs} current={tab} onChange={setTab} Icon={Icon} />;
   // Header actions. On desktop we render icon + text. On mobile we
@@ -9696,7 +9696,7 @@ function ReceiveView() {
 
       <div className="px-4 py-4 lg:px-10 lg:py-8">
         <MobilePageBand actions={ActionButtons} className="mb-3 -mx-4">
-          <div className="min-w-0 overflow-x-auto">{TabGroup}</div>
+          {TabGroup}
         </MobilePageBand>
         <p className="text-xs text-muted mb-4 lg:hidden truncate" title={tabs.find(t=>t.k===tab).hint}>
           {tabs.find(t=>t.k===tab).hint}

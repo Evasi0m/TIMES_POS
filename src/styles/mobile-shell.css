@@ -157,6 +157,50 @@
   }
 }
 
+/* Stock-in KindTabs — icon-first on mobile (mirrors bottom tab bar). */
+@media (max-width: 1023px) {
+  .kind-tabs {
+    align-items: stretch;
+  }
+  .kind-tabs__divide {
+    flex-shrink: 0;
+  }
+  .kind-tabs__btn {
+    -webkit-tap-highlight-color: transparent;
+  }
+  .kind-tabs__btn:active {
+    transform: scale(0.96);
+    transition-duration: 0.08s;
+  }
+  .kind-tabs__icon-wrap svg {
+    transition: transform 0.2s ease;
+  }
+  .kind-tabs__btn[aria-selected='true']:not(.ai-tab-active) .kind-tabs__icon-wrap svg {
+    transform: scale(1.06);
+  }
+  .kind-tabs__ai-badge {
+    position: absolute;
+    top: -3px;
+    right: calc(50% - 18px);
+    margin-right: 0;
+    transform: scale(0.72);
+    transform-origin: top right;
+    pointer-events: none;
+  }
+  .kind-tabs__btn.ai-tab-inactive .kind-tabs__label {
+    background: linear-gradient(135deg, #f97316 0%, #dc2626 50%, #7c3aed 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+  }
+  .kind-tabs__btn.ai-tab-active .kind-tabs__label {
+    color: #fff;
+    -webkit-text-fill-color: #fff;
+    font-weight: 600;
+  }
+}
+
 @media (max-width: 1023px) {
   .tt-glass__tabs--nav,
   .tt-glass__filter-rail .tt-glass__tabs--toolbar {
@@ -194,7 +238,8 @@
   }
   .tab-btn:hover,
   .mobile-fab:hover,
-  .mobile-tab-btn:hover {
+  .mobile-tab-btn:hover,
+  .kind-tabs__btn:active {
     transform: none !important;
   }
   .sheet-anim,
