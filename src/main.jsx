@@ -119,6 +119,7 @@ import {
   patchProductStockInCache,
   refreshLatestCostsInCache,
 } from './lib/product-catalog-cache.js';
+import { searchProducts, needsBrowseCatalog } from './lib/product-search.js';
 import {
   getSalesHistoryBundle,
   getCachedSalesHistoryBundle,
@@ -6461,11 +6462,13 @@ function ProductsView() {
   // buttons elsewhere are gated by the same flag.
   const role = useRole();
   const canEdit = role === 'admin' || role === 'super_admin';
-  // Whole catalog kept in memory + enriched with derived attrs (`_brand`,
-  // `_series`, ...). Dataset is ~6k rows — well within client capacity, and
-  // letting the browser do the filtering keeps chip interactions instant.
+  // Search-first (Tier B): server search by default; full ~6k catalog loads only
+  // for chip browse, advanced filter sheet, or export (shared session cache).
   const [allRows, setAllRows] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [searchRows, setSearchRows] = useState([]);
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [editing, setEditing] = useState(null);
   // Wrapper so visitor row clicks become a no-op (the editor never opens).
   // Use this in place of `setEditing` for every "open editor" callsite.
@@ -6544,7 +6547,7 @@ function ProductsView() {
     if (error) {
       toast.push('โหลดสินค้าไม่ได้: ' + (error.message || mapError(error)), 'error');
       setLoading(false);
-      return;
+      return false;
     }
 
     const imgMap = bundle.imageByProductId;
@@ -6554,6 +6557,7 @@ function ProductsView() {
     }));
     setAllRows(enriched);
     setLatestCostMap(bundle.latestCostMap || {});
+    setCatalogLoaded(true);
     setLoading(false);
 
     const orphans = enriched.filter(p => p._brand === 'other');
@@ -6562,18 +6566,54 @@ function ProductsView() {
       console.info('[ProductsView] %d products fell into "อื่น ๆ" — sample names:',
         orphans.length, orphans.slice(0, 20).map(p => p.name));
     }
+    return true;
   }, [toast]);
 
+  const ensureBrowseCatalog = useCallback(async ({ force = false } = {}) => {
+    if (catalogLoaded && !force) return true;
+    return loadProducts({ force });
+  }, [catalogLoaded, loadProducts]);
+
   useEffect(() => { loadTaxonomy(); }, [loadTaxonomy]);
-  useEffect(() => { loadProducts(); }, [loadProducts]);
+
+  // Server search when not in browse/chip mode (default path — no 6k fetch).
+  useEffect(() => {
+    if (catalogLoaded && needsBrowseCatalog(filter)) return;
+
+    const q = filter.query.trim();
+    if (!q) {
+      setSearchRows([]);
+      setSearchLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setSearchLoading(true);
+    const t = setTimeout(async () => {
+      const { data, error } = await searchProducts(sb, q);
+      if (cancelled) return;
+      if (error) {
+        toast.push('ค้นหาไม่ได้: ' + mapError(error), 'error');
+        setSearchRows([]);
+      } else {
+        setSearchRows((data || []).map(p => enrichProduct(p)));
+      }
+      setSearchLoading(false);
+    }, 200);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [filter, catalogLoaded, toast]);
   useEffect(() => {
     try {
       if (sessionStorage.getItem(PRODUCTS_EXPORT_PENDING_KEY) === '1') {
         sessionStorage.removeItem(PRODUCTS_EXPORT_PENDING_KEY);
-        setExportOpen(true);
+        ensureBrowseCatalog().then((ok) => { if (ok) setExportOpen(true); });
       }
     } catch { /* private mode */ }
-  }, []);
+  }, [ensureBrowseCatalog]);
   useEffect(() => {
     if (!exportAuthOpen && !exportOpen) return;
     sb.auth.getUser().then(({ data }) => {
@@ -6591,6 +6631,7 @@ function ProductsView() {
       minIntervalMs: 5000,
       onInvalidate: () => {
         invalidateProductCatalogCache();
+        setCatalogLoaded(false);
         loadProducts({ force: true });
       },
     });
@@ -6611,9 +6652,11 @@ function ProductsView() {
       }
       if (n.current_stock === o?.current_stock) return false;
       patchProductStockInCache(n.id, n.current_stock);
-      setAllRows(rows => rows.map(p => (p.id === n.id
+      const patchRow = (p) => (p.id === n.id
         ? enrichProduct({ ...p, current_stock: n.current_stock })
-        : p)));
+        : p);
+      setAllRows(rows => rows.map(patchRow));
+      setSearchRows(rows => rows.map(patchRow));
       return true;
     };
 
@@ -6638,11 +6681,20 @@ function ProductsView() {
   const brandName = (id) => brands.find(b => b.id === id)?.name;
   const catName   = (id) => categories.find(c => c.id === id)?.name;
 
-  // ===== Filter + sort + pagination (all client-side) =====
+  const browseMode = catalogLoaded && needsBrowseCatalog(filter);
+
+  // ===== Filter + sort + pagination =====
   const filtered = useMemo(() => {
-    const d = filterProducts(allRows, filter);
-    return sortProducts(d, filter.sort);
-  }, [allRows, filter]);
+    if (browseMode) {
+      return sortProducts(filterProducts(allRows, filter), filter.sort);
+    }
+    if (filter.query.trim()) {
+      let d = searchRows;
+      if (filter.inStockOnly) d = d.filter(p => Number(p.current_stock) > 0);
+      return sortProducts(d, filter.sort);
+    }
+    return [];
+  }, [browseMode, allRows, searchRows, filter]);
 
   const visibleRows = useMemo(() => filtered.slice(0, pageSize), [filtered, pageSize]);
   const productsTiktokIds = useMemo(() => visibleRows.map(p => p.id), [visibleRows]);
@@ -6654,16 +6706,29 @@ function ProductsView() {
   useEffect(() => { setPageSize(200); }, [filter]);
 
   // ===== Cascading state setters (parent change resets children) =====
-  const setBrand   = (b) => setFilter(f => ({ ...f, brand: b,   series: '', subType: '', material: '', color: '' }));
+  const setBrand = (b) => {
+    if (b !== 'all') ensureBrowseCatalog();
+    setFilter(f => ({ ...f, brand: b, series: '', subType: '', material: '', color: '' }));
+  };
   const setSeries  = (s) => setFilter(f => ({ ...f, series: s,  subType: '', material: '', color: '' }));
   const setSubType = (s) => setFilter(f => ({ ...f, subType: s, material: '', color: '' }));
 
+  const openFilterSheet = () => {
+    ensureBrowseCatalog();
+    setSheetOpen(true);
+  };
+
+  const openExport = () => {
+    ensureBrowseCatalog().then((ok) => { if (ok) setExportAuthOpen(true); });
+  };
+
   // ===== Facet counts =====
   const brandCounts = useMemo(() => {
+    if (!catalogLoaded) return { all: null };
     const c = { all: allRows.length };
     allRows.forEach(p => { c[p._brand] = (c[p._brand] || 0) + 1; });
     return c;
-  }, [allRows]);
+  }, [allRows, catalogLoaded]);
 
   const seriesCounts = useMemo(() => {
     if (filter.brand !== 'casio') return {};
@@ -6751,7 +6816,14 @@ function ProductsView() {
       }
       setEditing(null);
       invalidateProductCatalogCache();
-      loadProducts({ force: true });
+      const wasCatalogLoaded = catalogLoaded;
+      setCatalogLoaded(false);
+      if (needsBrowseCatalog(filter) || wasCatalogLoaded) {
+        loadProducts({ force: true });
+      } else if (filter.query.trim()) {
+        const { data, error } = await searchProducts(sb, filter.query.trim());
+        if (!error) setSearchRows((data || []).map(p => enrichProduct(p)));
+      }
     } catch (e) {
       toast.push("บันทึกไม่ได้: " + e.message, "error");
     }
@@ -6812,7 +6884,7 @@ function ProductsView() {
         <button
           type="button"
           className="btn-secondary !py-2 !text-sm relative icon-btn-44 !w-12 !h-12 flex-shrink-0 col-start-2 row-start-1 sm:col-auto sm:row-auto sm:order-3 sm:!w-auto sm:!h-auto"
-          onClick={()=>setSheetOpen(true)}
+          onClick={openFilterSheet}
           title="ตัวกรองขั้นสูง (วัสดุ / สี / ราคา / สต็อก)"
           aria-label="ตัวกรองขั้นสูง"
         >
@@ -6827,7 +6899,7 @@ function ProductsView() {
         <button
           type="button"
           className="btn-secondary !py-2 !text-sm icon-btn-44 !w-12 !h-12 flex-shrink-0 col-start-2 row-start-2 sm:col-auto sm:row-auto sm:order-4 sm:!w-auto sm:!h-auto"
-          onClick={()=>setExportAuthOpen(true)}
+          onClick={openExport}
           title="Export สต็อกเป็น CSV"
           aria-label="Export สต็อกเป็น CSV"
         >
@@ -6839,14 +6911,14 @@ function ProductsView() {
       {/* Brand chips (top-level facet) */}
       <div className="flex gap-1.5 mb-2 flex-shrink-0 overflow-x-auto pb-1 -mx-4 px-4 lg:mx-0 lg:px-0 scrollbar-thin">
         <button type="button" onClick={()=>setBrand('all')} className={chipCls(filter.brand === 'all')}>
-          ทั้งหมด <span className="opacity-60 tabular-nums">{brandCounts.all || 0}</span>
+          ทั้งหมด {catalogLoaded && <span className="opacity-60 tabular-nums">{brandCounts.all || 0}</span>}
         </button>
         {BRAND_RULES.map(b => {
-          const count = brandCounts[b.id] || 0;
-          if (count === 0 && filter.brand !== b.id) return null;
+          const count = catalogLoaded ? (brandCounts[b.id] || 0) : null;
+          if (catalogLoaded && count === 0 && filter.brand !== b.id) return null;
           return (
             <button key={b.id} type="button" onClick={()=>setBrand(b.id)} className={chipCls(filter.brand === b.id)}>
-              {b.label} <span className="opacity-60 tabular-nums">{count}</span>
+              {b.label}{count != null && <span className="opacity-60 tabular-nums"> {count}</span>}
             </button>
           );
         })}
@@ -6972,10 +7044,13 @@ function ProductsView() {
           <div className="col-span-1 text-center">คงเหลือ</div>
         </div>
         <div className="flex-1 overflow-y-auto min-h-0">
-          {loading && <SkeletonRows n={8} label="กำลังโหลดสินค้า" />}
-          {!loading && filtered.length===0 && (
+          {loading && browseMode && <SkeletonRows n={8} label="กำลังโหลดสินค้า" />}
+          {searchLoading && !browseMode && <SkeletonRows n={4} label="กำลังค้นหา" />}
+          {!loading && !searchLoading && filtered.length===0 && (
             <div className="p-6 text-muted text-sm text-center">
-              {hasAnyFilter ? "ไม่พบสินค้าตรงกับตัวกรอง" : "ยังไม่มีสินค้าในระบบ"}
+              {browseMode && hasAnyFilter ? 'ไม่พบสินค้าตรงกับตัวกรอง'
+                : filter.query.trim() ? 'ไม่พบสินค้า — ลองคำค้นอื่น'
+                : 'พิมพ์ชื่อรุ่นหรือบาร์โค้ดเพื่อค้นหา'}
             </div>
           )}
           {visibleRows.map(p => {
@@ -7035,10 +7110,13 @@ function ProductsView() {
 
       {/* Mobile cards */}
       <div className="lg:hidden space-y-2">
-        {loading && <div className="p-4 text-muted text-sm flex items-center gap-2"><span className="spinner"/>กำลังโหลด...</div>}
-        {!loading && filtered.length===0 && (
+        {(loading && browseMode) && <div className="p-4 text-muted text-sm flex items-center gap-2"><span className="spinner"/>กำลังโหลด...</div>}
+        {searchLoading && !browseMode && <div className="p-4 text-muted text-sm flex items-center gap-2"><span className="spinner"/>กำลังค้นหา...</div>}
+        {!loading && !searchLoading && filtered.length===0 && (
           <div className="p-4 text-muted text-sm text-center">
-            {hasAnyFilter ? "ไม่พบสินค้าตรงกับตัวกรอง" : "ยังไม่มีสินค้าในระบบ"}
+            {browseMode && hasAnyFilter ? 'ไม่พบสินค้าตรงกับตัวกรอง'
+              : filter.query.trim() ? 'ไม่พบสินค้า — ลองคำค้นอื่น'
+              : 'พิมพ์ชื่อรุ่นหรือบาร์โค้ดเพื่อค้นหา'}
           </div>
         )}
         {visibleRows.map(p => {
@@ -7088,7 +7166,18 @@ function ProductsView() {
       </div>
 
       <ProductEditor editing={editing} onClose={()=>setEditing(null)} onSave={save}
-        onDeleted={()=>{ setEditing(null); invalidateProductCatalogCache(); loadProducts({ force: true }); }}
+        onDeleted={async () => {
+          setEditing(null);
+          invalidateProductCatalogCache();
+          const wasCatalogLoaded = catalogLoaded;
+          setCatalogLoaded(false);
+          if (needsBrowseCatalog(filter) || wasCatalogLoaded) {
+            loadProducts({ force: true });
+          } else if (filter.query.trim()) {
+            const { data, error } = await searchProducts(sb, filter.query.trim());
+            if (!error) setSearchRows((data || []).map(p => enrichProduct(p)));
+          }
+        }}
         brands={brands} categories={categories} addBrand={addBrand} addCategory={addCategory} />
 
       <ProductStockExportAuthModal

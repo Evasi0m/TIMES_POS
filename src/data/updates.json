@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "patches": [
     {
+      "id": "2026-06-19-products-search-first",
+      "date": "2026-06-19",
+      "title": "หน้าสินค้า — ค้นก่อน ไม่โหลด 6k ทันที",
+      "tags": ["ปรับปรุง"],
+      "items": [
+        "เปิดหน้าสินค้าแล้วพิมพ์ค้นได้เลย — ดึงจาก server ~50 รายการ ไม่โหลด catalog ทั้งก้อน",
+        "กด chip แบรนด์ / ตัวกรอง / Export จึงโหลด catalog เต็ม (แชร์ cache กับ TikTok/Bulk Receive เหมือนเดิม)"
+      ]
+    },
+    {
       "id": "2026-06-19-app-update-hard-reset",
       "date": "2026-06-19",
       "title": "อัปเดตแอป — กดครั้งเดียวได้ patch ล่าสุด",
