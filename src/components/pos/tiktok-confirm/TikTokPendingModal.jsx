@@ -69,11 +69,20 @@ export default function TikTokPendingModal({
         }
         onClick={e => e.stopPropagation()}
       >
-        {mobile && (
-          <div className="w-10 h-1 rounded-full bg-muted-soft/40 mx-auto mt-2 shrink-0" aria-hidden="true" />
-        )}
-        {/* Header */}
-        <div className="ttc-modal-header ttc-brown-frame relative flex items-center gap-2.5 px-4 py-3 border-b border-white/15 shrink-0">
+        {/* Header — grab handle lives inside brown frame on mobile so glass
+            doesn't bleed through the sheet's rounded top corners. */}
+        <div
+          className={
+            'ttc-modal-header ttc-brown-frame relative shrink-0 border-b border-white/15 ' +
+            (mobile
+              ? 'ttc-modal-header--sheet'
+              : 'flex items-center gap-2.5 px-4 py-3')
+          }
+        >
+          {mobile && (
+            <div className="ttc-sheet-grab w-10 h-1 rounded-full bg-white/35 mx-auto mt-2.5 shrink-0" aria-hidden="true" />
+          )}
+          <div className={mobile ? 'flex items-center gap-2.5 px-4 pb-3 pt-1' : 'contents'}>
           {isConfirmView ? (
             <button
               type="button"
@@ -102,6 +111,7 @@ export default function TikTokPendingModal({
           <button type="button" className="pnb-iconbtn" onClick={onClose} aria-label="ปิด" disabled={saving || closing}>
             <Icon name="x" size={18}/>
           </button>
+          </div>
         </div>
 
         {/* Body — list OR confirm (ไม่ split) */}

@@ -25,18 +25,41 @@
 .mobile-topbar__actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   flex-shrink: 0;
 }
 
-.mobile-topbar__actions .pending-bell button,
-.mobile-topbar__actions .ttc-pending-badge {
+/* Net-pending bell only — TikTok uses full 44px icon-btn */
+.mobile-topbar__actions .pending-bell button:not(.ttc-pending-icon-btn) {
   transform: scale(0.82);
   transform-origin: center;
 }
 
-.mobile-topbar__actions .ttc-pending-badge__label {
-  display: none;
+.ttc-pending-icon-btn {
+  position: relative;
+  flex-shrink: 0;
+  color: rgb(var(--c-ink));
+}
+
+.ttc-pending-icon-btn__count {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  z-index: 1;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 10px;
+  pointer-events: none;
+  box-shadow:
+    0 0 0 2px rgb(var(--c-surface-strong)),
+    0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ttc-pending-icon-btn__count {
+    animation: none;
+  }
 }
 
 .mobile-menu-btn {

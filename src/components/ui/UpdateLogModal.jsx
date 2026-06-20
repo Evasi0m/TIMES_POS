@@ -23,53 +23,71 @@ function PatchCard({ patch, isLatest = false }) {
   return (
     <article
       className={
-        'ul-card ttc-bento rounded-2xl border p-3 min-w-0 h-auto flex-none flex flex-col gap-2 ' +
+        'ul-card ttc-bento rounded-2xl border p-3 min-w-0 flex-none flex flex-col gap-2 min-h-0 ' +
         (isLatest ? 'ul-card--hero ul-mesh-card' : 'ul-card--' + tint + ' ul-mesh-card--soft')
       }
     >
-      <div className="flex items-start justify-between gap-2 min-w-0">
-        <div className="min-w-0">
-          {isLatest && (
-            <div className="ul-hero__label text-[10px] font-semibold uppercase tracking-wider mb-1">
-              อัปเดตล่าสุด
+      <div className="ul-card__top shrink-0">
+        <div className="flex items-start justify-between gap-2 min-w-0">
+          <div className="min-w-0">
+            {isLatest && (
+              <div className="ul-hero__label text-[10px] font-semibold uppercase tracking-wider mb-1">
+                อัปเดตล่าสุด
+              </div>
+            )}
+            <h3 className="text-sm font-semibold text-ink leading-snug line-clamp-2">
+              {patch.title}
+            </h3>
+            <div className="text-[11px] text-muted tabular-nums mt-0.5">
+              {formatPatchDate(patch.date)}
             </div>
-          )}
-          <h3 className="text-sm font-semibold text-ink leading-snug">
-            {patch.title}
-          </h3>
-          <div className="text-[11px] text-muted tabular-nums mt-0.5">
-            {formatPatchDate(patch.date)}
+          </div>
+          <div className="flex flex-wrap gap-1 justify-end shrink-0 max-w-[45%]">
+            {(patch.tags || []).map(t => (
+              <PatchTag key={t} tag={t}/>
+            ))}
           </div>
         </div>
-        <div className="flex flex-wrap gap-1 justify-end shrink-0 max-w-[45%]">
-          {(patch.tags || []).map(t => (
-            <PatchTag key={t} tag={t}/>
-          ))}
-        </div>
       </div>
-      <ul className="space-y-1.5 text-xs">
-        {(patch.items || []).map((line, i) => (
-          <li key={i} className="flex gap-2 text-ink/90 leading-relaxed">
-            <span className="ul-bullet shrink-0" aria-hidden>✦</span>
-            <span className="min-w-0">{line}</span>
-          </li>
-        ))}
-      </ul>
+      <div className="ul-card__scroll min-h-0 flex-1 overflow-y-auto overscroll-contain -mx-1 px-1">
+        <ul className="space-y-1.5 text-xs">
+          {(patch.items || []).map((line, i) => (
+            <li key={i} className="flex gap-2 text-ink/90 leading-relaxed">
+              <span className="ul-bullet shrink-0" aria-hidden>✦</span>
+              <span className="min-w-0">{line}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
     </article>
   );
+}
+
+/** At most `windowSize` page buttons — user steps with prev/next for the rest. */
+function visiblePageNumbers(page, totalPages, windowSize = 3) {
+  if (totalPages <= windowSize) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+  let start = Math.max(1, page - Math.floor(windowSize / 2));
+  let end = start + windowSize - 1;
+  if (end > totalPages) {
+    end = totalPages;
+    start = end - windowSize + 1;
+  }
+  return Array.from({ length: windowSize }, (_, i) => start + i);
 }
 
 function UpdateLogPager({ page, totalPages, total, onPageChange }) {
   if (totalPages <= 1) return null;
 
-  const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+  const pages = visiblePageNumbers(page, totalPages, 3);
 
   return (
     <div className="ul-pager shrink-0 flex flex-col items-center gap-2 pt-3 border-t hairline-soft mt-1">
       <div className="text-[11px] text-muted tabular-nums">
         หน้า {page}/{totalPages} · ทั้งหมด {total} รายการ
       </div>
-      <div className="flex items-center gap-1 flex-wrap justify-center">
+      <div className="flex items-center gap-1 flex-nowrap justify-center">
         <button
           type="button"
           className="ul-pager__nav"

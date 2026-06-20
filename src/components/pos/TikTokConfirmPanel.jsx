@@ -26,6 +26,7 @@ import {
 } from '../../lib/tiktok-inventory-sync.js';
 import { logMirrorBackgroundError } from '../../lib/tiktok-mirror-helpers.js';
 import { isGenericTikTokSku } from './tiktok-confirm/helpers.js';
+import Icon from '../ui/Icon.jsx';
 
 export default function TikTokConfirmPanel({ toast, onConfirmed }) {
   const [orders, setOrders] = useState([]);
@@ -317,20 +318,39 @@ export default function TikTokConfirmPanel({ toast, onConfirmed }) {
   const count = orders.length;
   if (count === 0 && !loading) return null;
 
+  const countLabel = count > 99 ? '99+' : count;
+  const badgeAria = `${TTC_COPY.badgeLabel} ${count} รายการ`;
+
   const badge = (
-    <div className="pending-bell">
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label={`${TTC_COPY.badgeLabel} ${count} รายการ`}
-        className="ttc-pending-badge font-display"
-      >
-        <span className="ttc-pending-badge__count">
-          <span className="ttc-pending-badge__count-num">{count > 99 ? '99+' : count}</span>
-        </span>
-        <span className="ttc-pending-badge__label">{TTC_COPY.badgeLabel}</span>
-      </button>
-    </div>
+    <>
+      <div className="pending-bell lg:hidden">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label={badgeAria}
+          title={TTC_COPY.badgeLabel}
+          className="ttc-pending-icon-btn icon-btn-44 btn-ghost !p-0"
+        >
+          <Icon name="shop-bag" size={20} strokeWidth={1.85} />
+          <span className="nav-count-badge ttc-pending-icon-btn__count" aria-hidden="true">
+            {countLabel}
+          </span>
+        </button>
+      </div>
+      <div className="pending-bell hidden lg:block">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label={badgeAria}
+          className="ttc-pending-badge font-display"
+        >
+          <span className="ttc-pending-badge__count">
+            <span className="ttc-pending-badge__count-num">{countLabel}</span>
+          </span>
+          <span className="ttc-pending-badge__label">{TTC_COPY.badgeLabel}</span>
+        </button>
+      </div>
+    </>
   );
 
   return (

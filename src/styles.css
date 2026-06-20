@@ -449,7 +449,8 @@
 }
 
 :root:not([data-theme="dark"]) .tab-btn.active,
-:root:not([data-theme="dark"]) .mobile-fab {
+:root:not([data-theme="dark"]) .mobile-fab,
+:root:not([data-theme="dark"]) .scan-inline-btn {
   background:
     radial-gradient(circle at 18% 0%, rgba(255, 241, 227, 0.42), transparent 42%),
     linear-gradient(135deg, #dc8a70 0%, #cc6f54 52%, #a44c37 100%);
@@ -464,6 +465,15 @@
   background: rgb(var(--c-error));
   border-color: rgb(var(--c-surface-strong));
   box-shadow: 0 8px 18px -12px rgb(var(--c-error) / 0.58);
+}
+
+:root:not([data-theme="dark"]) .mobile-fab.active,
+:root:not([data-theme="dark"]) .scan-inline-btn {
+  box-shadow:
+    0 0 0 3px rgba(204, 120, 92, 0.22),
+    inset 0 1px 0 rgba(255, 244, 232, 0.42),
+    0 10px 24px -4px rgba(164, 76, 55, 0.52),
+    0 4px 10px -2px rgba(164, 76, 55, 0.32);
 }
 
 :root:not([data-theme="dark"]) .cart-glow-badge {
@@ -770,6 +780,16 @@
   color: inherit;
   stroke: currentColor;
 }
+
+/* Mobile bottom sheet — brown header fills rounded top; no side/top frame stroke */
+.ttc-pending-modal.ttc-modal-card .ttc-modal-header--sheet {
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  border-top-left-radius: calc(1rem - 2px);
+  border-top-right-radius: calc(1rem - 2px);
+}
+
 :root[data-theme="dark"] .ttc-brown-frame {
   border-color: rgba(255, 210, 160, 0.18);
   background:
@@ -3185,7 +3205,8 @@
 }
 
 :root[data-theme="dark"] .tab-btn.active,
-:root[data-theme="dark"] .mobile-fab {
+:root[data-theme="dark"] .mobile-fab,
+:root[data-theme="dark"] .scan-inline-btn {
   background:
     radial-gradient(circle at 18% 0%, rgba(255, 232, 205, 0.22), transparent 42%),
     linear-gradient(135deg, #e08a70 0%, #d7775c 52%, #a64f38 100%);
@@ -3200,6 +3221,15 @@
   background: rgb(var(--c-error));
   border-color: rgb(var(--c-canvas));
   box-shadow: 0 8px 18px -10px rgb(var(--c-error) / 0.90);
+}
+
+:root[data-theme="dark"] .mobile-fab.active,
+:root[data-theme="dark"] .scan-inline-btn {
+  box-shadow:
+    0 0 0 3px rgba(215, 119, 92, 0.28),
+    inset 0 1px 0 rgba(255, 239, 220, 0.34),
+    0 10px 24px -4px rgba(215, 119, 92, 0.72),
+    0 4px 10px -2px rgba(215, 119, 92, 0.48);
 }
 
 :root[data-theme="dark"] .cart-glow-badge {
@@ -3501,6 +3531,19 @@
 .ul-card-list > .ul-card {
   flex: 0 0 auto;
   height: auto;
+}
+
+@media (max-width: 1023px) {
+  .ul-card-list > .ul-card {
+    height: 130px;
+    min-height: 130px;
+    max-height: 130px;
+    overflow: hidden;
+  }
+  .ul-card__scroll {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
 }
 
 .ul-mesh-card {
