@@ -64,14 +64,24 @@ export default defineConfig({
       configureServer(server) {
         server.middlewares.use((req, res, next) => {
           const path = req.url?.split('?')[0];
-          if (path !== '/updates.json' && path !== './updates.json') return next();
-          try {
-            const body = readFileSync(join('src', 'data', 'updates.json'), 'utf8');
-            res.setHeader('Content-Type', 'application/json');
-            res.end(body);
-          } catch {
-            next();
+          if (path === '/updates.json' || path === './updates.json') {
+            try {
+              const body = readFileSync(join('src', 'data', 'updates.json'), 'utf8');
+              res.setHeader('Content-Type', 'application/json');
+              res.end(body);
+              return;
+            } catch {
+              return next();
+            }
           }
+          // version.json is emitted at build time only — without this middleware
+          // `npm run dev` returns index.html and app-update throws on res.json().
+          if (path === '/version.json' || path === './version.json') {
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ buildId, builtAt: new Date().toISOString() }));
+            return;
+          }
+          next();
         });
       },
       closeBundle() {
