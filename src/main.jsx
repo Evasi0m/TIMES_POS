@@ -146,6 +146,7 @@ import OrderStatusBadge from './components/sales/OrderStatusBadge.jsx';
 import PaymentMethodIcon from './components/sales/PaymentMethodIcon.jsx';
 import ChannelBadge from './components/ui/mobile/ChannelBadge.jsx';
 import MobileActionSheet from './components/ui/mobile/MobileActionSheet.jsx';
+import BottomSheet from './components/ui/mobile/BottomSheet.jsx';
 import MobilePageBand from './components/ui/mobile/MobilePageBand.jsx';
 import MobileIconButton from './components/ui/mobile/MobileIconButton.jsx';
 import { PAYMENT_METHOD_LABELS as PAYMENT_LABELS } from './lib/payment-method-label.js';
@@ -4602,7 +4603,7 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
         <div className="mobile-topbar__actions">
           {isAdminPlus && (
             <>
-              <TikTokConfirmPanel toast={toast.push} />
+              {view === 'pos' && <TikTokConfirmPanel toast={toast.push} />}
               <PendingNetBell toast={toast.push} size={40} placement="header" />
             </>
           )}
@@ -6510,6 +6511,7 @@ function ProductsView() {
   const [exportUserEmail, setExportUserEmail] = useState('');
   const [exportUserName, setExportUserName] = useState('');
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [brandPickerOpen, setBrandPickerOpen] = useState(false);
   // Render only the first N filtered rows; "ดูเพิ่ม" button bumps this. Keeps
   // initial paint fast even when the brand chip is "ทั้งหมด" (6k items).
   const [pageSize, setPageSize] = useState(200);
@@ -6874,66 +6876,99 @@ function ProductsView() {
       ? "lg-tile-dark"
       : "lg-tile text-muted hover:text-ink");
 
+  const brandFilterLabel = filter.brand === 'all'
+    ? 'ทั้งหมด'
+    : (BRAND_RULES.find((b) => b.id === filter.brand)?.label || filter.brand);
+
+  const openBrandPicker = () => {
+    ensureBrowseCatalog();
+    setBrandPickerOpen(true);
+  };
+
   return (
     <div className="px-4 py-4 lg:px-10 lg:py-6 lg:h-[calc(100vh-180px)] lg:flex lg:flex-col">
-      {/* Top bar: search + sort + filter + export.
-          Mobile (< sm): 2-row grid — row1 search+filter, row2 sort+export.
-          Desktop (sm+): single inline flex row (unchanged order). */}
-      <div className="products-toolbar grid grid-cols-[1fr_3rem] gap-2 mb-2 flex-shrink-0 sm:flex sm:flex-nowrap sm:items-stretch">
-        <div className="relative min-w-0 col-start-1 row-start-1 sm:col-auto sm:row-auto sm:flex-1 sm:order-1">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted z-10"><Icon name="search" size={18} strokeWidth={2.25}/></span>
-          <input className="input !pl-10 !pr-11 !h-12 w-full" placeholder="ชื่อรุ่น หรือ บาร์โค้ด"
-            value={queryInput} onChange={e=>setQueryInput(e.target.value)} autoFocus={!isMobileViewport()} />
+      {/* Top bar: mobile 2 rows — search+filter, then sort+brand+export */}
+      <div className="products-toolbar mb-2 flex-shrink-0">
+        <div className="products-search-wrap">
+          <span className="products-search-icon" aria-hidden="true">
+            <Icon name="search" size={18} strokeWidth={2.25}/>
+          </span>
+          <input
+            className={"input products-search-input w-full !h-12" + (queryInput ? ' has-clear' : '')}
+            placeholder="ชื่อรุ่น หรือ บาร์โค้ด"
+            value={queryInput}
+            onChange={e=>setQueryInput(e.target.value)}
+            autoFocus={!isMobileViewport()}
+          />
           {queryInput && (
-            <button type="button" onClick={()=>{ setQueryInput(''); setFilter(f=>({...f, query: ''})); }}
-              className="absolute right-11 top-1/2 -translate-y-1/2 p-1.5 text-muted-soft hover:text-ink rounded-md">
+            <button
+              type="button"
+              onClick={()=>{ setQueryInput(''); setFilter(f=>({...f, query: ''})); }}
+              className="products-search-clear"
+              aria-label="ล้างคำค้น"
+            >
               <Icon name="x" size={14}/>
             </button>
           )}
-          <button type="button" className="scan-inline-btn scan-inline-btn--in-field" onClick={()=>setScannerOpen(true)} aria-label="สแกนด้วยกล้อง">
+          <button
+            type="button"
+            className="scan-inline-btn scan-inline-btn--in-field"
+            onClick={()=>setScannerOpen(true)}
+            aria-label="สแกนด้วยกล้อง"
+          >
             <Icon name="camera" size={18}/>
           </button>
         </div>
-        <select
-          className="input !py-2 !text-sm !h-12 w-full col-start-1 row-start-2 sm:col-auto sm:row-auto sm:order-2 sm:!w-auto"
-          value={filter.sort}
-          onChange={e=>setFilter(f=>({...f, sort: e.target.value}))}
-        >
-          <option value="newest">ใหม่ล่าสุด</option>
-          <option value="oldest">เก่าสุด</option>
-          <option value="price-asc">ราคา ต่ำ → สูง</option>
-          <option value="price-desc">ราคา สูง → ต่ำ</option>
-          <option value="name">ชื่อรุ่น A-Z</option>
-        </select>
         <button
           type="button"
-          className="btn-secondary !py-2 !text-sm relative icon-btn-44 !w-12 !h-12 flex-shrink-0 col-start-2 row-start-1 sm:col-auto sm:row-auto sm:order-3 sm:!w-auto sm:!h-auto"
+          className="products-toolbar__filter btn-secondary relative icon-btn-44 !p-0 !w-12 !h-12 flex-shrink-0"
           onClick={openFilterSheet}
           title="ตัวกรองขั้นสูง (วัสดุ / สี / ราคา / สต็อก)"
           aria-label="ตัวกรองขั้นสูง"
         >
-          <Icon name="filter" size={22} className="sm:!w-[16px] sm:!h-[16px]"/>
-          <span className="hidden sm:inline sm:ml-1">ตัวกรอง</span>
+          <Icon name="sliders-h" size={22} strokeWidth={1.75}/>
           {advancedCount > 0 && (
-            <span className="absolute -top-1 -right-1 sm:static sm:ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-on-primary text-[10px] font-bold tabular-nums border border-canvas sm:border-0">
+            <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-on-primary text-[10px] font-bold tabular-nums border border-canvas">
               {advancedCount}
             </span>
           )}
         </button>
-        <button
-          type="button"
-          className="btn-secondary !py-2 !text-sm icon-btn-44 !w-12 !h-12 flex-shrink-0 col-start-2 row-start-2 sm:col-auto sm:row-auto sm:order-4 sm:!w-auto sm:!h-auto"
-          onClick={openExport}
-          title="Export สต็อกเป็น CSV"
-          aria-label="Export สต็อกเป็น CSV"
-        >
-          <Icon name="download" size={22} className="sm:!w-[16px] sm:!h-[16px]"/>
-          <span className="hidden sm:inline sm:ml-1">Export</span>
-        </button>
+        <div className="products-toolbar__actions">
+          <select
+            className="input products-toolbar__sort !py-2 !text-sm !h-12"
+            value={filter.sort}
+            onChange={e=>setFilter(f=>({...f, sort: e.target.value}))}
+          >
+            <option value="newest">ใหม่ล่าสุด</option>
+            <option value="oldest">เก่าสุด</option>
+            <option value="price-asc">ราคา ต่ำ → สูง</option>
+            <option value="price-desc">ราคา สูง → ต่ำ</option>
+            <option value="name">ชื่อรุ่น A-Z</option>
+          </select>
+          <button
+            type="button"
+            className="products-toolbar__brand btn-secondary !h-12 !px-3 !text-sm lg:hidden"
+            onClick={openBrandPicker}
+            aria-label="เลือกแบรนด์"
+          >
+            <Icon name="tag" size={14} className="shrink-0"/>
+            <span className="truncate max-w-[5.5rem]">{brandFilterLabel}</span>
+            <Icon name="chevron-d" size={12} className="shrink-0 opacity-70"/>
+          </button>
+          <button
+            type="button"
+            className="products-toolbar__export btn-secondary icon-btn-44 !p-0 !w-12 !h-12 flex-shrink-0"
+            onClick={openExport}
+            title="Export สต็อกเป็น CSV"
+            aria-label="Export สต็อกเป็น CSV"
+          >
+            <Icon name="csv-export" size={22} strokeWidth={1.75}/>
+          </button>
+        </div>
       </div>
 
-      {/* Brand chips (top-level facet) */}
-      <div className="flex gap-1.5 mb-2 flex-shrink-0 overflow-x-auto pb-1 -mx-4 px-4 lg:mx-0 lg:px-0 scrollbar-thin">
+      {/* Brand chips — desktop only; mobile uses picker button */}
+      <div className="hidden lg:flex gap-1.5 mb-2 flex-shrink-0 overflow-x-auto pb-1 scrollbar-thin">
         <button type="button" onClick={()=>setBrand('all')} className={chipCls(filter.brand === 'all')}>
           ทั้งหมด {catalogLoaded && <span className="opacity-60 tabular-nums">{brandCounts.all || 0}</span>}
         </button>
@@ -7236,6 +7271,15 @@ function ProductsView() {
         showCasioFacets={filter.brand === 'casio'}
       />
 
+      <ProductBrandPickerSheet
+        open={brandPickerOpen}
+        onClose={()=>setBrandPickerOpen(false)}
+        filter={filter}
+        brandCounts={brandCounts}
+        catalogLoaded={catalogLoaded}
+        onPick={(b) => { setBrand(b); setBrandPickerOpen(false); }}
+      />
+
       <BarcodeScannerModal
         open={scannerOpen}
         onClose={()=>setScannerOpen(false)}
@@ -7393,6 +7437,32 @@ function ProductStockExportModal({ open, onClose, scope, onScopeChange, products
         {shopName ? <> · ร้าน <span className="text-ink">{shopName}</span></> : null}
       </div>
     </Modal>
+  );
+}
+
+/* ProductBrandPickerSheet — mobile brand facet menu (replaces horizontal chips). */
+function ProductBrandPickerSheet({ open, onClose, filter, brandCounts, catalogLoaded, onPick }) {
+  const rowCls = (active) =>
+    'w-full flex items-center justify-between gap-3 px-4 py-3.5 text-left text-sm font-medium border-b hairline last:border-0 transition-colors ' +
+    (active ? 'bg-primary/8 text-primary' : 'text-ink hover:bg-surface-strong/60');
+
+  return (
+    <BottomSheet open={open} onClose={onClose} title="เลือกแบรนด์">
+      <button type="button" className={rowCls(filter.brand === 'all')} onClick={() => onPick('all')}>
+        <span>ทั้งหมด</span>
+        {catalogLoaded && <span className="text-xs text-muted-soft tabular-nums">{brandCounts.all || 0}</span>}
+      </button>
+      {BRAND_RULES.map((b) => {
+        const count = catalogLoaded ? (brandCounts[b.id] || 0) : null;
+        if (catalogLoaded && count === 0 && filter.brand !== b.id) return null;
+        return (
+          <button key={b.id} type="button" className={rowCls(filter.brand === b.id)} onClick={() => onPick(b.id)}>
+            <span>{b.label}</span>
+            {count != null && <span className="text-xs text-muted-soft tabular-nums">{count}</span>}
+          </button>
+        );
+      })}
+    </BottomSheet>
   );
 }
 
@@ -9641,6 +9711,7 @@ function ReceiveView() {
   const [tab, setTab] = useState('receive');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [addProductOpen, setAddProductOpen] = useState(false);
+  const [brvPhase, setBrvPhase] = useState('empty');
   // Ref to the active StockMovementForm so AddProductModal can push the
   // newly-created product straight into "รายการรับเข้า".
   const formRef = useRef(null);
@@ -9685,8 +9756,9 @@ function ReceiveView() {
       </button>
     </div>
   );
+  const inReviewFocus = tab === 'bulk_receive' && brvPhase === 'review';
   return (
-    <div>
+    <div className={inReviewFocus ? 'receive-focus-review' : ''}>
       {/* Desktop header */}
       <header className="hidden lg:flex px-10 pt-8 pb-6 items-end justify-between border-b hairline gap-4">
         <div>
@@ -9698,19 +9770,19 @@ function ReceiveView() {
         </div>
       </header>
 
-      <div className="px-4 py-4 lg:px-10 lg:py-8">
-        <MobilePageBand actions={ActionButtons} className="mb-3 -mx-4">
-          {TabGroup}
-        </MobilePageBand>
-        <p className="text-xs text-muted mb-4 lg:hidden truncate" title={tabs.find(t=>t.k===tab).hint}>
-          {tabs.find(t=>t.k===tab).hint}
-        </p>
+      <div className={'px-4 py-4 lg:px-10 lg:py-8' + (inReviewFocus ? ' receive-focus-review__body' : '')}>
+        {!inReviewFocus && (
+          <MobilePageBand actions={ActionButtons} className="mb-3 -mx-4">
+            {TabGroup}
+          </MobilePageBand>
+        )}
+        {!inReviewFocus && (
+          <p className="text-xs text-muted mb-4 lg:hidden truncate" title={tabs.find(t=>t.k===tab).hint}>
+            {tabs.find(t=>t.k===tab).hint}
+          </p>
+        )}
         {tab === 'bulk_receive' ? (
-          // Bulk receive flow owns its own state (multi-image upload,
-          // wizard review, sequential submit). Mounting under a stable
-          // `key` ensures switching away and back doesn't reset progress
-          // mid-batch.
-          <BulkReceiveView key="bulk_receive" toast={toast} />
+          <BulkReceiveView key="bulk_receive" toast={toast} onPhaseChange={setBrvPhase} />
         ) : (
           <StockMovementForm key={tab} kind={tab} ref={formRef} />
         )}

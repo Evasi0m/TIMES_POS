@@ -1,4 +1,4 @@
-import React, { forwardRef, useEffect, useMemo, useState } from 'react';
+import React, { forwardRef, useCallback, useEffect, useMemo, useState } from 'react';
 import Icon from '../ui/Icon.jsx';
 import ExpandableImageThumb from '../ui/ExpandableImageThumb.jsx';
 import ProductThumb from '../ui/ProductThumb.jsx';
@@ -6,7 +6,9 @@ import { findCandidates } from '../../lib/fuzzy-match.js';
 import { tiktokSkuDisplayLabel } from '../../lib/tiktok-mirror-helpers.js';
 import TikTokSkuMatchRow, { TIKTOK_MIN_PCT_OPTIONS } from '../ecommerce/TikTokSkuMatchRow.jsx';
 import RecentReceiveBadge from '../movement/RecentReceiveBadge.jsx';
+import ReceiveReviewWorkCard from './ReceiveReviewWorkCard.jsx';
 import { addVat, stripVat, fmtTHB } from '../../lib/money.js';
+import { vibrateScan } from '../../lib/barcode-feedback.js';
 import { suggestedRetail } from '../../lib/ai-receive.js';
 import {
   SOFT_MATCH_FLOOR,
@@ -15,6 +17,7 @@ import {
   firstIncompleteStep,
   getRowAsideImageUrl,
   getWorkspaceLayoutMode,
+  isRowComplete,
 } from './bill-review-shared.js';
 
 function CandidateCell({ c, onPick, highlight, dataFirst }) {
@@ -90,7 +93,34 @@ function QtyCostSection({ row, hasVat, onUpdate }) {
   );
 }
 
-function StepIndicator({ steps, activeStep, onGotoStep }) {
+function StepIndicator({ steps, activeStep, onGotoStep, segmented = false }) {
+  if (segmented) {
+    return (
+      <div
+        className="air-step-indicator air-step-indicator--segmented shrink-0"
+        style={{ gridTemplateColumns: `repeat(${steps.length}, 1fr)` }}
+      >
+        {steps.map((s) => (
+          <button
+            key={s.key}
+            type="button"
+            className={
+              'air-step-indicator__seg' +
+              (s.key === activeStep ? ' is-active' : '') +
+              (s.done ? ' is-done' : '') +
+              (s.disabled ? ' is-disabled' : '')
+            }
+            disabled={s.disabled}
+            onClick={() => !s.disabled && onGotoStep(s.key)}
+          >
+            {s.done ? <Icon name="check" size={11}/> : <Icon name={s.icon} size={12}/>}
+            <span>{s.label === 'จับคู่รุ่น' ? 'จับคู่' : s.label === 'จำนวน/ทุน' ? 'ตัวเลข' : s.label}</span>
+          </button>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="air-step-indicator shrink-0">
       {steps.map((s, i) => (
@@ -167,8 +197,53 @@ function StageAsideVisual({ row, tiktokCatalog = [], productImagesById = {} }) {
 
 function StageAside({
   rowIndex, row, hasVat, displayState, duplicate, onRemove, tiktokCatalog = [], productImagesById = {},
+  compact = false,
 }) {
   const grossCost = hasVat ? addVat(row.unit_cost) : row.unit_cost;
+
+  if (compact) {
+    return (
+      <div className="air-stage__aside air-stage__aside--compact">
+        <div className="air-stage__compact-row">
+          <div className="air-stage__compact-visual">
+            <StageAsideVisual row={row} tiktokCatalog={tiktokCatalog} productImagesById={productImagesById}/>
+          </div>
+          <div className="air-stage__compact-body min-w-0 flex-1">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={'ai-row-badge !w-6 !h-6 !text-[10px] shrink-0 ' + displayState.badgeCls}>
+                {rowIndex + 1}
+              </span>
+              <div className="font-mono text-sm font-bold text-ink leading-snug break-all min-w-0">
+                {row.model_code}
+              </div>
+            </div>
+            <div className="text-xs text-muted tabular-nums mt-0.5">
+              ×{row.quantity} · {fmtTHB(grossCost)}
+              {hasVat && <span className="text-muted-soft"> (รวม VAT)</span>}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+              <span className={'air-status-chip ' + displayState.pillCls}>
+                <Icon name={displayState.icon} size={9}/>
+                <span>{displayState.label}</span>
+              </span>
+              {duplicate && (
+                <span className="air-chip air-chip--dup" title="model นี้มีมากกว่าหนึ่งบรรทัดในบิล">ซ้ำ?</span>
+              )}
+            </div>
+          </div>
+          <button
+            type="button"
+            className="air-stage__compact-menu btn-ghost !p-2 shrink-0"
+            onClick={onRemove}
+            aria-label="ลบรายการนี้"
+          >
+            <Icon name="trash" size={16} className="text-muted-soft"/>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="air-stage__aside">
       <div className="shrink-0 flex items-center gap-2">
@@ -280,7 +355,22 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
   onTiktokRowMatch,
   productImagesById = {},
   onLayoutModeChange,
+  hideFooter = false,
+  wizardMode = false,
+  onWizardMetaChange,
+  onItemComplete,
 }, ref) {
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches,
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 1023px)');
+    const fn = () => setIsMobile(mq.matches);
+    mq.addEventListener('change', fn);
+    return () => mq.removeEventListener('change', fn);
+  }, []);
+
   const [rematch, setRematch] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [activeStep, setActiveStep] = useState('match');
@@ -391,6 +481,7 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
 
   const handlePick = (p) => {
     onPick(p);
+    vibrateScan();
     setRematch(false);
     setShowCreate(false);
     setActiveStep('qtycost');
@@ -412,84 +503,149 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
   const hasTiktokStep = steps.some((s) => s.key === 'tiktok');
   const advanceFromQtyCost = () => {
     if (hasTiktokStep) setActiveStep('tiktok');
+    else if (wizardMode) onItemComplete?.();
     else onNextAttention?.();
   };
 
-  return (
-    <div
-      ref={ref}
-      className={
-        'air-stage air-stage--' + layoutMode +
-        ' ttc-rl ttc-bento rounded-2xl border w-full ' +
-        displayState.cardCls
-      }
-      id="receive-match-workspace"
-    >
-      <div className="air-stage__grid">
-        <StageAside
-          rowIndex={rowIndex}
-          row={row}
-          hasVat={hasVat}
-          displayState={displayState}
-          duplicate={duplicate}
-          onRemove={onRemove}
-          tiktokCatalog={tiktokCatalog}
-          productImagesById={productImagesById}
-        />
+  const wizardAdvance = useCallback(() => {
+    if (!row) return;
+    if (activeStep === 'match') {
+      if (!isMatched || resolveMode) return;
+      setActiveStep('qtycost');
+      return;
+    }
+    if (activeStep === 'qtycost') {
+      if (!(Number(row.quantity) > 0) || !(Number(row.unit_cost) > 0)) return;
+      if (hasTiktokStep) setActiveStep('tiktok');
+      else onItemComplete?.();
+      return;
+    }
+    if (activeStep === 'tiktok') {
+      if (row.tiktok_skip || row.tiktok_sku || row.tiktok_mapping) onItemComplete?.();
+    }
+  }, [row, activeStep, isMatched, resolveMode, hasTiktokStep, onItemComplete]);
 
-        <div className="air-stage__main">
-          {billComplete && (
-            <div className="air-stage__main-top shrink-0">
-              <span className="air-status-chip air-status-chip--done ml-auto">
-                <Icon name="check" size={9}/> บิลนี้พร้อมบันทึก
-              </span>
-            </div>
-          )}
-          <StepIndicator steps={steps} activeStep={activeStep} onGotoStep={setActiveStep}/>
+  const wizardBack = useCallback(() => {
+    if (activeStep === 'qtycost') setActiveStep('match');
+    else if (activeStep === 'tiktok') setActiveStep('qtycost');
+  }, [activeStep]);
 
-          <div className="air-stage__main-body">
+  const wizardGotoStep = useCallback((key) => {
+    const target = steps.find((s) => s.key === key);
+    if (!target || target.disabled) return;
+    if (target.done || key === activeStep) setActiveStep(key);
+  }, [steps, activeStep]);
+
+  const canWizardAdvance = useMemo(() => {
+    if (!row) return false;
+    if (activeStep === 'match') return isMatched && !resolveMode;
+    if (activeStep === 'qtycost') return Number(row.quantity) > 0 && Number(row.unit_cost) > 0;
+    if (activeStep === 'tiktok') {
+      return !!(row.tiktok_skip || row.tiktok_sku || row.tiktok_mapping);
+    }
+    return false;
+  }, [row, activeStep, isMatched, resolveMode]);
+
+  const canWizardBack = activeStep === 'qtycost' || activeStep === 'tiktok';
+
+  useEffect(() => {
+    if (!wizardMode) return;
+    onWizardMetaChange?.({
+      activeStep,
+      steps,
+      canAdvance: canWizardAdvance,
+      canBack: canWizardBack,
+      isItemComplete: row ? isRowComplete(row, tiktokMirrorEnabled) : false,
+      advance: wizardAdvance,
+      back: wizardBack,
+      gotoStep: wizardGotoStep,
+    });
+  }, [
+    wizardMode,
+    activeStep,
+    steps,
+    canWizardAdvance,
+    canWizardBack,
+    row,
+    tiktokMirrorEnabled,
+    onWizardMetaChange,
+    wizardAdvance,
+    wizardBack,
+    wizardGotoStep,
+  ]);
+
+  const showInlineNav = !wizardMode;
+  const useWizardLayout = wizardMode && isMobile;
+
+  const rowWarnings = (
+    <>
+      {softMatch && (
+        <div className="rrm-alert">
+          <Icon name="alert" size={14} className="shrink-0"/>
+          ความมั่นใจ {Math.round(row.matchScore * 100)}% — ตรวจว่ารุ่นตรงไหม
+        </div>
+      )}
+      {row.validationIssues?.includes('row_math_mismatch') && (
+        <div className="rrm-alert">
+          <Icon name="alert" size={14} className="shrink-0"/>
+          {row.validationDetail || 'qty × ราคา ≠ จำนวนเงินบิล — ตรวจกับรูป'}
+        </div>
+      )}
+      {row.needsReview && !row.validationIssues?.includes('row_math_mismatch') && (
+        <div className="rrm-alert">
+          <Icon name="alert" size={14} className="shrink-0"/>
+          AI ไม่มั่นใจ — ตรวจรุ่นและตัวเลขกับรูปบิล
+        </div>
+      )}
+    </>
+  );
+
+  const stepBodies = (
+    <>
             {/* ── STEP: MATCH ─────────────────────────────── */}
             {activeStep === 'match' && (
               <>
                 {!resolveMode && hasPos ? (
                   <>
-                    <div className="receive-match-step-callout receive-match-step-callout--edit">
-                      <Icon name="check" size={16} className="shrink-0 text-[#0a7a43]"/>
-                      <span>จับคู่รุ่นแล้ว — ตรวจชื่อให้ตรง แล้วไปขั้นถัดไป</span>
-                    </div>
-                    <div className="air-stage__detail">
-                      <div className="air-stage__from-label">POS ในระบบ</div>
-                      <div className="font-mono text-base font-semibold text-[#0a5a32] break-words leading-snug">
-                        {posName}
+                    {!useWizardLayout && (
+                      <div className="receive-match-step-callout receive-match-step-callout--edit">
+                        <Icon name="check" size={16} className="shrink-0 text-[#0a7a43]"/>
+                        <span>จับคู่รุ่นแล้ว — ตรวจชื่อให้ตรง แล้วไปขั้นถัดไป</span>
                       </div>
-                      <div className="text-xs text-muted tabular-nums mt-0.5">
-                        {row.status === 'new'
-                          ? <>สินค้าใหม่ · ป้าย ฿{Number(row.newProduct?.retail_price).toLocaleString()}</>
-                          : <>stock {currentStock} → {stockAfter}
-                              {typeof row.matchScore === 'number' && <> · มั่นใจ {Math.round(row.matchScore * 100)}%</>}
-                            </>}
+                    )}
+                    {useWizardLayout ? (
+                      <div className="rrm-work-card__match-ok">
+                        <div className="rrm-work-section__label">POS ในระบบ</div>
+                        <div className="font-mono text-[15px] font-semibold text-primary break-words leading-snug">
+                          {posName}
+                        </div>
+                        <div className="text-xs text-muted tabular-nums mt-1">
+                          {row.status === 'new'
+                            ? <>สินค้าใหม่ · ป้าย ฿{Number(row.newProduct?.retail_price).toLocaleString()}</>
+                            : <>stock {currentStock} → {stockAfter}
+                                {typeof row.matchScore === 'number' && <> · มั่นใจ {Math.round(row.matchScore * 100)}%</>}
+                              </>}
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="air-stage__detail">
+                        <div className="air-stage__from-label">POS ในระบบ</div>
+                        <div className="font-mono text-base font-semibold text-[#0a5a32] break-words leading-snug">
+                          {posName}
+                        </div>
+                        <div className="text-xs text-muted tabular-nums mt-0.5">
+                          {row.status === 'new'
+                            ? <>สินค้าใหม่ · ป้าย ฿{Number(row.newProduct?.retail_price).toLocaleString()}</>
+                            : <>stock {currentStock} → {stockAfter}
+                                {typeof row.matchScore === 'number' && <> · มั่นใจ {Math.round(row.matchScore * 100)}%</>}
+                              </>}
+                        </div>
+                      </div>
+                    )}
 
-                    {softMatch && (
-                      <div className="text-xs text-amber-800 bg-amber-50/80 border border-amber-200/60 rounded-lg px-3 py-2 flex items-center gap-2">
-                        <Icon name="alert" size={14} className="shrink-0"/>
-                        ความมั่นใจ {Math.round(row.matchScore * 100)}% — ตรวจว่ารุ่นตรงไหม
-                      </div>
-                    )}
-                    {row.validationIssues?.includes('row_math_mismatch') && (
-                      <div className="text-xs text-amber-800 bg-amber-50/80 border border-amber-200/60 rounded-lg px-3 py-2 flex items-center gap-2">
-                        <Icon name="alert" size={14} className="shrink-0"/>
-                        {row.validationDetail || 'qty × ราคา ≠ จำนวนเงินบิล — ตรวจกับรูป'}
-                      </div>
-                    )}
-                    {row.needsReview && !row.validationIssues?.includes('row_math_mismatch') && (
-                      <div className="text-xs text-amber-800 bg-amber-50/80 border border-amber-200/60 rounded-lg px-3 py-2 flex items-center gap-2">
-                        <Icon name="alert" size={14} className="shrink-0"/>
-                        AI ไม่มั่นใจ — ตรวจรุ่นและตัวเลขกับรูปบิล
-                      </div>
-                    )}
+                    {rowWarnings}
 
+                    {!useWizardLayout && (
                     <div className="air-stage__footer-actions">
                       <button
                         type="button"
@@ -498,6 +654,7 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
                       >
                         <Icon name="refresh" size={15}/> เปลี่ยนรุ่น
                       </button>
+                      {showInlineNav && (
                       <button
                         type="button"
                         className="btn-primary air-stage__footer-btn !py-2.5 !text-sm"
@@ -505,14 +662,20 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
                       >
                         ตรวจจำนวน/ทุน <Icon name="chevron-r" size={14}/>
                       </button>
+                      )}
                     </div>
+                    )}
                   </>
                 ) : (
                   <>
-                    <div className="receive-match-step-callout">
-                      <Icon name="info" size={16} className="shrink-0"/>
-                      <span>เลือกรุ่น POS จากรายการใกล้เคียง หรือค้นหา/สร้างใหม่</span>
-                    </div>
+                    {useWizardLayout ? (
+                      <p className="text-xs text-muted">เลือกรุ่น POS จากรายการใกล้เคียง หรือค้นหา/สร้างใหม่</p>
+                    ) : (
+                      <div className="receive-match-step-callout">
+                        <Icon name="info" size={16} className="shrink-0"/>
+                        <span>เลือกรุ่น POS จากรายการใกล้เคียง หรือค้นหา/สร้างใหม่</span>
+                      </div>
+                    )}
 
                     {!showCreate && (
                       <>
@@ -658,12 +821,19 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
             {/* ── STEP: QTY / COST ────────────────────────── */}
             {activeStep === 'qtycost' && (
               <>
-                <div className="receive-match-step-callout receive-match-step-callout--edit">
-                  <Icon name="edit" size={16} className="shrink-0 text-[#0a7a43]"/>
-                  <span>ตรวจจำนวนและทุนให้ตรงกับบิล</span>
-                </div>
+                {!useWizardLayout && (
+                  <div className="receive-match-step-callout receive-match-step-callout--edit">
+                    <Icon name="edit" size={16} className="shrink-0 text-[#0a7a43]"/>
+                    <span>ตรวจจำนวนและทุนให้ตรงกับบิล</span>
+                  </div>
+                )}
 
-                {posName && (
+                {useWizardLayout && posName ? (
+                  <div className="text-xs text-muted">
+                    <span className="font-mono font-semibold text-ink">{posName}</span>
+                    {' · '}stock {currentStock} → {stockAfter}
+                  </div>
+                ) : posName ? (
                   <div className="air-stage__detail">
                     <div className="air-stage__from-label">สินค้า POS</div>
                     <div className="font-mono text-sm font-semibold text-[#0a5a32] break-words leading-snug">
@@ -682,12 +852,20 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
                       )}
                     </dl>
                   </div>
-                )}
+                ) : null}
 
                 {recentInfo && <RecentReceiveBadge info={recentInfo} />}
 
-                <QtyCostSection row={row} hasVat={hasVat} onUpdate={onUpdate} />
+                {useWizardLayout ? (
+                  <div className="rrm-work-section">
+                    <span className="rrm-work-section__label">จำนวนและทุน</span>
+                    <QtyCostSection row={row} hasVat={hasVat} onUpdate={onUpdate} />
+                  </div>
+                ) : (
+                  <QtyCostSection row={row} hasVat={hasVat} onUpdate={onUpdate} />
+                )}
 
+                {showInlineNav && (
                 <div className="flex items-center gap-2 mt-auto pt-2">
                   <button
                     type="button"
@@ -704,29 +882,50 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
                     {hasTiktokStep ? 'ไปจับ TikTok' : 'รายการถัดไป'} <Icon name="chevron-r" size={14}/>
                   </button>
                 </div>
+                )}
               </>
             )}
 
             {/* ── STEP: TIKTOK ────────────────────────────── */}
             {activeStep === 'tiktok' && hasTiktokStep && (
               <>
-                <div className="receive-match-step-callout air-tiktok-step-callout">
-                  <Icon name="store" size={16} className="shrink-0 text-[#6d28d9]"/>
-                  <span className="flex-1 min-w-0">จับคู่ TikTok SKU เพื่อตัดสต็อกฝั่ง TikTok</span>
-                  <label className="air-tiktok-minpct shrink-0">
-                    <span className="air-tiktok-minpct__label">candidate ≥</span>
-                    <select
-                      className="air-tiktok-minpct__select"
-                      value={tiktokMinPct}
-                      onChange={(e) => onTiktokMinPctChange?.(Number(e.target.value))}
-                      disabled={tiktokCatalogLoading}
-                    >
-                      {TIKTOK_MIN_PCT_OPTIONS.map((n) => (
-                        <option key={n} value={n}>{n}%</option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
+                {useWizardLayout ? (
+                  <div className="rrm-work-card__tiktok-head flex items-center gap-2 flex-wrap">
+                    <Icon name="store" size={16} className="shrink-0 text-[#6d28d9]"/>
+                    <span className="text-xs text-muted flex-1 min-w-0">จับคู่ TikTok SKU เพื่อตัดสต็อกฝั่ง TikTok</span>
+                    <label className="air-tiktok-minpct shrink-0">
+                      <span className="air-tiktok-minpct__label">candidate ≥</span>
+                      <select
+                        className="air-tiktok-minpct__select"
+                        value={tiktokMinPct}
+                        onChange={(e) => onTiktokMinPctChange?.(Number(e.target.value))}
+                        disabled={tiktokCatalogLoading}
+                      >
+                        {TIKTOK_MIN_PCT_OPTIONS.map((n) => (
+                          <option key={n} value={n}>{n}%</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                ) : (
+                  <div className="receive-match-step-callout air-tiktok-step-callout">
+                    <Icon name="store" size={16} className="shrink-0 text-[#6d28d9]"/>
+                    <span className="flex-1 min-w-0">จับคู่ TikTok SKU เพื่อตัดสต็อกฝั่ง TikTok</span>
+                    <label className="air-tiktok-minpct shrink-0">
+                      <span className="air-tiktok-minpct__label">candidate ≥</span>
+                      <select
+                        className="air-tiktok-minpct__select"
+                        value={tiktokMinPct}
+                        onChange={(e) => onTiktokMinPctChange?.(Number(e.target.value))}
+                        disabled={tiktokCatalogLoading}
+                      >
+                        {TIKTOK_MIN_PCT_OPTIONS.map((n) => (
+                          <option key={n} value={n}>{n}%</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                )}
 
                 {hasPos && (
                   <TikTokSkuMatchRow
@@ -753,6 +952,7 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
                   />
                 )}
 
+                {showInlineNav && (
                 <div className="flex items-center gap-2 mt-auto pt-2">
                   <button
                     type="button"
@@ -770,21 +970,92 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
                     รายการถัดไป <Icon name="chevron-r" size={14}/>
                   </button>
                 </div>
+                )}
               </>
             )}
+    </>
+  );
+
+  if (useWizardLayout) {
+    const secondaryAction =
+      activeStep === 'match' && !resolveMode && hasPos
+        ? { label: 'เปลี่ยนรุ่น', icon: 'refresh', onClick: () => setRematch(true) }
+        : null;
+
+    return (
+      <ReceiveReviewWorkCard
+        ref={ref}
+        rowIndex={rowIndex}
+        row={row}
+        hasVat={hasVat}
+        displayState={displayState}
+        duplicate={duplicate}
+        onRemove={onRemove}
+        tiktokCatalog={tiktokCatalog}
+        productImagesById={productImagesById}
+        secondaryAction={secondaryAction}
+        cardCls={displayState.cardCls}
+      >
+        {stepBodies}
+      </ReceiveReviewWorkCard>
+    );
+  }
+
+  return (
+    <div
+      ref={ref}
+      className={
+        'air-stage air-stage--' + layoutMode +
+        ' ttc-bento rounded-2xl border ttc-rl w-full ' +
+        displayState.cardCls
+      }
+      id="receive-match-workspace"
+    >
+      <div className="air-stage__grid">
+        <StageAside
+          rowIndex={rowIndex}
+          row={row}
+          hasVat={hasVat}
+          displayState={displayState}
+          duplicate={duplicate}
+          onRemove={onRemove}
+          tiktokCatalog={tiktokCatalog}
+          productImagesById={productImagesById}
+          compact={isMobile}
+        />
+
+        <div className="air-stage__main">
+          {billComplete && (
+            <div className="air-stage__main-top shrink-0">
+              <span className="air-status-chip air-status-chip--done ml-auto">
+                <Icon name="check" size={9}/> บิลนี้พร้อมบันทึก
+              </span>
+            </div>
+          )}
+          <StepIndicator
+            steps={steps}
+            activeStep={activeStep}
+            onGotoStep={setActiveStep}
+            segmented={isMobile}
+          />
+
+          <div className="air-stage__main-body">
+            {stepBodies}
           </div>
         </div>
       </div>
 
-      <WorkspaceFooter
-        rowIndex={rowIndex}
-        totalRows={totalRows}
-        hasPrevAttention={hasPrevAttention}
-        hasNextAttention={hasNextAttention}
-        onPrevAttention={onPrevAttention}
-        onNextAttention={onNextAttention}
-        attentionCount={attentionCount}
-      />
+      {!hideFooter && (
+        <WorkspaceFooter
+          rowIndex={rowIndex}
+          totalRows={totalRows}
+          hasPrevAttention={hasPrevAttention}
+          hasNextAttention={hasNextAttention}
+          onPrevAttention={onPrevAttention}
+          onNextAttention={onNextAttention}
+          attentionCount={attentionCount}
+        />
+      )}
     </div>
   );
 });

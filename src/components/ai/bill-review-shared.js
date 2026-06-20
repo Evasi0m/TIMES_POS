@@ -258,6 +258,11 @@ export function computeTiktokBillSummary(rows) {
   return { total, ready };
 }
 
+/** True when a row has no remaining review work (match, qty/cost, TikTok, flags). */
+export function isRowComplete(row, tiktokMirrorEnabled = false) {
+  return !rowNeedsAttention(row, tiktokMirrorEnabled);
+}
+
 export function rowNeedsAttention(row, tiktokMirrorEnabled = false) {
   if (!row) return false;
   const costIncomplete = !(Number(row.unit_cost) > 0);

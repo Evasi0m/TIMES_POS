@@ -2,6 +2,7 @@
 
 :root {
   --mobile-tabbar-h: 64px;
+  --mobile-page-band-h: 2.75rem;
   --mobile-clearance: calc(var(--mobile-tabbar-h) + env(safe-area-inset-bottom, 0px));
 }
 

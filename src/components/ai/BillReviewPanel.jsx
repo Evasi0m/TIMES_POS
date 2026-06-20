@@ -3,10 +3,12 @@
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../ui/Icon.jsx';
+import BottomSheet from '../ui/mobile/BottomSheet.jsx';
 import { classifyMatch, normalizeCode } from '../../lib/fuzzy-match.js';
 import { validateCmgBill } from '../../lib/cmg-bill-validate.js';
 import ReceiveMatchPanel from './ReceiveMatchPanel.jsx';
 import BillItemsListCard from './BillItemsListCard.jsx';
+import MobileReviewStepShell from './MobileReviewStepShell.jsx';
 import {
   computeRowSummary,
   computeTiktokBillSummary,
@@ -81,7 +83,7 @@ export function materializeParsedBill(parsed, catalog) {
 }
 
 function ItemStepper({
-  rows, activeUid, summary, tiktokMirrorEnabled, tiktokSummary, onSelect, onJumpAttention,
+  rows, activeUid, summary, tiktokMirrorEnabled, tiktokSummary, onSelect, onJumpAttention, onOpenAllItems,
 }) {
   const chipsRef = useRef(null);
 
@@ -105,6 +107,16 @@ function ItemStepper({
             <Icon name="store" size={11} className="shrink-0"/>
             {tiktokSummary.ready}/{tiktokSummary.total}
           </span>
+        )}
+        {onOpenAllItems && (
+          <button
+            type="button"
+            className="air-stepper__all-items lg:hidden"
+            onClick={onOpenAllItems}
+          >
+            <Icon name="menu" size={12}/>
+            รายการทั้งหมด
+          </button>
         )}
       </div>
 
@@ -134,7 +146,8 @@ function ItemStepper({
       {summary.attention > 0 && (
         <button type="button" className="air-stepper__jump" onClick={onJumpAttention}>
           <Icon name="alert" size={12} className="inline mr-1"/>
-          ไปที่ต้องแก้ ({summary.attention})
+          <span className="hidden lg:inline">ไปที่ต้องแก้ ({summary.attention})</span>
+          <span className="lg:hidden">แก้ที่ค้าง ({summary.attention})</span>
         </button>
       )}
     </div>
@@ -163,12 +176,29 @@ export default function BillReviewPanel({
   stocksByProductId = {},
   onTiktokRowMatch,
   productImagesById = {},
+  onMobileNavChange,
+  batchSummary = null,
+  submitting = false,
+  savingProgress = null,
+  onSubmit,
 }) {
   const wizardRef = useRef(null);
   const listCardRef = useRef(null);
   const stageRef = useRef(null);
+  const swipeRef = useRef({ x: 0, y: 0 });
   const [syncedCardHeight, setSyncedCardHeight] = useState(null);
   const [layoutMode, setLayoutMode] = useState('compact');
+  const [itemsSheetOpen, setItemsSheetOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const fn = () => setIsDesktop(mq.matches);
+    mq.addEventListener('change', fn);
+    return () => mq.removeEventListener('change', fn);
+  }, []);
 
   const summary = useMemo(
     () => computeRowSummary(rows, tiktokMirrorEnabled),
@@ -199,7 +229,6 @@ export default function BillReviewPanel({
     setBillComplete(summary.attention === 0 && summary.total > 0);
   }, [summary.attention, summary.total]);
 
-  // Auto-select first row needing attention when bill changes or rows load.
   useEffect(() => {
     if (!rows.length) {
       setActiveUid(null);
@@ -211,7 +240,6 @@ export default function BillReviewPanel({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [billKey, rows.length]);
 
-  // Keep selection valid if active row was deleted.
   useEffect(() => {
     if (!activeUid || rows.some((r) => r.uid === activeUid)) return;
     setActiveUid(rows[0]?.uid ?? null);
@@ -224,8 +252,11 @@ export default function BillReviewPanel({
     setLayoutMode(mode);
   }, []);
 
-  // CARD A height follows CARD B (master). B must stay content-sized (flex-start).
   useLayoutEffect(() => {
+    if (!isDesktop) {
+      setSyncedCardHeight(null);
+      return;
+    }
     const el = stageRef.current;
     if (!el) return;
     const sync = () => {
@@ -236,13 +267,16 @@ export default function BillReviewPanel({
     const ro = new ResizeObserver(sync);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [rows.length, activeUid, layoutMode, tiktokMirrorEnabled]);
+  }, [rows.length, activeUid, layoutMode, tiktokMirrorEnabled, isDesktop]);
 
   const listCardStyle = syncedCardHeight > 0
     ? { height: syncedCardHeight, maxHeight: syncedCardHeight, minHeight: syncedCardHeight }
     : { maxHeight: 'min(28rem, calc(100vh - 14rem))' };
 
-  const selectUid = useCallback((uid) => setActiveUid(uid), []);
+  const selectUid = useCallback((uid) => {
+    setActiveUid(uid);
+    setItemsSheetOpen(false);
+  }, []);
 
   const handlePick = useCallback((product) => {
     if (!activeUid) return;
@@ -274,7 +308,48 @@ export default function BillReviewPanel({
   const hasPrevAttention = prevIdx >= 0 && prevIdx !== activeIndex;
   const hasNextAttention = nextIdx >= 0 && nextIdx !== activeIndex;
 
-  // Keyboard: ←/→ (or ↑/↓) move between items.
+  const goPrevSequential = useCallback(() => {
+    if (activeIndex > 0) selectUid(rows[activeIndex - 1].uid);
+  }, [rows, activeIndex, selectUid]);
+
+  const goNextSequential = useCallback(() => {
+    if (activeIndex < rows.length - 1) selectUid(rows[activeIndex + 1].uid);
+  }, [rows, activeIndex, selectUid]);
+
+  const hasPrev = activeIndex > 0;
+  const hasNext = activeIndex < rows.length - 1;
+
+  useEffect(() => {
+    if (!isDesktop) return;
+    onMobileNavChange?.({
+      rowIndex: activeIndex,
+      totalRows: rows.length,
+      attentionCount: summary.attention,
+      hasPrev,
+      hasNext,
+      onPrev: goPrevSequential,
+      onNext: goNextSequential,
+      hasPrevAttention,
+      hasNextAttention,
+      onPrevAttention: goPrevAttention,
+      onNextAttention: goNextAttention,
+    });
+  }, [
+    activeIndex,
+    rows.length,
+    summary.attention,
+    hasPrev,
+    hasNext,
+    hasPrevAttention,
+    hasNextAttention,
+    goPrevSequential,
+    goNextSequential,
+    goPrevAttention,
+    goNextAttention,
+    onMobileNavChange,
+    isDesktop,
+  ]);
+
   useEffect(() => {
     const onKey = (e) => {
       const keys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
@@ -297,6 +372,18 @@ export default function BillReviewPanel({
     return () => window.removeEventListener('keydown', onKey);
   }, [rows, activeUid, selectUid]);
 
+  const handleSwipeStart = useCallback((e) => {
+    swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }, []);
+
+  const handleSwipeEnd = useCallback((e) => {
+    const dx = e.changedTouches[0].clientX - swipeRef.current.x;
+    const dy = e.changedTouches[0].clientY - swipeRef.current.y;
+    if (Math.abs(dx) < 48 || Math.abs(dy) > Math.abs(dx)) return;
+    if (dx < 0) goNextSequential();
+    else goPrevSequential();
+  }, [goNextSequential, goPrevSequential]);
+
   if (!rows.length) {
     return (
       <div className="py-10 text-center text-sm text-muted-soft">
@@ -310,6 +397,37 @@ export default function BillReviewPanel({
       ? recentReceivesMap.get(activeRow.product.id)
       : null;
 
+  if (!isDesktop) {
+    return (
+      <MobileReviewStepShell
+        rows={rows}
+        products={products}
+        recentReceivesMap={recentReceivesMap}
+        hasVat={hasVat}
+        onUpdateRow={onUpdateRow}
+        onRemoveRow={onRemoveRow}
+        onPickCandidate={onPickCandidate}
+        onSetNewProduct={onSetNewProduct}
+        tiktokMirrorEnabled={tiktokMirrorEnabled}
+        tiktokCatalog={tiktokCatalog}
+        tiktokCatalogLoading={tiktokCatalogLoading}
+        tiktokCatalogError={tiktokCatalogError}
+        onTiktokRetryCatalog={onTiktokRetryCatalog}
+        tiktokMinPct={tiktokMinPct}
+        onTiktokMinPctChange={onTiktokMinPctChange}
+        onTiktokRowMatch={onTiktokRowMatch}
+        productImagesById={productImagesById}
+        dupCodes={dupCodes}
+        billComplete={billComplete}
+        onNavSummaryChange={onMobileNavChange}
+        batchSummary={batchSummary}
+        submitting={submitting}
+        savingProgress={savingProgress}
+        onSubmit={onSubmit}
+      />
+    );
+  }
+
   return (
     <div className="air-wizard" ref={wizardRef}>
       <ItemStepper
@@ -320,11 +438,17 @@ export default function BillReviewPanel({
         tiktokSummary={tiktokSummary}
         onSelect={selectUid}
         onJumpAttention={jumpFirstAttention}
+        onOpenAllItems={() => setItemsSheetOpen(true)}
       />
 
-      <div className="air-wizard__workspace">
+      <div
+        className="air-wizard__workspace"
+        onTouchStart={handleSwipeStart}
+        onTouchEnd={handleSwipeEnd}
+      >
         <BillItemsListCard
           ref={listCardRef}
+          className="hidden lg:flex"
           style={listCardStyle}
           rows={rows}
           activeUid={activeUid}
@@ -352,6 +476,7 @@ export default function BillReviewPanel({
           hasPrevAttention={hasPrevAttention}
           hasNextAttention={hasNextAttention}
           attentionCount={summary.attention}
+          hideFooter={!isDesktop}
           tiktokMirrorEnabled={tiktokMirrorEnabled}
           tiktokCatalog={tiktokCatalog}
           tiktokCatalogLoading={tiktokCatalogLoading}
@@ -367,6 +492,20 @@ export default function BillReviewPanel({
           productImagesById={productImagesById}
         />
       </div>
+
+      <BottomSheet
+        open={itemsSheetOpen}
+        onClose={() => setItemsSheetOpen(false)}
+        title="รายการในบิล"
+      >
+        <BillItemsListCard
+          variant="sheet"
+          rows={rows}
+          activeUid={activeUid}
+          tiktokMirrorEnabled={tiktokMirrorEnabled}
+          onSelect={selectUid}
+        />
+      </BottomSheet>
     </div>
   );
 }

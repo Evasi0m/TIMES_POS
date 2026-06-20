@@ -37,6 +37,8 @@ import BulkBillUploadModal from './BulkBillUploadModal.jsx';
 import BillImageLightbox from './BillImageLightbox.jsx';
 import AIErrorCard, { parseAIError } from './AIErrorCard.jsx';
 import MacTerminal from '../ui/MacTerminal.jsx';
+import BottomSheet from '../ui/mobile/BottomSheet.jsx';
+import { collectBillAlerts, BILL_STATUS_LABELS, BILL_STATUS_CHIP_CLS } from './bill-card-alerts.js';
 import {
   deriveParsingSteps,
   makeLogLine,
@@ -61,7 +63,7 @@ import {
   msgTraceLines,
   msgWaitingDetail,
 } from './parse-activity-log.js';
-import { enrichTiktokMappingFromCatalog } from './bill-review-shared.js';
+import { enrichTiktokMappingFromCatalog, computeRowSummary } from './bill-review-shared.js';
 import { useRecentReceivesMap, findExistingCmgInvoices } from '../../lib/recent-receives.js';
 import { saveDraft, loadDraft, clearDraft, base64ToBlob } from '../../lib/ai-draft.js';
 import { useTikTokMirrorCatalog } from '../../hooks/useTikTokMirrorCatalog.js';
@@ -74,6 +76,7 @@ import {
   mirrorStockToTikTok,
   persistTiktokMatchMapping,
 } from '../../lib/tiktok-inventory-sync.js';
+import { flushDraftNow, resolveMobileBackAction } from './bulk-receive-mobile-back.js';
 
 const AI_PARSE_CHUNK_SIZE = 1;
 
@@ -175,8 +178,8 @@ const STEP_STATUS_META = {
 };
 
 // ─── Main component ───────────────────────────────────────────────────
-export default function BulkReceiveView({ toast }) {
-  const [phase, setPhase] = useState('empty'); // empty | parsing | review | done
+export default function BulkReceiveView({ toast, onPhaseChange }) {
+  const [phase, setPhase] = useState('empty'); // empty | parsing | review | review_paused | done
   // Duplicate-bill guard — same hook as StockMovementForm uses.
   // Loads once on mount; powers the small "พึ่งรับ X วันก่อน" badge on
   // RowCards whose AI-matched product was already received in the
@@ -260,6 +263,10 @@ export default function BulkReceiveView({ toast }) {
   }, [stopWaitTicker]);
 
   useEffect(() => () => stopWaitTicker(), [stopWaitTicker]);
+
+  useEffect(() => {
+    onPhaseChange?.(phase);
+  }, [phase, onPhaseChange]);
 
   useEffect(() => {
     let cancelled = false;
@@ -437,16 +444,14 @@ export default function BulkReceiveView({ toast }) {
     if (phase !== 'review' || bills.length === 0) return;
     if (draftTimer.current) clearTimeout(draftTimer.current);
     draftTimer.current = setTimeout(() => {
-      // Strip the ObjectURL (regenerated from base64 on restore).
-      const slim = bills.map(({ previewUrl, ...rest }) => rest); // eslint-disable-line no-unused-vars
-      saveDraft({ bills: slim, currentIdx, usage });
+      flushDraftNow(bills, currentIdx, usage);
     }, 800);
     return () => { if (draftTimer.current) clearTimeout(draftTimer.current); };
   }, [bills, currentIdx, usage, phase]);
 
   // ─── C2: warn before unloading the tab with unsaved bills ──────────
   useEffect(() => {
-    const dirty = phase === 'review' && bills.some(
+    const dirty = (phase === 'review' || phase === 'review_paused') && bills.some(
       (b) => b.is_cmg_bill && b.rows.length > 0 && b.saveState !== 'saved'
     );
     if (!dirty) return;
@@ -1200,6 +1205,16 @@ export default function BulkReceiveView({ toast }) {
     clearDraft();
   };
 
+  const pauseReview = useCallback(() => {
+    if (draftTimer.current) clearTimeout(draftTimer.current);
+    flushDraftNow(bills, currentIdx, usage);
+    setPhase('review_paused');
+  }, [bills, currentIdx, usage]);
+
+  const resumeReview = useCallback(() => {
+    setPhase('review');
+  }, []);
+
   // ═══ RENDER ═══════════════════════════════════════════════════════
   return (
     <div className="space-y-4">
@@ -1252,6 +1267,17 @@ export default function BulkReceiveView({ toast }) {
         </div>
       )}
 
+      {/* PHASE: REVIEW_PAUSED — exit focus mode, keep bills in memory */}
+      {phase === 'review_paused' && bills.length > 0 && (
+        <ReviewPausedCard
+          bills={bills}
+          summary={summary}
+          tiktokMirrorOn={tiktokMirrorOn}
+          onResume={resumeReview}
+          onDiscard={resetBatch}
+        />
+      )}
+
       {/* PHASE: EMPTY — landing screen with the big upload button */}
       {phase === 'empty' && (
         <EmptyLanding
@@ -1293,6 +1319,7 @@ export default function BulkReceiveView({ toast }) {
           onRemoveBill={removeCurrentBill}
           onSubmitAll={submitAll}
           onCancel={resetBatch}
+          onPauseReview={pauseReview}
           dupInvoices={dupInvoices}
           onZoom={setLightboxSrc}
           onSetAllVat={setAllVat}
@@ -1349,6 +1376,66 @@ export default function BulkReceiveView({ toast }) {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Sub: paused review (mobile back from list) ───────────────────────
+function ReviewPausedCard({ bills, summary, tiktokMirrorOn, onResume, onDiscard }) {
+  const rowProgress = useMemo(() => {
+    let total = 0;
+    let done = 0;
+    for (const b of bills) {
+      const s = computeRowSummary(b.rows || [], tiktokMirrorOn);
+      total += s.total;
+      done += s.done;
+    }
+    return { total, done };
+  }, [bills, tiktokMirrorOn]);
+
+  const handleDiscard = () => {
+    if (!window.confirm(`ยกเลิก ${bills.length} บิลที่ยังไม่ได้บันทึก?`)) return;
+    onDiscard?.();
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="card-canvas p-4 border-l-4 border-l-primary">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center flex-shrink-0">
+            <Icon name="file" size={18} className="text-primary"/>
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-base font-semibold text-ink">
+              งานตรวจรับค้างอยู่ {bills.length} บิล
+            </div>
+            <div className="text-xs text-muted-soft mt-1 tabular-nums">
+              รายการตรวจแล้ว {rowProgress.done}/{rowProgress.total}
+              {summary.blocked > 0 && (
+                <span className="text-warning"> · เหลือแก้ {summary.blocked} บิล</span>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2 flex-wrap mt-3">
+          {bills.map((b, i) => (
+            <div key={b.uid} className="relative w-14 h-18 rounded-md overflow-hidden border hairline bg-surface-soft">
+              {b.previewUrl
+                ? <img src={b.previewUrl} alt={`bill ${i + 1}`} className="w-full h-full object-cover"/>
+                : <div className="w-full h-full flex items-center justify-center text-muted-soft text-xs">{i + 1}</div>}
+              <div className="absolute top-0.5 left-0.5 ai-row-badge !w-5 !h-5 !text-[10px]">{i + 1}</div>
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2 mt-4">
+          <button type="button" className="btn-primary flex-1 !py-2.5" onClick={onResume}>
+            <Icon name="chevron-r" size={16}/> กลับไปตรวจต่อ
+          </button>
+          <button type="button" className="btn-ghost flex-1 !py-2.5 text-error" onClick={handleDiscard}>
+            ยกเลิกและลบงาน
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1535,11 +1622,79 @@ function ParsingScreen({ bills, progress, logs, activeLine, isActive }) {
   );
 }
 
+// ─── Sub: review overflow menu (mobile) ───────────────────────────────
+function ReviewOverflowSheet({
+  open, onClose, current, billNumber, totalBills, bills, currentIdx,
+  supplierName, disabled, onZoom, onSelectBill, onOpenSettings,
+  tiktokConnected, syncTikTokAfterReceive, onSyncTikTokChange,
+  onSetAllVat, submitting, onCancelAll,
+}) {
+  const allVat = (bills || []).length > 0 && bills.every((b) => b.has_vat !== false);
+  return (
+    <BottomSheet open={open} onClose={onClose} title="ตัวเลือก">
+      <div className="brv-overflow-menu space-y-1 p-1">
+        <button
+          type="button"
+          className="brv-overflow-menu__row"
+          onClick={() => { current?.previewUrl && onZoom?.(current.previewUrl); onClose(); }}
+          disabled={!current?.previewUrl}
+        >
+          <Icon name="search" size={16}/> ดูรูปบิล
+        </button>
+        {totalBills > 1 && (
+          <button
+            type="button"
+            className="brv-overflow-menu__row"
+            onClick={() => { onSelectBill?.(); onClose(); }}
+          >
+            <Icon name="file" size={16}/> เลือกบิล ({currentIdx + 1}/{totalBills})
+          </button>
+        )}
+        <button
+          type="button"
+          className="brv-overflow-menu__row"
+          onClick={() => { onOpenSettings?.(); onClose(); }}
+        >
+          <Icon name="settings" size={16}/> ตั้งค่าบิลที่ {billNumber}
+        </button>
+        {tiktokConnected && (
+          <label className="brv-overflow-menu__row brv-overflow-menu__row--check">
+            <input
+              type="checkbox"
+              className="rounded border-hairline"
+              checked={syncTikTokAfterReceive}
+              onChange={(e) => onSyncTikTokChange?.(e.target.checked)}
+              disabled={submitting}
+            />
+            <span>Mirror สต็อกไป TikTok Shop</span>
+          </label>
+        )}
+        <button
+          type="button"
+          className="brv-overflow-menu__row"
+          onClick={() => onSetAllVat?.(!allVat)}
+          disabled={submitting || !(bills || []).length}
+        >
+          <Icon name="edit" size={16}/> VAT ทั้งชุด {allVat ? '✓' : ''}
+        </button>
+        <button
+          type="button"
+          className="brv-overflow-menu__row brv-overflow-menu__row--destructive"
+          onClick={() => { onClose(); onCancelAll?.(); }}
+          disabled={submitting}
+        >
+          <Icon name="trash" size={16}/> ยกเลิกงานทั้งหมด
+        </button>
+      </div>
+    </BottomSheet>
+  );
+}
+
 // ─── Sub: review wizard ───────────────────────────────────────────────
 function ReviewWizard({
   bills, currentIdx, setCurrentIdx, products, recentReceivesMap, usage, summary, submitting,
   onUpdateRow, onRemoveRow, onPickCandidate, onSetNewProduct,
-  onInvoiceNoChange, onHasVatChange, onRemoveBill, onSubmitAll, onCancel,
+  onInvoiceNoChange, onHasVatChange, onRemoveBill, onSubmitAll, onCancel, onPauseReview,
   dupInvoices, onZoom, onSetAllVat, savingProgress, supplierName,
   tiktokConnected, syncTikTokAfterReceive, onSyncTikTokChange,
   tiktokMirrorOn, tiktokCatalog, tiktokCatalogLoading, tiktokCatalogError,
@@ -1552,11 +1707,41 @@ function ReviewWizard({
   const currentDup = current?.supplier_invoice_no
     ? dupInvoices?.get(current.supplier_invoice_no.trim())
     : null;
+  const [billPickerOpen, setBillPickerOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const [mobileNav, setMobileNav] = useState(null);
+
+  useEffect(() => {
+    setSettingsOpen(false);
+    setOverflowOpen(false);
+  }, [current?.uid]);
+
+  const handleCancel = () => {
+    if (bills.length > 0 && !submitting) {
+      if (!window.confirm(`ยกเลิก ${bills.length} บิลที่ยังไม่ได้บันทึก?`)) return;
+    }
+    onCancel();
+  };
+
+  const handleMobileBack = () => {
+    if (submitting) return;
+    const nav = mobileNav;
+    const action = resolveMobileBackAction({
+      macroStep: nav?.macroStep || 'list',
+      wizardCanBack: nav?.wizardCanBack,
+    });
+    if (action === 'wizardBack') nav?.wizardBack?.();
+    else if (action === 'goToList') nav?.goToList?.();
+    else onPauseReview?.();
+  };
+
+  const billDisabled = current?.saveState === 'saved' || submitting;
 
   return (
-    <div className="space-y-4">
-      {/* Top bar: title + summary chips + cancel */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+    <div className="brv-mobile-review lg:space-y-4">
+      {/* Desktop top bar */}
+      <div className="hidden lg:flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2.5 min-w-0">
           <span className="ai-chip">AI</span>
           <div className="font-display text-xl truncate">รับเข้า ×10 — Review</div>
@@ -1567,40 +1752,66 @@ function ReviewWizard({
               {usage.total_tokens.toLocaleString()} tokens · ≈{fmtTHB(usage.estimated_thb)}
             </div>
           )}
-          {/* H1: "+ เพิ่มบิล" removed — the old wiring re-ran
-              startUpload() which silently wiped the in-progress
-              batch. True append-and-reparse isn't implemented; the
-              user can finish this batch and start another from the
-              done summary. */}
-          <button
-            type="button"
-            className="btn-ghost text-sm"
-            onClick={() => {
-              // M5: explicit confirm before destroying an in-progress batch.
-              if (bills.length > 0 && !submitting) {
-                if (!window.confirm(`ยกเลิก ${bills.length} บิลที่ยังไม่ได้บันทึก?`)) return;
-              }
-              onCancel();
-            }}
-            disabled={submitting}
-          >
+          <button type="button" className="btn-ghost text-sm" onClick={handleCancel} disabled={submitting}>
             ยกเลิกทั้งหมด
           </button>
         </div>
       </div>
 
-      {/* Stepper — click any bill to jump to it */}
-      <Stepper
-        bills={bills}
-        currentIdx={currentIdx}
-        onJump={(i) => setCurrentIdx(i)}
-        mirrorOn={tiktokMirrorOn}
-      />
+      {/* Mobile lean header (Step Wizard B) */}
+      <div className="brv-mobile-review__top mrs-header lg:hidden">
+        <div className="brv-mobile-review__top-row">
+          <button
+            type="button"
+            className="btn-secondary icon-btn-44 !p-0 shrink-0"
+            onClick={handleMobileBack}
+            disabled={submitting}
+            aria-label="กลับ"
+          >
+            <Icon name="chevron-l" size={18}/>
+          </button>
+          <div className="min-w-0 flex-1 text-center">
+            <div className="text-sm font-semibold text-ink tabular-nums">
+              {mobileNav?.macroStep === 'work' && mobileNav?.totalRows > 0
+                ? <>รายการ {mobileNav.rowIndex + 1}/{mobileNav.totalRows}</>
+                : <>ตรวจรับบิล</>}
+              {mobileNav?.attentionCount > 0 && (
+                <span className="text-warning font-semibold text-xs ml-1">
+                  · เหลือ {mobileNav.attentionCount}
+                </span>
+              )}
+            </div>
+            {mobileNav?.macroStep === 'work' && mobileNav?.totalRows > 0 && (
+              <div className="text-[11px] text-muted-soft truncate mt-0.5">
+                จับคู่และตรวจรายการทีละชิ้น
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            className="btn-secondary icon-btn-44 !p-0 shrink-0"
+            onClick={() => setOverflowOpen(true)}
+            aria-label="ตัวเลือกเพิ่มเติม"
+          >
+            <Icon name="menu" size={18}/>
+          </button>
+        </div>
+      </div>
 
-      {/* Current bill card */}
-      {current && (
-        <BillCard
-          bill={current}
+      <div className="brv-mobile-review__scroll">
+        <div className="hidden lg:block">
+          <Stepper
+            bills={bills}
+            currentIdx={currentIdx}
+            onJump={(i) => setCurrentIdx(i)}
+            mirrorOn={tiktokMirrorOn}
+          />
+        </div>
+
+        {current && (
+          <BillCard
+            key={current.uid}
+            bill={current}
           billNumber={currentIdx + 1}
           totalBills={bills.length}
           products={products}
@@ -1614,7 +1825,7 @@ function ReviewWizard({
           onInvoiceNoChange={onInvoiceNoChange}
           onHasVatChange={onHasVatChange}
           onRemoveBill={onRemoveBill}
-          disabled={current.saveState === 'saved' || submitting}
+          disabled={billDisabled}
           supplierName={supplierName}
           tiktokMirrorEnabled={tiktokMirrorOn}
           tiktokCatalog={tiktokCatalog}
@@ -1627,12 +1838,17 @@ function ReviewWizard({
           stocksByProductId={stocksByProductId}
           onTiktokRowMatch={onTiktokRowMatch}
           productImagesById={productImagesById}
+          onMobileNavChange={setMobileNav}
+          mobileMacroStep={mobileNav?.macroStep ?? 'list'}
+          batchSummary={summary}
+          submitting={submitting}
+          savingProgress={savingProgress}
+          onSubmit={onSubmitAll}
         />
       )}
 
-      {/* Navigation buttons — only when reviewing multiple bills */}
       {bills.length > 1 && (
-        <div className="flex items-center justify-between gap-2">
+        <div className="hidden lg:flex items-center justify-between gap-2">
           <button
             type="button"
             className="btn-secondary"
@@ -1655,19 +1871,157 @@ function ReviewWizard({
         </div>
       )}
 
-      {/* Submit bar */}
-      <SubmitBar
-        summary={summary}
-        submitting={submitting}
-        savingProgress={savingProgress}
+        <div className="hidden lg:block">
+          <SubmitBar
+            summary={summary}
+            submitting={submitting}
+            savingProgress={savingProgress}
+            bills={bills}
+            onSetAllVat={onSetAllVat}
+            onSubmit={onSubmitAll}
+            tiktokConnected={tiktokConnected}
+            syncTikTokAfterReceive={syncTikTokAfterReceive}
+            onSyncTikTokChange={onSyncTikTokChange}
+          />
+        </div>
+      </div>
+
+      <BillPickerSheet
+        open={billPickerOpen}
+        onClose={() => setBillPickerOpen(false)}
         bills={bills}
-        onSetAllVat={onSetAllVat}
-        onSubmit={onSubmitAll}
+        currentIdx={currentIdx}
+        mirrorOn={tiktokMirrorOn}
+        onSelect={(i) => { setCurrentIdx(i); setBillPickerOpen(false); }}
+      />
+      {current && (
+        <BillSettingsSheet
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          bill={current}
+          billNumber={currentIdx + 1}
+          supplierName={supplierName}
+          disabled={billDisabled}
+          onInvoiceNoChange={onInvoiceNoChange}
+          onHasVatChange={onHasVatChange}
+          onRemoveBill={onRemoveBill}
+        />
+      )}
+      <ReviewOverflowSheet
+        open={overflowOpen}
+        onClose={() => setOverflowOpen(false)}
+        current={current}
+        billNumber={currentIdx + 1}
+        totalBills={bills.length}
+        bills={bills}
+        currentIdx={currentIdx}
+        supplierName={supplierName}
+        disabled={billDisabled}
+        onZoom={onZoom}
+        onSelectBill={() => setBillPickerOpen(true)}
+        onOpenSettings={() => setSettingsOpen(true)}
         tiktokConnected={tiktokConnected}
         syncTikTokAfterReceive={syncTikTokAfterReceive}
         onSyncTikTokChange={onSyncTikTokChange}
+        onSetAllVat={onSetAllVat}
+        submitting={submitting}
+        onCancelAll={handleCancel}
       />
     </div>
+  );
+}
+
+// ─── Sub: bill picker bottom sheet (mobile) ───────────────────────────
+function BillPickerSheet({ open, onClose, bills, currentIdx, mirrorOn, onSelect }) {
+  return (
+    <BottomSheet open={open} onClose={onClose} title="เลือกบิล">
+      <ul className="brv-bill-picker-list">
+        {bills.map((b, i) => {
+          const status = billStatus(b, mirrorOn);
+          const meta = STEP_STATUS_META[status];
+          const label = BILL_STATUS_LABELS[status] || status;
+          const isCurrent = i === currentIdx;
+          const inv = b.supplier_invoice_no?.trim() || `บิล ${i + 1}`;
+          return (
+            <li key={b.uid}>
+              <button
+                type="button"
+                className={'brv-bill-picker-list__row' + (isCurrent ? ' is-current' : '')}
+                onClick={() => onSelect(i)}
+              >
+                <div className="brv-bill-picker-list__thumb">
+                  {b.previewUrl
+                    ? <img src={b.previewUrl} alt="" className="w-full h-full object-cover"/>
+                    : <Icon name="file" size={16} className="text-muted-soft"/>}
+                  <span className="brv-bill-picker-list__idx">{i + 1}</span>
+                </div>
+                <div className="min-w-0 flex-1 text-left">
+                  <div className="font-mono text-sm font-semibold truncate">{inv}</div>
+                  <div className="text-[11px] text-muted-soft tabular-nums">
+                    {b.rows.length} รายการ
+                    {b.saveState === 'saved' && <> · #{b.savedOrderId}</>}
+                  </div>
+                </div>
+                <span className={'brv-bill-picker-list__chip inline-flex items-center gap-1 ' + (BILL_STATUS_CHIP_CLS[status] || '')}>
+                  <Icon name={meta.icon} size={10} className={meta.spin ? 'animate-spin' : ''}/>
+                  {label}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </BottomSheet>
+  );
+}
+
+// ─── Sub: bill settings bottom sheet (mobile) ─────────────────────────
+function BillSettingsSheet({
+  open, onClose, bill, billNumber, supplierName, disabled,
+  onInvoiceNoChange, onHasVatChange, onRemoveBill,
+}) {
+  return (
+    <BottomSheet open={open} onClose={onClose} title={`ตั้งค่าบิลที่ ${billNumber}`}>
+      <div className="brv-bill-settings space-y-3 p-1">
+        <label className="brv-bill-field">
+          <span className="brv-bill-field__label">เลขบิล</span>
+          <input
+            type="text"
+            className="input brv-bill-field__input font-mono"
+            value={bill.supplier_invoice_no}
+            onChange={(e) => onInvoiceNoChange(e.target.value)}
+            placeholder="เว้นว่างเพื่อสร้างอัตโนมัติ"
+            disabled={disabled}
+          />
+        </label>
+        <div className="brv-bill-field">
+          <span className="brv-bill-field__label">ผู้ขาย</span>
+          <div className="brv-bill-field__static">{supplierName || 'CMG'}</div>
+        </div>
+        <label className="brv-bill-field brv-bill-field--vat">
+          <span className="brv-bill-field__label">VAT</span>
+          <div className="brv-bill-field__vat">
+            <input
+              type="checkbox"
+              className="rounded border-hairline text-primary focus:ring-primary/30 w-3.5 h-3.5 cursor-pointer shrink-0"
+              checked={bill.has_vat !== false}
+              onChange={(e) => onHasVatChange?.(e.target.checked)}
+              disabled={disabled}
+            />
+            <span className="vat-chip shrink-0">+7%</span>
+            <span className="brv-bill-field__vat-hint">สแกนราคาก่อน VAT</span>
+          </div>
+        </label>
+        <button
+          type="button"
+          className="btn-ghost w-full !py-2 !text-sm text-error"
+          onClick={() => { onRemoveBill(); onClose(); }}
+          disabled={disabled}
+        >
+          <Icon name="trash" size={15}/> ลบบิลนี้
+        </button>
+      </div>
+    </BottomSheet>
   );
 }
 
@@ -1707,6 +2061,63 @@ function Stepper({ bills, currentIdx, onJump, mirrorOn = false }) {
 }
 
 // ─── Sub: current bill card (thumbnail + invoice + review panel) ──────
+function BillCardMobileStrip({
+  bill, billNumber, totalBills, itemCount, supplierName,
+  onInvoiceNoChange, onHasVatChange, onRemoveBill, disabled,
+  tiktokMirrorEnabled,
+}) {
+  const status = billStatus(bill, tiktokMirrorEnabled);
+  const statusLabel = BILL_STATUS_LABELS[status] || status;
+  const statusChip = BILL_STATUS_CHIP_CLS[status] || '';
+
+  return (
+    <div className="rrm-bill-strip card-canvas lg:hidden space-y-2.5">
+      <div className="flex items-center gap-2 min-w-0 flex-wrap">
+        <input
+          type="text"
+          className="input font-mono flex-1 min-w-[6.5rem] !h-9 !py-1 !text-sm"
+          value={bill.supplier_invoice_no}
+          onChange={(e) => onInvoiceNoChange(e.target.value)}
+          placeholder="เลขบิล"
+          disabled={disabled}
+          aria-label="เลขบิล"
+        />
+        <span className="rrm-bill-strip__pill tabular-nums">
+          บิล {billNumber}/{totalBills}
+        </span>
+        {itemCount > 0 && (
+          <span className="rrm-bill-strip__pill tabular-nums">{itemCount} รายการ</span>
+        )}
+        <span className={'rrm-bill-strip__pill tabular-nums ' + statusChip}>{statusLabel}</span>
+        <button
+          type="button"
+          className="rrm-bill-strip__icon-btn shrink-0"
+          onClick={onRemoveBill}
+          disabled={disabled}
+          aria-label={`ลบบิลที่ ${billNumber}`}
+        >
+          <Icon name="trash" size={16}/>
+        </button>
+      </div>
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="rrm-bill-strip__supplier flex-1" title={supplierName || 'CMG'}>
+          {supplierName || 'CMG'}
+        </span>
+        <label className="rrm-bill-strip__vat shrink-0">
+          <input
+            type="checkbox"
+            className="rounded border-hairline text-primary focus:ring-primary/30 w-3.5 h-3.5 cursor-pointer shrink-0"
+            checked={bill.has_vat !== false}
+            onChange={(e) => onHasVatChange?.(e.target.checked)}
+            disabled={disabled}
+          />
+          <span className="vat-chip shrink-0">VAT +7%</span>
+        </label>
+      </div>
+    </div>
+  );
+}
+
 function BillCard({
   bill, billNumber, totalBills, products, recentReceivesMap, dup, onZoom,
   onUpdateRow, onRemoveRow, onPickCandidate, onSetNewProduct,
@@ -1722,32 +2133,46 @@ function BillCard({
   stocksByProductId = {},
   onTiktokRowMatch,
   productImagesById = {},
+  onMobileNavChange,
+  mobileMacroStep = 'list',
+  batchSummary = null,
+  submitting = false,
+  savingProgress = null,
+  onSubmit,
 }) {
   const itemCount = bill.rows.length;
-  const unresolved = bill.rows.filter((r) => r.status === 'suggestions' || r.status === 'none').length;
-  const isNonCmg = !bill.is_cmg_bill;
-  const isEmpty = bill.rows.length === 0;
-  // H3: rows where AI couldn't read qty or cost (returned 0 per prompt
-  // rule #5). Distinct from "unresolved" because the product itself is
-  // identified — the user just needs to type in the missing number.
-  const incompleteRows = (!isNonCmg && !isEmpty && unresolved === 0)
-    ? bill.rows.filter((r) => !(Number(r.unit_cost) > 0) || !(Number(r.quantity) > 0)).length
-    : 0;
-  // B1: rows the AI itself flagged as uncertain — informational (doesn't
-  // block submit), nudges the user to eyeball them against the image.
-  const reviewRows = (!isNonCmg && !isEmpty)
-    ? bill.rows.filter((r) => r.needsReview).length
-    : 0;
-  const validationBillWarnings = bill.validation?.bill?.warnings?.length || 0;
-  const validationRowIssues = bill.validation?.rows?.length || 0;
+  const [alertsOpen, setAlertsOpen] = useState(false);
+
+  const alerts = useMemo(
+    () => collectBillAlerts(bill, { dup, tiktokMirrorEnabled, onZoom }),
+    [bill, dup, tiktokMirrorEnabled, onZoom],
+  );
+  const topAlert = alerts[0] || null;
+  const moreAlerts = alerts.length > 1 ? alerts.slice(1) : [];
+  const saveFailedAlert = topAlert?.key === 'save-failed' ? topAlert : null;
 
   return (
     <div className="brv-bill-card ttc-bento rounded-2xl border overflow-hidden">
       <header className="brv-bill-head">
+        {mobileMacroStep !== 'work' && (
+          <BillCardMobileStrip
+            bill={bill}
+            billNumber={billNumber}
+            totalBills={totalBills}
+            itemCount={itemCount}
+            supplierName={supplierName}
+            onInvoiceNoChange={onInvoiceNoChange}
+            onHasVatChange={onHasVatChange}
+            onRemoveBill={onRemoveBill}
+            disabled={disabled}
+            tiktokMirrorEnabled={tiktokMirrorEnabled}
+          />
+        )}
+
         <button
           type="button"
           onClick={() => bill.previewUrl && onZoom?.(bill.previewUrl)}
-          className="brv-bill-head__thumb group"
+          className="brv-bill-head__thumb group hidden lg:block"
           aria-label="ดูรูปบิลแบบขยาย"
         >
           <img
@@ -1761,7 +2186,7 @@ function BillCard({
           </span>
         </button>
 
-        <div className="brv-bill-head__top">
+        <div className="brv-bill-head__top hidden lg:flex">
           <h2 className="brv-bill-head__title">บิลที่ {billNumber} / {totalBills}</h2>
           {itemCount > 0 && (
             <span className="brv-bill-head__count tabular-nums">{itemCount} รายการ</span>
@@ -1778,7 +2203,7 @@ function BillCard({
           )}
         </div>
 
-        <div className="brv-bill-head__actions">
+        <div className="brv-bill-head__actions hidden lg:flex">
           <button
             type="button"
             className="brv-bill-head__delete"
@@ -1790,7 +2215,7 @@ function BillCard({
           </button>
         </div>
 
-        <div className="brv-bill-head__meta">
+        <div className="brv-bill-head__meta hidden lg:grid">
           <label className="brv-bill-field">
             <span className="brv-bill-field__label">เลขบิล</span>
             <input
@@ -1824,97 +2249,60 @@ function BillCard({
           </label>
         </div>
 
-          {(dup || isNonCmg || isEmpty || unresolved > 0 || incompleteRows > 0 || reviewRows > 0 || validationBillWarnings > 0 || validationRowIssues > 0 || bill.saveState === 'failed') && (
-            <div className="brv-bill-head__alerts">
-          {dup && (
-            <div className="brv-bill-alert brv-bill-alert--error">
-              <Icon name="alert" size={12}/>
-              เลขบิลนี้เคยรับเข้าแล้ว (#{dup.id}
-              {dup.date ? ` · ${new Date(dup.date).toLocaleDateString('th-TH', { day: '2-digit', month: 'short' })}` : ''})
-              — ตรวจก่อนบันทึกซ้ำ
-            </div>
-          )}
-          {/* Per-bill status banner */}
-          {isNonCmg && (
-            <div className="brv-bill-alert brv-bill-alert--error">
-              <Icon name="alert" size={12}/>
-              AI บอกว่ารูปนี้ไม่ใช่บิล CMG — บิลนี้จะถูกข้ามตอนบันทึก
-            </div>
-          )}
-          {!isNonCmg && isEmpty && (
-            <div className="brv-bill-alert brv-bill-alert--warn">
-              <Icon name="alert" size={12}/>
-              อ่านรายการไม่ได้ — ลบบิลนี้แล้วถ่ายใหม่
-            </div>
-          )}
-          {!isNonCmg && !isEmpty && unresolved > 0 && (
-            <div className="brv-bill-alert brv-bill-alert--warn">
-              <Icon name="alert" size={12}/>
-              เหลือ {unresolved} รายการที่ต้อง resolve
-            </div>
-          )}
-          {incompleteRows > 0 && (
-            <div className="brv-bill-alert brv-bill-alert--warn">
-              <Icon name="alert" size={12}/>
-              เหลือ {incompleteRows} รายการที่ AI อ่าน ทุน/จำนวน ไม่ออก — กรอกให้ครบก่อนบันทึก
-            </div>
-          )}
-          {tiktokMirrorEnabled && !isNonCmg && !isEmpty && unresolved === 0 && incompleteRows === 0 && (() => {
-            const tiktokLeft = bill.rows.filter(r => {
-              const hasPos = r.product || (r.status === 'new' && r.newProduct);
-              return hasPos && !r.tiktok_skip && !isTikTokLineReady(r);
-            }).length;
-                return tiktokLeft > 0 ? (
-                  <div className="brv-bill-alert brv-bill-alert--warn">
-                <Icon name="store" size={12}/>
-                เหลือ {tiktokLeft} รายการที่ต้องจับคู่ TikTok
+        {saveFailedAlert && (
+          <div className="brv-bill-head__alerts">
+            <AIErrorCard error={parseAIError(saveFailedAlert.saveError)} compact/>
+          </div>
+        )}
+
+        {topAlert && topAlert.key !== 'save-failed' && (
+          <div className="brv-bill-head__alerts">
+            {topAlert.onClick ? (
+              <button
+                type="button"
+                onClick={topAlert.onClick}
+                className={'brv-bill-alert brv-bill-alert--' + topAlert.severity + ' brv-bill-alert--click w-full'}
+              >
+                <Icon name="alert" size={12}/>
+                {topAlert.message}
+              </button>
+            ) : (
+              <div className={'brv-bill-alert brv-bill-alert--' + topAlert.severity}>
+                <Icon name="alert" size={12}/>
+                {topAlert.message}
               </div>
-            ) : null;
-          })()}
-          {validationBillWarnings > 0 && (
-            <button
-              type="button"
-              onClick={() => bill.previewUrl && onZoom?.(bill.previewUrl)}
-              className="brv-bill-alert brv-bill-alert--warn brv-bill-alert--click"
-            >
-              <Icon name="alert" size={12}/>
-              ผลรวมบิลไม่ตรง footer ({validationBillWarnings} จุด) — แตะดูรูปเทียบ
-            </button>
-          )}
-          {validationRowIssues > 0 && (
-            <button
-              type="button"
-              onClick={() => bill.previewUrl && onZoom?.(bill.previewUrl)}
-              className="brv-bill-alert brv-bill-alert--warn brv-bill-alert--click"
-            >
-              <Icon name="alert" size={12}/>
-              {validationRowIssues} แถวเลขไม่ตรงบิล — แตะดูรูปเทียบ
-            </button>
-          )}
-          {reviewRows > 0 && (
-            <button
-              type="button"
-              onClick={() => bill.previewUrl && onZoom?.(bill.previewUrl)}
-              className="brv-bill-alert brv-bill-alert--warn brv-bill-alert--click"
-            >
-              <Icon name="alert" size={12}/>
-              AI ไม่มั่นใจ {reviewRows} รายการ — แตะดูรูปเทียบให้ชัวร์
-            </button>
-          )}
-          {bill.saveState === 'failed' && bill.saveError && (
-            <AIErrorCard
-              compact
-              error={{
-                kind: 'data',
-                severity: 'danger',
-                icon: 'alert',
-                title: 'บันทึกไม่สำเร็จ',
-                body: bill.saveError,
-              }}
-            />
-          )}
-            </div>
-          )}
+            )}
+            {moreAlerts.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  className="brv-bill-alert-more"
+                  onClick={() => setAlertsOpen((o) => !o)}
+                >
+                  {alertsOpen ? 'ซ่อน' : `ดูทั้งหมด (${alerts.length})`}
+                </button>
+                {alertsOpen && moreAlerts.map((a) => (
+                  a.onClick ? (
+                    <button
+                      key={a.key}
+                      type="button"
+                      onClick={a.onClick}
+                      className={'brv-bill-alert brv-bill-alert--' + a.severity + ' brv-bill-alert--click w-full'}
+                    >
+                      <Icon name="alert" size={12}/>
+                      {a.message}
+                    </button>
+                  ) : (
+                    <div key={a.key} className={'brv-bill-alert brv-bill-alert--' + a.severity}>
+                      <Icon name="alert" size={12}/>
+                      {a.message}
+                    </div>
+                  )
+                ))}
+              </>
+            )}
+          </div>
+        )}
       </header>
 
       <div className="brv-bill-card__body">
@@ -1941,6 +2329,11 @@ function BillCard({
           stocksByProductId={stocksByProductId}
           onTiktokRowMatch={onTiktokRowMatch}
           productImagesById={productImagesById}
+          onMobileNavChange={onMobileNavChange}
+          batchSummary={batchSummary}
+          submitting={submitting}
+          savingProgress={savingProgress}
+          onSubmit={onSubmit}
         />
       </div>
     </div>
@@ -1951,13 +2344,64 @@ function BillCard({
 function SubmitBar({
   summary, submitting, savingProgress, bills, onSetAllVat, onSubmit,
   tiktokConnected, syncTikTokAfterReceive, onSyncTikTokChange,
+  compact = false,
 }) {
   const ready = summary.readyToSubmit && !submitting;
-  // A2: are all bills currently set to "add VAT"? Drives the one-tap toggle.
   const allVat = (bills || []).length > 0 && bills.every((b) => b.has_vat !== false);
   const pct = savingProgress && savingProgress.total
     ? Math.round((savingProgress.done / savingProgress.total) * 100)
     : 0;
+  const saveLabel = submitting
+    ? 'กำลังบันทึก…'
+    : `บันทึกเข้าสต็อก (${summary.actionable - summary.blocked} บิล)`;
+
+  if (compact) {
+    return (
+      <div className="brv-submit-bar-compact space-y-2">
+        {(tiktokConnected || (bills || []).length > 0) && (
+          <div className="brv-submit-bar-compact__opts flex items-center justify-between gap-2 text-xs">
+            {tiktokConnected ? (
+              <label className="flex items-center gap-1.5 cursor-pointer select-none text-muted min-w-0">
+                <input
+                  type="checkbox"
+                  className="rounded border-hairline shrink-0"
+                  checked={syncTikTokAfterReceive}
+                  onChange={(e) => onSyncTikTokChange?.(e.target.checked)}
+                  disabled={submitting}
+                />
+                <span className="truncate">Mirror TikTok</span>
+              </label>
+            ) : <span/>}
+            <button
+              type="button"
+              className="btn-ghost !py-1 !px-2 !text-[11px] shrink-0"
+              onClick={() => onSetAllVat?.(!allVat)}
+              disabled={submitting || !(bills || []).length}
+            >
+              VAT ทั้งชุด {allVat ? '✓' : ''}
+            </button>
+          </div>
+        )}
+        {savingProgress && (
+          <div className="h-1 rounded-full glass-tube overflow-hidden">
+            <div className="h-full rounded-full glass-tube-fill bg-primary transition-all duration-300" style={{ width: `${pct}%` }}/>
+          </div>
+        )}
+        <button
+          type="button"
+          className="btn-primary w-full !py-3"
+          disabled={!ready}
+          onClick={onSubmit}
+          title={!ready ? `เหลือ ${summary.blocked} บิลที่ต้องแก้` : undefined}
+        >
+          {submitting
+            ? <><span className="spinner"/> {saveLabel}</>
+            : <><Icon name="check" size={16}/> {saveLabel}</>}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="card-canvas p-3 lg:p-4 space-y-3">
       {/* A4: live save progress bar */}
@@ -2001,7 +2445,7 @@ function SubmitBar({
         {summary.blocked > 0 && (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-warning/10 border border-warning/30">
             <span className="font-semibold text-warning tabular-nums">{summary.blocked}</span>
-            <span className="text-muted-soft">รอ resolve</span>
+            <span className="text-muted-soft">รอแก้ไข</span>
           </span>
         )}
         {summary.skip > 0 && (
@@ -2032,11 +2476,11 @@ function SubmitBar({
           className="btn-primary"
           disabled={!ready}
           onClick={onSubmit}
-          title={!ready ? `เหลือ ${summary.blocked} บิลที่ต้อง resolve` : undefined}
+          title={!ready ? `เหลือ ${summary.blocked} บิลที่ต้องแก้` : undefined}
         >
           {submitting
             ? <><span className="spinner"/> กำลังบันทึก…</>
-            : <><Icon name="check" size={16}/> บันทึกทั้งหมด ({summary.actionable - summary.blocked} บิล)</>}
+            : <><Icon name="check" size={16}/> บันทึกเข้าสต็อก ({summary.actionable - summary.blocked} บิล)</>}
         </button>
       </div>
       </div>

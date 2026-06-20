@@ -51,6 +51,8 @@ const Icon = ({ name, size = 20, className = '', strokeWidth = 1.75, color }) =>
     case 'chevron-u':    return <svg {...p}><path d="m6 15 6-6 6 6"/></svg>;
     case 'menu':         return <svg {...p}><path d="M3 6h18M3 12h18M3 18h18"/></svg>;
     case 'filter':       return <svg {...p}><path d="M4 4h16l-6 8v6l-4 2v-8L4 4z"/></svg>;
+    case 'sliders-h':    return <svg {...p}><path d="M4 9h16"/><circle cx="9" cy="9" r="2"/><path d="M4 15h16"/><circle cx="15" cy="15" r="2"/></svg>;
+    case 'csv-export':   return <svg {...p}><rect x="6" y="4" width="12" height="13" rx="1.5"/><path d="M9 8h6"/><path d="M9 11h4"/><path d="M12 17v3"/><path d="M9 20h6"/></svg>;
     case 'check':        return <svg {...p}><path d="m20 6-9 9-5-5"/></svg>;
     case 'alert':        return <svg {...p}><path d="M12 2 2 22h20L12 2z"/><path d="M12 9v6M12 17h.01"/></svg>;
     case 'info':         return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M12 10v6M12 7h.01"/></svg>;

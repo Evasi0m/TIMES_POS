@@ -13,7 +13,7 @@
   position: absolute;
   bottom: calc(100% + 8px);
   left: 50%;
-  z-index: 30;
+  z-index: 50;
   transform: translateX(-50%) translateY(3px);
   padding: 0.35rem 0.6rem;
   border-radius: 8px;
@@ -61,6 +61,31 @@
   opacity: 1;
   visibility: visible;
   transform: translateX(-50%) translateY(0);
+}
+
+/* Inside .pressable rows (overflow:hidden for ripple) — tip below + lift card on hover */
+.pressable .glass-hover-tip__bubble {
+  bottom: auto;
+  top: calc(100% + 8px);
+  transform: translateX(-50%) translateY(-3px);
+}
+
+.pressable .glass-hover-tip:hover .glass-hover-tip__bubble,
+.pressable .glass-hover-tip:focus-visible .glass-hover-tip__bubble {
+  transform: translateX(-50%) translateY(0);
+}
+
+.pressable .glass-hover-tip__bubble::after {
+  top: auto;
+  bottom: 100%;
+  border-top-color: transparent;
+  border-bottom-color: var(--glass-border);
+}
+
+.pressable:has(.glass-hover-tip:hover),
+.pressable:has(.glass-hover-tip:focus-visible) {
+  overflow: visible;
+  z-index: 20;
 }
 
 :root[data-theme='dark'] .glass-hover-tip__bubble {
