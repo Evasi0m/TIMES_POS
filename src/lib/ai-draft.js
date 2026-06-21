@@ -35,8 +35,10 @@ export async function saveDraft(data) {
       tx.onerror = () => reject(tx.error);
     });
     db.close?.();
+    return { ok: true, error: null };
   } catch (e) {
     console.warn('[ai-draft] save failed:', e);
+    return { ok: false, error: e };
   }
 }
 
@@ -58,7 +60,7 @@ export async function loadDraft() {
   }
 }
 
-/** Delete the saved draft (called on submit / cancel / discard). */
+/** Remove the saved draft. */
 export async function clearDraft() {
   try {
     const db = await openDb();
@@ -74,11 +76,11 @@ export async function clearDraft() {
   }
 }
 
-/** Decode a raw base64 string (no data: prefix) into a Blob for an ObjectURL. */
-export function base64ToBlob(b64, mime = 'image/jpeg') {
-  const bin = atob(b64);
-  const len = bin.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+/** Decode a base64 data URL / raw base64 string into a Blob for preview URLs. */
+export function base64ToBlob(base64, mime = 'image/jpeg') {
+  const raw = base64.includes(',') ? base64.split(',')[1] : base64;
+  const bin = atob(raw);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
   return new Blob([bytes], { type: mime });
 }

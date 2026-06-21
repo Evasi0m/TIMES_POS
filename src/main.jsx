@@ -104,6 +104,7 @@ import {
 import { logStockExport, fetchStockExportLogs } from './lib/stock-export-log.js';
 import { parseManualAdjustNotes } from './lib/stock-manual-adjust.js';
 import StockAdjustModal from './components/products/StockAdjustModal.jsx';
+import BulkStockAdjustView from './components/products/BulkStockAdjustView.jsx';
 import Icon from './components/ui/Icon.jsx';
 import Modal from './components/ui/Modal.jsx';
 import { useMountedToggle } from './lib/use-mounted-toggle.js';
@@ -6486,6 +6487,7 @@ function ProductsView() {
   // still look interactive (hover, etc.) yet do nothing on click. Edit
   // buttons elsewhere are gated by the same flag.
   const role = useRole();
+  const isSuperAdmin = role === 'super_admin';
   const canEdit = role === 'admin' || role === 'super_admin';
   // Search-first (Tier B): server search by default; full ~6k catalog loads only
   // for chip browse, advanced filter sheet, or export (shared session cache).
@@ -6512,6 +6514,8 @@ function ProductsView() {
   const [exportUserName, setExportUserName] = useState('');
   const [scannerOpen, setScannerOpen] = useState(false);
   const [brandPickerOpen, setBrandPickerOpen] = useState(false);
+  const [bulkAdjustOpen, setBulkAdjustOpen] = useState(false);
+  const [bulkAdjustUserEmail, setBulkAdjustUserEmail] = useState('');
   // Render only the first N filtered rows; "ดูเพิ่ม" button bumps this. Keeps
   // initial paint fast even when the brand chip is "ทั้งหมด" (6k items).
   const [pageSize, setPageSize] = useState(200);
@@ -6550,6 +6554,13 @@ function ProductsView() {
     }, 180);
     return () => clearTimeout(t);
   }, [queryInput]);
+
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    sb.auth.getSession().then(({ data }) => {
+      setBulkAdjustUserEmail(data.session?.user?.email || '');
+    });
+  }, [isSuperAdmin]);
 
   const loadTaxonomy = useCallback(async () => {
     const [b, c] = await Promise.all([
@@ -6964,6 +6975,17 @@ function ProductsView() {
           >
             <Icon name="csv-export" size={22} strokeWidth={1.75}/>
           </button>
+          {isSuperAdmin && (
+            <button
+              type="button"
+              className="products-toolbar__bulk-adjust btn-secondary !h-12 !px-3 !text-sm whitespace-nowrap flex-shrink-0"
+              onClick={() => setBulkAdjustOpen(true)}
+              title="ปรับสต็อกหลายรายการ (Super Admin)"
+            >
+              <Icon name="edit" size={16} className="shrink-0"/>
+              <span className="hidden sm:inline">ปรับสต็อกกลุ่ม</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -7238,6 +7260,25 @@ function ProductsView() {
           }
         }}
         brands={brands} categories={categories} addBrand={addBrand} addCategory={addCategory} />
+
+      <BulkStockAdjustView
+        open={bulkAdjustOpen}
+        onClose={() => setBulkAdjustOpen(false)}
+        userEmail={bulkAdjustUserEmail}
+        toast={toast}
+        onSuccess={() => {
+          invalidateProductCatalogCache();
+          const wasCatalogLoaded = catalogLoaded;
+          setCatalogLoaded(false);
+          if (needsBrowseCatalog(filter) || wasCatalogLoaded) {
+            loadProducts({ force: true });
+          } else if (filter.query.trim()) {
+            searchProducts(sb, filter.query.trim()).then(({ data, error }) => {
+              if (!error) setSearchRows((data || []).map(p => enrichProduct(p)));
+            });
+          }
+        }}
+      />
 
       <ProductStockExportAuthModal
         open={exportAuthOpen}

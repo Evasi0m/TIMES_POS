@@ -63,7 +63,7 @@ import {
   msgTraceLines,
   msgWaitingDetail,
 } from './parse-activity-log.js';
-import { enrichTiktokMappingFromCatalog, computeRowSummary } from './bill-review-shared.js';
+import { enrichTiktokMappingFromCatalog, computeRowSummary, computeBillStatus } from './bill-review-shared.js';
 import { useRecentReceivesMap, findExistingCmgInvoices } from '../../lib/recent-receives.js';
 import { saveDraft, loadDraft, clearDraft, base64ToBlob } from '../../lib/ai-draft.js';
 import { useTikTokMirrorCatalog } from '../../hooks/useTikTokMirrorCatalog.js';
@@ -138,36 +138,17 @@ function autoInvoiceNo(seq) {
 // unit_cost <= 0 OR quantity <= 0 (AI rule #5 makes these the
 // "unreadable" sentinels — the user MUST fix them before submit
 // otherwise we'd persist `unit_price=0` rows that silently wreck
-// profit calculations).
-function billStatus(bill, mirrorOn = false) {
-  if (bill.saveState === 'saved')   return 'saved';
-  if (bill.saveState === 'failed')  return 'failed';
-  if (bill.saveState === 'saving')  return 'saving';
-  if (!bill.is_cmg_bill || bill.rows.length === 0) return 'empty';
-  const unresolved = bill.rows.filter((r) => r.status === 'suggestions' || r.status === 'none').length;
-  if (unresolved > 0) return 'unresolved';
-  const incomplete = bill.rows.some((r) =>
-    !(Number(r.unit_cost) > 0) || !(Number(r.quantity) > 0)
-  );
-  if (incomplete) return 'incomplete';
-  if (mirrorOn) {
-    const tiktokBad = bill.rows.some((r) => {
-      const hasPos = r.product || (r.status === 'new' && r.newProduct);
-      return hasPos && !r.tiktok_skip && !isTikTokLineReady(r);
-    });
-    if (tiktokBad) return 'tiktok_unresolved';
-  }
-  return 'ready';
-}
+// profit calculations). See computeBillStatus in bill-review-shared.js.
+const billStatus = computeBillStatus;
 
-// Returns true if a bill can be submitted (passes H3 guards too).
-function isBillSubmittable(bill, mirrorOn = false) {
-  const s = billStatus(bill, mirrorOn);
-  return s === 'ready' || s === 'failed';
+/** Bill stepper chip: green when ready/saved, red otherwise. */
+function isBillStepperSuccess(status) {
+  return status === 'ready' || status === 'saved';
 }
 
 const STEP_STATUS_META = {
   ready:      { icon: 'check', cls: 'bg-success/15 text-success border-success/40' },
+  needs_review: { icon: 'alert', cls: 'bg-warning/15 text-warning border-warning/40' },
   unresolved: { icon: 'alert', cls: 'bg-warning/15 text-warning border-warning/40' },
   incomplete: { icon: 'alert', cls: 'bg-warning/15 text-warning border-warning/40' },
   tiktok_unresolved: { icon: 'store', cls: 'bg-warning/15 text-warning border-warning/40' },
@@ -176,6 +157,12 @@ const STEP_STATUS_META = {
   saved:      { icon: 'check', cls: 'bg-success/20 text-success border-success/55' },
   failed:     { icon: 'x', cls: 'bg-error/20 text-error border-error/55' },
 };
+
+// Returns true if a bill can be submitted (passes H3 guards too).
+function isBillSubmittable(bill, mirrorOn = false) {
+  const s = billStatus(bill, mirrorOn);
+  return s === 'ready' || s === 'failed';
+}
 
 // ─── Main component ───────────────────────────────────────────────────
 export default function BulkReceiveView({ toast, onPhaseChange }) {
@@ -214,6 +201,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
   const [supplier, setSupplier] = useState(null);
   const undoTimer = useRef(null);
   const draftTimer = useRef(null);
+  const draftFailWarned = useRef(false);
   const parseWaitTimer = useRef(null);
   const parseWaitStartedAt = useRef(0);
   const parseWaitContext = useRef({ from: 1, to: 1 });
@@ -441,13 +429,17 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
 
   // ─── C1: debounced autosave of the in-progress review batch ────────
   useEffect(() => {
-    if (phase !== 'review' || bills.length === 0) return;
+    if ((phase !== 'review' && phase !== 'review_paused') || bills.length === 0) return;
     if (draftTimer.current) clearTimeout(draftTimer.current);
-    draftTimer.current = setTimeout(() => {
-      flushDraftNow(bills, currentIdx, usage);
+    draftTimer.current = setTimeout(async () => {
+      const result = await flushDraftNow(bills, currentIdx, usage);
+      if (!result.ok && !draftFailWarned.current) {
+        draftFailWarned.current = true;
+        toast?.push('บันทึก draft ไม่สำเร็จ — อย่าปิดแท็บ', 'error');
+      }
     }, 800);
     return () => { if (draftTimer.current) clearTimeout(draftTimer.current); };
-  }, [bills, currentIdx, usage, phase]);
+  }, [bills, currentIdx, usage, phase, toast]);
 
   // ─── C2: warn before unloading the tab with unsaved bills ──────────
   useEffect(() => {
@@ -639,6 +631,13 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
             ? seedBills.findIndex((b) => b.uid === chunk[i]?.uid)
             : start + i;
           const billNo = originalIndex >= 0 ? originalIndex + 1 : start + i + 1;
+          if (bill?.parse_warning === 'empty_slot') {
+            appendParseLog(`บิลที่ ${billNo}: AI ไม่ได้คืนข้อมูล — ลองถ่ายใหม่`);
+            if (originalIndex >= 0) {
+              parsedByIndex.set(originalIndex, { bill, emptySlot: true });
+            }
+            return;
+          }
           const itemsRaw = Array.isArray(bill?.items) ? bill.items : [];
           const invoiceNo = String(bill?.supplier_invoice_no || '').trim();
           appendParseLog(msgBillSuccess(billNo, itemsRaw.length, invoiceNo));
@@ -664,6 +663,22 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
           prev.map((b, i) => {
             const entry = parsedByIndex.get(i);
             if (!entry) return b;
+            if (entry.emptySlot) {
+              return {
+                ...b,
+                is_cmg_bill: false,
+                supplier_invoice_no: '',
+                bill_subtotal: 0,
+                total_qty: 0,
+                vat_amount: 0,
+                grand_total: 0,
+                validation: null,
+                rows: [],
+                parseState: 'failed',
+                parseError: 'AI ไม่ได้คืนข้อมูลบิลนี้ — ลองถ่ายใหม่',
+                parse_warning: 'empty_slot',
+              };
+            }
             const { bill: parsed, materialized } = entry;
             return {
               ...b,
@@ -735,12 +750,15 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
     await handleUploadConfirm({ images, retryOnly: true });
   }, [bills, handleUploadConfirm]);
 
-  // ─── Dismiss the error and go back to landing ──────────────────
-  // R6 fix: the prior implementation had identical if/else branches
-  // and a misleading comment about preserving thumbs. EmptyLanding
-  // does not render thumbs; the bills array silently leaks ObjectURLs
-  // every time the user dismisses an error. Wipe explicitly.
-  const dismissError = () => {
+  // ─── Dismiss error batch (wipe all) vs continue with parsed bills ──
+  const discardErrorBatch = () => {
+    const parsedCount = bills.filter((b) => b.parseState === 'parsed').length;
+    if (parsedCount > 0) {
+      const ok = window.confirm(
+        `มี ${parsedCount} บิลที่อ่านสำเร็จแล้ว — ลบทั้งหมดและเริ่มใหม่?`
+      );
+      if (!ok) return;
+    }
     setError(null);
     setParsingProgress(null);
     clearParseLogs();
@@ -748,11 +766,24 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
       bills.forEach((b) => b.previewUrl && URL.revokeObjectURL(b.previewUrl));
       setBills([]);
       setUsage(null);
-      setParsingProgress(null);
       setCurrentIdx(0);
     }
     setPhase('empty');
     clearDraft();
+  };
+
+  const continueWithParsedBills = () => {
+    const parsed = bills.filter((b) => b.parseState === 'parsed');
+    if (!parsed.length) return;
+    setError(null);
+    setParsingProgress(null);
+    clearParseLogs();
+    bills.forEach((b) => {
+      if (b.parseState !== 'parsed' && b.previewUrl) URL.revokeObjectURL(b.previewUrl);
+    });
+    setBills(parsed);
+    setCurrentIdx(0);
+    setPhase('review');
   };
 
   // ─── Row mutators (scoped to currentIdx) ───────────────────────────
@@ -801,6 +832,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
     const row = billsRef.current[currentIdx]?.rows.find((r) => r.uid === rowUid);
     const productId = row?.product?.id;
     if (!productId) return;
+    // In-memory patch on the row; mapping is persisted again after product insert on save.
     persistTiktokMatchMapping(productId, patch, {
       onPersisted: (id) => refreshMappings([id]),
     }).catch((e) => console.warn('[BulkReceiveView] TikTok mapping persist failed:', e));
@@ -851,7 +883,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
     const actionable = bills.filter((b) => b.is_cmg_bill && b.rows.length > 0);
     const blocked = actionable.filter((b) => {
       const s = billStatus(b, tiktokMirrorOn);
-      return s === 'unresolved' || s === 'incomplete' || s === 'tiktok_unresolved';
+      return s === 'unresolved' || s === 'incomplete' || s === 'tiktok_unresolved' || s === 'needs_review';
     });
     const skip = bills.filter((b) => !b.is_cmg_bill || b.rows.length === 0);
     const saved = bills.filter((b) => b.saveState === 'saved');
@@ -1078,7 +1110,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
           // `loopIdx + 1` mirrors the user-visible bill number well
           // enough; we don't expose the suffix in UI anywhere.
           supplier_invoice_no:
-            bill.supplier_invoice_no?.trim() || autoInvoiceNo(loopIdx + 1),
+            bill.supplier_invoice_no?.trim() || autoInvoiceNo(i + 1),
           notes: `AI scan · batch · ${items.length} รายการ`,
         };
 
@@ -1190,6 +1222,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
         savedIds: allSavedIds,
         failed: allFailed,
         skipped: allSkipped,
+        tiktokMirrorHadFailures: mirrorResultsAll.some((r) => r && r.status === 'failed'),
       });
       if (mirrorResultsAll.length) {
         const { msg, isError } = formatMirrorToast(mirrorResultsAll);
@@ -1245,7 +1278,13 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
           <AIErrorCard
             error={error}
             onRetry={error.retryable ? retryParse : undefined}
-            onDismiss={dismissError}
+            onDismiss={discardErrorBatch}
+            onContinue={
+              bills.some((b) => b.parseState === 'parsed')
+                ? continueWithParsedBills
+                : undefined
+            }
+            continueLabel={`ไปตรวจรับ ${bills.filter((b) => b.parseState === 'parsed').length} บิลที่อ่านแล้ว`}
           />
           {parseLogs.length > 0 && (
             <div className="brv-error-terminal-wrap">
@@ -2046,24 +2085,24 @@ function BillSettingsSheet({
 // ─── Sub: stepper ─────────────────────────────────────────────────────
 function Stepper({ bills, currentIdx, onJump, mirrorOn = false }) {
   return (
-    <div className="card-canvas p-2 lg:p-2.5">
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+    <div className="card-canvas brv-bill-stepper">
+      <div className="brv-bill-stepper__track">
         {bills.map((b, i) => {
           const status = billStatus(b, mirrorOn);
           const meta = STEP_STATUS_META[status];
           const isCurrent = i === currentIdx;
+          const tone = isBillStepperSuccess(status) ? 'ok' : 'bad';
           return (
             <button
               key={b.uid}
               type="button"
               onClick={() => onJump(i)}
               className={
-                'relative flex-shrink-0 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ' +
-                (isCurrent
-                  ? 'bg-white border-primary text-ink shadow-sm ring-2 ring-primary/30'
-                  : `${meta.cls} hover:brightness-105`)
+                'brv-bill-stepper__chip brv-bill-stepper__chip--' + tone +
+                (isCurrent ? ' is-active' : '')
               }
               aria-label={`ไปบิลที่ ${i + 1}`}
+              aria-current={isCurrent ? 'step' : undefined}
             >
               <span className="tabular-nums">{i + 1}</span>
               <Icon name={meta.icon} size={12} className={meta.spin ? 'animate-spin' : ''}/>
@@ -2134,6 +2173,17 @@ function BillCardMobileStrip({
       </div>
     </div>
   );
+}
+
+function BillSaveErrorAlert({ rawError }) {
+  const [parsed, setParsed] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    parseAIError(rawError).then((e) => { if (alive) setParsed(e); });
+    return () => { alive = false; };
+  }, [rawError]);
+  if (!parsed) return null;
+  return <AIErrorCard error={parsed} compact />;
 }
 
 function BillCard({
@@ -2269,7 +2319,16 @@ function BillCard({
 
         {saveFailedAlert && (
           <div className="brv-bill-head__alerts">
-            <AIErrorCard error={parseAIError(saveFailedAlert.saveError)} compact/>
+            <BillSaveErrorAlert rawError={saveFailedAlert.saveError} />
+          </div>
+        )}
+
+        {tiktokMirrorEnabled && tiktokCatalogError && (
+          <div className="brv-bill-head__alerts">
+            <div className="brv-bill-alert brv-bill-alert--warn text-xs">
+              <Icon name="store" size={12}/>
+              Catalog TikTok โหลดไม่ครบ — ค้นหาด้วยชื่อสินค้าในขั้นจับคู่ TikTok
+            </div>
           </div>
         )}
 
@@ -2491,7 +2550,7 @@ function SubmitBar({
         )}
         <button
           type="button"
-          className="btn-primary"
+          className="btn-patch-log-action"
           disabled={!ready}
           onClick={onSubmit}
           title={!ready ? `เหลือ ${summary.blocked} บิลที่ต้องแก้` : undefined}
@@ -2515,6 +2574,7 @@ function DoneSummary({ submitSummary, bills, onRetryFailed, onStartNew, submitti
   const failedCount = failed.length;
   const skippedCount = bills.filter((b) => !b.is_cmg_bill || b.rows.length === 0).length;
   const allOk = failedCount === 0;
+  const tiktokMirrorPartial = submitSummary.tiktokMirrorHadFailures;
 
   return (
     <div className="card-canvas overflow-hidden">
@@ -2539,6 +2599,9 @@ function DoneSummary({ submitSummary, bills, onRetryFailed, onStartNew, submitti
               : 'บางบิลบันทึกไม่สำเร็จ — กดลองอีกครั้งหรือเริ่มรอบใหม่'}
             {skippedCount > 0 && (
               <> · ข้าม {skippedCount} บิล (ไม่ใช่ CMG / ไม่มีรายการ)</>
+            )}
+            {tiktokMirrorPartial && (
+              <> · TikTok บางรายการยังไม่ sync — ไป Stock Control</>
             )}
           </div>
         </div>

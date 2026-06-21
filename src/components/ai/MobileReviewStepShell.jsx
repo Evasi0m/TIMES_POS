@@ -1,112 +1,13 @@
 // Mobile Step Wizard B - macro steps (list / work) + unified footer for bill review.
 
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../ui/Icon.jsx';
 import BillItemsListCard from './BillItemsListCard.jsx';
 import ReceiveMatchPanel from './ReceiveMatchPanel.jsx';
+import ReceiveStepProgress from './ReceiveStepProgress.jsx';
 import { computeRowSummary } from './bill-review-shared.js';
 import { normalizeCode } from '../../lib/fuzzy-match.js';
 import { pickFirstAttentionRow, pickNextRowAfterComplete } from './mobile-review-step-logic.js';
-
-function MicroStepProgress({ steps, activeStep, onGotoStep }) {
-  const trackRef = useRef(null);
-  const tabRefs = useRef([]);
-  const [indicator, setIndicator] = useState({ x: 0, y: 0, width: 0, height: 0, ready: false });
-
-  const activeIndex = Math.max(0, steps.findIndex((s) => s.key === activeStep));
-  const activeStepObj = steps[activeIndex] || steps[0];
-  const shortLabel = (s) =>
-    s.label === '??????????' ? '??????'
-      : s.label === '?????/???' ? '??????'
-      : s.label;
-
-  const measureIndicator = useCallback(() => {
-    const track = trackRef.current;
-    const tab = tabRefs.current[activeIndex];
-    if (!track || !tab) return;
-    const tr = track.getBoundingClientRect();
-    const tb = tab.getBoundingClientRect();
-    setIndicator({
-      x: tb.left - tr.left,
-      y: tb.top - tr.top,
-      width: tb.width,
-      height: tb.height,
-      ready: true,
-    });
-  }, [activeIndex]);
-
-  useLayoutEffect(() => {
-    measureIndicator();
-  }, [measureIndicator, steps.length]);
-
-  useEffect(() => {
-    const track = trackRef.current;
-    if (!track || typeof ResizeObserver === 'undefined') return undefined;
-    const ro = new ResizeObserver(() => measureIndicator());
-    ro.observe(track);
-    return () => ro.disconnect();
-  }, [measureIndicator]);
-
-  if (!steps?.length) return null;
-
-  return (
-    <div className={'mrs-progress-card card-canvas mrs-progress-card--on-' + (activeStep || 'match')}>
-      <div className="mrs-progress-card__head">
-        <span className="mrs-progress-card__title">???????</span>
-        <span className="mrs-progress-card__active">{activeStepObj?.label}</span>
-      </div>
-      <div
-        ref={trackRef}
-        className={'mrs-progress mrs-progress--glass mrs-progress--on-' + (activeStep || 'match')}
-        aria-label="?????????????"
-      >
-        <div
-          className="mrs-progress__indicator"
-          aria-hidden="true"
-          style={{
-            '--mrs-ind-x': indicator.x + 'px',
-            '--mrs-ind-y': indicator.y + 'px',
-            '--mrs-ind-w': indicator.width + 'px',
-            '--mrs-ind-h': indicator.height + 'px',
-            opacity: indicator.ready ? 1 : 0,
-          }}
-        />
-        {steps.map((s, i) => {
-          const isActive = s.key === activeStep;
-          const isDone = s.done && !isActive;
-          const isPending = !isActive && !s.done && !s.disabled;
-          const canJump = !s.disabled && (s.done || isActive);
-          const Tag = canJump && onGotoStep ? 'button' : 'span';
-          return (
-            <Tag
-              key={s.key}
-              ref={(el) => { tabRefs.current[i] = el; }}
-              type={Tag === 'button' ? 'button' : undefined}
-              className={
-                'mrs-progress__tab mrs-progress__tab--' + s.key +
-                (isActive ? ' is-active' : '') +
-                (isDone ? ' is-done' : '') +
-                (isPending ? ' is-pending' : '') +
-                (s.disabled ? ' is-disabled' : '') +
-                (canJump && onGotoStep ? ' is-tappable' : '')
-              }
-              style={{ gridColumn: i + 1 }}
-              disabled={Tag === 'button' ? !canJump : undefined}
-              onClick={canJump && onGotoStep ? () => onGotoStep(s.key) : undefined}
-              aria-current={isActive ? 'step' : undefined}
-              aria-label={s.label}
-            >
-              <span className="mrs-progress__tab-icon" aria-hidden="true">
-                {isDone ? <Icon name="check" size={13}/> : <Icon name={s.icon} size={14}/>}
-              </span>
-              <span className="mrs-progress__label">{shortLabel(s)}</span>
-            </Tag>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 function UnifiedFooter({
   macroStep,
@@ -125,9 +26,10 @@ function UnifiedFooter({
   const pct = savingProgress?.total
     ? Math.round((savingProgress.done / savingProgress.total) * 100)
     : 0;
+  const saveCount = Math.max(0, (batchSummary?.actionable || 0) - (batchSummary?.blocked || 0));
   const saveLabel = submitting
-    ? '???????????�'
-    : `????????????? (${(batchSummary?.actionable || 0) - (batchSummary?.blocked || 0)} ???)`;
+    ? 'กำลังบันทึก…'
+    : `บันทึกทั้งหมด (${saveCount} บิล)`;
 
   if (rowSummary.attention === 0 && rowSummary.total > 0 && macroStep === 'list') {
     return (
@@ -164,7 +66,7 @@ function UnifiedFooter({
           disabled={rowSummary.attention === 0}
         >
           <Icon name="alert" size={16}/>
-          ?????????????????????
+          ไปแก้รายการที่ค้าง
           {rowSummary.attention > 0 && (
             <span className="ml-1 tabular-nums">({rowSummary.attention})</span>
           )}
@@ -177,10 +79,9 @@ function UnifiedFooter({
   const canAdvance = wizardMeta?.canAdvance;
   const canBack = wizardMeta?.canBack;
 
-  let primaryLabel = '?????';
-  if (step === 'tiktok') primaryLabel = '???????????';
-  else if (step === 'qtycost' && !wizardMeta?.steps?.some((s) => s.key === 'tiktok')) {
-    primaryLabel = '???????????';
+  let primaryLabel = 'ถัดไป';
+  if (step === 'tiktok' || (step === 'qtycost' && !wizardMeta?.steps?.some((s) => s.key === 'tiktok'))) {
+    primaryLabel = 'เสร็จรายการ';
   }
 
   return (
@@ -193,9 +94,9 @@ function UnifiedFooter({
           disabled={step === 'match' ? false : !canBack}
         >
           {step === 'match' ? (
-            <><Icon name="menu" size={14}/> ???????????????</>
+            <><Icon name="menu" size={14}/> รายการทั้งหมด</>
           ) : (
-            <><Icon name="chevron-l" size={14}/> ????</>
+            <><Icon name="chevron-l" size={14}/> กลับ</>
           )}
         </button>
         <button
@@ -288,6 +189,18 @@ export default function MobileReviewStepShell({
     wizardActionsRef.current?.back?.();
   }, []);
 
+  // When the active row is removed, fall back to list (matches BillReviewPanel desktop guard).
+  useEffect(() => {
+    if (!activeUid || rows.some((r) => r.uid === activeUid)) return;
+    if (!rows.length) {
+      setActiveUid(null);
+      setMacroStep('list');
+      return;
+    }
+    setActiveUid(rows[0].uid);
+    setMacroStep('list');
+  }, [rows, activeUid]);
+
   useEffect(() => {
     onNavSummaryChange?.({
       rowIndex: activeIndex,
@@ -334,9 +247,9 @@ export default function MobileReviewStepShell({
         {macroStep === 'list' && (
           <div className="mrs-list">
             <div className="mrs-list__head">
-              <span className="mrs-list__head-title">?????????????</span>
+              <span className="mrs-list__head-title">รายการในบิล</span>
               <span className="mrs-list__head-meta tabular-nums">
-                ?????????? {rowSummary.matched}/{rowSummary.total}
+                ตรวจแล้ว {rowSummary.done}/{rowSummary.total}
               </span>
             </div>
             <BillItemsListCard
@@ -352,7 +265,7 @@ export default function MobileReviewStepShell({
         {macroStep === 'work' && activeRow && (
           <div className="mrs-work">
             {wizardMeta?.steps && (
-              <MicroStepProgress
+              <ReceiveStepProgress
                 steps={wizardMeta.steps}
                 activeStep={wizardMeta.activeStep}
                 onGotoStep={wizardMeta.gotoStep}
@@ -385,6 +298,12 @@ export default function MobileReviewStepShell({
               onWizardMetaChange={handleWizardMeta}
               onItemComplete={handleItemComplete}
             />
+          </div>
+        )}
+
+        {macroStep === 'work' && !activeRow && rows.length > 0 && (
+          <div className="py-8 text-center text-sm text-muted-soft">
+            ไม่พบรายการที่เลือก — กลับไปรายการทั้งหมด
           </div>
         )}
       </div>

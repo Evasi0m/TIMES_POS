@@ -150,11 +150,11 @@ const BillItemsListCard = forwardRef(function BillItemsListCard({
               <div className="air-bill-list-card__row-head">
                 <span className="air-bill-list-card__idx" aria-hidden="true">{idx + 1}</span>
                 <span className="air-bill-list-card__sku">{sku || row.model_code || '—'}</span>
+                <span className={'air-status-chip air-bill-list-card__chip ' + ds.pillCls}>
+                  <Icon name={ds.icon} size={9}/>
+                  <span>{ds.label}</span>
+                </span>
               </div>
-              <span className={'air-status-chip ' + ds.pillCls}>
-                <Icon name={ds.icon} size={9}/>
-                <span>{ds.label}</span>
-              </span>
             </button>
           );
         })}

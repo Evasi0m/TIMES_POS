@@ -180,7 +180,7 @@ function isTiktokPending(row, tiktokMirrorEnabled) {
   );
 }
 
-function isSoftMatch(row) {
+export function isSoftMatch(row) {
   return (
     row.status === 'auto' &&
     typeof row.matchScore === 'number' &&
@@ -188,9 +188,42 @@ function isSoftMatch(row) {
   );
 }
 
-function hasRowMathMismatch(row) {
+export function hasRowMathMismatch(row) {
   return Array.isArray(row?.validationIssues)
     && row.validationIssues.includes('row_math_mismatch');
+}
+
+function isTikTokLineReady(row) {
+  if (!row || row.tiktok_skip) return true;
+  return !!(row.tiktok_sku || row.tiktok_mapping);
+}
+
+/** Maps a post-AI bill to a stepper/submit status (shared by desktop + mobile). */
+export function computeBillStatus(bill, mirrorOn = false) {
+  if (!bill) return 'empty';
+  if (bill.saveState === 'saved') return 'saved';
+  if (bill.saveState === 'failed') return 'failed';
+  if (bill.saveState === 'saving') return 'saving';
+  if (!bill.is_cmg_bill || bill.rows.length === 0) return 'empty';
+  const unresolved = bill.rows.filter((r) => r.status === 'suggestions' || r.status === 'none').length;
+  if (unresolved > 0) return 'unresolved';
+  const incomplete = bill.rows.some((r) =>
+    !(Number(r.unit_cost) > 0) || !(Number(r.quantity) > 0)
+  );
+  if (incomplete) return 'incomplete';
+  const flagged = bill.rows.some((r) =>
+    (r.status === 'auto' || r.status === 'new') &&
+    (r.needsReview || hasRowMathMismatch(r) || isSoftMatch(r))
+  );
+  if (flagged) return 'needs_review';
+  if (mirrorOn) {
+    const tiktokBad = bill.rows.some((r) => {
+      const hasPos = r.product || (r.status === 'new' && r.newProduct);
+      return hasPos && !r.tiktok_skip && !isTikTokLineReady(r);
+    });
+    if (tiktokBad) return 'tiktok_unresolved';
+  }
+  return 'ready';
 }
 
 export function getRowDisplayState(row, tiktokMirrorEnabled = false) {

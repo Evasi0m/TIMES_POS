@@ -479,8 +479,17 @@ Deno.serve(async (req: Request) => {
       // These are terminal for the WHOLE request — no point burning
       // the rest of the pool on the same bad user input.
       if (attempt.kind === 'network') {
+        const shortMsg = shortError(0, attempt.detail);
+        console.warn('[cmg-bill-parse] network attempt failed', {
+          req_id: reqId,
+          key_label: keyLabel,
+          model: m.id,
+          attempt_ms: attemptMs,
+          detail: attempt.detail.slice(0, 180),
+        });
         await logUsage(adminClient, userId, k.id, m.id, images.length, 0, 0, false, `network: ${attempt.detail} · attempt_ms=${attemptMs} · req_id=${reqId}`);
-        return j(502, { error: 'cannot reach Gemini: ' + attempt.detail, req_id: reqId, trace });
+        trace.push(`${keyLabel} · ${m.id} เชื่อมต่อไม่ได้ (${shortMsg}) → ลองต่อ`);
+        continue;
       }
       if (attempt.kind === 'clientErr') {
         await logUsage(adminClient, userId, k.id, m.id, images.length, 0, 0, false, `client ${attempt.status}: ${attempt.detail.slice(0, 200)} · attempt_ms=${attemptMs} · req_id=${reqId}`);
@@ -506,15 +515,32 @@ Deno.serve(async (req: Request) => {
         return j(502, { error: 'Gemini ไม่ได้รีเทิร์นบิลใดเลย — ลองถ่ายรูปใหม่', req_id: reqId });
       }
 
+      const warnings: { index: number; code: string }[] = [];
       const bills = images.map((_, idx) => {
-        const b = billsRaw[idx] || {};
-        const items = Array.isArray(b.items) ? b.items.map((x: any) => ({
+        const b = billsRaw[idx];
+        const hasRaw = b && typeof b === 'object';
+        const items = hasRaw && Array.isArray(b.items) ? b.items.map((x: any) => ({
           model_code:   stripCmgModelPrefix(String(x?.model_code ?? '')),
           quantity:     Math.max(0, Math.round(Number(x?.quantity) || 0)),
           unit_cost:    Math.max(0, Number(x?.unit_cost) || 0),
           line_amount:  Math.max(0, Number(x?.line_amount) || 0),
           needs_review: Boolean(x?.needs_review),
         })).filter((x: any) => x.model_code) : [];
+        const missingSlot = !hasRaw || idx >= billsRaw.length;
+        const emptyItems = items.length === 0;
+        if (missingSlot || emptyItems) {
+          warnings.push({ index: idx, code: 'empty_slot' });
+          return {
+            is_cmg_bill: false,
+            supplier_invoice_no: '',
+            bill_subtotal: null,
+            total_qty: 0,
+            vat_amount: null,
+            grand_total: null,
+            items: [],
+            parse_warning: 'empty_slot',
+          };
+        }
         return {
           is_cmg_bill:         Boolean(b.is_cmg_bill),
           supplier_invoice_no: String(b.supplier_invoice_no ?? '').trim(),
@@ -556,6 +582,7 @@ Deno.serve(async (req: Request) => {
 
       return j(200, {
         bills,
+        warnings: warnings.length ? warnings : undefined,
         req_id: reqId,
         trace,
         usage: {

@@ -26,6 +26,7 @@ import {
   formatDaily,
   formatMonthly,
   formatRange,
+  formatStockAdjustAlert,
   sendTelegram,
 } from '../_shared/telegram-format.ts';
 
@@ -39,8 +40,10 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 interface ReqBody {
-  action?: 'send' | 'preview' | 'test' | 'install_webhook' | 'delete_webhook' | 'webhook_status' | 'list_chats';
-  kind?: 'daily' | 'monthly' | 'range' | 'cron';
+  action?: 'send' | 'preview' | 'test' | 'alert' | 'install_webhook' | 'delete_webhook' | 'webhook_status' | 'list_chats';
+  kind?: 'daily' | 'monthly' | 'range' | 'cron' | 'stock_adjust';
+  audit_id?: number;
+  batch_id?: number;
   date?: string;          // YYYY-MM-DD, target day for daily
   yyyymm?: string;        // YYYY-MM,    target month for monthly
   days?: number;          // for kind=range
@@ -310,6 +313,42 @@ Deno.serve(async (req: Request) => {
   if (body.kind === 'cron' && !body.action) {
     if (!secret) return json({ ok: false, error: 'no shop_secrets row' }, 500);
     return json({ ok: true, ...(await dispatchCron(supa, secret)) });
+  }
+
+  // ── Stock adjust alert (super admin) ────────────────────────────────
+  if (body.action === 'alert' && body.kind === 'stock_adjust') {
+    const auth = req.headers.get('Authorization') ?? '';
+    if (!auth.toLowerCase().startsWith('bearer ')) {
+      return json({ ok: false, error: 'missing_authorization' }, 401);
+    }
+    const userClient = createClient(SUPABASE_URL, SERVICE_ROLE, {
+      global: { headers: { Authorization: auth } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: isSuper, error: authErr } = await userClient.rpc('is_super_admin');
+    if (authErr) return json({ ok: false, error: 'auth_check_failed: ' + authErr.message }, 500);
+    if (isSuper !== true) return json({ ok: false, error: 'forbidden' }, 403);
+
+    if (secret?.stock_adjust_notify_enabled === false) {
+      return json({ ok: true, skipped: true, reason: 'disabled' });
+    }
+    if (!token || !chatId) {
+      return json({ ok: true, skipped: true, reason: 'missing token or chat_id' });
+    }
+
+    const auditId = body.audit_id != null ? Number(body.audit_id) : undefined;
+    const batchId = body.batch_id != null ? Number(body.batch_id) : undefined;
+    if (auditId == null && batchId == null) {
+      return json({ ok: false, error: 'audit_id or batch_id required' }, 400);
+    }
+
+    try {
+      const text = await formatStockAdjustAlert(supa, { auditId, batchId });
+      await sendTelegram(token, chatId, text);
+      return json({ ok: true, sent: true });
+    } catch (err) {
+      return json({ ok: false, error: String(err) }, 502);
+    }
   }
 
   // ── Build a message for preview / manual send ───────────────────────

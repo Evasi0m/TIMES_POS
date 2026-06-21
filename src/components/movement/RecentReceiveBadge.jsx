@@ -15,7 +15,7 @@ import React from 'react';
 import Icon from '../ui/Icon.jsx';
 import { daysAgoFrom } from '../../lib/recent-receives.js';
 
-export default function RecentReceiveBadge({ info }) {
+export default function RecentReceiveBadge({ info, variant = 'inline', className = '' }) {
   if (!info) return null;
   const days = daysAgoFrom(info.lastDate);
   if (days == null || days > 7) return null;
@@ -37,8 +37,20 @@ export default function RecentReceiveBadge({ info }) {
     return parts.join(' · ') + ' — ตรวจสอบว่าไม่ใช่บิลซ้ำ';
   })();
 
+  if (variant === 'chip') {
+    return (
+      <span
+        className={'air-status-chip air-status-chip--soft' + (className ? ` ${className}` : '')}
+        title={tooltip}
+      >
+        <Icon name="alert" size={9}/>
+        {label}
+      </span>
+    );
+  }
+
   return (
-    <span className="recent-receive-badge" title={tooltip}>
+    <span className={'recent-receive-badge' + (className ? ` ${className}` : '')} title={tooltip}>
       <Icon name="alert" size={10}/>
       {label}
     </span>

@@ -200,6 +200,7 @@ describe('normalizeSyncOperation', () => {
     expect(normalizeSyncOperation('return')).toBe('return');
     expect(normalizeSyncOperation('return_void')).toBe('return_void');
     expect(normalizeSyncOperation('sale_edit')).toBe('sale_edit');
+    expect(normalizeSyncOperation('manual_adjust')).toBe('manual_adjust');
   });
   it('defaults unknown to receive', () => {
     expect(normalizeSyncOperation('bogus')).toBe('receive');

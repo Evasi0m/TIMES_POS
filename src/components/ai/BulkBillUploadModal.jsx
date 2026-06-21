@@ -68,6 +68,11 @@ function Impl({ onClose, onConfirm, closing }) {
 
   const fileInputRef   = useRef(null);
   const cameraInputRef = useRef(null);
+  const thumbsLengthRef = useRef(0);
+
+  useEffect(() => {
+    thumbsLengthRef.current = thumbs.length;
+  }, [thumbs.length]);
 
   // ─── core: take one or many Files, run pipeline per file ───────────
   // We process files sequentially (not in parallel) because
@@ -81,11 +86,7 @@ function Impl({ onClose, onConfirm, closing }) {
     try {
       const accepted = [];
       for (const file of files) {
-        // Stop accepting once the batch is full. We check against the
-        // CURRENT thumbs length + what's already accepted in this loop
-        // to enforce the cap mid-batch (e.g. user drops 8 files when
-        // already 5 are in — accept 5 more, reject the last 3).
-        if (thumbs.length + accepted.length >= MAX_BILLS) {
+        if (thumbsLengthRef.current + accepted.length >= MAX_BILLS) {
           setError(`รับได้สูงสุด ${MAX_BILLS} บิล/รอบ — รูปที่เกินถูกข้าม`);
           break;
         }

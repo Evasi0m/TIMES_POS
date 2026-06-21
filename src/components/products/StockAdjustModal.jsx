@@ -5,8 +5,10 @@ import {
   STOCK_ADJUST_SUBREASONS,
   validateManualStockAdjust,
   manualAdjustProductStock,
+  notifyStockAdjustTelegram,
 } from '../../lib/stock-manual-adjust.js';
 import { verifyCurrentUserPassword } from '../../lib/export-auth.js';
+import { fetchTikTokMappings, mirrorStockAfterManualAdjust } from '../../lib/tiktok-inventory-sync.js';
 
 export default function StockAdjustModal({
   open,
@@ -23,7 +25,11 @@ export default function StockAdjustModal({
   const [password, setPassword] = useState('');
   const [step, setStep] = useState('form');
   const [busy, setBusy] = useState(false);
+  const [syncBusy, setSyncBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [result, setResult] = useState(null);
+  const [tiktokMapping, setTiktokMapping] = useState(null);
+  const [syncDone, setSyncDone] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -33,7 +39,19 @@ export default function StockAdjustModal({
     setPassword('');
     setStep('form');
     setBusy(false);
+    setSyncBusy(false);
     setErr('');
+    setResult(null);
+    setTiktokMapping(null);
+    setSyncDone(false);
+
+    if (!product?.id) return;
+    fetchTikTokMappings([product.id])
+      .then((rows) => {
+        const m = (rows || []).find((r) => r.product_id === product.id && r.sync_enabled !== false);
+        setTiktokMapping(m || null);
+      })
+      .catch(() => setTiktokMapping(null));
   }, [open, product?.id, currentStock]);
 
   const targetQty = targetQtyStr === '' ? NaN : Number(targetQtyStr);
@@ -87,24 +105,59 @@ export default function StockAdjustModal({
     }
     if (res.data?.unchanged) {
       toast?.push('ยอดสต็อกเท่าเดิม — ไม่มีการเปลี่ยนแปลง', 'info');
-    } else {
-      toast?.push(
-        `ปรับสต็อกแล้ว: ${res.data.stock_before} → ${res.data.stock_after}`,
-        'success',
-      );
+      setPassword('');
+      onSuccess?.(res.data);
+      onClose?.();
+      return;
     }
+    toast?.push(
+      `ปรับสต็อกแล้ว: ${res.data.stock_before} → ${res.data.stock_after}`,
+      'success',
+    );
+    setResult(res.data);
     setPassword('');
     onSuccess?.(res.data);
-    onClose?.();
+    notifyStockAdjustTelegram({ auditId: res.data.audit_id });
+    setStep('done');
+  };
+
+  const runTikTokSync = async () => {
+    if (!result?.audit_id || !product?.id) return;
+    setSyncBusy(true);
+    try {
+      const mirror = await mirrorStockAfterManualAdjust({
+        auditId: result.audit_id,
+        productIds: [product.id],
+        mappings: tiktokMapping ? [tiktokMapping] : null,
+        toast,
+      });
+      if (mirror.skipped && mirror.reason === 'not_connected') {
+        toast?.push('TikTok ยังไม่เชื่อมต่อ — sync ไม่ได้', 'warning');
+      } else if (mirror.skipped) {
+        toast?.push('ไม่มี mapping TikTok ที่พร้อม sync', 'info');
+      } else {
+        setSyncDone(true);
+      }
+    } catch (e) {
+      toast?.push('Sync TikTok ไม่สำเร็จ: ' + (e?.message || e), 'error');
+    } finally {
+      setSyncBusy(false);
+    }
   };
 
   const subreasonLabel = STOCK_ADJUST_SUBREASONS.find((r) => r.value === subreason)?.label || subreason;
+
+  const title = step === 'form'
+    ? 'ปรับจำนวนคงเหลือ'
+    : step === 'confirm'
+      ? 'ยืนยันการปรับสต็อก'
+      : 'ปรับสต็อกสำเร็จ';
 
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title={step === 'form' ? 'ปรับจำนวนคงเหลือ' : 'ยืนยันการปรับสต็อก'}
+      title={title}
       footer={
         step === 'form' ? (
           <>
@@ -113,7 +166,7 @@ export default function StockAdjustModal({
               ถัดไป
             </button>
           </>
-        ) : (
+        ) : step === 'confirm' ? (
           <>
             <button type="button" className="btn-secondary" onClick={() => { setStep('form'); setErr(''); }} disabled={busy}>
               ย้อนกลับ
@@ -121,6 +174,15 @@ export default function StockAdjustModal({
             <button type="button" className="btn-primary" onClick={submit} disabled={busy || !password}>
               {busy ? <><span className="spinner"/> กำลังบันทึก...</> : 'ยืนยันปรับสต็อก'}
             </button>
+          </>
+        ) : (
+          <>
+            {tiktokMapping && !syncDone && (
+              <button type="button" className="btn-secondary" onClick={runTikTokSync} disabled={syncBusy}>
+                {syncBusy ? <><span className="spinner"/> กำลัง sync...</> : 'Sync ไป TikTok'}
+              </button>
+            )}
+            <button type="button" className="btn-primary" onClick={onClose}>ปิด</button>
           </>
         )
       }
@@ -136,6 +198,15 @@ export default function StockAdjustModal({
               ยอดปัจจุบัน: <span className="font-display text-lg text-ink tabular-nums">{currentStock}</span>
             </div>
           </div>
+
+          {tiktokMapping && (
+            <div className="rounded-xl border border-warning/30 bg-warning/5 p-3 text-sm flex items-start gap-2">
+              <Icon name="alert" size={16} className="text-warning shrink-0 mt-0.5"/>
+              <span className="text-muted">
+                สินค้านี้เชื่อม TikTok — POS จะเปลี่ยนแต่ TikTok <span className="font-medium text-ink">ยังไม่ sync อัตโนมัติ</span>
+              </span>
+            </div>
+          )}
 
           <div>
             <label className="text-xs uppercase tracking-wider text-muted font-medium">ยอดที่ต้องการ *</label>
@@ -176,7 +247,7 @@ export default function StockAdjustModal({
 
           {err && <div className="text-sm text-danger">{err}</div>}
         </form>
-      ) : (
+      ) : step === 'confirm' ? (
         <form className="space-y-4" onSubmit={submit}>
           <div className="rounded-xl border border-warning/30 bg-warning/5 p-4 space-y-2 text-sm">
             <div className="flex items-start gap-2 font-medium text-ink">
@@ -207,6 +278,37 @@ export default function StockAdjustModal({
 
           {err && <div className="text-sm text-danger">{err}</div>}
         </form>
+      ) : (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-success/30 bg-success/5 p-4 space-y-2 text-sm">
+            <div className="flex items-start gap-2 font-medium text-ink">
+              <Icon name="check" size={18} className="text-success shrink-0 mt-0.5"/>
+              <span>บันทึกการปรับสต็อกแล้ว</span>
+            </div>
+            <div className="text-muted space-y-1 pl-7">
+              <div><span className="text-muted-soft">สินค้า:</span> {product?.name}</div>
+              <div>
+                <span className="text-muted-soft">ยอดเดิม → ใหม่:</span>{' '}
+                <span className="tabular-nums font-medium text-ink">
+                  {result?.stock_before} → {result?.stock_after}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {tiktokMapping && (
+            <div className="rounded-xl border border-warning/30 bg-warning/5 p-3 text-sm space-y-2">
+              <div className="flex items-start gap-2">
+                <Icon name="shop-bag" size={16} className="text-warning shrink-0 mt-0.5"/>
+                <span className="text-muted">
+                  {syncDone
+                    ? 'Sync ไป TikTok แล้ว'
+                    : 'POS เปลี่ยนแล้ว — กด "Sync ไป TikTok" ถ้าต้องการอัปเดต TikTok Shop'}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </Modal>
   );

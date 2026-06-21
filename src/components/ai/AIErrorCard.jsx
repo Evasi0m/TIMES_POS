@@ -273,11 +273,12 @@ const SEVERITY_META = {
 };
 
 // ─── UI ───────────────────────────────────────────────────────────────
-export default function AIErrorCard({ error, onRetry, onDismiss, onOpenSettings, compact = false }) {
+export default function AIErrorCard({ error, onRetry, onDismiss, onContinue, continueLabel, onOpenSettings, compact = false }) {
   const [showDetail, setShowDetail] = useState(false);
   if (!error) return null;
   const meta = SEVERITY_META[error.severity] || SEVERITY_META.danger;
   const showRetry = error.retryable && typeof onRetry === 'function';
+  const showContinue = typeof onContinue === 'function';
   const showSettings = error.kind === 'auth' && typeof onOpenSettings === 'function';
 
   // Compact variant — single-line strip used inside per-bill cards
@@ -355,11 +356,16 @@ export default function AIErrorCard({ error, onRetry, onDismiss, onOpenSettings,
         )}
 
         {/* Action row */}
-        {(showRetry || showSettings) && (
+        {(showRetry || showContinue || showSettings) && (
           <div className="mt-3.5 flex items-center gap-2 flex-wrap">
             {showRetry && (
               <button type="button" className="btn-primary !py-2 !text-sm" onClick={onRetry}>
                 <Icon name="refresh" size={14}/> ลองอีกครั้ง
+              </button>
+            )}
+            {showContinue && (
+              <button type="button" className="btn-secondary !py-2 !text-sm" onClick={onContinue}>
+                <Icon name="check" size={14}/> {continueLabel || 'ไปตรวจรับบิลที่อ่านแล้ว'}
               </button>
             )}
             {showSettings && (

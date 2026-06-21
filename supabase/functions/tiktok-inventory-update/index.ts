@@ -23,14 +23,17 @@ interface SyncItem {
   seller_sku?: string;
   tiktok_product_name?: string;
   skip?: boolean;
-  sync_operation?: 'receive' | 'void' | 'sale' | 'sale_void' | 'sale_edit' | 'return' | 'return_void';
+  sync_operation?: 'receive' | 'void' | 'sale' | 'sale_void' | 'sale_edit' | 'return' | 'return_void' | 'manual_adjust';
 }
 
-type SyncOp = 'receive' | 'void' | 'sale' | 'sale_void' | 'sale_edit' | 'return' | 'return_void';
+type SyncOp = 'receive' | 'void' | 'sale' | 'sale_void' | 'sale_edit' | 'return' | 'return_void' | 'manual_adjust';
 
 function resolveSyncOperation(it: SyncItem): SyncOp {
   const op = it.sync_operation;
-  if (op === 'void' || op === 'sale' || op === 'sale_void' || op === 'sale_edit' || op === 'return' || op === 'return_void') {
+  if (
+    op === 'void' || op === 'sale' || op === 'sale_void' || op === 'sale_edit'
+    || op === 'return' || op === 'return_void' || op === 'manual_adjust'
+  ) {
     return op;
   }
   return 'receive';
@@ -42,7 +45,7 @@ async function checkAlreadySynced(
   productId: number,
   syncOp: SyncOp,
 ): Promise<boolean> {
-  if (syncOp === 'sale_edit') return false;
+  if (syncOp === 'sale_edit' || syncOp === 'manual_adjust') return false;
   const { data, error } = await supa.rpc('tiktok_inventory_already_synced', {
     p_receive_order_id: receiveOrderId,
     p_product_id: productId,

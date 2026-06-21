@@ -71,4 +71,10 @@ describe('collectBillAlerts', () => {
       expect(BILL_STATUS_CHIP_CLS[key]).toMatch(/^brv-status-chip--/);
     }
   });
+
+  it('exposes needs_review status label', () => {
+    expectThaiText(BILL_STATUS_LABELS.needs_review);
+    expect(BILL_STATUS_LABELS.needs_review).toBe('ตรวจอีกครั้ง');
+    expect(BILL_STATUS_CHIP_CLS.needs_review).toBe('brv-status-chip--warn');
+  });
 });

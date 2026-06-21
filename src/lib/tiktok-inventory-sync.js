@@ -13,6 +13,7 @@ import {
   formatSaleVoidMirrorToast,
   formatReturnMirrorToast,
   formatReturnVoidMirrorToast,
+  formatManualAdjustMirrorToast,
   formatMirrorSkipToast,
   logMirrorBackgroundError,
   mappingNeedsProductId,
@@ -36,6 +37,7 @@ export {
   formatSaleVoidMirrorToast,
   formatReturnMirrorToast,
   formatReturnVoidMirrorToast,
+  formatManualAdjustMirrorToast,
   formatMirrorSkipToast,
   formatTikTokApiError,
   logMirrorBackgroundError,
@@ -538,6 +540,56 @@ export async function mirrorStockAfterSale({
     syncOperation,
   }));
   const results = await mirrorStockToTikTok(mirrorPayload);
+  return { results, skipped: false, targetCount: mappings.length };
+}
+
+/**
+ * Mirror POS stock to TikTok after manual stock adjust (super admin).
+ * Uses auditId or batchId as receive_order_id ref in sync log.
+ */
+export async function mirrorStockAfterManualAdjust({
+  auditId,
+  batchId,
+  productIds,
+  mappings: preloadedMappings = null,
+  toast = null,
+}) {
+  const refId = auditId ?? batchId;
+  const ids = [...new Set((productIds || []).filter(id => id != null))];
+  if (!refId || !ids.length) return { results: [], skipped: true, targetCount: 0 };
+
+  if (!(await isTikTokMirrorAvailable())) {
+    return { results: [], skipped: true, targetCount: 0, reason: 'not_connected' };
+  }
+
+  const rawMappings = preloadedMappings ?? await fetchTikTokMappings(ids);
+  const { mappings: readyMappings, healed, failed } = await ensureMappingsReady(rawMappings);
+  const mappings = filterMirrorEligibleMappings(readyMappings);
+  if (!mappings.length) {
+    const stillIncomplete = readyMappings.filter(mappingNeedsProductId).length + failed;
+    return {
+      results: [],
+      skipped: true,
+      targetCount: 0,
+      reason: mirrorSkipReason(rawMappings, mappings, failed),
+      incompleteCount: stillIncomplete,
+      healed,
+    };
+  }
+
+  const stocks = await fetchPosStocks(mappings.map(m => m.product_id));
+  const mirrorPayload = mappings.map(m => buildSyncLine({
+    receiveOrderId: refId,
+    productId: m.product_id,
+    posStockAfter: stocks[m.product_id]?.current_stock ?? 0,
+    mapping: m,
+    syncOperation: 'manual_adjust',
+  }));
+  const results = await mirrorStockToTikTok(mirrorPayload);
+  if (toast) {
+    const { msg, isError } = formatManualAdjustMirrorToast(results);
+    toast.push(msg, isError ? 'error' : 'success');
+  }
   return { results, skipped: false, targetCount: mappings.length };
 }
 

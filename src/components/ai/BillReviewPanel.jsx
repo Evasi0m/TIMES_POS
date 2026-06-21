@@ -475,6 +475,10 @@ export default function BillReviewPanel({
           onNextAttention={goNextAttention}
           hasPrevAttention={hasPrevAttention}
           hasNextAttention={hasNextAttention}
+          onPrevRow={goPrevSequential}
+          onNextRow={goNextSequential}
+          hasPrevRow={hasPrev}
+          hasNextRow={hasNext}
           attentionCount={summary.attention}
           hideFooter={!isDesktop}
           tiktokMirrorEnabled={tiktokMirrorEnabled}

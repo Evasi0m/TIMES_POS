@@ -36,6 +36,7 @@ const MSG = {
   monthly: '\u0e2a\u0e23\u0e38\u0e1b\u0e23\u0e32\u0e22\u0e40\u0e14\u0e37\u0e2d\u0e19 (\u0e27\u0e31\u0e19\u0e17\u0e35\u0e48 1 \u0e02\u0e2d\u0e07\u0e40\u0e14\u0e37\u0e2d\u0e19)',
   monthlyHour: '\u0e40\u0e27\u0e25\u0e32\u0e2a\u0e48\u0e07\u0e23\u0e32\u0e22\u0e40\u0e14\u0e37\u0e2d\u0e19',
   lowStock: '\u0e40\u0e01\u0e13\u0e11\u0e36\u0e2a\u0e15\u0e47\u0e2d\u0e01\u0e15\u0e48\u0e33 (/lowstock)',
+  stockAdjustNotify: '\u0e41\u0e08\u0e49\u0e07\u0e40\u0e15\u0e37\u0e2d\u0e19\u0e40\u0e21\u0e37\u0e48\u0e2d\u0e21\u0e35\u0e01\u0e32\u0e23\u0e1b\u0e23\u0e31\u0e1a\u0e2a\u0e15\u0e47\u0e2d\u0e01 (\u0e21\u0e37\u0e2d)',
   twoWay: 'Bot \u0e2a\u0e2d\u0e07\u0e17\u0e32\u0e07 (\u0e04\u0e33\u0e2a\u0e31\u0e48\u0e07\u0e43\u0e19\u0e41\u0e0a\u0e17)',
   installWebhook: '\u0e15\u0e34\u0e14 webhook',
   checkWebhook: '\u0e15\u0e23\u0e27\u0e08\u0e2a\u0e16\u0e32\u0e19\u0e30 webhook',
@@ -86,6 +87,7 @@ export default function TelegramSettings({ toast }) {
         monthly_enabled,
         monthly_hour,
         low_stock_threshold,
+        stock_adjust_notify_enabled,
         last_summary_sent_at,
         last_monthly_sent_at,
         last_summary_error
@@ -105,6 +107,7 @@ export default function TelegramSettings({ toast }) {
       monthly_enabled: data?.monthly_enabled ?? false,
       monthly_hour: data?.monthly_hour ?? 9,
       low_stock_threshold: data?.low_stock_threshold ?? 3,
+      stock_adjust_notify_enabled: data?.stock_adjust_notify_enabled ?? true,
       last_summary_sent_at: data?.last_summary_sent_at || null,
       last_monthly_sent_at: data?.last_monthly_sent_at || null,
       last_summary_error: data?.last_summary_error || null,
@@ -132,6 +135,7 @@ export default function TelegramSettings({ toast }) {
         monthly_enabled: !!draft.monthly_enabled,
         monthly_hour: Number(draft.monthly_hour) || 9,
         low_stock_threshold: Math.max(0, Math.min(999, Number(draft.low_stock_threshold) || 3)),
+        stock_adjust_notify_enabled: !!draft.stock_adjust_notify_enabled,
         daily_summary_enabled: !!draft.daily_enabled,
         daily_summary_hour: Number(draft.daily_hour) || 21,
       }).eq('id', 1);
@@ -335,6 +339,15 @@ export default function TelegramSettings({ toast }) {
             onChange={(e) => set('low_stock_threshold', e.target.value)}
           />
         </div>
+
+        <label className="flex items-center justify-between gap-3 cursor-pointer border-t hairline-soft pt-3">
+          <span className="text-sm">{MSG.stockAdjustNotify}</span>
+          <input
+            type="checkbox"
+            checked={draft.stock_adjust_notify_enabled}
+            onChange={(e) => set('stock_adjust_notify_enabled', e.target.checked)}
+          />
+        </label>
       </div>
 
       <div className="bg-surface-soft rounded-xl p-4 border hairline space-y-3">

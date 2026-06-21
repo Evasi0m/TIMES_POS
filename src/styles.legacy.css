@@ -1617,6 +1617,158 @@
   .btn-patch-log-sidebar svg { filter: drop-shadow(0 1px 1px rgba(30, 10, 60, 0.35)); position: relative; z-index: 1; }
   .btn-patch-log-sidebar > * { position: relative; z-index: 1; }
 
+  /* Purple + Tiffany pixel-mesh — inline action (patch-log look, btn-primary sizing) */
+  .btn-patch-log-action {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    position: relative;
+    overflow: hidden;
+    color: #f0fdfa;
+    text-shadow: 0 1px 0 rgba(15, 60, 55, 0.45);
+    padding: 12px 22px;
+    min-height: 44px;
+    border-radius: 11px;
+    font-weight: 500;
+    font-size: 15px;
+    letter-spacing: 0.01em;
+    border: 1px solid rgba(90, 45, 80, 0.55);
+    background:
+      radial-gradient(circle at 14% 22%, #c084fc 0%, transparent 52%),
+      radial-gradient(circle at 86% 18%, #5eead4 0%, transparent 48%),
+      radial-gradient(circle at 52% 108%, #a855f7 0%, transparent 58%),
+      radial-gradient(circle at 72% 55%, #0abab5 0%, transparent 42%),
+      linear-gradient(135deg, #7c3aed 0%, #5b21b6 42%, #0f766e 100%);
+    box-shadow:
+      0 2px 8px rgba(91, 33, 182, 0.40),
+      0 1px 0 rgba(255, 255, 255, 0.28) inset,
+      0 -1px 0 rgba(15, 60, 55, 0.30) inset;
+    cursor: pointer;
+    transition: all .18s var(--ease-out);
+  }
+  .btn-patch-log-action::before {
+    content: "";
+    position: absolute; top: 0; left: 0; right: 0; height: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.18), transparent);
+    pointer-events: none;
+    border-radius: inherit;
+  }
+  .btn-patch-log-action::after {
+    content: "";
+    position: absolute; inset: 0;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.04) 0, rgba(255,255,255,0.04) 1px, transparent 1px, transparent 3px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.04) 0, rgba(255,255,255,0.04) 1px, transparent 1px, transparent 3px);
+    pointer-events: none;
+    border-radius: inherit;
+    opacity: 0.55;
+  }
+  .btn-patch-log-action:hover {
+    filter: brightness(1.05) saturate(1.03);
+    transform: translateY(-1px);
+    box-shadow:
+      0 6px 16px rgba(91, 33, 182, 0.55),
+      0 0 0 1px rgba(180, 255, 240, 0.35),
+      0 1px 0 rgba(255, 255, 255, 0.45) inset,
+      0 -1px 0 rgba(15, 60, 55, 0.30) inset;
+  }
+  .btn-patch-log-action:active {
+    transform: scale(0.97);
+    box-shadow:
+      0 1px 4px rgba(91, 33, 182, 0.40),
+      0 1px 0 rgba(255, 255, 255, 0.35) inset;
+  }
+  .btn-patch-log-action:disabled {
+    background: rgb(var(--c-primary-disabled));
+    color: rgb(var(--c-muted));
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+    filter: none;
+  }
+  .btn-patch-log-action:disabled::before,
+  .btn-patch-log-action:disabled::after { display: none; }
+  :root[data-theme="dark"] .btn-patch-log-action:disabled {
+    background: rgb(var(--c-surface-card));
+    color: rgb(var(--c-muted-soft));
+  }
+  .btn-patch-log-action svg { filter: drop-shadow(0 1px 1px rgba(30, 10, 60, 0.35)); position: relative; z-index: 1; }
+  .btn-patch-log-action > * { position: relative; z-index: 1; }
+
+  /* Graphite pixel-mesh — wizard nav (patch-log treatment, charcoal palette) */
+  .btn-charcoal-premium {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    position: relative;
+    overflow: hidden;
+    color: #f3f4f6;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
+    padding: 12px 22px;
+    min-height: 44px;
+    border-radius: 11px;
+    font-weight: 500;
+    font-size: 15px;
+    letter-spacing: 0.01em;
+    border: 1px solid rgba(55, 65, 81, 0.62);
+    background:
+      radial-gradient(circle at 14% 22%, #9ca3af 0%, transparent 52%),
+      radial-gradient(circle at 86% 18%, #6b7280 0%, transparent 48%),
+      radial-gradient(circle at 52% 108%, #4b5563 0%, transparent 58%),
+      radial-gradient(circle at 72% 55%, #374151 0%, transparent 42%),
+      linear-gradient(135deg, #52525b 0%, #374151 42%, #111827 100%);
+    box-shadow:
+      0 2px 8px rgba(17, 24, 39, 0.42),
+      0 1px 0 rgba(255, 255, 255, 0.16) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.34) inset;
+    cursor: pointer;
+    transition: all .18s var(--ease-out);
+  }
+  .btn-charcoal-premium::before {
+    content: "";
+    position: absolute; top: 0; left: 0; right: 0; height: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.14), transparent);
+    pointer-events: none;
+    border-radius: inherit;
+  }
+  .btn-charcoal-premium::after {
+    content: "";
+    position: absolute; inset: 0;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.035) 0, rgba(255,255,255,0.035) 1px, transparent 1px, transparent 3px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.035) 0, rgba(255,255,255,0.035) 1px, transparent 1px, transparent 3px);
+    pointer-events: none;
+    border-radius: inherit;
+    opacity: 0.55;
+  }
+  .btn-charcoal-premium:hover {
+    filter: brightness(1.06) saturate(1.02);
+    transform: translateY(-1px);
+    box-shadow:
+      0 6px 16px rgba(17, 24, 39, 0.55),
+      0 0 0 1px rgba(229, 231, 235, 0.22),
+      0 1px 0 rgba(255, 255, 255, 0.22) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.34) inset;
+  }
+  .btn-charcoal-premium:active {
+    transform: scale(0.97);
+    box-shadow:
+      0 1px 4px rgba(17, 24, 39, 0.42),
+      0 1px 0 rgba(255, 255, 255, 0.14) inset;
+  }
+  .btn-charcoal-premium:disabled {
+    background: rgb(var(--c-primary-disabled));
+    color: rgb(var(--c-muted));
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+    filter: none;
+  }
+  .btn-charcoal-premium:disabled::before,
+  .btn-charcoal-premium:disabled::after { display: none; }
+  :root[data-theme="dark"] .btn-charcoal-premium:disabled {
+    background: rgb(var(--c-surface-card));
+    color: rgb(var(--c-muted-soft));
+  }
+  .btn-charcoal-premium svg { filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35)); position: relative; z-index: 1; }
+  .btn-charcoal-premium > * { position: relative; z-index: 1; }
+
   /* Used by the OverviewView segment tabs (ยอดขาย / วิเคราะห์).
      Mirrors `.btn-app-settings-sidebar` so the brand identity feels
      consistent — same coral gradient, same shadow recipe — but applies

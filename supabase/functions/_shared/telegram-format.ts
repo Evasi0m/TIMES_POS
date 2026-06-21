@@ -658,6 +658,104 @@ export function formatLowStock(items: Array<{ name: string; current_stock: numbe
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+//  STOCK MANUAL ADJUST ALERT
+// ─────────────────────────────────────────────────────────────────────────
+
+const STOCK_ADJUST_SUBREASON_LABEL: Record<string, string> = {
+  recording_error: 'บันทึกผิดพลาด / ซ้ำ',
+  physical_count: 'นับสต็อกจริงไม่ตรง',
+  damage_loss: 'เสียหาย / สูญหาย',
+  legacy_data: 'ข้อมูลเก่า / ย้ายระบบ',
+  other: 'อื่นๆ',
+};
+
+export interface StockAdjustAlertRow {
+  product_name: string;
+  stock_before: number;
+  stock_after: number;
+  qty_delta: number;
+  subreason: string;
+  note: string;
+}
+
+export function formatStockAdjustAlertText(
+  rows: StockAdjustAlertRow[],
+  actorEmail: string | null,
+): string {
+  const lines: string[] = [];
+  lines.push('⚠️ <b>ปรับสต็อก (มือ)</b>');
+  if (actorEmail) lines.push(`โดย: ${actorEmail}`);
+  if (!rows.length) {
+    lines.push('');
+    lines.push('ไม่พบรายการ');
+    return lines.join('\n');
+  }
+  const subreason = rows[0].subreason;
+  const note = rows[0].note;
+  lines.push(`เหตุผล: ${STOCK_ADJUST_SUBREASON_LABEL[subreason] || subreason}`);
+  if (note) lines.push(`หมายเหตุ: ${truncate(note, 120)}`);
+  lines.push('');
+  const show = rows.slice(0, 5);
+  for (const r of show) {
+    const sign = r.qty_delta > 0 ? '+' : '';
+    lines.push(`• ${truncate(r.product_name, 36)}: ${r.stock_before} → ${r.stock_after} (${sign}${r.qty_delta})`);
+  }
+  if (rows.length > 5) {
+    lines.push(`<i>… และอีก ${rows.length - 5} รายการ</i>`);
+  }
+  return lines.join('\n');
+}
+
+export async function loadStockAdjustAlertData(
+  supa: any,
+  opts: { auditId?: number; batchId?: number },
+): Promise<{ rows: StockAdjustAlertRow[]; actorEmail: string | null }> {
+  let q = supa
+    .from('stock_manual_adjustments')
+    .select('product_id, stock_before, stock_after, qty_delta, subreason, note, created_by, products(name)')
+    .order('id', { ascending: true });
+
+  if (opts.auditId != null) {
+    q = q.eq('id', opts.auditId);
+  } else if (opts.batchId != null) {
+    q = q.eq('batch_id', opts.batchId);
+  } else {
+    return { rows: [], actorEmail: null };
+  }
+
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+
+  const rows: StockAdjustAlertRow[] = (data || []).map((r: any) => ({
+    product_name: r.products?.name || `#${r.product_id}`,
+    stock_before: r.stock_before,
+    stock_after: r.stock_after,
+    qty_delta: r.qty_delta,
+    subreason: r.subreason,
+    note: r.note,
+  }));
+
+  const createdBy = data?.[0]?.created_by as string | undefined;
+  let actorEmail: string | null = null;
+  if (createdBy) {
+    try {
+      const { data: userData } = await supa.auth.admin.getUserById(createdBy);
+      actorEmail = userData?.user?.email ?? null;
+    } catch { /* best-effort */ }
+  }
+
+  return { rows, actorEmail };
+}
+
+export async function formatStockAdjustAlert(
+  supa: any,
+  opts: { auditId?: number; batchId?: number },
+): Promise<string> {
+  const { rows, actorEmail } = await loadStockAdjustAlertData(supa, opts);
+  return formatStockAdjustAlertText(rows, actorEmail);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 //  TELEGRAM API HELPERS
 // ─────────────────────────────────────────────────────────────────────────
 

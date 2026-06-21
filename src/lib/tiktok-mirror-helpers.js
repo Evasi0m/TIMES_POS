@@ -135,13 +135,21 @@ export function formatReturnVoidMirrorToast(results) {
   return formatMirrorToast(results, { label: 'TikTok return void mirror' });
 }
 
-/** @returns {'receive'|'void'|'sale'|'sale_void'|'sale_edit'|'return'|'return_void'} */
+/** @returns {'receive'|'void'|'sale'|'sale_void'|'sale_edit'|'return'|'return_void'|'manual_adjust'} */
 export function normalizeSyncOperation(syncOperation) {
   const op = syncOperation || 'receive';
-  if (op === 'void' || op === 'sale' || op === 'sale_void' || op === 'sale_edit' || op === 'return' || op === 'return_void') {
+  if (
+    op === 'void' || op === 'sale' || op === 'sale_void' || op === 'sale_edit'
+    || op === 'return' || op === 'return_void' || op === 'manual_adjust'
+  ) {
     return op;
   }
   return 'receive';
+}
+
+/** Toast after manual stock adjust mirror. */
+export function formatManualAdjustMirrorToast(results) {
+  return formatMirrorToast(results, { label: 'TikTok manual adjust mirror' });
 }
 
 /** True when mapping has TikTok SKU but lacks product id (blocks sale mirror). */

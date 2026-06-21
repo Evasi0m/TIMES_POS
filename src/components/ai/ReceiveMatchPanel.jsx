@@ -7,7 +7,8 @@ import { tiktokSkuDisplayLabel } from '../../lib/tiktok-mirror-helpers.js';
 import TikTokSkuMatchRow, { TIKTOK_MIN_PCT_OPTIONS } from '../ecommerce/TikTokSkuMatchRow.jsx';
 import RecentReceiveBadge from '../movement/RecentReceiveBadge.jsx';
 import ReceiveReviewWorkCard from './ReceiveReviewWorkCard.jsx';
-import { addVat, stripVat, fmtTHB } from '../../lib/money.js';
+import ReceiveStepProgress from './ReceiveStepProgress.jsx';
+import { addVat, fmtTHB } from '../../lib/money.js';
 import { vibrateScan } from '../../lib/barcode-feedback.js';
 import { suggestedRetail } from '../../lib/ai-receive.js';
 import {
@@ -49,10 +50,12 @@ function CandidateCell({ c, onPick, highlight, dataFirst }) {
 function QtyCostSection({ row, hasVat, onUpdate }) {
   const costIncomplete = !(Number(row.unit_cost) > 0);
   const qtyIncomplete = !(Number(row.quantity) > 0);
+  const inputBase = 'input !py-2.5 !min-h-[44px] !text-base w-full tabular-nums';
+  const costInputCls = inputBase + ' text-right font-mono ' + (costIncomplete ? '!border-warning ring-2 ring-warning/30' : '');
 
   return (
-    <div className="grid grid-cols-2 gap-3">
-      <label className="block">
+    <div className={'grid gap-3 ' + (hasVat ? 'grid-cols-3' : 'grid-cols-2')}>
+      <label className="block min-w-0">
         <span className={'text-xs mb-1 block flex items-center gap-1 ' + (qtyIncomplete ? 'text-warning font-medium' : 'text-muted-soft')}>
           จำนวน
           {qtyIncomplete && <Icon name="alert" size={10}/>}
@@ -61,12 +64,12 @@ function QtyCostSection({ row, hasVat, onUpdate }) {
           type="number"
           inputMode="numeric"
           min="1"
-          className={'input !py-2.5 !min-h-[44px] !text-base w-full tabular-nums ' + (qtyIncomplete ? '!border-warning ring-2 ring-warning/30' : '')}
+          className={inputBase + (qtyIncomplete ? ' !border-warning ring-2 ring-warning/30' : '')}
           value={row.quantity}
           onChange={(e) => onUpdate({ quantity: Math.max(0, Number(e.target.value) || 0) })}
         />
       </label>
-      <label className="block">
+      <label className="block min-w-0">
         <span className={'text-xs mb-1 block flex items-center gap-1 ' + (costIncomplete ? 'text-warning font-medium' : 'text-muted-soft')}>
           ทุน / เรือน
           {costIncomplete && <Icon name="alert" size={10}/>}
@@ -75,74 +78,34 @@ function QtyCostSection({ row, hasVat, onUpdate }) {
           type="number"
           inputMode="decimal"
           step="0.01"
-          className={'input !py-2.5 !min-h-[44px] !text-base w-full text-right font-mono tabular-nums ' + (costIncomplete ? '!border-warning ring-2 ring-warning/30' : '')}
+          readOnly={hasVat}
+          className={costInputCls + (hasVat ? ' read-only:bg-surface-soft read-only:cursor-default' : '')}
           value={row.unit_cost === 0 ? '' : hasVat ? addVat(row.unit_cost) : row.unit_cost}
-          onChange={(e) => {
+          onChange={hasVat ? undefined : (e) => {
             const inputVal = e.target.value === '' ? 0 : Number(e.target.value);
-            const val = Math.max(0, inputVal || 0);
-            onUpdate({ unit_cost: hasVat ? stripVat(val) : val });
+            onUpdate({ unit_cost: Math.max(0, inputVal || 0) });
           }}
         />
-        {hasVat && !costIncomplete && (
-          <span className="text-[10px] text-muted-soft mt-1 block text-right tabular-nums">
-            ก่อน VAT {fmtTHB(row.unit_cost)}
-          </span>
-        )}
       </label>
-    </div>
-  );
-}
-
-function StepIndicator({ steps, activeStep, onGotoStep, segmented = false }) {
-  if (segmented) {
-    return (
-      <div
-        className="air-step-indicator air-step-indicator--segmented shrink-0"
-        style={{ gridTemplateColumns: `repeat(${steps.length}, 1fr)` }}
-      >
-        {steps.map((s) => (
-          <button
-            key={s.key}
-            type="button"
-            className={
-              'air-step-indicator__seg' +
-              (s.key === activeStep ? ' is-active' : '') +
-              (s.done ? ' is-done' : '') +
-              (s.disabled ? ' is-disabled' : '')
-            }
-            disabled={s.disabled}
-            onClick={() => !s.disabled && onGotoStep(s.key)}
-          >
-            {s.done ? <Icon name="check" size={11}/> : <Icon name={s.icon} size={12}/>}
-            <span>{s.label === 'จับคู่รุ่น' ? 'จับคู่' : s.label === 'จำนวน/ทุน' ? 'ตัวเลข' : s.label}</span>
-          </button>
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <div className="air-step-indicator shrink-0">
-      {steps.map((s, i) => (
-        <React.Fragment key={s.key}>
-          {i > 0 && <Icon name="chevron-r" size={14} className="air-step-indicator__arrow"/>}
-          <button
-            type="button"
-            className={
-              'air-step-indicator__step' +
-              (s.key === activeStep ? ' is-active' : '') +
-              (s.done ? ' is-done' : '')
-            }
-            disabled={s.disabled}
-            onClick={() => !s.disabled && onGotoStep(s.key)}
-          >
-            <span className="air-step-indicator__num">
-              {s.done ? <Icon name="check" size={11}/> : i + 1}
-            </span>
-            {s.label}
-          </button>
-        </React.Fragment>
-      ))}
+      {hasVat && (
+        <label className="block min-w-0">
+          <span className={'text-xs mb-1 block flex items-center gap-1 ' + (costIncomplete ? 'text-warning font-medium' : 'text-muted-soft')}>
+            ก่อน VAT
+            {costIncomplete && <Icon name="alert" size={10}/>}
+          </span>
+          <input
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            className={costInputCls + ' !text-[rgb(255,0,0)] border-primary/40 focus:ring-primary/30'}
+            value={row.unit_cost === 0 ? '' : row.unit_cost}
+            onChange={(e) => {
+              const inputVal = e.target.value === '' ? 0 : Number(e.target.value);
+              onUpdate({ unit_cost: Math.max(0, inputVal || 0) });
+            }}
+          />
+        </label>
+      )}
     </div>
   );
 }
@@ -286,7 +249,7 @@ function StageAside({
 
       <button
         type="button"
-        className="btn-ghost !py-1.5 !px-2 !text-xs text-muted-soft hover:text-error mt-auto self-start inline-flex items-center gap-1"
+        className="air-glass-btn air-glass-btn--muted mt-auto self-start"
         onClick={onRemove}
       >
         <Icon name="trash" size={14}/> ลบรายการนี้
@@ -296,20 +259,20 @@ function StageAside({
 }
 
 function WorkspaceFooter({
-  rowIndex, totalRows, hasPrevAttention, hasNextAttention,
-  onPrevAttention, onNextAttention, attentionCount,
+  rowIndex, totalRows, hasPrevRow, hasNextRow,
+  onPrevRow, onNextRow, attentionCount,
 }) {
   return (
-    <div className="receive-match-panel__footer shrink-0 px-3 py-2.5 border-t hairline-soft flex items-center gap-2">
+    <div className="receive-match-panel__footer shrink-0 border-t hairline-soft flex items-center">
       <button
         type="button"
-        className="btn-secondary !py-1.5 !px-2.5 !text-xs flex-1 min-w-0"
-        onClick={onPrevAttention}
-        disabled={!hasPrevAttention}
+        className="brv-ws-footer-btn brv-ws-footer-btn--secondary"
+        onClick={onPrevRow}
+        disabled={!hasPrevRow}
       >
         <Icon name="chevron-l" size={14}/> ก่อนหน้า
       </button>
-      <span className="text-[11px] text-muted-soft tabular-nums shrink-0 text-center">
+      <span className="text-[11px] text-muted-soft tabular-nums shrink-0 text-center min-w-[3.25rem] px-1">
         {rowIndex + 1}/{totalRows}
         {attentionCount > 0 && (
           <span className="block text-[10px] text-amber-700">เหลือ {attentionCount}</span>
@@ -317,9 +280,9 @@ function WorkspaceFooter({
       </span>
       <button
         type="button"
-        className="btn-primary !py-1.5 !px-2.5 !text-xs flex-1 min-w-0"
-        onClick={onNextAttention}
-        disabled={!hasNextAttention}
+        className="brv-ws-footer-btn brv-ws-footer-btn--primary"
+        onClick={onNextRow}
+        disabled={!hasNextRow}
       >
         ถัดไป <Icon name="chevron-r" size={14}/>
       </button>
@@ -344,6 +307,10 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
   onNextAttention,
   hasPrevAttention = false,
   hasNextAttention = false,
+  onPrevRow,
+  onNextRow,
+  hasPrevRow = false,
+  hasNextRow = false,
   attentionCount = 0,
   tiktokMirrorEnabled = false,
   tiktokCatalog = [],
@@ -572,7 +539,7 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
   const advanceFromQtyCost = () => {
     if (hasTiktokStep) setActiveStep('tiktok');
     else if (wizardMode) onItemComplete?.();
-    else onNextAttention?.();
+    else onNextRow?.();
   };
 
   const showInlineNav = !wizardMode;
@@ -650,7 +617,7 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
                     <div className="air-stage__footer-actions">
                       <button
                         type="button"
-                        className="air-change-model-btn air-stage__footer-btn"
+                        className="air-change-model-btn air-stage__footer-btn !py-2.5 !text-sm"
                         onClick={() => setRematch(true)}
                       >
                         <Icon name="refresh" size={15}/> เปลี่ยนรุ่น
@@ -658,7 +625,7 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
                       {showInlineNav && (
                       <button
                         type="button"
-                        className="btn-primary air-stage__footer-btn !py-2.5 !text-sm"
+                        className="btn-charcoal-premium air-stage__footer-btn !py-2.5 !text-sm"
                         onClick={() => setActiveStep('qtycost')}
                       >
                         ตรวจจำนวน/ทุน <Icon name="chevron-r" size={14}/>
@@ -855,8 +822,6 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
                   </div>
                 ) : null}
 
-                {recentInfo && <RecentReceiveBadge info={recentInfo} />}
-
                 {useWizardLayout ? (
                   <div className="rrm-work-section">
                     <span className="rrm-work-section__label">จำนวนและทุน</span>
@@ -877,8 +842,9 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
                   </button>
                   <button
                     type="button"
-                    className="btn-primary !py-2 !px-4 !text-sm ml-auto"
+                    className="btn-charcoal-premium !py-2 !px-4 !text-sm ml-auto"
                     onClick={advanceFromQtyCost}
+                    disabled={!hasTiktokStep && !hasNextRow}
                   >
                     {hasTiktokStep ? 'ไปจับ TikTok' : 'รายการถัดไป'} <Icon name="chevron-r" size={14}/>
                   </button>
@@ -964,9 +930,9 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
                   </button>
                   <button
                     type="button"
-                    className="btn-primary !py-2 !px-4 !text-sm ml-auto"
-                    onClick={() => onNextAttention?.()}
-                    disabled={!hasNextAttention}
+                    className="btn-charcoal-premium !py-2 !px-4 !text-sm ml-auto"
+                    onClick={() => onNextRow?.()}
+                    disabled={!hasNextRow}
                   >
                     รายการถัดไป <Icon name="chevron-r" size={14}/>
                   </button>
@@ -1026,18 +992,21 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
         />
 
         <div className="air-stage__main">
-          {billComplete && (
+          {(recentInfo || billComplete) && (
             <div className="air-stage__main-top shrink-0">
-              <span className="air-status-chip air-status-chip--done ml-auto">
-                <Icon name="check" size={9}/> บิลนี้พร้อมบันทึก
-              </span>
+              {recentInfo && <RecentReceiveBadge info={recentInfo} variant="chip"/>}
+              {billComplete && (
+                <span className="air-status-chip air-status-chip--done">
+                  <Icon name="check" size={9}/> บิลนี้พร้อมบันทึก
+                </span>
+              )}
             </div>
           )}
-          <StepIndicator
+          <ReceiveStepProgress
             steps={steps}
             activeStep={activeStep}
             onGotoStep={setActiveStep}
-            segmented={isMobile}
+            variant="inline"
           />
 
           <div className="air-stage__main-body">
@@ -1050,10 +1019,10 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
         <WorkspaceFooter
           rowIndex={rowIndex}
           totalRows={totalRows}
-          hasPrevAttention={hasPrevAttention}
-          hasNextAttention={hasNextAttention}
-          onPrevAttention={onPrevAttention}
-          onNextAttention={onNextAttention}
+          hasPrevRow={hasPrevRow}
+          hasNextRow={hasNextRow}
+          onPrevRow={onPrevRow}
+          onNextRow={onNextRow}
           attentionCount={attentionCount}
         />
       )}

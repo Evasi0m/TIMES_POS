@@ -1,0 +1,345 @@
+/* Glass step progress — shared desktop + mobile (sliding indicator) */
+
+.mrs-progress-card.card-canvas {
+  padding: 0.75rem 0.875rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.mrs-progress-card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 1.375rem;
+}
+
+.mrs-progress-card__title {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  color: rgb(var(--c-muted));
+  letter-spacing: 0.02em;
+}
+
+.mrs-progress-card__active {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: rgb(var(--c-ink));
+  text-align: right;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 0.35s ease, opacity 0.25s ease;
+}
+
+.mrs-progress-card--on-match .mrs-progress-card__active {
+  color: rgb(var(--c-primary));
+}
+
+.mrs-progress-card--on-qtycost .mrs-progress-card__active {
+  color: rgb(var(--c-accent-teal));
+}
+
+.mrs-progress-card--on-tiktok .mrs-progress-card__active {
+  color: #6d28d9;
+}
+
+.receive-step-progress--inline {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid rgb(var(--c-hairline) / 0.5);
+}
+
+.mrs-progress--glass {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: repeat(var(--mrs-steps, 3), 1fr);
+  grid-template-rows: 1fr;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: 0.875rem;
+  border: 1px solid rgb(var(--c-hairline) / 0.42);
+  background: rgb(var(--c-surface-strong) / 0.52);
+  backdrop-filter: blur(18px) saturate(145%);
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.72),
+    0 6px 20px -14px rgb(var(--shadow-rgb, 0 0 0) / 0.22);
+  overflow: hidden;
+}
+
+.mrs-progress--glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 85% 65% at 50% 0%, rgb(255 255 255 / 0.42), transparent 62%),
+    linear-gradient(
+      90deg,
+      rgb(var(--c-primary) / 0.04),
+      transparent 30%,
+      rgb(var(--c-accent-teal) / 0.035)
+    );
+}
+
+.mrs-progress__indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  width: var(--mrs-ind-w, 0);
+  height: var(--mrs-ind-h, 0);
+  border-radius: 0.6875rem;
+  border: 1px solid rgb(255 255 255 / 0.72);
+  background:
+    linear-gradient(
+      165deg,
+      rgb(255 255 255 / 0.92) 0%,
+      rgb(255 255 255 / 0.68) 48%,
+      rgb(255 255 255 / 0.78) 100%
+    );
+  backdrop-filter: blur(18px) saturate(175%);
+  -webkit-backdrop-filter: blur(18px) saturate(175%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.98),
+    inset 0 -1px 0 rgb(255 255 255 / 0.35),
+    0 2px 8px -2px rgb(var(--shadow-rgb, 0 0 0) / 0.12);
+  transform: translate3d(var(--mrs-ind-x, 0), var(--mrs-ind-y, 0), 0);
+  transition:
+    transform 0.46s cubic-bezier(0.34, 1.28, 0.64, 1),
+    width 0.46s cubic-bezier(0.34, 1.28, 0.64, 1),
+    height 0.46s cubic-bezier(0.34, 1.28, 0.64, 1),
+    opacity 0.2s ease,
+    box-shadow 0.35s ease,
+    border-color 0.35s ease,
+    background 0.35s ease;
+  will-change: transform, width;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mrs-progress__indicator {
+    transition-duration: 0.01ms;
+  }
+}
+
+.mrs-progress__indicator::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(ellipse 90% 70% at 50% 0%, rgb(255 255 255 / 0.55), transparent 62%);
+}
+
+.mrs-progress--on-match .mrs-progress__indicator {
+  border-color: rgb(var(--c-primary) / 0.42);
+  background:
+    linear-gradient(
+      165deg,
+      rgb(255 255 255 / 0.94) 0%,
+      rgb(var(--c-primary) / 0.1) 52%,
+      rgb(255 255 255 / 0.82) 100%
+    );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.98),
+    inset 0 -2px 0 rgb(var(--c-primary) / 0.55),
+    0 0 0 1px rgb(var(--c-primary) / 0.14),
+    0 0 22px -4px rgb(var(--c-primary) / 0.42),
+    0 6px 18px -8px rgb(var(--c-primary) / 0.38);
+}
+
+.mrs-progress--on-qtycost .mrs-progress__indicator {
+  border-color: rgb(var(--c-accent-teal) / 0.42);
+  background:
+    linear-gradient(
+      165deg,
+      rgb(255 255 255 / 0.94) 0%,
+      rgb(var(--c-accent-teal) / 0.12) 52%,
+      rgb(255 255 255 / 0.82) 100%
+    );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.98),
+    inset 0 -2px 0 rgb(var(--c-accent-teal) / 0.55),
+    0 0 0 1px rgb(var(--c-accent-teal) / 0.14),
+    0 0 22px -4px rgb(var(--c-accent-teal) / 0.4),
+    0 6px 18px -8px rgb(var(--c-accent-teal) / 0.36);
+}
+
+.mrs-progress--on-tiktok .mrs-progress__indicator {
+  border-color: rgb(124 58 237 / 0.42);
+  background:
+    linear-gradient(
+      165deg,
+      rgb(255 255 255 / 0.94) 0%,
+      rgb(124 58 237 / 0.1) 52%,
+      rgb(255 255 255 / 0.82) 100%
+    );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.98),
+    inset 0 -2px 0 rgb(124 58 237 / 0.5),
+    0 0 0 1px rgb(124 58 237 / 0.14),
+    0 0 22px -4px rgb(124 58 237 / 0.36),
+    0 6px 18px -8px rgb(124 58 237 / 0.32);
+}
+
+.mrs-progress__tab {
+  position: relative;
+  grid-row: 1;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3125rem;
+  min-height: 2.875rem;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid transparent;
+  border-radius: 0.6875rem;
+  font-size: 0.8125rem;
+  font-weight: 650;
+  color: rgb(var(--c-muted-soft));
+  background: transparent;
+  cursor: pointer;
+  transition:
+    color 0.22s ease,
+    opacity 0.22s ease,
+    text-shadow 0.22s ease,
+    transform 0.14s ease;
+}
+
+.receive-step-progress--inline .mrs-progress__tab {
+  min-height: 2.5rem;
+  font-size: 0.75rem;
+}
+
+.mrs-progress__tab-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  opacity: 0.72;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.mrs-progress__tab.is-pending {
+  color: rgb(var(--c-muted) / 0.72);
+}
+
+.mrs-progress__tab.is-done {
+  color: rgb(var(--c-success, 34 197 94) / 0.88);
+}
+
+.mrs-progress__tab.is-done .mrs-progress__tab-icon {
+  opacity: 1;
+}
+
+.mrs-progress__tab.is-disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.mrs-progress__tab.is-active {
+  color: rgb(var(--c-ink));
+  font-weight: 700;
+  z-index: 2;
+}
+
+.mrs-progress__tab--match.is-active {
+  color: rgb(var(--c-primary));
+  text-shadow: 0 0 14px rgb(var(--c-primary) / 0.35);
+}
+
+.mrs-progress__tab--qtycost.is-active {
+  color: rgb(var(--c-accent-teal));
+  text-shadow: 0 0 14px rgb(var(--c-accent-teal) / 0.38);
+}
+
+.mrs-progress__tab--tiktok.is-active {
+  color: #6d28d9;
+  text-shadow: 0 0 14px rgb(124 58 237 / 0.35);
+}
+
+.mrs-progress__tab.is-active .mrs-progress__tab-icon {
+  opacity: 1;
+  transform: scale(1.08);
+  filter: drop-shadow(0 0 6px currentColor);
+}
+
+.mrs-progress__tab.is-tappable.is-active:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.mrs-progress__tab.is-tappable:not(:disabled):hover {
+  color: rgb(var(--c-ink));
+}
+
+.mrs-progress__label {
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+:root[data-theme='dark'] .mrs-progress--glass {
+  background: rgb(var(--c-surface-card) / 0.58);
+  border-color: rgb(var(--c-hairline) / 0.38);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 8px 24px -16px rgb(0 0 0 / 0.45);
+}
+
+:root[data-theme='dark'] .mrs-progress--glass::before {
+  background:
+    radial-gradient(ellipse 85% 65% at 50% 0%, rgb(255 255 255 / 0.06), transparent 62%),
+    linear-gradient(90deg, rgb(var(--c-primary) / 0.08), transparent 30%, rgb(var(--c-accent-teal) / 0.06));
+}
+
+:root[data-theme='dark'] .mrs-progress__indicator {
+  background:
+    linear-gradient(
+      165deg,
+      rgb(var(--c-surface-strong) / 0.92) 0%,
+      rgb(var(--c-surface-card) / 0.72) 100%
+    );
+  border-color: rgb(var(--c-hairline) / 0.5);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    0 2px 12px -4px rgb(0 0 0 / 0.45);
+}
+
+:root[data-theme='dark'] .mrs-progress__indicator::before {
+  background: radial-gradient(ellipse 90% 70% at 50% 0%, rgb(255 255 255 / 0.08), transparent 62%);
+}
+
+:root[data-theme='dark'] .mrs-progress--on-match .mrs-progress__indicator {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    inset 0 -2px 0 rgb(var(--c-primary)),
+    0 0 0 1px rgb(var(--c-primary) / 0.22),
+    0 0 22px -4px rgb(var(--c-primary) / 0.48),
+    0 4px 16px -6px rgb(var(--c-primary) / 0.42);
+}
+
+:root[data-theme='dark'] .mrs-progress--on-qtycost .mrs-progress__indicator {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    inset 0 -2px 0 rgb(var(--c-accent-teal)),
+    0 4px 16px -6px rgb(var(--c-accent-teal) / 0.38);
+}
+
+:root[data-theme='dark'] .mrs-progress--on-tiktok .mrs-progress__indicator {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    inset 0 -2px 0 #a78bfa,
+    0 0 0 1px rgb(124 58 237 / 0.2),
+    0 0 22px -4px rgb(124 58 237 / 0.45),
+    0 4px 16px -6px rgb(124 58 237 / 0.38);
+}

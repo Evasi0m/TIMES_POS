@@ -9,6 +9,7 @@ const SEVERITY = { error: 0, warn: 1, info: 2 };
 
 export const BILL_STATUS_LABELS = {
   ready: 'พร้อมบันทึก',
+  needs_review: 'ตรวจอีกครั้ง',
   unresolved: 'ต้องจับคู่',
   incomplete: 'กรอกตัวเลข',
   tiktok_unresolved: 'จับ TikTok',
@@ -21,6 +22,7 @@ export const BILL_STATUS_LABELS = {
 /** Stable CSS chip classes (not dynamic Tailwind). */
 export const BILL_STATUS_CHIP_CLS = {
   ready: 'brv-status-chip--ready',
+  needs_review: 'brv-status-chip--warn',
   unresolved: 'brv-status-chip--warn',
   incomplete: 'brv-status-chip--warn',
   tiktok_unresolved: 'brv-status-chip--warn',
@@ -72,6 +74,13 @@ export function collectBillAlerts(bill, {
       key: 'empty',
       severity: 'warn',
       message: 'อ่านรายการไม่ได้ — ลบบิลนี้แล้วถ่ายใหม่',
+    });
+  }
+  if (bill.parse_warning === 'empty_slot' || (bill.parseState === 'failed' && isEmpty && bill.parseError)) {
+    alerts.push({
+      key: 'parse-empty',
+      severity: 'error',
+      message: bill.parseError || 'AI ไม่ได้คืนข้อมูลบิลนี้ — ลองถ่ายใหม่',
     });
   }
   if (!isNonCmg && !isEmpty && unresolved > 0) {
