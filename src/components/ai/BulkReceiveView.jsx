@@ -889,7 +889,17 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
     // permanently lock the UI.
     let savedIdsThisPass = [];
     let failedThisPass = [];
+    let submitAttempted = false;
     const mirrorResultsAll = [];
+    // Keep billsRef in sync inside submitAll — React may batch setBills
+    // across awaits, so the finally block must not rely on useEffect alone.
+    const commitBills = (updater) => {
+      setBills((prev) => {
+        const next = updater(prev);
+        billsRef.current = next;
+        return next;
+      });
+    };
     try {
       // Snapshot the indices we'll attempt so concurrent state changes
       // can't shift them mid-loop. We re-read bills[i] each iteration
@@ -905,6 +915,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
       if (targets.length === 0) {
         return;
       }
+      submitAttempted = true;
       setSavingProgress({ done: 0, total: targets.length });
 
       // M6 fix: pre-validate barcodes against the in-memory catalog. If
@@ -928,7 +939,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
         if (!bill || bill.saveState === 'saved') continue;
 
         // Mark in-flight so the stepper shows a spinner on this bill.
-        setBills((prev) => prev.map((b, j) =>
+        commitBills((prev) => prev.map((b, j) =>
           j === i ? { ...b, saveState: 'saving', saveError: null } : b,
         ));
 
@@ -1123,7 +1134,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
           if (bc) existingBarcodes.add(bc);
         }
 
-        setBills((prev) => prev.map((b, j) =>
+        commitBills((prev) => prev.map((b, j) =>
           j === i
             ? { ...b, saveState: 'saved', savedOrderId: head.id, saveError: null }
             : b,
@@ -1142,7 +1153,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
           }
         }
         const msg = mapError(e) || e?.message || String(e);
-        setBills((prev) => prev.map((b, j) =>
+        commitBills((prev) => prev.map((b, j) =>
           j === i ? { ...b, saveState: 'failed', saveError: msg } : b,
         ));
         failed.push({ index: i, message: msg });
@@ -1150,16 +1161,23 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
         setSavingProgress({ done: loopIdx + 1, total: targets.length });
       }
     } finally {
+      if (!submitAttempted) {
+        setSubmitting(false);
+        setSavingProgress(null);
+        return;
+      }
       // R7 fix: build the summary from the FINAL bills state, not
       // from per-pass local arrays. After a retry-failed pass, the
       // local `savedIdsThisPass` only contains the retry's saves,
       // throwing away the original successes. Reading from billsRef
       // gives a cumulative view that's always honest about what's
-      // actually been saved.
+      // actually been saved. commitBills keeps the ref current even
+      // when React hasn't flushed batched setBills yet.
       const finalBills = billsRef.current;
-      const allSavedIds = finalBills
+      const refSavedIds = finalBills
         .filter((b) => b.saveState === 'saved' && b.savedOrderId != null)
         .map((b) => b.savedOrderId);
+      const allSavedIds = [...new Set([...refSavedIds, ...savedIdsThisPass])];
       const allFailed = finalBills
         .map((b, idx) => (b.saveState === 'failed'
           ? { index: idx, message: b.saveError || 'unknown error' }
@@ -2491,7 +2509,9 @@ function SubmitBar({
 // ─── Sub: done summary ────────────────────────────────────────────────
 function DoneSummary({ submitSummary, bills, onRetryFailed, onStartNew, submitting }) {
   const failed = submitSummary.failed || [];
-  const savedCount = submitSummary.savedIds?.length || 0;
+  const savedFromSummary = submitSummary.savedIds?.length || 0;
+  const savedFromBills = bills.filter((b) => b.saveState === 'saved').length;
+  const savedCount = Math.max(savedFromSummary, savedFromBills);
   const failedCount = failed.length;
   const skippedCount = bills.filter((b) => !b.is_cmg_bill || b.rows.length === 0).length;
   const allOk = failedCount === 0;
