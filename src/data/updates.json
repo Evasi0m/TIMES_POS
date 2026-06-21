@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "patches": [
     {
+      "id": "2026-06-21-ai-scan-review-blank",
+      "date": "2026-06-21",
+      "title": "แก้ AI scan บิลแล้วหน้าว่าง",
+      "tags": ["แก้ไข", "AI"],
+      "items": [
+        "หลัง AI อ่านบิล CMG เสร็จ หน้าตรวจรับบิลแสดงรายการได้ตามปกติอีกครั้ง",
+        "แก้ React hooks ใน ReceiveMatchPanel ที่ทำให้ component crash ตอนเข้า review"
+      ]
+    },
+    {
       "id": "2026-06-20-receive-review-mobile",
       "date": "2026-06-20",
       "title": "รับเข้า ×10 — ตรวจรับบิลบนมือถือใหม่",

@@ -455,57 +455,7 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
     return () => window.removeEventListener('keydown', onKey);
   }, [row, activeStep, resolveMode, showCreate, row?.candidates?.length]);
 
-  if (!row) {
-    return (
-      <div
-        ref={ref}
-        className="receive-match-panel receive-match-panel--empty air-stage--compact ttc-rl ttc-bento rounded-2xl border p-6 flex items-center justify-center min-h-[200px]"
-      >
-        <div className="text-center text-sm text-muted-soft">
-          <Icon name="check" size={24} className="mx-auto mb-2 opacity-40"/>
-          ไม่มีรายการให้แก้ไข
-        </div>
-      </div>
-    );
-  }
-
-  const displayState = getRowDisplayState(row, tiktokMirrorEnabled);
-  const softMatch =
-    row.status === 'auto' &&
-    typeof row.matchScore === 'number' &&
-    row.matchScore < SOFT_MATCH_FLOOR;
-  const hasPos = row.product || (row.status === 'new' && row.newProduct);
-  const posName = row.product?.name || row.newProduct?.name || null;
-  const currentStock = Number(row.product?.current_stock) || 0;
-  const stockAfter = currentStock + (Number(row.quantity) || 0);
-
-  const handlePick = (p) => {
-    onPick(p);
-    vibrateScan();
-    setRematch(false);
-    setShowCreate(false);
-    setActiveStep('qtycost');
-  };
-
-  const submitCreate = () => {
-    if (!npName.trim()) return;
-    const retail = Number(npRetail);
-    if (!retail || retail <= 0) return;
-    onCreateNew({
-      name: npName.trim(),
-      barcode: npBarcode.trim() || null,
-      retail_price: retail,
-    });
-    setShowCreate(false);
-    setActiveStep('qtycost');
-  };
-
   const hasTiktokStep = steps.some((s) => s.key === 'tiktok');
-  const advanceFromQtyCost = () => {
-    if (hasTiktokStep) setActiveStep('tiktok');
-    else if (wizardMode) onItemComplete?.();
-    else onNextAttention?.();
-  };
 
   const wizardAdvance = useCallback(() => {
     if (!row) return;
@@ -573,6 +523,57 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
     wizardBack,
     wizardGotoStep,
   ]);
+
+  if (!row) {
+    return (
+      <div
+        ref={ref}
+        className="receive-match-panel receive-match-panel--empty air-stage--compact ttc-rl ttc-bento rounded-2xl border p-6 flex items-center justify-center min-h-[200px]"
+      >
+        <div className="text-center text-sm text-muted-soft">
+          <Icon name="check" size={24} className="mx-auto mb-2 opacity-40"/>
+          ไม่มีรายการให้แก้ไข
+        </div>
+      </div>
+    );
+  }
+
+  const displayState = getRowDisplayState(row, tiktokMirrorEnabled);
+  const softMatch =
+    row.status === 'auto' &&
+    typeof row.matchScore === 'number' &&
+    row.matchScore < SOFT_MATCH_FLOOR;
+  const hasPos = row.product || (row.status === 'new' && row.newProduct);
+  const posName = row.product?.name || row.newProduct?.name || null;
+  const currentStock = Number(row.product?.current_stock) || 0;
+  const stockAfter = currentStock + (Number(row.quantity) || 0);
+
+  const handlePick = (p) => {
+    onPick(p);
+    vibrateScan();
+    setRematch(false);
+    setShowCreate(false);
+    setActiveStep('qtycost');
+  };
+
+  const submitCreate = () => {
+    if (!npName.trim()) return;
+    const retail = Number(npRetail);
+    if (!retail || retail <= 0) return;
+    onCreateNew({
+      name: npName.trim(),
+      barcode: npBarcode.trim() || null,
+      retail_price: retail,
+    });
+    setShowCreate(false);
+    setActiveStep('qtycost');
+  };
+
+  const advanceFromQtyCost = () => {
+    if (hasTiktokStep) setActiveStep('tiktok');
+    else if (wizardMode) onItemComplete?.();
+    else onNextAttention?.();
+  };
 
   const showInlineNav = !wizardMode;
   const useWizardLayout = wizardMode && isMobile;
