@@ -34,6 +34,7 @@ import { todayISO } from '../../lib/server-clock.js';
 import Icon from '../ui/Icon.jsx';
 import BillReviewPanel, { materializeParsedBill, makeRowUid } from './BillReviewPanel.jsx';
 import BulkBillUploadModal from './BulkBillUploadModal.jsx';
+import JsonBillImportModal from './JsonBillImportModal.jsx';
 import BillImageLightbox from './BillImageLightbox.jsx';
 import AIErrorCard, { parseAIError } from './AIErrorCard.jsx';
 import MacTerminal from '../ui/MacTerminal.jsx';
@@ -58,6 +59,8 @@ import {
   msgResponseOk,
   msgRetryScan,
   msgSendBills,
+  msgJsonBillReady,
+  msgStartJsonImport,
   msgStartScan,
   msgTokenUsage,
   msgTraceLines,
@@ -174,6 +177,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
   // submitted earlier in the week.
   const { map: recentReceivesMap, refresh: refreshRecentReceives } = useRecentReceivesMap();
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [jsonImportOpen, setJsonImportOpen] = useState(false);
   const [error, setError] = useState(null);
   const [products, setProducts] = useState([]);
   const [bills, setBills] = useState([]); // per-image state
@@ -506,6 +510,138 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
     }
     setUploadOpen(true);
   };
+
+  const startJsonImport = () => {
+    if (bills.length > 0) {
+      bills.forEach((b) => b.previewUrl && URL.revokeObjectURL(b.previewUrl));
+      setBills([]);
+      setUsage(null);
+      setParsingProgress(null);
+      setSubmitSummary(null);
+      setError(null);
+      setCurrentIdx(0);
+    }
+    setJsonImportOpen(true);
+  };
+
+  const retryJsonImport = () => {
+    setError(null);
+    setPhase('empty');
+    startJsonImport();
+  };
+
+  const handleJsonImportConfirm = useCallback(async ({ bills: parsedBills, fileName } = {}) => {
+    if (!parsedBills?.length) return;
+    setJsonImportOpen(false);
+    setPhase('parsing');
+    setError(null);
+    clearParseLogs();
+    pushParseLogs(msgStartJsonImport(parsedBills.length));
+    setParsingProgress({ done: 0, total: parsedBills.length, currentFrom: 1, currentTo: parsedBills.length, failed: 0 });
+    setCurrentIdx(0);
+    setUsage(null);
+
+    const seedBills = parsedBills.map((_, i) => ({
+      uid: makeRowUid(),
+      name: fileName ? `${fileName}#${i + 1}` : `json-bill-${i + 1}`,
+      importSource: 'json',
+      previewUrl: null,
+      base64: null,
+      mime: null,
+      is_cmg_bill: false,
+      supplier_invoice_no: '',
+      has_vat: true,
+      bill_subtotal: 0,
+      total_qty: 0,
+      vat_amount: 0,
+      grand_total: 0,
+      validation: null,
+      rows: [],
+      parseState: 'parsing',
+      parseError: null,
+      saveState: 'pending',
+      savedOrderId: null,
+      saveError: null,
+    }));
+    setBills(seedBills);
+
+    try {
+      pushParseLogs(msgCatalogStart());
+      const catalogStartedAt = Date.now();
+      const { bundle, error: catalogError } = await getProductListBundle(sb);
+      const catalog = bundle?.products || [];
+      const catalogMs = Date.now() - catalogStartedAt;
+      if (catalogError) {
+        console.warn('[BulkReceiveView] JSON import catalog load issue:', catalogError);
+        pushParseLogs(msgCatalogWarn());
+      } else {
+        pushParseLogs(msgCatalogDone(catalog.length, catalogMs));
+      }
+      setProducts(catalog);
+
+      const materializedBills = [];
+      for (let i = 0; i < parsedBills.length; i++) {
+        const bill = parsedBills[i];
+        const billNo = i + 1;
+        const invoiceNo = String(bill?.supplier_invoice_no || '').trim();
+        const materialized = materializeParsedBill(bill, catalog);
+        const { rows, validation } = materialized;
+        appendParseLog(msgJsonBillReady(billNo, invoiceNo, rows.length));
+        const auto = rows.filter((r) => r.status === 'auto' || r.status === 'new').length;
+        const pick = rows.filter((r) => r.status === 'suggestions').length;
+        const none = rows.filter((r) => r.status === 'none').length;
+        appendParseLog(msgMatchSummary(billNo, auto, pick, none));
+        const valLine = msgValidationSummary(billNo, validation);
+        if (valLine) appendParseLog(valLine);
+        materializedBills.push({ parsed: bill, materialized });
+        setParsingProgress((prev) => ({
+          ...(prev || {}),
+          done: i + 1,
+          total: parsedBills.length,
+          currentFrom: 1,
+          currentTo: parsedBills.length,
+        }));
+      }
+
+      setBills((prev) =>
+        prev.map((b, i) => {
+          const entry = materializedBills[i];
+          if (!entry) return b;
+          const { parsed, materialized } = entry;
+          return {
+            ...b,
+            is_cmg_bill: Boolean(parsed.is_cmg_bill),
+            supplier_invoice_no: String(parsed.supplier_invoice_no || '').trim(),
+            bill_subtotal: materialized.bill_subtotal,
+            total_qty: materialized.total_qty,
+            vat_amount: materialized.vat_amount,
+            grand_total: materialized.grand_total,
+            validation: materialized.validation,
+            rows: materialized.rows,
+            parseState: 'parsed',
+            parseError: null,
+          };
+        }),
+      );
+
+      const invoiceNos = materializedBills
+        .map(({ parsed }) => String(parsed?.supplier_invoice_no || '').trim())
+        .filter(Boolean);
+      if (invoiceNos.length) pushParseLogs(msgDupCheckStart(invoiceNos.length));
+      findExistingCmgInvoices(invoiceNos).then(setDupInvoices).catch(() => {});
+
+      pushParseLogs(msgAllDone(parsedBills.length, parsedBills.length));
+      setParsingProgress(null);
+      setPhase('review');
+    } catch (e) {
+      console.warn('[BulkReceiveView] JSON import failed:', e);
+      const parsed = await parseAIError(e);
+      pushParseLogs(msgParseError(parsed.title, parsed.hint));
+      setError({ ...parsed, retryable: false });
+      setBills((prev) => prev.map((b) => ({ ...b, parseState: 'failed', parseError: parsed.title })));
+      setPhase('error');
+    }
+  }, [appendParseLog, clearParseLogs, pushParseLogs]);
 
   // ─── Upload commit → kick off chunked AI parsing ───────────────────
   const handleUploadConfirm = useCallback(async ({ images, retryOnly = false } = {}) => {
@@ -1094,6 +1230,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
         // path as the regular receive form. Date is today; supplier =
         // CMG; VAT 7% always (CMG always issues VAT invoices).
         const today = todayISO();
+        const isJsonBatch = bills.some((b) => b.importSource === 'json');
         const header = {
           receive_date: startOfDayBangkok(today),
           total_value: total,
@@ -1105,13 +1242,15 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
           supplier_id: supplier?.id,
           supplier_name: supplier?.business_name || 'CMG',
           supplier_tax_id: supplier?.tax_id || null,
-          created_via: 'ai_cmg',
+          created_via: isJsonBatch ? 'json_cmg' : 'ai_cmg',
           // M3: per-bill suffix so two same-second fallbacks differ.
           // `loopIdx + 1` mirrors the user-visible bill number well
           // enough; we don't expose the suffix in UI anywhere.
           supplier_invoice_no:
             bill.supplier_invoice_no?.trim() || autoInvoiceNo(i + 1),
-          notes: `AI scan · batch · ${items.length} รายการ`,
+          notes: isJsonBatch
+            ? `JSON import · batch · ${items.length} รายการ`
+            : `AI scan · batch · ${items.length} รายการ`,
         };
 
         const { data: head, error: rpcErr } = await sb.rpc('create_stock_movement_with_items', {
@@ -1273,11 +1412,19 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
           between EMPTY and the rest so the user sees the rich error
           UI (with retry button preserving their images) instead of
           being dumped back to the landing page. */}
-      {phase === 'error' && error && (
+      {phase === 'error' && error && (() => {
+        const isJsonErrorBatch = bills.some((b) => b.importSource === 'json');
+        const pendingCount = bills.filter((b) => b.parseState !== 'parsed').length || bills.length;
+        return (
         <div className="space-y-4">
           <AIErrorCard
             error={error}
-            onRetry={error.retryable ? retryParse : undefined}
+            onRetry={
+              isJsonErrorBatch
+                ? retryJsonImport
+                : (error.retryable ? retryParse : undefined)
+            }
+            retryLabel={isJsonErrorBatch ? 'เลือกไฟล์ JSON ใหม่' : undefined}
             onDismiss={discardErrorBatch}
             onContinue={
               bills.some((b) => b.parseState === 'parsed')
@@ -1291,21 +1438,23 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
               <MacTerminal lines={parseLogs} isActive={false} />
             </div>
           )}
-          {/* If we still have image thumbs from the failed attempt,
-              show them so the user knows their picks aren't lost. */}
           {bills.length > 0 && (
             <div className="card-canvas p-4">
               <div className="text-xs text-muted-soft mb-2 flex items-center gap-1.5">
                 <Icon name="file" size={12}/>
                 <span>
-                  {bills.filter((b) => b.parseState !== 'parsed').length || bills.length} รูปยังรอ retry — รูปที่อ่านสำเร็จแล้วไม่ต้องอ่านซ้ำ
+                  {isJsonErrorBatch
+                    ? `${pendingCount} บิลที่ยังไม่สำเร็จ — เลือกไฟล์ JSON ใหม่ได้`
+                    : `${pendingCount} รูปยังรอ retry — รูปที่อ่านสำเร็จแล้วไม่ต้องอ่านซ้ำ`}
                 </span>
               </div>
               <div className="flex gap-2 flex-wrap">
                 {bills.map((b, i) => (
                   <div key={b.uid} className="relative w-14 h-18 rounded-md overflow-hidden border hairline bg-surface-soft">
-                    <img src={b.previewUrl} alt={`bill ${i+1}`} className="w-full h-full object-cover"/>
-                    <div className="absolute top-0.5 left-0.5 ai-row-badge !w-5 !h-5 !text-[10px]">{i+1}</div>
+                    {b.previewUrl
+                      ? <img src={b.previewUrl} alt={`bill ${i + 1}`} className="w-full h-full object-cover"/>
+                      : <div className="w-full h-full flex items-center justify-center"><Icon name="file" size={14} className="text-muted-soft"/></div>}
+                    <div className="absolute top-0.5 left-0.5 ai-row-badge !w-5 !h-5 !text-[10px]">{i + 1}</div>
                     {b.parseState === 'parsed' && (
                       <div className="absolute bottom-0.5 right-0.5 rounded-full bg-success text-white w-5 h-5 flex items-center justify-center">
                         <Icon name="check" size={11}/>
@@ -1322,7 +1471,8 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
             </div>
           )}
         </div>
-      )}
+        );
+      })()}
 
       {/* PHASE: REVIEW_PAUSED — exit focus mode, keep bills in memory */}
       {phase === 'review_paused' && bills.length > 0 && (
@@ -1339,6 +1489,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
       {phase === 'empty' && (
         <EmptyLanding
           onStart={startUpload}
+          onJsonImport={startJsonImport}
           draft={draftAvailable}
           onRestore={() => restoreDraft(draftAvailable)}
           onDiscard={discardDraft}
@@ -1416,6 +1567,12 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
         open={uploadOpen}
         onClose={() => setUploadOpen(false)}
         onConfirm={handleUploadConfirm}
+      />
+
+      <JsonBillImportModal
+        open={jsonImportOpen}
+        onClose={() => setJsonImportOpen(false)}
+        onConfirm={handleJsonImportConfirm}
       />
 
       {/* A1: full-screen zoomable bill image */}
@@ -1498,7 +1655,7 @@ function ReviewPausedCard({ bills, summary, tiktokMirrorOn, onResume, onDiscard 
 }
 
 // ─── Sub: landing screen ──────────────────────────────────────────────
-function EmptyLanding({ onStart, draft, onRestore, onDiscard }) {
+function EmptyLanding({ onStart, onJsonImport, draft, onRestore, onDiscard }) {
   return (
    <div className="space-y-3">
     {/* C1: restore an unsaved batch from a previous session */}
@@ -1517,32 +1674,55 @@ function EmptyLanding({ onStart, draft, onRestore, onDiscard }) {
         <button type="button" className="btn-primary !py-1.5 !px-3 !text-xs" onClick={onRestore}>กู้คืนงาน</button>
       </div>
     )}
-    <div className="card-canvas overflow-hidden">
-      <div className="p-8 lg:p-12 flex flex-col items-center text-center gap-4">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/20 to-accent/20 border hairline flex items-center justify-center">
-          <Icon name="scan" size={32} className="text-primary"/>
-        </div>
-        <div>
-          <div className="font-display text-2xl lg:text-3xl">สแกนบิล CMG หลายใบในครั้งเดียว</div>
-          <div className="text-sm text-muted-soft mt-1.5 max-w-md mx-auto leading-relaxed">
-            อัปโหลดได้สูงสุด <strong className="text-ink">10 บิล/รอบ</strong> — AI จะอ่านทุกบิลในการเรียกเดียว
-            ประหยัดโควต้า เร็วกว่าทีละบิล 5-10 เท่า
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <div className="card-canvas overflow-hidden flex flex-col brv-landing-card">
+        <div className="p-8 lg:p-12 flex flex-col items-center text-center gap-4 flex-1">
+          <span className="ai-chip">AI</span>
+          <div className="brv-landing-icon w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/20 to-accent/20 border hairline flex items-center justify-center">
+            <Icon name="scan" size={32} className="text-primary"/>
           </div>
+          <div className="space-y-1.5">
+            <div className="font-display text-xl lg:text-2xl">สแกนบิล CMG ด้วย AI</div>
+            <div className="text-sm text-muted-soft max-w-sm mx-auto leading-relaxed">
+              อัปโหลดรูปบิล 1–10 ใบ/รอบ — AI อ่านทุกบิลใน batch เดียว ประหยัดโควต้า
+            </div>
+          </div>
+          <div className="text-[11px] text-muted-soft max-w-xs leading-relaxed">
+            JPG · PNG · WebP · EXIF rotate · resize อัตโนมัติ
+          </div>
+          <button
+            type="button"
+            className="btn-ai-mesh btn-ai-mesh-wide !py-3 !px-6 !text-base mt-auto"
+            onClick={onStart}
+          >
+            <Icon name="scan" size={18}/>
+            เริ่มสแกนบิล
+          </button>
         </div>
-        <button
-          type="button"
-          className="btn-ai-mesh btn-ai-mesh-wide !py-3 !px-6 !text-base"
-          onClick={onStart}
-        >
-          <Icon name="scan" size={18}/>
-          เริ่มสแกนบิล
-        </button>
-        <div className="text-[11px] text-muted-soft mt-2 flex items-center gap-2 flex-wrap justify-center">
-          <span>รองรับ JPG · PNG · WebP</span>
-          <span>·</span>
-          <span>EXIF rotate อัตโนมัติ</span>
-          <span>·</span>
-          <span>ปรับขนาดให้พอเหมาะอัตโนมัติ</span>
+      </div>
+      <div className="card-canvas overflow-hidden flex flex-col brv-landing-card">
+        <div className="p-8 lg:p-12 flex flex-col items-center text-center gap-4 flex-1">
+          <span className="json-chip">JSON</span>
+          <div className="brv-landing-icon w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/20 to-accent/20 border hairline flex items-center justify-center">
+            <Icon name="file" size={32} className="text-primary"/>
+          </div>
+          <div className="space-y-1.5">
+            <div className="font-display text-xl lg:text-2xl">นำเข้าจาก JSON</div>
+            <div className="text-sm text-muted-soft max-w-sm mx-auto leading-relaxed">
+              ไฟล์จาก Gemini Gem — schema เดียวกับ AI parse สูงสุด 10 บิล/ไฟล์ ไม่ใช้ AI quota
+            </div>
+          </div>
+          <div className="text-[11px] text-muted-soft max-w-xs leading-relaxed">
+            {'{ "bills": [...] }'} · ตรวจเลขแถวก่อนเข้า review
+          </div>
+          <button
+            type="button"
+            className="btn-json-mesh btn-ai-mesh-wide !py-3 !px-6 !text-base mt-auto"
+            onClick={onJsonImport}
+          >
+            <Icon name="file" size={18}/>
+            นำเข้า JSON
+          </button>
         </div>
       </div>
     </div>
@@ -1566,14 +1746,19 @@ function ParsingStatusPanel({ bills, progress, parseIsActive, logs }) {
     ? `บิลที่ ${progress.currentFrom}${progress.currentTo !== progress.currentFrom ? `–${progress.currentTo}` : ''} / ${total}`
     : `${total} บิล`;
   const steps = deriveParsingSteps({ bills, progress, parseIsActive, logs });
+  const isJsonImport = bills.some((b) => b.importSource === 'json');
 
   return (
     <div className="brv-parsing-status">
       <div className="brv-parsing-status__head">
         <div className="flex items-center gap-2.5 min-w-0">
-          <span className="ai-chip shrink-0">AI</span>
+          <span className={isJsonImport ? 'inline-flex items-center justify-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-accent/15 text-accent border hairline shrink-0' : 'ai-chip shrink-0'}>
+            {isJsonImport ? 'JSON' : 'AI'}
+          </span>
           <div className="min-w-0">
-            <div className="font-display text-lg leading-tight">กำลังให้ AI อ่านบิล…</div>
+            <div className="font-display text-lg leading-tight">
+              {isJsonImport ? 'กำลังนำเข้าบิลจาก JSON…' : 'กำลังให้ AI อ่านบิล…'}
+            </div>
             <div className="text-[11px] text-muted-soft mt-0.5 tabular-nums truncate">
               {currentLabel} · สำเร็จแล้ว {done}/{total}
             </div>
@@ -1635,7 +1820,11 @@ function ParsingStatusPanel({ bills, progress, parseIsActive, logs }) {
             >
               <span className="brv-parsing-status__bill-idx">{i + 1}</span>
               <div className="brv-parsing-status__bill-thumb">
-                <img src={b.previewUrl} alt="" className="w-full h-full object-cover"/>
+                {b.previewUrl
+                  ? <img src={b.previewUrl} alt="" className="w-full h-full object-cover"/>
+                  : <div className="w-full h-full flex items-center justify-center bg-surface-soft">
+                      <Icon name="file" size={14} className="text-muted-soft"/>
+                    </div>}
               </div>
               <div className="brv-parsing-status__bill-meta min-w-0">
                 <div className="brv-parsing-status__bill-name truncate">{sub}</div>
@@ -1794,13 +1983,18 @@ function ReviewWizard({
   };
 
   const billDisabled = current?.saveState === 'saved' || submitting;
+  const isJsonBatch = bills.some((b) => b.importSource === 'json');
 
   return (
     <div className="brv-mobile-review lg:space-y-4">
       {/* Desktop top bar */}
       <div className="hidden lg:flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2.5 min-w-0">
-          <span className="ai-chip">AI</span>
+          {isJsonBatch ? (
+            <span className="json-chip shrink-0">JSON</span>
+          ) : (
+            <span className="ai-chip">AI</span>
+          )}
           <div className="font-display text-xl truncate">รับเข้า ×10 — Review</div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -2240,18 +2434,30 @@ function BillCard({
         <button
           type="button"
           onClick={() => bill.previewUrl && onZoom?.(bill.previewUrl)}
-          className="brv-bill-head__thumb group hidden lg:block"
-          aria-label="ดูรูปบิลแบบขยาย"
+          disabled={!bill.previewUrl}
+          className={
+            'brv-bill-head__thumb group hidden lg:block' +
+            (bill.previewUrl ? '' : ' brv-bill-head__thumb--no-image')
+          }
+          aria-label={bill.previewUrl ? 'ดูรูปบิลแบบขยาย' : 'ไม่มีรูปบิล (นำเข้า JSON)'}
         >
-          <img
-            src={bill.previewUrl}
-            alt={`bill ${billNumber}`}
-            className="brv-bill-head__thumb-img"
-          />
+          {bill.previewUrl ? (
+            <>
+              <img
+                src={bill.previewUrl}
+                alt={`bill ${billNumber}`}
+                className="brv-bill-head__thumb-img"
+              />
+              <span className="brv-bill-head__thumb-zoom" aria-hidden="true">
+                <Icon name="search" size={14}/>
+              </span>
+            </>
+          ) : (
+            <div className="brv-bill-head__thumb-img flex items-center justify-center bg-surface-soft">
+              <Icon name="file" size={28} className="text-muted-soft"/>
+            </div>
+          )}
           <span className="brv-bill-head__thumb-badge ai-row-badge">{billNumber}</span>
-          <span className="brv-bill-head__thumb-zoom" aria-hidden="true">
-            <Icon name="search" size={14}/>
-          </span>
         </button>
 
         <div className="brv-bill-head__top hidden lg:flex">

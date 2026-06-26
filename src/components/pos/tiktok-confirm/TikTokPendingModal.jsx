@@ -21,6 +21,7 @@ export default function TikTokPendingModal({
   sortOrder,
   onSortChange,
   onOpenOrder,
+  openingId,
   refreshing,
   syncPct,
   onSync,
@@ -46,6 +47,7 @@ export default function TikTokPendingModal({
 }) {
   const isConfirmView = Boolean(activeOrder);
   const mobile = isMobileViewport();
+  const countLabel = count > 99 ? '99+' : count;
 
   return (
     <div
@@ -62,25 +64,23 @@ export default function TikTokPendingModal({
           'ttc-pending-modal ttc-modal-card relative w-full glass-strong border hairline overflow-hidden flex flex-col ' +
           (mobile
             ? 'rounded-t-2xl rounded-b-none max-h-[92vh] pb-safe ' + (closing ? 'sheet-out' : 'sheet-anim')
-            : 'rounded-3xl ' +
-              (isConfirmView ? 'max-w-[min(96vw,900px)]' : 'max-w-[min(96vw,640px)]') +
-              (isConfirmView ? ' max-h-[min(90vh,820px)] ' : ' h-[min(90vh,820px)] ') +
+            : 'rounded-3xl ttc-modal-card--' + (isConfirmView ? 'confirm' : 'list') + ' ' +
               (closing ? 'holo-card-out' : 'holo-card-in'))
         }
         onClick={e => e.stopPropagation()}
       >
-        {/* Header — grab handle lives inside brown frame on mobile so glass
-            doesn't bleed through the sheet's rounded top corners. */}
+        {/* Header — grab handle lives inside coral header on mobile */}
         <div
+          key={isConfirmView ? 'confirm-header' : 'list-header'}
           className={
-            'ttc-modal-header ttc-brown-frame relative shrink-0 border-b border-white/15 ' +
+            'ttc-modal-header ttc-coral-header ttc-header-enter relative shrink-0 ' +
             (mobile
               ? 'ttc-modal-header--sheet'
               : 'flex items-center gap-2.5 px-4 py-3')
           }
         >
           {mobile && (
-            <div className="ttc-sheet-grab w-10 h-1 rounded-full bg-white/35 mx-auto mt-2.5 shrink-0" aria-hidden="true" />
+            <div className="ttc-sheet-grab w-10 h-1 rounded-full mx-auto mt-2.5 shrink-0" aria-hidden="true" />
           )}
           <div className={mobile ? 'flex items-center gap-2.5 px-4 pb-3 pt-1' : 'contents'}>
           {isConfirmView ? (
@@ -94,8 +94,8 @@ export default function TikTokPendingModal({
               <Icon name="chevron-l" size={20}/>
             </button>
           ) : (
-            <span className="pnb-bell-chip" style={{ background: '#fe2c55', color: '#fff' }}>
-              <Icon name="cart" size={15}/>
+            <span className="ttc-coral-mesh-chip ttc-coral-mesh-chip--header">
+              <span className="ttc-pending-badge__count-num">{countLabel}</span>
             </span>
           )}
           <div className="min-w-0 flex-1 ttc-modal-header__text">
@@ -105,7 +105,7 @@ export default function TikTokPendingModal({
             <div className="ttc-modal-header__sub text-[12px] mt-0.5 tabular-nums truncate">
               {isConfirmView
                 ? `${fmtTime(activeOrder.sale_date)} · ${fmtTHB(activeOrder.grand_total)}`
-                : `${count} ออเดอร์รอยืนยัน`}
+                : `${count} ออเดอร์`}
             </div>
           </div>
           <button type="button" className="pnb-iconbtn" onClick={onClose} aria-label="ปิด" disabled={saving || closing}>
@@ -114,7 +114,7 @@ export default function TikTokPendingModal({
           </div>
         </div>
 
-        {/* Body — list OR confirm (ไม่ split) */}
+        {/* Body — list OR confirm (drill-in transition) */}
         <div className="relative flex-1 min-h-0 flex flex-col">
           {refreshing && !isConfirmView && (
             <TikTokSyncOverlay
@@ -124,40 +124,50 @@ export default function TikTokPendingModal({
             />
           )}
 
-          {isConfirmView ? (
-            <TikTokOrderConfirmPane
-              order={activeOrder}
-              picks={picks}
-              setPicks={setPicks}
-              substitutionMeta={substitutionMeta}
-              setSubstitutionMeta={setSubstitutionMeta}
-              matchConfirmed={matchConfirmed}
-              setMatchConfirmed={setMatchConfirmed}
-              net={net}
-              setNet={setNet}
-              deferNet={deferNet}
-              setDeferNet={setDeferNet}
-              saving={saving}
-              allMatched={allMatched}
-              netOk={netOk}
-              onConfirm={onConfirm}
-              catalog={catalog}
-              catalogLoading={catalogLoading}
-              catalogError={catalogError}
-              onRetryCatalog={onRetryCatalog}
-              toast={toast}
-            />
-          ) : (
-            <TikTokPendingList
-              orders={sortedOrders}
-              sortOrder={sortOrder}
-              onSortChange={onSortChange}
-              onOpen={onOpenOrder}
-              disabled={refreshing}
-              onSync={onSync}
-              refreshing={refreshing}
-            />
-          )}
+          <div
+            key={isConfirmView ? 'confirm' : 'list'}
+            className="ttc-view-stage flex-1 min-h-0 flex flex-col"
+          >
+            {isConfirmView ? (
+              <div className="ttc-view-enter ttc-view-enter--forward flex flex-col flex-1 min-h-0">
+                <TikTokOrderConfirmPane
+                  order={activeOrder}
+                  picks={picks}
+                  setPicks={setPicks}
+                  substitutionMeta={substitutionMeta}
+                  setSubstitutionMeta={setSubstitutionMeta}
+                  matchConfirmed={matchConfirmed}
+                  setMatchConfirmed={setMatchConfirmed}
+                  net={net}
+                  setNet={setNet}
+                  deferNet={deferNet}
+                  setDeferNet={setDeferNet}
+                  saving={saving}
+                  allMatched={allMatched}
+                  netOk={netOk}
+                  onConfirm={onConfirm}
+                  catalog={catalog}
+                  catalogLoading={catalogLoading}
+                  catalogError={catalogError}
+                  onRetryCatalog={onRetryCatalog}
+                  toast={toast}
+                />
+              </div>
+            ) : (
+              <div className="ttc-view-enter ttc-view-enter--back flex flex-col flex-1 min-h-0">
+                <TikTokPendingList
+                  orders={sortedOrders}
+                  sortOrder={sortOrder}
+                  onSortChange={onSortChange}
+                  onOpen={onOpenOrder}
+                  openingId={openingId}
+                  disabled={refreshing}
+                  onSync={onSync}
+                  refreshing={refreshing}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

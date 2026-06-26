@@ -43,6 +43,7 @@ export function collectBillAlerts(bill, {
   if (!bill) return [];
 
   const alerts = [];
+  const isJson = bill.importSource === 'json';
   const isNonCmg = !bill.is_cmg_bill;
   const isEmpty = bill.rows.length === 0;
   const unresolved = bill.rows.filter((r) => r.status === 'suggestions' || r.status === 'none').length;
@@ -66,21 +67,27 @@ export function collectBillAlerts(bill, {
     alerts.push({
       key: 'non-cmg',
       severity: 'error',
-      message: 'AI บอกว่ารูปนี้ไม่ใช่บิล CMG — บิลนี้จะถูกข้ามตอนบันทึก',
+      message: isJson
+        ? 'ข้อมูลไม่ใช่บิล CMG — บิลนี้จะถูกข้ามตอนบันทึก'
+        : 'AI บอกว่ารูปนี้ไม่ใช่บิล CMG — บิลนี้จะถูกข้ามตอนบันทึก',
     });
   }
   if (!isNonCmg && isEmpty) {
     alerts.push({
       key: 'empty',
       severity: 'warn',
-      message: 'อ่านรายการไม่ได้ — ลบบิลนี้แล้วถ่ายใหม่',
+      message: isJson
+        ? 'อ่านรายการไม่ได้ — ลบบิลนี้แล้วนำเข้า JSON ใหม่'
+        : 'อ่านรายการไม่ได้ — ลบบิลนี้แล้วถ่ายใหม่',
     });
   }
   if (bill.parse_warning === 'empty_slot' || (bill.parseState === 'failed' && isEmpty && bill.parseError)) {
     alerts.push({
       key: 'parse-empty',
       severity: 'error',
-      message: bill.parseError || 'AI ไม่ได้คืนข้อมูลบิลนี้ — ลองถ่ายใหม่',
+      message: bill.parseError || (isJson
+        ? 'นำเข้าบิลนี้ไม่สำเร็จ — ลองเลือกไฟล์ JSON ใหม่'
+        : 'AI ไม่ได้คืนข้อมูลบิลนี้ — ลองถ่ายใหม่'),
     });
   }
   if (!isNonCmg && !isEmpty && unresolved > 0) {
@@ -114,24 +121,30 @@ export function collectBillAlerts(bill, {
     alerts.push({
       key: 'bill-math',
       severity: 'warn',
-      message: `ผลรวมบิลไม่ตรง footer (${validationBillWarnings} จุด) — แตะดูรูปเทียบ`,
-      onClick: bill.previewUrl && onZoom ? () => onZoom(bill.previewUrl) : undefined,
+      message: isJson
+        ? `ผลรวมบิลไม่ตรง footer (${validationBillWarnings} จุด) — ตรวจเลขใน JSON / แถวด้านล่าง`
+        : `ผลรวมบิลไม่ตรง footer (${validationBillWarnings} จุด) — แตะดูรูปเทียบ`,
+      onClick: !isJson && bill.previewUrl && onZoom ? () => onZoom(bill.previewUrl) : undefined,
     });
   }
   if (validationRowIssues > 0) {
     alerts.push({
       key: 'row-math',
       severity: 'warn',
-      message: `${validationRowIssues} แถวเลขไม่ตรงบิล — แตะดูรูปเทียบ`,
-      onClick: bill.previewUrl && onZoom ? () => onZoom(bill.previewUrl) : undefined,
+      message: isJson
+        ? `${validationRowIssues} แถวเลขไม่ตรงบิล — ตรวจเลขใน JSON / แถวด้านล่าง`
+        : `${validationRowIssues} แถวเลขไม่ตรงบิล — แตะดูรูปเทียบ`,
+      onClick: !isJson && bill.previewUrl && onZoom ? () => onZoom(bill.previewUrl) : undefined,
     });
   }
   if (reviewRows > 0) {
     alerts.push({
       key: 'ai-review',
       severity: 'warn',
-      message: `AI ไม่มั่นใจ ${reviewRows} รายการ — แตะดูรูปเทียบให้ชัวร์`,
-      onClick: bill.previewUrl && onZoom ? () => onZoom(bill.previewUrl) : undefined,
+      message: isJson
+        ? `${reviewRows} รายการต้องตรวจอีกครั้ง — ดูแถวด้านล่าง`
+        : `AI ไม่มั่นใจ ${reviewRows} รายการ — แตะดูรูปเทียบให้ชัวร์`,
+      onClick: !isJson && bill.previewUrl && onZoom ? () => onZoom(bill.previewUrl) : undefined,
     });
   }
   if (bill.saveState === 'failed' && bill.saveError) {

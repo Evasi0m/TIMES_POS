@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Icon from '../../ui/Icon.jsx';
 import TikTokListPagination from '../../ecommerce/tiktok/TikTokListPagination.jsx';
 import TikTokPendingOrderRow from './TikTokPendingOrderRow.jsx';
+import { useScrollFrostEdges } from '../../../hooks/useScrollFrostEdges.js';
 import { SORT_OLDEST } from './helpers.js';
 
 export default function TikTokPendingList({
@@ -9,6 +10,7 @@ export default function TikTokPendingList({
   sortOrder,
   onSortChange,
   onOpen,
+  openingId,
   disabled,
   onSync,
   refreshing,
@@ -32,11 +34,21 @@ export default function TikTokPendingList({
     [orders, safePage, pageSize],
   );
 
+  const { ref: scrollRef, edges: scrollEdges } = useScrollFrostEdges([
+    pageOrders.length,
+    safePage,
+    pageSize,
+  ]);
+
   return (
-    <div className={'flex flex-col min-h-0 h-full ' + (disabled ? 'pointer-events-none select-none opacity-60' : '')}>
-      <div className="px-4 py-2.5 border-b hairline bg-surface-soft/40 flex flex-wrap items-center justify-between gap-2 shrink-0">
+    <div className={
+      'flex flex-col min-h-0 h-full ' +
+      (disabled ? 'pointer-events-none select-none opacity-60 ' : '') +
+      (openingId ? 'pointer-events-none select-none ' : '')
+    }>
+      <div className="px-4 py-2.5 ttc-list-toolbar bg-surface-soft/40 flex flex-wrap items-center justify-between gap-2 shrink-0">
         <span className="text-xs text-muted tabular-nums">
-          <span className="font-semibold text-ink text-sm">{orders.length.toLocaleString('th-TH')}</span> ออเดอร์
+          <span className="font-semibold text-[#e81e5a] text-sm">{orders.length.toLocaleString('th-TH')}</span> ออเดอร์
         </span>
         <div className="flex items-center gap-2">
           <label className="flex items-center gap-1.5 shrink-0">
@@ -55,7 +67,7 @@ export default function TikTokPendingList({
           {onSync && (
             <button
               type="button"
-              className="btn-secondary !h-8 !py-0 !px-2.5 !text-xs inline-flex items-center gap-1"
+              className="btn-secondary !h-8 !min-h-8 !py-0 !px-2.5 !text-xs !rounded-lg inline-flex items-center gap-1 shrink-0"
               onClick={onSync}
               disabled={refreshing || disabled}
               title="ดึงออเดอร์ล่าสุดจาก TikTok"
@@ -67,19 +79,37 @@ export default function TikTokPendingList({
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2.5 bg-surface-cream-strong">
-        {pageOrders.map(o => (
-          <TikTokPendingOrderRow key={o.id} order={o} onOpen={onOpen}/>
-        ))}
-        {!pageOrders.length && (
-          <div className="p-10 text-center">
-            <Icon name="package" size={32} className="text-muted mx-auto mb-3"/>
-            <p className="text-sm text-muted">ไม่มีออเดอร์ในรายการ</p>
+      <div className="ttc-scroll-frost flex-1 min-h-0 bg-surface-cream-strong">
+        <div ref={scrollRef} className="ttc-scroll-frost__viewport">
+          <div className="ttc-scroll-frost__inner">
+            {pageOrders.map(o => (
+              <TikTokPendingOrderRow
+                key={o.id}
+                order={o}
+                onOpen={onOpen}
+                opening={openingId === o.id}
+              />
+            ))}
+            {!pageOrders.length && (
+              <div className="p-10 text-center">
+                <Icon name="package" size={32} className="text-muted mx-auto mb-3"/>
+                <p className="text-sm text-muted">ไม่มีออเดอร์ในรายการ</p>
+              </div>
+            )}
           </div>
-        )}
+        </div>
+        <div
+          className={'ttc-scroll-frost__edge ttc-scroll-frost__edge--top' + (scrollEdges.top ? ' is-visible' : '')}
+          aria-hidden="true"
+        />
+        <div
+          className={'ttc-scroll-frost__edge ttc-scroll-frost__edge--bottom' + (scrollEdges.bottom ? ' is-visible' : '')}
+          aria-hidden="true"
+        />
       </div>
 
       <TikTokListPagination
+        variant="modal"
         total={orders.length}
         page={safePage}
         pageSize={pageSize}

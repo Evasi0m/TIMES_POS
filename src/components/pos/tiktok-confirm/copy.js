@@ -2,6 +2,7 @@
 
 export const TTC_COPY = {
   badgeLabel: 'ออเดอร์ TikTok รอยืนยัน',
+  badgeLabelShort: 'TikTok รอยืนยัน',
   modalConfirmTitle: 'ยืนยันการขาย TikTok',
   colTiktok: 'บน TikTok',
   colStore: 'ในร้าน',

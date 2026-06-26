@@ -20,6 +20,15 @@ export function msgStartScan(count) {
   return makeLogLine(`$ เริ่มสแกนบิล ${count} ใบ`);
 }
 
+export function msgStartJsonImport(count) {
+  return makeLogLine(`$ นำเข้า JSON · ${count} บิล`);
+}
+
+export function msgJsonBillReady(billNo, invoiceNo, rows) {
+  const inv = invoiceNo ? ` · เลขที่ ${invoiceNo}` : '';
+  return makeLogLine(`$ ✓ บิล ${billNo} พร้อมตรวจ ${rows} รายการ${inv}`, 'ok');
+}
+
 export function msgRetryScan(count) {
   return makeLogLine(`$ ลองอ่านใหม่เฉพาะบิลที่ยังไม่สำเร็จ (${count} ใบ)`, 'warn');
 }
@@ -146,7 +155,9 @@ export function msgTraceLines(trace) {
 /** Step checklist for the parsing status panel (left side). */
 export function deriveParsingSteps({ bills = [], progress, parseIsActive, logs = [] }) {
   const texts = logs.map((l) => l.text || '');
-  const hasPrep = texts.some((t) => t.includes('เตรียมรูป'));
+  const isJsonImport = bills.some((b) => b.importSource === 'json')
+    || texts.some((t) => t.includes('นำเข้า JSON'));
+  const hasPrep = isJsonImport || texts.some((t) => t.includes('เตรียมรูป'));
   const hasCatalogDone = texts.some(
     (t) => (t.includes('โหลดสินค้า') && t.includes('ใช้เวลา')) || t.includes('ไม่ครบ'),
   );
@@ -155,15 +166,25 @@ export function deriveParsingSteps({ bills = [], progress, parseIsActive, logs =
   const total = progress?.total ?? bills.length;
   const allParsed = total > 0 && parsedCount >= total;
 
-  const defs = [
-    { key: 'prep', label: 'เตรียมรูปภาพ', done: hasPrep },
-    { key: 'catalog', label: 'โหลดรายชื่อสินค้า', done: hasCatalogDone },
-    { key: 'ai', label: 'ส่งให้ AI อ่าน', done: allParsed },
-    { key: 'match', label: 'จับคู่รุ่นในระบบ', done: allParsed && matchedCount >= total },
-  ];
+  const defs = isJsonImport
+    ? [
+      { key: 'parse', label: 'อ่านไฟล์ JSON', done: hasPrep },
+      { key: 'catalog', label: 'โหลดรายชื่อสินค้า', done: hasCatalogDone },
+      { key: 'match', label: 'จับคู่รุ่นในระบบ', done: allParsed && matchedCount >= total },
+    ]
+    : [
+      { key: 'prep', label: 'เตรียมรูปภาพ', done: hasPrep },
+      { key: 'catalog', label: 'โหลดรายชื่อสินค้า', done: hasCatalogDone },
+      { key: 'ai', label: 'ส่งให้ AI อ่าน', done: allParsed },
+      { key: 'match', label: 'จับคู่รุ่นในระบบ', done: allParsed && matchedCount >= total },
+    ];
 
   let activeKey = null;
-  if (!hasPrep) activeKey = 'prep';
+  if (isJsonImport) {
+    if (!hasPrep) activeKey = 'parse';
+    else if (!hasCatalogDone) activeKey = 'catalog';
+    else if (matchedCount < total) activeKey = 'match';
+  } else if (!hasPrep) activeKey = 'prep';
   else if (!hasCatalogDone) activeKey = 'catalog';
   else if (!allParsed) activeKey = 'ai';
   else if (matchedCount < total) activeKey = 'match';
@@ -171,6 +192,6 @@ export function deriveParsingSteps({ bills = [], progress, parseIsActive, logs =
   return defs.map((d) => ({
     ...d,
     active: d.key === activeKey && !d.done,
-    spinning: d.key === 'ai' && parseIsActive && !d.done,
+    spinning: (d.key === 'ai' || d.key === 'parse') && parseIsActive && !d.done,
   }));
 }

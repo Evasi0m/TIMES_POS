@@ -170,6 +170,7 @@ import BulkReceiveView from './components/ai/BulkReceiveView.jsx';
 import PendingNetBell from './components/pos/PendingNetBell.jsx';
 import DeferNetButton from './components/pos/DeferNetButton.jsx';
 import TikTokConfirmPanel from './components/pos/TikTokConfirmPanel.jsx';
+import { usePendingTikTokOrderCount } from './hooks/usePendingTikTokOrderCount.js';
 import { useTikTokMirrorCatalog } from './hooks/useTikTokMirrorCatalog.js';
 import { useTikTokProductMappings } from './hooks/useTikTokProductMappings.js';
 import {
@@ -3760,6 +3761,9 @@ function MovementHistoryModal({ open, onClose, kind }) {
                           {kind === 'receive' && r.created_via === 'ai_cmg' && (
                             <span className="badge-pill !bg-primary/10 !text-primary !px-1.5 !py-0.5 text-[10px] font-semibold flex-shrink-0" title="นำเข้าด้วย AI">AI</span>
                           )}
+                          {kind === 'receive' && r.created_via === 'json_cmg' && (
+                            <span className="badge-pill !bg-accent/10 !text-accent !px-1.5 !py-0.5 text-[10px] font-semibold flex-shrink-0" title="นำเข้าจาก JSON">JSON</span>
+                          )}
                         </div>
                         <div className="text-xs text-muted">{fmtThaiDateShort(r[meta.dateField])}{r.supplier_invoice_no ? ` · ${r.supplier_invoice_no}` : ''}</div>
                       </div>
@@ -4377,6 +4381,7 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
   const role = useRole();
   const isSuperAdmin = role === 'super_admin';
   const items = navForRole(role);
+  const pendingTiktokCount = usePendingTikTokOrderCount();
   const [ecomExpanded, setEcomExpanded] = useState(() => isEcommerceView(view));
 
   useEffect(() => {
@@ -4425,17 +4430,27 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
     >
       {/* Hidden SVG defs — one-shot linearGradient referenced by
           `.nav-item-ai > svg { stroke: url(#ai-icon-gradient) }` so
-          AI-flagged nav icons inherit the same orange→red→purple sweep
-          as the .ai-tab-badge. userSpaceOnUse + viewBox coords (0–24)
-          keeps the gradient spatially consistent across all icons
-          regardless of their internal path shape. */}
+          AI-flagged nav icons inherit the merged scan+JSON mesh sweep
+          (orange → red → blue → purple). userSpaceOnUse + viewBox
+          coords (0–24) keeps the gradient spatially consistent across
+          all icons regardless of their internal path shape. */}
       <svg width="0" height="0" aria-hidden="true" style={{position:'absolute'}}>
         <defs>
           <linearGradient id="ai-icon-gradient" gradientUnits="userSpaceOnUse"
                           x1="0" y1="0" x2="24" y2="24">
-            <stop offset="0%"   stopColor="#f97316"/>
-            <stop offset="55%"  stopColor="#dc2626"/>
+            <stop offset="0%"   stopColor="#fbbf24"/>
+            <stop offset="18%"  stopColor="#f97316"/>
+            <stop offset="38%"  stopColor="#dc2626"/>
+            <stop offset="62%"  stopColor="#2563eb"/>
+            <stop offset="82%"  stopColor="#1d4ed8"/>
             <stop offset="100%" stopColor="#7c3aed"/>
+          </linearGradient>
+          <linearGradient id="tiktok-coral-icon-gradient" gradientUnits="userSpaceOnUse"
+                          x1="0" y1="0" x2="24" y2="24">
+            <stop offset="0%"   stopColor="#ff6b9d"/>
+            <stop offset="32%"  stopColor="#f42f68"/>
+            <stop offset="62%"  stopColor="#e81e5a"/>
+            <stop offset="100%" stopColor="#0cbfba"/>
           </linearGradient>
         </defs>
       </svg>
@@ -4517,6 +4532,7 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
                 "nav-item w-full text-left bg-transparent " +
                 (view===it.k && allowed ? "active " : "") +
                 (it.ai ? "nav-item-ai " : "") +
+                (it.k === 'pos' && pendingTiktokCount > 0 ? "nav-item-tiktok-pending " : "") +
                 (allowed ? "" : "opacity-40 cursor-not-allowed")
               }
               onClick={allowed ? (()=>setView(it.k)) : undefined}

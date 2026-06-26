@@ -4341,6 +4341,134 @@
   }
   .btn-ai-mesh svg { filter: drop-shadow(0 1px 1px rgba(40, 5, 30, 0.30)); }
 
+  /* JSON import CTA — blue-dominant mesh with gold corner accents.
+     White label/icon must stay readable: yellow blobs stay small and
+     off-centre; the mid-tone is always deep blue. */
+  .btn-json-mesh {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 50px;
+    padding: 0 16px;
+    border-radius: 10px;
+    color: #fff;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.2px;
+    text-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.55),
+      0 0 10px rgba(15, 23, 42, 0.35);
+    border: 1px solid rgba(147, 197, 253, 0.35);
+    background:
+      radial-gradient(circle at 8% 12%,   #fbbf24 0%, transparent 32%),
+      radial-gradient(circle at 92% 88%,  #f59e0b 0%, transparent 28%),
+      radial-gradient(circle at 78% 18%,  #60a5fa 0%, transparent 38%),
+      linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 48%, #1e40af 72%, #172554 100%);
+    box-shadow:
+      0 4px 14px -2px rgba(30, 64, 175, 0.48),
+      0 1px 0 rgba(255, 255, 255, 0.22) inset,
+      0 -1px 0 rgba(15, 23, 42, 0.45) inset;
+    cursor: pointer;
+    transition: transform .15s var(--ease-out), box-shadow .2s ease, filter .15s;
+    position: relative;
+    overflow: hidden;
+    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn-json-mesh::before {
+    content: "";
+    position: absolute; top: 0; left: 0; right: 0; height: 45%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.14), transparent);
+    pointer-events: none;
+    border-radius: inherit;
+  }
+  .btn-json-mesh:hover {
+    filter: brightness(1.05) saturate(1.06);
+    transform: translateY(-1px);
+    box-shadow:
+      0 8px 22px -2px rgba(37, 99, 235, 0.58),
+      0 0 0 1px rgba(191, 219, 254, 0.32),
+      0 1px 0 rgba(255, 255, 255, 0.30) inset,
+      0 -1px 0 rgba(15, 23, 42, 0.40) inset;
+  }
+  .btn-json-mesh:active {
+    transform: scale(0.96);
+    filter: brightness(0.94);
+    transition-duration: .08s;
+  }
+  .btn-json-mesh svg {
+    color: #fff;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.50));
+  }
+
+  /* Cancel/dismiss mesh — red-black palette, pairs with .btn-json-mesh in modals. */
+  .btn-cancel-mesh {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 50px;
+    padding: 0 16px;
+    border-radius: 10px;
+    color: #fff;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.2px;
+    text-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.65),
+      0 0 10px rgba(0, 0, 0, 0.40);
+    border: 1px solid rgba(252, 165, 165, 0.22);
+    background:
+      radial-gradient(circle at 10% 14%,  #ef4444 0%, transparent 30%),
+      radial-gradient(circle at 90% 86%,  #991b1b 0%, transparent 28%),
+      radial-gradient(circle at 72% 20%,  #525252 0%, transparent 36%),
+      linear-gradient(135deg, #0a0a0a 0%, #450a0a 42%, #7f1d1d 68%, #171717 100%);
+    box-shadow:
+      0 4px 14px -2px rgba(127, 29, 29, 0.50),
+      0 1px 0 rgba(255, 255, 255, 0.14) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.55) inset;
+    cursor: pointer;
+    transition: transform .15s var(--ease-out), box-shadow .2s ease, filter .15s;
+    position: relative;
+    overflow: hidden;
+    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn-cancel-mesh::before {
+    content: "";
+    position: absolute; top: 0; left: 0; right: 0; height: 45%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.10), transparent);
+    pointer-events: none;
+    border-radius: inherit;
+  }
+  .btn-cancel-mesh:hover {
+    filter: brightness(1.06) saturate(1.05);
+    transform: translateY(-1px);
+    box-shadow:
+      0 8px 22px -2px rgba(185, 28, 28, 0.55),
+      0 0 0 1px rgba(252, 165, 165, 0.22),
+      0 1px 0 rgba(255, 255, 255, 0.18) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.50) inset;
+  }
+  .btn-cancel-mesh:active {
+    transform: scale(0.96);
+    filter: brightness(0.92);
+    transition-duration: .08s;
+  }
+  .btn-cancel-mesh:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+    filter: none;
+  }
+  .btn-cancel-mesh svg {
+    color: #fff;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
+  }
+
   /* On narrow phone widths collapse to an icon-only 48×48 square so the
      search row stays single-line on iPhone SE / 320-360px viewports.
      The Thai label inside the button uses `hidden sm:inline` so React
@@ -4368,14 +4496,11 @@
          red/orange tint and a soft outer halo (text-shadow). The
          glow intensifies on hover as the first affordance cue.
 
-       .ai-tab-active — the tab is selected; gets a very low-opacity
-         mesh gradient (≈12-16% alpha so it reads as a tinted panel
-         rather than a solid button), plus an outer box-shadow halo
-         in warm red so the pill "lights up" within the neutral
-         KindTabs strip.
+       .ai-tab-active — merged mesh of `.btn-ai-mesh` (scan) +
+         `.btn-json-mesh` (JSON import): orange/red/purple + gold/blue
+         in one pill so the ×10 tab reads as both entry paths.
 
-     Palette is the same 3 stops as `.btn-ai-mesh` (#f97316 orange →
-     #dc2626 red → #7c3aed purple) to keep the brand cohesion. */
+     Palette merges the 3 AI stops with the JSON gold/blue stops. */
 
   /* ─── INACTIVE ────────────────────────────────────────────────────
      Gradient-filled text: the label LITERALLY becomes the AI palette.
@@ -4385,7 +4510,7 @@
   .ai-tab-inactive {
     position: relative;
     background: linear-gradient(135deg,
-      #f97316 0%, #dc2626 50%, #7c3aed 100%);
+      #f97316 0%, #dc2626 32%, #2563eb 62%, #7c3aed 100%);
     background-clip: text;
     -webkit-background-clip: text;
     color: transparent;
@@ -4402,22 +4527,20 @@
   .ai-tab-inactive svg {
     color: #dc2626;
     -webkit-text-fill-color: currentColor;
-    filter: drop-shadow(0 0 4px rgba(249, 115, 22, 0.50))
-            drop-shadow(0 0 8px rgba(220, 38, 38, 0.30));
+    filter: drop-shadow(0 0 4px rgba(249, 115, 22, 0.45))
+            drop-shadow(0 0 6px rgba(37, 99, 235, 0.28));
     transition: filter 0.25s var(--ease-out), color 0.2s var(--ease-out);
   }
   .ai-tab-inactive:hover svg {
     color: #b91c1c;
-    filter: drop-shadow(0 0 5px rgba(249, 115, 22, 0.70))
-            drop-shadow(0 0 12px rgba(220, 38, 38, 0.48));
+    filter: drop-shadow(0 0 5px rgba(249, 115, 22, 0.65))
+            drop-shadow(0 0 10px rgba(37, 99, 235, 0.40));
   }
 
   /* ─── ACTIVE ─────────────────────────────────────────────────────
-     Full mesh-gradient pill — this is the only tab that LOOKS like
-     btn-ai-mesh inside an otherwise neutral strip. A diagonal white
-     sheen stripe sweeps across every ~3s, and the outer halo breathes
-     to give the button a faint "processing" feel. All colour
-     references use the same 3 stops as .btn-ai-mesh to stay on-brand. */
+     Full mesh-gradient pill — merged `.btn-ai-mesh` + `.btn-json-mesh`.
+     A diagonal white sheen stripe sweeps across every ~3s, and the
+     outer halo breathes warm + cool to signal both scan and JSON paths. */
   .ai-tab-active {
     position: relative;
     overflow: hidden;
@@ -4425,18 +4548,25 @@
     -webkit-text-fill-color: #fff;
     font-weight: 600;
     letter-spacing: 0.1px;
-    text-shadow: 0 1px 2px rgba(60, 10, 40, 0.45);
+    text-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.45),
+      0 0 8px rgba(15, 23, 42, 0.20);
     background:
+      radial-gradient(circle at 8% 12%,   #fbbf24 0%, transparent 32%),
+      radial-gradient(circle at 92% 88%,  #f59e0b 0%, transparent 28%),
+      radial-gradient(circle at 78% 18%,  #60a5fa 0%, transparent 38%),
       radial-gradient(circle at 15% 20%,  #fb923c 0%, transparent 55%),
       radial-gradient(circle at 85% 25%,  #ef4444 0%, transparent 55%),
       radial-gradient(circle at 50% 110%, #8b5cf6 0%, transparent 65%),
-      linear-gradient(135deg, #f97316 0%, #dc2626 50%, #7c3aed 100%);
-    border: 1px solid rgba(255, 255, 255, 0.24);
+      linear-gradient(135deg, #f97316 0%, #dc2626 30%, #2563eb 58%, #1d4ed8 78%, #7c3aed 100%);
+    border: 1px solid rgba(255, 255, 255, 0.26);
     box-shadow:
       0 1px 0 rgba(255, 255, 255, 0.35) inset,
-      0 -1px 0 rgba(60, 10, 80, 0.28) inset,
-      0 4px 12px -2px rgba(220, 38, 38, 0.42),
-      0 0 18px 0 rgba(249, 115, 22, 0.35);
+      0 -1px 0 rgba(15, 23, 42, 0.28) inset,
+      0 4px 12px -2px rgba(220, 38, 38, 0.38),
+      0 4px 12px -2px rgba(30, 64, 175, 0.30),
+      0 0 16px 0 rgba(249, 115, 22, 0.28),
+      0 0 14px 0 rgba(37, 99, 235, 0.22);
     animation: ai-tab-halo 3s ease-in-out infinite;
   }
   /* Gloss highlight — static top-half sheen so the pill reads as
@@ -4472,32 +4602,37 @@
     animation: ai-tab-sheen 3s ease-in-out infinite;
   }
   .ai-tab-active svg {
-    filter: drop-shadow(0 1px 1px rgba(40, 5, 30, 0.40));
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.40));
   }
 
   @keyframes ai-tab-pulse {
     0%, 100% {
-      filter: drop-shadow(0 0 2px rgba(249, 115, 22, 0.18));
+      filter: drop-shadow(0 0 2px rgba(249, 115, 22, 0.16))
+              drop-shadow(0 0 2px rgba(37, 99, 235, 0.12));
     }
     50% {
-      filter: drop-shadow(0 0 6px rgba(249, 115, 22, 0.42))
-              drop-shadow(0 0 12px rgba(220, 38, 38, 0.25));
+      filter: drop-shadow(0 0 6px rgba(249, 115, 22, 0.38))
+              drop-shadow(0 0 8px rgba(37, 99, 235, 0.28));
     }
   }
   @keyframes ai-tab-halo {
     0%, 100% {
       box-shadow:
         0 1px 0 rgba(255, 255, 255, 0.35) inset,
-        0 -1px 0 rgba(60, 10, 80, 0.28) inset,
-        0 4px 12px -2px rgba(220, 38, 38, 0.42),
-        0 0 14px 0 rgba(249, 115, 22, 0.30);
+        0 -1px 0 rgba(15, 23, 42, 0.28) inset,
+        0 4px 12px -2px rgba(220, 38, 38, 0.38),
+        0 4px 12px -2px rgba(30, 64, 175, 0.28),
+        0 0 14px 0 rgba(249, 115, 22, 0.26),
+        0 0 12px 0 rgba(37, 99, 235, 0.18);
     }
     50% {
       box-shadow:
         0 1px 0 rgba(255, 255, 255, 0.35) inset,
-        0 -1px 0 rgba(60, 10, 80, 0.28) inset,
-        0 5px 16px -2px rgba(220, 38, 38, 0.55),
-        0 0 22px 2px rgba(249, 115, 22, 0.48);
+        0 -1px 0 rgba(15, 23, 42, 0.28) inset,
+        0 5px 16px -2px rgba(220, 38, 38, 0.50),
+        0 5px 16px -2px rgba(37, 99, 235, 0.38),
+        0 0 20px 2px rgba(249, 115, 22, 0.40),
+        0 0 18px 2px rgba(37, 99, 235, 0.30);
     }
   }
   @keyframes ai-tab-sheen {
@@ -4527,9 +4662,11 @@
     -webkit-text-fill-color: #fff;
     text-shadow: 0 1px 1px rgba(30, 5, 40, 0.30);
     background:
+      radial-gradient(circle at 8% 12%,   #fbbf24 0%, transparent 45%),
+      radial-gradient(circle at 78% 18%,  #60a5fa 0%, transparent 45%),
       radial-gradient(circle at 25% 20%, #fb923c 0%, transparent 60%),
       radial-gradient(circle at 80% 25%, #ef4444 0%, transparent 60%),
-      linear-gradient(135deg, #f97316 0%, #dc2626 55%, #7c3aed 100%);
+      linear-gradient(135deg, #f59e0b 0%, #dc2626 40%, #2563eb 72%, #7c3aed 100%);
     border: 1px solid rgba(255, 255, 255, 0.22);
     box-shadow:
       0 1px 2px rgba(220, 38, 38, 0.35),
@@ -4537,13 +4674,13 @@
     flex-shrink: 0;
   }
   .ai-tab-active .ai-tab-badge {
-    color: #b91c1c;
-    -webkit-text-fill-color: #b91c1c;
+    color: #1d4ed8;
+    -webkit-text-fill-color: #1d4ed8;
     text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
     background: rgba(255, 255, 255, 0.95);
     border-color: rgba(255, 255, 255, 0.85);
     box-shadow:
-      0 1px 2px rgba(60, 10, 40, 0.25),
+      0 1px 2px rgba(30, 64, 175, 0.22),
       0 1px 0 rgba(255, 255, 255, 0.55) inset;
   }
 
@@ -4596,16 +4733,30 @@
   /* ─── Sidebar nav-item variant: AI-flagged row ───────────────────
      Applied via `className += "nav-item-ai "` when a nav entry has
      `ai: true` in nav-config. Replaces the icon's plain currentColor
-     stroke with the same 3-stop gradient the .ai-tab-badge uses
-     (orange → red → purple), referenced through an SVG linearGradient
-     injected once at the top of the Sidebar (id=ai-icon-gradient).
-     Paired with a warm drop-shadow for the same "live / AI" glow as
-     .ai-tab-inactive — keeps every AI surface in the app visually
-     coherent so users learn "orange-red glow = AI feature" once. */
+     stroke with the merged scan+JSON gradient (gold/orange → red →
+     blue → purple), referenced through an SVG linearGradient injected
+     once at the top of the Sidebar (id=ai-icon-gradient).
+     Paired with warm + cool drop-shadow for the same dual-path glow
+     as .ai-tab-active. */
   .nav-item-ai > svg {
     stroke: url(#ai-icon-gradient);
-    filter: drop-shadow(0 0 3px rgba(249, 115, 22, 0.45))
-            drop-shadow(0 0 6px rgba(220, 38, 38, 0.25));
+    filter: drop-shadow(0 0 3px rgba(249, 115, 22, 0.42))
+            drop-shadow(0 0 5px rgba(37, 99, 235, 0.28));
+  }
+  .nav-item-ai.active > svg {
+    filter: drop-shadow(0 0 4px rgba(249, 115, 22, 0.52))
+            drop-shadow(0 0 8px rgba(37, 99, 235, 0.36));
+  }
+
+  /* POS cart — TikTok coral mesh stroke when pending confirm queue > 0 */
+  .nav-item-tiktok-pending > svg {
+    stroke: url(#tiktok-coral-icon-gradient);
+    filter: drop-shadow(0 0 3px rgba(244, 47, 104, 0.42))
+            drop-shadow(0 0 6px rgba(12, 191, 186, 0.22));
+  }
+  .nav-item-tiktok-pending.active > svg {
+    filter: drop-shadow(0 0 4px rgba(244, 47, 104, 0.52))
+            drop-shadow(0 0 8px rgba(12, 191, 186, 0.30));
   }
 
   /* ─── Sidebar count badge (e.g. today's bill count) ─────────────
@@ -4670,6 +4821,30 @@
       linear-gradient(135deg, #f97316 0%, #dc2626 50%, #7c3aed 100%);
     box-shadow:
       0 1px 3px rgba(220, 38, 38, 0.32),
+      0 1px 0 rgba(255, 255, 255, 0.32) inset;
+    flex-shrink: 0;
+  }
+
+  /* JSON path chip — same geometry/recipe as .ai-chip, gold + blue accents */
+  .json-chip {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    color: #fff;
+    text-shadow: 0 1px 1px rgba(30, 5, 40, 0.30);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background:
+      radial-gradient(circle at 15% 25%, #fbbf24 0%, transparent 55%),
+      radial-gradient(circle at 85% 25%, #60a5fa 0%, transparent 55%),
+      radial-gradient(circle at 50% 115%, #1d4ed8 0%, transparent 65%),
+      linear-gradient(135deg, #f59e0b 0%, #2563eb 50%, #1e40af 100%);
+    box-shadow:
+      0 1px 3px rgba(37, 99, 235, 0.32),
       0 1px 0 rgba(255, 255, 255, 0.32) inset;
     flex-shrink: 0;
   }

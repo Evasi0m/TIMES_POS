@@ -18,7 +18,7 @@ describe('formatStockAdjustAlertText', () => {
     expect(text).toContain('owner@example.com');
     expect(text).toContain(stockAdjustSubreasonLabel('physical_count'));
     expect(text).toContain('MTP-1302D-7A2');
-    expect(text).toContain('5 ? 12 (+7)');
+    expect(text).toContain('5 → 12 (+7)');
     expect(text).toContain('count note');
   });
 

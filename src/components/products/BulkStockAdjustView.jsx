@@ -90,7 +90,7 @@ export default function BulkStockAdjustView({
     const { data, error } = await searchProducts(sb, trimmed);
     setSearchBusy(false);
     if (error) {
-      toast?.push('??????????????: ' + error.message, 'error');
+      toast?.push('ค้นหาไม่สำเร็จ: ' + error.message, 'error');
       return;
     }
     setSearchHits((data || []).map(enrichProduct));
@@ -99,7 +99,7 @@ export default function BulkStockAdjustView({
   const pickProduct = (product) => {
     if (!activeRowKey || !product?.id) return;
     if (filledRows.some((r) => r.key !== activeRowKey && r.product?.id === product.id)) {
-      toast?.push('?????????????????????????', 'warning');
+      toast?.push('สินค้านี้มีในรายการแล้ว', 'warning');
       return;
     }
     setRows((prev) => prev.map((r) => (
@@ -129,7 +129,7 @@ export default function BulkStockAdjustView({
       return;
     }
     if (changeCount === 0) {
-      setErr('???????????????????????? � ???? target qty ????');
+      setErr('ไม่มีรายการที่เปลี่ยนยอด — กรุณาแก้ยอดที่ต้องการก่อน');
       return;
     }
     setStep('confirm');
@@ -139,7 +139,7 @@ export default function BulkStockAdjustView({
     if (applyLockRef.current) return;
     setErr('');
     if (!password) {
-      setErr('????????????????????????????');
+      setErr('กรุณากรอกรหัสผ่านเพื่อยืนยัน');
       return;
     }
     applyLockRef.current = true;
@@ -204,7 +204,7 @@ export default function BulkStockAdjustView({
     if (!applyResult?.batchId) return;
     const ids = [...tiktokMappedIds];
     if (!ids.length) {
-      toast?.push('???????????????????? TikTok', 'info');
+      toast?.push('ไม่มี mapping TikTok ที่พร้อม sync', 'info');
       return;
     }
     setSyncBusy(true);
@@ -215,7 +215,7 @@ export default function BulkStockAdjustView({
         toast,
       });
     } catch (e) {
-      toast?.push('Sync TikTok ?????????: ' + (e?.message || e), 'error');
+      toast?.push('Sync TikTok ไม่สำเร็จ: ' + (e?.message || e), 'error');
     } finally {
       setSyncBusy(false);
     }
@@ -224,10 +224,10 @@ export default function BulkStockAdjustView({
   const subreasonLabel = STOCK_ADJUST_SUBREASONS.find((r) => r.value === subreason)?.label || subreason;
 
   const title = step === 'edit'
-    ? '??????????????'
+    ? 'ปรับสต็อกกลุ่ม'
     : step === 'confirm'
-      ? '???????????????????????'
-      : '????????????????????';
+      ? 'ยืนยันการปรับสต็อกกลุ่ม'
+      : 'ปรับสต็อกกลุ่มสำเร็จ';
 
   return (
     <Modal
@@ -238,28 +238,28 @@ export default function BulkStockAdjustView({
       footer={
         step === 'edit' ? (
           <>
-            <button type="button" className="btn-secondary" onClick={handleClose}>??????</button>
+            <button type="button" className="btn-secondary" onClick={handleClose}>ยกเลิก</button>
             <button type="button" className="btn-primary" onClick={goConfirm} disabled={changeCount === 0}>
-              ????? ({changeCount} ??????)
+              ถัดไป ({changeCount} รายการ)
             </button>
           </>
         ) : step === 'confirm' ? (
           <>
             <button type="button" className="btn-secondary" onClick={() => { setStep('edit'); setErr(''); }} disabled={busy}>
-              ????????
+              ย้อนกลับ
             </button>
             <button type="button" className="btn-primary" onClick={submit} disabled={busy || !password}>
-              {busy ? <><span className="spinner"/> ???????????...</> : '???????????????'}
+              {busy ? <><span className="spinner"/> กำลังบันทึก...</> : 'ยืนยันปรับสต็อกกลุ่ม'}
             </button>
           </>
         ) : (
           <>
             {tiktokMappedIds.size > 0 && (
               <button type="button" className="btn-secondary" onClick={runTikTokSyncAll} disabled={syncBusy}>
-                {syncBusy ? <><span className="spinner"/> ????? sync...</> : `Sync TikTok (${tiktokMappedIds.size})`}
+                {syncBusy ? <><span className="spinner"/> กำลัง sync...</> : `Sync TikTok (${tiktokMappedIds.size})`}
               </button>
             )}
-            <button type="button" className="btn-primary" onClick={handleClose}>???</button>
+            <button type="button" className="btn-primary" onClick={handleClose}>ปิด</button>
           </>
         )
       }
@@ -267,11 +267,11 @@ export default function BulkStockAdjustView({
       {step === 'edit' && (
         <div className="space-y-4">
           <div className="rounded-xl border hairline bg-surface-soft p-3 space-y-2">
-            <div className="text-xs uppercase tracking-wider text-muted font-medium">???????????</div>
+            <div className="text-xs uppercase tracking-wider text-muted font-medium">ค้นหาสินค้า</div>
             <div className="flex gap-2">
               <input
                 className="input flex-1"
-                placeholder="???????? ???? ????????"
+                placeholder="ชื่อ, รหัส, บาร์โค้ด…"
                 value={searchQ}
                 onChange={(e) => {
                   setSearchQ(e.target.value);
@@ -282,7 +282,7 @@ export default function BulkStockAdjustView({
                 }}
               />
             </div>
-            {searchBusy && <div className="text-xs text-muted flex items-center gap-2"><span className="spinner"/> ??????????...</div>}
+            {searchBusy && <div className="text-xs text-muted flex items-center gap-2"><span className="spinner"/> กำลังค้นหา…</div>}
             {searchHits.length > 0 && (
               <div className="border hairline rounded-lg max-h-40 overflow-y-auto divide-y hairline-soft">
                 {searchHits.map((p) => (
@@ -294,8 +294,8 @@ export default function BulkStockAdjustView({
                   >
                     <div className="font-medium truncate">{p.name}</div>
                     <div className="text-xs text-muted tabular-nums">
-                      ??????? {p.current_stock ?? 0}
-                      {p.barcode ? ` � ${p.barcode}` : ''}
+                      คงเหลือ {p.current_stock ?? 0}
+                      {p.barcode ? ` · ${p.barcode}` : ''}
                     </div>
                   </button>
                 ))}
@@ -305,9 +305,9 @@ export default function BulkStockAdjustView({
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <div className="text-xs uppercase tracking-wider text-muted font-medium">?????? ({filledRows.length})</div>
+              <div className="text-xs uppercase tracking-wider text-muted font-medium">รายการ ({filledRows.length})</div>
               <button type="button" className="btn-secondary !text-xs !py-1 !px-2" onClick={addRow}>
-                <Icon name="plus" size={14}/> ????????
+                <Icon name="plus" size={14}/> เพิ่มแถว
               </button>
             </div>
             {rows.map((row, idx) => (
@@ -317,7 +317,7 @@ export default function BulkStockAdjustView({
                     <>
                       <div className="font-medium text-sm truncate">{row.product.name}</div>
                       <div className="text-xs text-muted tabular-nums">
-                        ????????: {row.product.current_stock ?? 0}
+                        คงเหลือ: {row.product.current_stock ?? 0}
                       </div>
                     </>
                   ) : (
@@ -326,7 +326,7 @@ export default function BulkStockAdjustView({
                       className="text-sm text-muted hover:text-ink"
                       onClick={() => setActiveRowKey(row.key)}
                     >
-                      ?????????????????????????
+                      เลือกสินค้า (ค้นหาด้านบน)
                     </button>
                   )}
                 </div>
@@ -336,7 +336,7 @@ export default function BulkStockAdjustView({
                     min="0"
                     step="1"
                     className="input !text-sm tabular-nums"
-                    placeholder="????"
+                    placeholder="ยอด"
                     value={row.targetQtyStr}
                     disabled={!row.product}
                     onChange={(e) => setRows((prev) => prev.map((r) => (
@@ -344,7 +344,7 @@ export default function BulkStockAdjustView({
                     )))}
                   />
                 </div>
-                <button type="button" className="btn-secondary !p-2 shrink-0" onClick={() => removeRow(row.key)} aria-label={`????? ${idx + 1}`}>
+                <button type="button" className="btn-secondary !p-2 shrink-0" onClick={() => removeRow(row.key)} aria-label={`ลบแถว ${idx + 1}`}>
                   <Icon name="trash" size={16}/>
                 </button>
               </div>
@@ -353,7 +353,7 @@ export default function BulkStockAdjustView({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-xs uppercase tracking-wider text-muted font-medium">?????? (???? batch) *</label>
+              <label className="text-xs uppercase tracking-wider text-muted font-medium">เหตุผล (ใช้ร่วมทั้ง batch) *</label>
               <select className="input mt-1 w-full" value={subreason} onChange={(e) => setSubreason(e.target.value)}>
                 {STOCK_ADJUST_SUBREASONS.map((r) => (
                   <option key={r.value} value={r.value}>{r.label}</option>
@@ -361,12 +361,12 @@ export default function BulkStockAdjustView({
               </select>
             </div>
             <div>
-              <label className="text-xs uppercase tracking-wider text-muted font-medium">???????? (???? batch) *</label>
+              <label className="text-xs uppercase tracking-wider text-muted font-medium">หมายเหตุ (ใช้ร่วมทั้ง batch) *</label>
               <textarea
                 className="input mt-1 w-full min-h-[72px] resize-y"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="?????????????????????????????�"
+                placeholder="อธิบายสั้นๆ ว่าทำไมต้องปรับยอด…"
               />
             </div>
           </div>
@@ -378,22 +378,22 @@ export default function BulkStockAdjustView({
       {step === 'confirm' && (
         <div className="space-y-4">
           <div className="rounded-xl border border-warning/30 bg-warning/5 p-4 text-sm space-y-2">
-            <div className="font-medium text-ink">????????????????? � {changeCount} ???????????????</div>
-            <div className="text-muted">??????: {subreasonLabel}</div>
-            <div className="text-muted">????????: {note}</div>
+            <div className="font-medium text-ink">กำลังปรับสต็อก — {changeCount} รายการจะเปลี่ยน</div>
+            <div className="text-muted">เหตุผล: {subreasonLabel}</div>
+            <div className="text-muted">หมายเหตุ: {note}</div>
           </div>
           <div className="max-h-48 overflow-y-auto border hairline rounded-lg divide-y hairline-soft text-sm">
             {adjustItems.filter((it) => it.targetQty !== it.currentStock).map((it) => (
               <div key={it.productId} className="px-3 py-2 flex justify-between gap-2">
                 <span className="truncate">{it.name}</span>
                 <span className="tabular-nums shrink-0 text-muted">
-                  {it.currentStock} ? {it.targetQty}
+                  {it.currentStock} → {it.targetQty}
                 </span>
               </div>
             ))}
           </div>
           <div>
-            <label className="text-xs uppercase tracking-wider text-muted font-medium">?????????????? *</label>
+            <label className="text-xs uppercase tracking-wider text-muted font-medium">รหัสผ่านยืนยัน *</label>
             <input
               type="password"
               autoComplete="current-password"
@@ -401,6 +401,7 @@ export default function BulkStockAdjustView({
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
+            <div className="text-xs text-muted-soft mt-1">ยืนยันตัวตนก่อนปรับสต็อก (เฉพาะ Super Admin)</div>
           </div>
           {err && <div className="text-sm text-danger">{err}</div>}
         </div>
@@ -409,12 +410,12 @@ export default function BulkStockAdjustView({
       {step === 'done' && applyResult && (
         <div className="space-y-4 text-sm">
           <div className="rounded-xl border border-success/30 bg-success/5 p-4 space-y-1">
-            <div className="font-medium text-ink">??????????</div>
+            <div className="font-medium text-ink">บันทึกเรียบร้อย</div>
             <div className="text-muted tabular-nums">
-              ?????? {applyResult.applied ?? 0}
-              {(applyResult.unchanged ?? 0) > 0 && ` � ?????????? ${applyResult.unchanged}`}
+              สำเร็จ {applyResult.applied ?? 0}
+              {(applyResult.unchanged ?? 0) > 0 && ` · ไม่เปลี่ยน ${applyResult.unchanged}`}
               {Array.isArray(applyResult.errors) && applyResult.errors.length > 0 && (
-                <> � ??????? {applyResult.errors.length}</>
+                <> · ผิดพลาด {applyResult.errors.length}</>
               )}
             </div>
           </div>
@@ -431,7 +432,7 @@ export default function BulkStockAdjustView({
             <div className="rounded-xl border border-warning/30 bg-warning/5 p-3 flex items-start gap-2">
               <Icon name="shop-bag" size={16} className="text-warning shrink-0 mt-0.5"/>
               <span className="text-muted">
-                ?? {tiktokMappedIds.size} ???????????? TikTok � POS ??????????? ?? Sync ???????????????? TikTok Shop
+                มี {tiktokMappedIds.size} รายการเชื่อม TikTok — POS เปลี่ยนแล้ว แต่ Sync ไป TikTok Shop ต้องกดปุ่มด้านล่าง
               </span>
             </div>
           )}

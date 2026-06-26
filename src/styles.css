@@ -514,55 +514,145 @@
     0 5px 12px -4px rgba(220, 38, 38, 0.55);
 }
 
-/* TikTok pending badge — POS header, sized to sit beside the text-5xl
-   page title. Black gradient pill + slow red halo pulse; count sits in a
-   dedicated ring frame so the number reads as the primary action cue. */
+/* ── TikTok Coral Mesh design tokens (badge + modal) ── */
+.ttc-coral-mesh-surface {
+  background:
+    radial-gradient(circle at 12% 18%, rgba(244, 47, 104, 0.22) 0%, transparent 55%),
+    radial-gradient(circle at 88% 28%, rgba(12, 191, 186, 0.18) 0%, transparent 52%),
+    radial-gradient(circle at 50% 110%, rgba(244, 47, 104, 0.10) 0%, transparent 60%),
+    linear-gradient(135deg,
+      rgba(255, 253, 248, 0.96) 0%,
+      rgba(244, 238, 228, 0.88) 48%,
+      rgba(255, 250, 252, 0.92) 100%);
+  border: 1px solid rgba(244, 47, 104, 0.22);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+}
+
+.ttc-coral-mesh-chip,
+.ttc-pending-badge__count {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.375rem;
+  height: 2.375rem;
+  padding: 0 0.3125rem;
+  flex-shrink: 0;
+  border-radius: 0.5625rem;
+  background:
+    radial-gradient(circle at 20% 20%, #ff6b9d 0%, transparent 55%),
+    radial-gradient(circle at 80% 80%, #0cbfba 0%, transparent 45%),
+    linear-gradient(135deg, #f42f68 0%, #e81e5a 55%, #c2185b 100%);
+  border: 2px solid rgba(255, 255, 255, 0.46);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.38),
+    0 0 8px 0 rgba(244, 47, 104, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.30),
+    inset 0 -2px 4px rgba(194, 24, 91, 0.24);
+}
+.ttc-coral-mesh-chip--header {
+  min-width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.5rem;
+  animation: none;
+}
+.ttc-coral-mesh-chip--header .ttc-pending-badge__count-num {
+  font-size: 0.9375rem;
+}
+.ttc-coral-mesh-chip::before,
+.ttc-pending-badge__count::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  pointer-events: none;
+}
+
+.btn-ttc-coral-mesh {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 10px;
+  color: #fff;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background:
+    radial-gradient(circle at 12% 18%, #ff6b9d 0%, transparent 52%),
+    radial-gradient(circle at 88% 82%, #0cbfba 0%, transparent 48%),
+    linear-gradient(135deg, #f42f68 0%, #e81e5a 52%, #c2185b 100%);
+  box-shadow:
+    0 4px 14px -2px rgba(244, 47, 104, 0.42),
+    0 1px 0 rgba(255, 255, 255, 0.24) inset,
+    0 -1px 0 rgba(120, 8, 48, 0.32) inset;
+  cursor: pointer;
+  transition: transform 0.15s var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1)),
+    box-shadow 0.2s ease, filter 0.15s;
+  position: relative;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-ttc-coral-mesh::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 45%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent);
+  pointer-events: none;
+  border-radius: inherit;
+}
+.btn-ttc-coral-mesh:hover:not(:disabled) {
+  filter: brightness(1.05) saturate(1.04);
+  transform: translateY(-1px);
+  box-shadow:
+    0 8px 22px -2px rgba(244, 47, 104, 0.52),
+    0 1px 0 rgba(255, 255, 255, 0.28) inset,
+    0 -1px 0 rgba(120, 8, 48, 0.28) inset;
+}
+.btn-ttc-coral-mesh:active:not(:disabled) {
+  transform: scale(0.98);
+  filter: brightness(0.96);
+}
+.btn-ttc-coral-mesh:disabled {
+  cursor: not-allowed;
+}
+
+/* TikTok pending badge — POS header coral mesh pill (warm glass + tt-coral/cyan). */
 @keyframes ttcPendingGlow {
   0%, 100% {
     box-shadow:
-      0 2px 6px rgba(0, 0, 0, 0.42),
-      0 8px 22px -8px rgba(0, 0, 0, 0.55),
-      0 1px 0 rgba(255, 255, 255, 0.14) inset,
-      0 0 0 0 rgba(220, 38, 38, 0.38),
-      0 0 14px 0 rgba(220, 38, 38, 0.18);
+      0 2px 6px rgba(20, 20, 19, 0.08),
+      0 6px 18px -6px rgba(244, 47, 104, 0.22),
+      0 1px 0 rgba(255, 255, 255, 0.72) inset,
+      0 0 0 0 rgba(244, 47, 104, 0.28),
+      0 0 12px 0 rgba(12, 191, 186, 0.10);
   }
   50% {
     box-shadow:
-      0 2px 6px rgba(0, 0, 0, 0.42),
-      0 10px 26px -8px rgba(0, 0, 0, 0.58),
-      0 1px 0 rgba(255, 255, 255, 0.18) inset,
-      0 0 0 7px rgba(220, 38, 38, 0),
-      0 0 28px 4px rgba(220, 38, 38, 0.32);
+      0 3px 8px rgba(20, 20, 19, 0.10),
+      0 8px 22px -6px rgba(244, 47, 104, 0.32),
+      0 1px 0 rgba(255, 255, 255, 0.82) inset,
+      0 0 0 5px rgba(244, 47, 104, 0),
+      0 0 20px 2px rgba(244, 47, 104, 0.22),
+      0 0 16px 0 rgba(12, 191, 186, 0.16);
   }
 }
 @keyframes ttcCountFocusIn {
   from {
     opacity: 0;
-    filter: blur(12px);
+    transform: scale(0.92);
   }
   to {
     opacity: 1;
-    filter: blur(0);
-  }
-}
-@keyframes ttcCountRingPulse {
-  0%, 100% {
-    opacity: 1;
     transform: scale(1);
-    box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.45),
-      0 0 10px 0 rgba(220, 38, 38, 0.55),
-      inset 0 1px 0 rgba(255, 255, 255, 0.35),
-      inset 0 -2px 4px rgba(120, 10, 10, 0.35);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.04);
-    box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.55),
-      0 0 20px 3px rgba(220, 38, 38, 0.72),
-      inset 0 1px 0 rgba(255, 255, 255, 0.42),
-      inset 0 -2px 4px rgba(120, 10, 10, 0.28);
   }
 }
 
@@ -570,34 +660,54 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.625rem;
   height: 3rem;
-  padding: 0 1.125rem 0 0.375rem;
+  padding: 0 1rem 0 0.25rem;
   border-radius: 0.75rem;
   font-family: 'Taviraj', serif;
-  font-size: 1.125rem;
+  font-size: 1.0625rem;
   font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1.1;
-  color: #fff;
-  -webkit-text-fill-color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.50);
+  color: rgb(var(--c-ink));
+  -webkit-text-fill-color: rgb(var(--c-ink));
   cursor: pointer;
   flex-shrink: 0;
   user-select: none;
-  transition: transform 0.22s ease;
+  overflow: hidden;
+  transition:
+    transform 0.22s var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1)),
+    filter 0.22s ease;
   animation: ttcPendingGlow 3.4s ease-in-out infinite;
+}
+.ttc-pending-badge.ttc-coral-mesh-surface,
+.ttc-pending-badge {
   background:
-    radial-gradient(circle at 22% 18%, rgba(110, 110, 120, 0.55) 0%, transparent 58%),
-    radial-gradient(circle at 82% 28%, rgba(55, 55, 62, 0.48) 0%, transparent 55%),
-    linear-gradient(135deg, #3a3a42 0%, #18181d 46%, #08080a 100%);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+    radial-gradient(circle at 12% 18%, rgba(244, 47, 104, 0.22) 0%, transparent 55%),
+    radial-gradient(circle at 88% 28%, rgba(12, 191, 186, 0.18) 0%, transparent 52%),
+    radial-gradient(circle at 50% 110%, rgba(244, 47, 104, 0.10) 0%, transparent 60%),
+    linear-gradient(135deg,
+      rgba(255, 253, 248, 0.96) 0%,
+      rgba(244, 238, 228, 0.88) 48%,
+      rgba(255, 250, 252, 0.92) 100%);
+  border: 1px solid rgba(244, 47, 104, 0.22);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+}
+.ttc-pending-badge::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 50%;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.42), transparent);
 }
 .ttc-pending-badge:hover {
-  transform: scale(1.025);
+  transform: translateY(-1px) scale(1.02);
 }
 .ttc-pending-badge:active {
-  transform: scale(0.985);
+  transform: translateY(0) scale(0.985);
 }
 
 /* Floating product picker — portaled above modal (z-130) so list isn't clipped. */
@@ -731,101 +841,115 @@
   color: #8a6500;
 }
 
-/* Shared dark-brown premium gradient (modal header + price frame) */
-.ttc-brown-frame {
+/* Coral mesh modal header — warm glass + ink text (replaces ttc-brown-frame) */
+.ttc-coral-header {
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(255, 220, 180, 0.22);
   background:
-    radial-gradient(circle at 18% 0%, rgba(255, 235, 205, 0.28), transparent 46%),
-    linear-gradient(180deg, #8f5a38 0%, #6b4228 52%, #452714 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 248, 230, 0.38),
-    inset 0 -1px 0 rgba(30, 16, 8, 0.35),
-    0 4px 14px -6px rgba(50, 28, 14, 0.45);
+    radial-gradient(circle at 12% 18%, rgba(244, 47, 104, 0.12) 0%, transparent 55%),
+    radial-gradient(circle at 88% 28%, rgba(12, 191, 186, 0.10) 0%, transparent 52%),
+    linear-gradient(135deg,
+      rgba(255, 253, 248, 0.98) 0%,
+      rgba(244, 238, 228, 0.92) 48%,
+      rgba(255, 250, 252, 0.96) 100%);
+  border-bottom: 1px solid rgba(244, 47, 104, 0.12) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
-.ttc-brown-frame::before {
+.ttc-coral-header::before {
   content: '';
   position: absolute;
-  inset: 0;
+  inset: 0 0 auto 0;
+  height: 50%;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), transparent 42%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.42), transparent);
 }
-:root:not([data-theme="dark"]) .glass-strong .ttc-modal-header,
-:root:not([data-theme="dark"]) .glass-strong .ttc-modal-header__title,
-:root:not([data-theme="dark"]) .glass-strong .ttc-modal-header__sub {
-  color: #fff;
-}
-:root[data-theme="dark"] .glass-strong .ttc-modal-header,
-:root[data-theme="dark"] .glass-strong .ttc-modal-header__title,
-:root[data-theme="dark"] .glass-strong .ttc-modal-header__sub {
-  color: #fff;
-}
-
-/* TikTok confirm modal — single dark-brown stroke that follows the rounded
-   corners cleanly and continues the brown header frame around the card */
+/* TikTok confirm modal — coral mesh stroke aligned with pending badge */
 :root:not([data-theme="dark"]) .ttc-modal-card.glass-strong {
-  border-width: 2px !important;
-  border-color: rgba(95, 57, 32, 0.65) !important;
+  border-width: 1px !important;
+  border-color: rgba(244, 47, 104, 0.22) !important;
   box-shadow:
-    0 4px 20px -6px rgba(69, 39, 20, 0.26),
-    0 16px 48px -12px rgba(50, 28, 14, 0.32),
-    0 0 72px -16px rgba(107, 66, 40, 0.2);
+    0 4px 20px -6px rgba(244, 47, 104, 0.14),
+    0 16px 48px -12px rgba(20, 20, 19, 0.12),
+    0 0 72px -16px rgba(244, 47, 104, 0.10);
 }
 :root[data-theme="dark"] .ttc-modal-card.glass-strong {
-  border-width: 2px !important;
-  border-color: rgba(180, 120, 70, 0.5) !important;
+  border-width: 1px !important;
+  border-color: rgba(244, 47, 104, 0.28) !important;
   box-shadow:
     0 4px 24px -6px rgba(0, 0, 0, 0.45),
-    0 16px 52px -12px rgba(30, 16, 8, 0.55),
-    0 0 80px -16px rgba(107, 66, 40, 0.28);
+    0 16px 52px -12px rgba(0, 0, 0, 0.38),
+    0 0 80px -16px rgba(244, 47, 104, 0.14);
 }
 
 .ttc-modal-header {
-  color: #fff;
-  border-bottom-color: rgba(255, 255, 255, 0.14) !important;
+  border-bottom-color: rgba(244, 47, 104, 0.12) !important;
+}
+.ttc-coral-header.ttc-modal-header,
+.ttc-coral-header .ttc-modal-header__title,
+.ttc-coral-header .ttc-modal-header__sub,
+.ttc-coral-header .ttc-modal-header__text {
+  color: rgb(var(--c-ink));
 }
 .ttc-modal-header > * {
   position: relative;
   z-index: 1;
 }
-.ttc-modal-header__title,
-.ttc-modal-header__sub,
-.ttc-modal-header__text {
-  color: #fff;
+.ttc-coral-header .pnb-iconbtn {
+  color: rgb(var(--c-ink));
+  background: rgba(244, 47, 104, 0.08);
+  border-color: rgba(244, 47, 104, 0.18);
 }
-.ttc-modal-header .pnb-iconbtn {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.22);
+.ttc-coral-header .pnb-iconbtn:hover {
+  background: rgba(244, 47, 104, 0.14);
+  color: rgb(var(--c-ink));
 }
-.ttc-modal-header .pnb-iconbtn:hover {
-  background: rgba(255, 255, 255, 0.22);
-  color: #fff;
-}
-.ttc-modal-header .pnb-iconbtn svg {
+.ttc-coral-header .pnb-iconbtn svg {
   color: inherit;
   stroke: currentColor;
 }
+.ttc-coral-header .ttc-sheet-grab {
+  background: rgba(244, 47, 104, 0.28);
+}
 
-/* Mobile bottom sheet — brown header fills rounded top; no side/top frame stroke */
+/* Mobile bottom sheet — coral header fills rounded top */
 .ttc-pending-modal.ttc-modal-card .ttc-modal-header--sheet {
   border-top: none;
   border-left: none;
   border-right: none;
-  border-top-left-radius: calc(1rem - 2px);
-  border-top-right-radius: calc(1rem - 2px);
+  border-top-left-radius: calc(1rem - 1px);
+  border-top-right-radius: calc(1rem - 1px);
 }
 
-:root[data-theme="dark"] .ttc-brown-frame {
-  border-color: rgba(255, 210, 160, 0.18);
+:root[data-theme="dark"] .ttc-coral-header {
   background:
-    radial-gradient(circle at 18% 0%, rgba(255, 220, 170, 0.16), transparent 46%),
-    linear-gradient(180deg, #7a4c30 0%, #5a351f 52%, #3a2012 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 240, 210, 0.22),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.28),
-    0 4px 14px -6px rgba(0, 0, 0, 0.42);
+    radial-gradient(circle at 12% 18%, rgba(244, 47, 104, 0.18) 0%, transparent 55%),
+    radial-gradient(circle at 88% 28%, rgba(12, 191, 186, 0.12) 0%, transparent 52%),
+    linear-gradient(135deg,
+      rgba(36, 32, 27, 0.96) 0%,
+      rgba(29, 25, 21, 0.92) 48%,
+      rgba(32, 26, 28, 0.94) 100%);
+  border-bottom-color: rgba(244, 47, 104, 0.18) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+:root[data-theme="dark"] .ttc-coral-header::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent);
+}
+:root[data-theme="dark"] .ttc-coral-header.ttc-modal-header,
+:root[data-theme="dark"] .ttc-coral-header .ttc-modal-header__title,
+:root[data-theme="dark"] .ttc-coral-header .ttc-modal-header__sub {
+  color: rgba(255, 252, 250, 0.96);
+}
+:root[data-theme="dark"] .ttc-coral-header .pnb-iconbtn {
+  color: rgba(255, 252, 250, 0.92);
+  background: rgba(244, 47, 104, 0.14);
+  border-color: rgba(244, 47, 104, 0.24);
+}
+:root[data-theme="dark"] .ttc-coral-header .pnb-iconbtn:hover {
+  background: rgba(244, 47, 104, 0.22);
+  color: #fff;
+}
+:root[data-theme="dark"] .btn-ttc-coral-mesh:disabled {
+  opacity: 0.55;
 }
 
 .ttc-confirm-sideframe {
@@ -2789,25 +2913,304 @@
   padding: 1px 5px;
 }
 
-/* Net-received card — softened red on cream frame */
+/* Net-received card — coral tint on cream frame */
 .ttc-net-card {
-  border: 1px solid rgba(220, 40, 40, 0.22);
+  border: 1px solid rgba(244, 47, 104, 0.22);
   background:
-    radial-gradient(circle at 0% 0%, rgba(220, 40, 40, 0.07), transparent 55%),
+    radial-gradient(circle at 0% 0%, rgba(244, 47, 104, 0.08), transparent 55%),
     linear-gradient(135deg, rgba(239, 233, 222, 0.92), rgba(232, 224, 210, 0.78));
   background-clip: padding-box;
   box-shadow: var(--shadow-low);
 }
 :root[data-theme='dark'] .ttc-net-card {
-  border-color: rgba(240, 90, 90, 0.26);
+  border-color: rgba(244, 47, 104, 0.26);
   background:
-    radial-gradient(circle at 0% 0%, rgba(220, 40, 40, 0.16), transparent 55%),
+    radial-gradient(circle at 0% 0%, rgba(244, 47, 104, 0.14), transparent 55%),
     linear-gradient(135deg, rgba(56, 50, 42, 0.94), rgba(48, 43, 37, 0.82));
+}
+.ttc-list-toolbar {
+  border-bottom: 1px solid rgba(244, 47, 104, 0.12);
+}
+:root[data-theme='dark'] .ttc-list-toolbar {
+  border-bottom-color: rgba(244, 47, 104, 0.18);
+}
+
+/* Modal list scroll — frosted liquid-glass edge overlays */
+.ttc-scroll-frost {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.ttc-scroll-frost__viewport {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+}
+.ttc-scroll-frost__inner {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+.ttc-scroll-frost__edge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1.5rem;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.ttc-scroll-frost__edge.is-visible {
+  opacity: 1;
+}
+.ttc-scroll-frost__edge--top {
+  top: 0;
+  background: linear-gradient(
+    to bottom,
+    rgb(var(--c-surface-cream-strong, 244 238 228) / 0.88) 0%,
+    rgb(var(--c-surface-cream-strong, 244 238 228) / 0.35) 50%,
+    transparent 100%
+  );
+  backdrop-filter: blur(14px) saturate(145%);
+  -webkit-backdrop-filter: blur(14px) saturate(145%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 40%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 40%, transparent 100%);
+}
+.ttc-scroll-frost__edge--bottom {
+  bottom: 0;
+  background:
+    radial-gradient(circle at 50% 100%, rgba(244, 47, 104, 0.04) 0%, transparent 70%),
+    linear-gradient(
+      to top,
+      rgb(var(--c-surface-cream-strong, 244 238 228) / 0.88) 0%,
+      rgb(var(--c-surface-cream-strong, 244 238 228) / 0.35) 50%,
+      transparent 100%
+    );
+  backdrop-filter: blur(14px) saturate(145%);
+  -webkit-backdrop-filter: blur(14px) saturate(145%);
+  mask-image: linear-gradient(to top, #000 0%, #000 40%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to top, #000 0%, #000 40%, transparent 100%);
+}
+:root[data-theme='dark'] .ttc-scroll-frost__edge--top {
+  background: linear-gradient(
+    to bottom,
+    rgb(var(--c-surface-cream-strong, 36 32 27) / 0.82) 0%,
+    rgb(var(--c-surface-cream-strong, 36 32 27) / 0.32) 50%,
+    transparent 100%
+  );
+}
+:root[data-theme='dark'] .ttc-scroll-frost__edge--bottom {
+  background:
+    radial-gradient(circle at 50% 100%, rgba(244, 47, 104, 0.06) 0%, transparent 70%),
+    linear-gradient(
+      to top,
+      rgb(var(--c-surface-cream-strong, 36 32 27) / 0.82) 0%,
+      rgb(var(--c-surface-cream-strong, 36 32 27) / 0.32) 50%,
+      transparent 100%
+    );
+}
+@media (prefers-reduced-motion: reduce) {
+  .ttc-scroll-frost__edge {
+    transition-duration: 0.01ms;
+  }
+}
+
+/* Modal list pagination — coral mesh footer aligned with confirm view */
+.ttc-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  padding: 0.625rem 1rem;
+  border-top: 1px solid rgba(244, 47, 104, 0.12);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(244, 47, 104, 0.06) 0%, transparent 55%),
+    linear-gradient(180deg, rgba(255, 253, 248, 0.72) 0%, rgba(244, 238, 228, 0.55) 100%);
+}
+:root[data-theme='dark'] .ttc-pagination {
+  border-top-color: rgba(244, 47, 104, 0.18);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(244, 47, 104, 0.10) 0%, transparent 55%),
+    linear-gradient(180deg, rgba(36, 32, 27, 0.88) 0%, rgba(29, 25, 21, 0.82) 100%);
+}
+.ttc-pagination-select {
+  height: 2rem;
+  padding: 0 0.5rem;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: rgb(var(--c-ink));
+  border: 1px solid rgba(244, 47, 104, 0.18);
+  background: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.ttc-pagination-select:hover {
+  border-color: rgba(244, 47, 104, 0.28);
+}
+.ttc-pagination-select:focus {
+  outline: none;
+  border-color: rgba(244, 47, 104, 0.35);
+  box-shadow: 0 0 0 2px rgba(244, 47, 104, 0.12);
+}
+:root[data-theme='dark'] .ttc-pagination-select {
+  border-color: rgba(244, 47, 104, 0.24);
+  background: rgba(48, 43, 37, 0.92);
+  color: rgba(255, 252, 250, 0.96);
+}
+.ttc-pagination-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.375rem;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: rgb(var(--c-muted));
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.ttc-pagination-btn:hover:not(:disabled) {
+  color: rgb(var(--c-ink));
+  background: rgba(244, 47, 104, 0.08);
+  border-color: rgba(244, 47, 104, 0.14);
+}
+.ttc-pagination-btn--active {
+  color: #e81e5a;
+  border-color: rgba(244, 47, 104, 0.28);
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255, 107, 157, 0.12) 0%, transparent 55%),
+    linear-gradient(135deg, rgba(244, 47, 104, 0.12) 0%, rgba(232, 30, 90, 0.08) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+:root[data-theme='dark'] .ttc-pagination-btn--active {
+  color: #ff6b9d;
+  border-color: rgba(244, 47, 104, 0.32);
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255, 107, 157, 0.14) 0%, transparent 55%),
+    linear-gradient(135deg, rgba(244, 47, 104, 0.18) 0%, rgba(194, 24, 91, 0.12) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.ttc-pagination-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ttc-pending-card .ttc-row-cta {
+  color: #e81e5a;
+  transition: color 0.15s ease, gap 0.15s ease;
+}
+.ttc-pending-card:hover .ttc-row-cta {
+  color: #f42f68;
+}
+.ttc-confirm-footer {
+  border-top: 1px solid rgba(244, 47, 104, 0.12);
+}
+:root[data-theme='dark'] .ttc-confirm-footer {
+  border-top-color: rgba(244, 47, 104, 0.18);
+}
+.ttc-net-card__label {
+  color: #e81e5a;
+}
+:root[data-theme='dark'] .ttc-net-card__label {
+  color: #ff6b9d;
 }
 .ttc-pending-modal {
   display: flex;
   flex-direction: column;
 }
+
+/* List → confirm: shell width morph (desktop) */
+@media (min-width: 1024px) {
+  .ttc-pending-modal.ttc-modal-card {
+    transition:
+      max-width 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      height 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .ttc-modal-card--list {
+    max-width: min(96vw, 640px);
+    height: min(90vh, 820px);
+  }
+  .ttc-modal-card--confirm {
+    max-width: min(96vw, 900px);
+    height: min(90vh, 820px);
+  }
+}
+
+/* Drill-in content transition (list ↔ confirm) */
+@keyframes ttcDrillIn {
+  from {
+    opacity: 0;
+    transform: translateX(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+@keyframes ttcDrillInBack {
+  from {
+    opacity: 0;
+    transform: translateX(-12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+@keyframes ttcHeaderEnter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.ttc-view-stage {
+  overflow: hidden;
+  min-height: 0;
+}
+.ttc-view-enter--forward {
+  animation: ttcDrillIn 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.ttc-view-enter--back {
+  animation: ttcDrillInBack 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.ttc-header-enter {
+  animation: ttcHeaderEnter 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.ttc-pending-card--opening {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ttc-pending-modal.ttc-modal-card {
+    transition: none !important;
+  }
+  .ttc-view-enter--forward,
+  .ttc-view-enter--back {
+    animation: ttcDrillInReduced 150ms linear both;
+  }
+  @keyframes ttcDrillInReduced {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  .ttc-header-enter {
+    animation-duration: 150ms;
+  }
+}
+
 .ttc-pending-split-list,
 .ttc-pending-split-detail {
   min-height: 0;
@@ -2850,32 +3253,17 @@
   background: rgba(10, 122, 67, 0.12);
 }
 
-/* Count frame — solid red chip (same family as cart-glow-badge). */
+/* Count chip — badge-specific (base mesh in .ttc-coral-mesh-chip above). */
 .ttc-pending-badge__count {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 2.375rem;
-  height: 2.375rem;
-  padding: 0 0.3125rem;
-  flex-shrink: 0;
-  border-radius: 0.5625rem;
-  background:
-    radial-gradient(circle at 30% 22%, rgba(255, 200, 190, 0.55) 0%, transparent 58%),
-    linear-gradient(180deg, #ef4444 0%, #dc2626 52%, #b91c1c 100%);
-  border: 2px solid rgba(255, 255, 255, 0.42);
-  animation:
-    ttcCountFocusIn 0.48s cubic-bezier(0.22, 1, 0.36, 1) both 0.18s,
-    ttcCountRingPulse 3.4s ease-in-out 0.66s infinite;
+  animation: ttcCountFocusIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
-.ttc-pending-badge__count::before {
-  content: '';
-  position: absolute;
-  inset: 2px;
-  border-radius: 0.3125rem;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  pointer-events: none;
+.ttc-pending-badge__count--sm {
+  min-width: 1.125rem;
+  height: 1.125rem;
+  padding: 0 0.3125rem;
+  border-radius: 9999px;
+  border-width: 1.5px;
+  animation: none;
 }
 .ttc-pending-badge__count-num {
   position: relative;
@@ -2888,9 +3276,16 @@
   letter-spacing: -0.02em;
   color: #fff;
   -webkit-text-fill-color: #fff;
-  text-shadow: 0 1px 2px rgba(110, 8, 8, 0.55);
+  text-shadow: 0 1px 2px rgba(120, 8, 48, 0.45);
+}
+.ttc-pending-badge__count--sm .ttc-pending-badge__count-num {
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0;
 }
 .ttc-pending-badge__label {
+  position: relative;
+  z-index: 1;
   white-space: nowrap;
   padding-right: 0.125rem;
 }
@@ -2900,10 +3295,9 @@
     transition: none;
     animation: none;
     box-shadow:
-      0 2px 6px rgba(0, 0, 0, 0.42),
-      0 8px 22px -8px rgba(0, 0, 0, 0.55),
-      0 1px 0 rgba(255, 255, 255, 0.14) inset,
-      0 0 16px 0 rgba(220, 38, 38, 0.22);
+      0 2px 6px rgba(20, 20, 19, 0.08),
+      0 6px 18px -6px rgba(244, 47, 104, 0.18),
+      0 1px 0 rgba(255, 255, 255, 0.72) inset;
   }
   .ttc-pending-badge__count {
     animation: none;
@@ -3775,17 +4169,27 @@
 }
 
 :root[data-theme="dark"] .ttc-pending-badge {
+  color: rgba(255, 252, 250, 0.96);
+  -webkit-text-fill-color: rgba(255, 252, 250, 0.96);
   background:
-    radial-gradient(circle at 22% 18%, rgba(85, 85, 95, 0.48) 0%, transparent 58%),
-    radial-gradient(circle at 82% 28%, rgba(38, 38, 46, 0.52) 0%, transparent 55%),
-    linear-gradient(135deg, #2e2e36 0%, #121218 50%, #050506 100%);
-  border-color: rgba(255, 255, 255, 0.14);
+    radial-gradient(circle at 12% 18%, rgba(244, 47, 104, 0.28) 0%, transparent 55%),
+    radial-gradient(circle at 88% 28%, rgba(12, 191, 186, 0.16) 0%, transparent 52%),
+    radial-gradient(circle at 50% 110%, rgba(244, 47, 104, 0.12) 0%, transparent 60%),
+    linear-gradient(135deg,
+      rgba(36, 32, 27, 0.94) 0%,
+      rgba(29, 25, 21, 0.90) 48%,
+      rgba(32, 26, 28, 0.92) 100%);
+  border-color: rgba(244, 47, 104, 0.28);
+}
+:root[data-theme="dark"] .ttc-pending-badge::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), transparent);
 }
 :root[data-theme="dark"] .ttc-pending-badge__count {
   background:
-    radial-gradient(circle at 30% 22%, rgba(255, 180, 170, 0.40) 0%, transparent 58%),
-    linear-gradient(180deg, #f05252 0%, #dc2626 52%, #991b1b 100%);
-  border-color: rgba(255, 255, 255, 0.32);
+    radial-gradient(circle at 20% 20%, #ff6b9d 0%, transparent 55%),
+    radial-gradient(circle at 80% 80%, #0cbfba 0%, transparent 45%),
+    linear-gradient(135deg, #f42f68 0%, #e81e5a 55%, #991b1b 100%);
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
 :root[data-theme="dark"] .modal-overlay {
@@ -4457,6 +4861,12 @@
 .brv-bill-head__thumb:hover .brv-bill-head__thumb-zoom {
   opacity: 1;
 }
+.brv-bill-head__thumb--no-image {
+  cursor: default;
+}
+.brv-bill-head__thumb--no-image:hover .brv-bill-head__thumb-img {
+  transform: none;
+}
 .brv-bill-head__top {
   grid-area: top;
   display: none;
@@ -4640,6 +5050,126 @@
   display: flex;
   justify-content: center;
   padding: 0 1.5rem 1.5rem;
+}
+
+/* Empty landing — keep card-canvas warm; JSON CTA uses ai-chip mesh recipe (gold/blue) */
+.brv-landing-card .btn-json-mesh {
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background:
+    radial-gradient(circle at 15% 20%,  #fbbf24 0%, transparent 55%),
+    radial-gradient(circle at 85% 25%,  #60a5fa 0%, transparent 55%),
+    radial-gradient(circle at 50% 110%, #1d4ed8 0%, transparent 65%),
+    linear-gradient(135deg, #2563eb 0%, #1d4ed8 50%, #1e40af 100%);
+  box-shadow:
+    0 4px 14px -2px rgba(37, 99, 235, 0.38),
+    0 1px 0 rgba(255, 255, 255, 0.32) inset,
+    0 -1px 0 rgba(15, 23, 42, 0.28) inset;
+}
+.brv-landing-card .btn-json-mesh:hover {
+  box-shadow:
+    0 8px 22px -2px rgba(37, 99, 235, 0.48),
+    0 0 0 1px rgba(191, 219, 254, 0.22),
+    0 1px 0 rgba(255, 255, 255, 0.38) inset,
+    0 -1px 0 rgba(15, 23, 42, 0.26) inset;
+}
+
+/* Empty landing — icon box hover (scan + file personalities) */
+@keyframes brv-landing-scan-bob {
+  0%, 100% { transform: translateY(0) scale(1); }
+  35%      { transform: translateY(-2px) scale(1.04); }
+  65%      { transform: translateY(1px) scale(0.98); }
+}
+@keyframes brv-landing-scan-sweep {
+  0%, 100% { transform: translateY(-4px); opacity: 0.55; }
+  50%      { transform: translateY(4px);  opacity: 1; }
+}
+@keyframes brv-landing-file-bob {
+  0%, 100% { transform: translateY(0) scale(1); }
+  40%      { transform: translateY(-2px) scale(1.03); }
+  70%      { transform: translateY(0.5px) scale(0.99); }
+}
+@keyframes brv-landing-file-line {
+  0%   { transform: scaleX(0.55); opacity: 0.4; }
+  100% { transform: scaleX(1);    opacity: 1; }
+}
+
+.brv-landing-icon {
+  transition:
+    transform 0.25s var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1)),
+    box-shadow 0.25s ease,
+    filter 0.25s ease;
+}
+.brv-landing-icon svg {
+  transform-origin: center;
+  transform-box: fill-box;
+}
+.brv-landing-icon:hover {
+  transform: translateY(-3px) scale(1.06);
+  box-shadow: 0 8px 20px -4px rgb(var(--c-primary) / 0.22);
+  filter: drop-shadow(0 0 8px rgb(var(--c-primary) / 0.18));
+}
+.brv-landing-icon:hover svg[data-icon="scan"] {
+  animation: brv-landing-scan-bob 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.brv-landing-icon:hover svg[data-icon="scan"] path:last-of-type {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: brv-landing-scan-sweep 0.8s ease-in-out infinite;
+}
+.brv-landing-icon:hover svg[data-icon="file"] {
+  animation: brv-landing-file-bob 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.brv-landing-icon:hover svg[data-icon="file"] line {
+  transform-origin: left center;
+  transform-box: fill-box;
+  animation: brv-landing-file-line 0.45s ease-out both;
+}
+.brv-landing-icon:hover svg[data-icon="file"] line:nth-of-type(1) { animation-delay: 0s; }
+.brv-landing-icon:hover svg[data-icon="file"] line:nth-of-type(2) { animation-delay: 0.06s; }
+.brv-landing-icon:hover svg[data-icon="file"] line:nth-of-type(3) { animation-delay: 0.12s; }
+
+/* Empty landing — CTA button icons (same scan/file personalities) */
+.brv-landing-card button svg {
+  transform-origin: center;
+  transform-box: fill-box;
+}
+.brv-landing-card button:hover > svg[data-icon="scan"] {
+  animation: brv-landing-scan-bob 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform: none;
+}
+.brv-landing-card button:hover > svg[data-icon="scan"] path:last-of-type {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: brv-landing-scan-sweep 0.8s ease-in-out infinite;
+}
+.brv-landing-card button:hover > svg[data-icon="file"] {
+  animation: brv-landing-file-bob 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform: none;
+}
+.brv-landing-card button:hover > svg[data-icon="file"] line {
+  transform-origin: left center;
+  transform-box: fill-box;
+  animation: brv-landing-file-line 0.45s ease-out both;
+}
+.brv-landing-card button:hover > svg[data-icon="file"] line:nth-of-type(1) { animation-delay: 0s; }
+.brv-landing-card button:hover > svg[data-icon="file"] line:nth-of-type(2) { animation-delay: 0.06s; }
+.brv-landing-card button:hover > svg[data-icon="file"] line:nth-of-type(3) { animation-delay: 0.12s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .brv-landing-icon,
+  .brv-landing-icon svg,
+  .brv-landing-icon svg *,
+  .brv-landing-card button:hover > svg,
+  .brv-landing-card button:hover > svg * {
+    animation: none !important;
+    transition: none;
+    transform: none !important;
+  }
+  .brv-landing-icon:hover {
+    box-shadow: none;
+    filter: none;
+  }
 }
 
 /* Parsing split — status left, terminal right */

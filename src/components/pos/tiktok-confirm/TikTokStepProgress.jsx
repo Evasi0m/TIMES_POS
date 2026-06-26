@@ -61,7 +61,7 @@ export default function TikTokStepProgress({
               <div className={'flex items-center gap-1 shrink-0 ' + (active ? '' : done ? 'opacity-95' : 'opacity-45')}>
                 <span className={
                   'flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-bold shrink-0 ' +
-                  (done ? 'bg-[#0a7a43] text-white' : active ? 'bg-primary text-white ring-2 ring-primary/25' : 'bg-surface-soft border hairline text-muted')
+                  (done ? 'bg-[#0a7a43] text-white' : active ? 'bg-[#f42f68] text-white ring-2 ring-[#f42f68]/25' : 'bg-surface-soft border hairline text-muted')
                 }>
                   {done ? <Icon name="check" size={13}/> : s.id}
                 </span>

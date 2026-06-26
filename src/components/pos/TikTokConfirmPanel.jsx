@@ -26,7 +26,7 @@ import {
 } from '../../lib/tiktok-inventory-sync.js';
 import { logMirrorBackgroundError } from '../../lib/tiktok-mirror-helpers.js';
 import { isGenericTikTokSku } from './tiktok-confirm/helpers.js';
-import Icon from '../ui/Icon.jsx';
+import EcommerceBrandIcon from '../ecommerce/EcommerceBrandIcon.jsx';
 
 export default function TikTokConfirmPanel({ toast, onConfirmed }) {
   const [orders, setOrders] = useState([]);
@@ -35,6 +35,7 @@ export default function TikTokConfirmPanel({ toast, onConfirmed }) {
   const [catalogError, setCatalogError] = useState(null);
   const [open, setOpen] = useState(false);
   const [activeId, setActiveId] = useState(null);
+  const [openingId, setOpeningId] = useState(null);
   const [picks, setPicks] = useState({});
   const [substitutionMeta, setSubstitutionMeta] = useState({});
   const [matchConfirmed, setMatchConfirmed] = useState({});
@@ -156,51 +157,58 @@ export default function TikTokConfirmPanel({ toast, onConfirmed }) {
   }, [orders, sortOrder]);
 
   const openOrder = async (o) => {
-    setActiveId(o.id);
-    const items = o.items || [];
-    let catalog = products;
-    if (!catalog.length) {
-      catalog = await loadCatalog({ quiet: true });
-    }
-
-    const skuIds = items.map(it => it.tiktok_sku_id).filter(Boolean);
-    let mappings = [];
+    if (openingId) return;
+    setOpeningId(o.id);
     try {
-      mappings = await fetchTikTokMappingsBySkuIds(skuIds);
-    } catch { /* pre-fill is best-effort */ }
-    const mappingBySku = Object.fromEntries(
-      mappings.map(m => [String(m.tiktok_sku_id), m]),
-    );
-
-    const seed = {};
-    const matchSeed = {};
-    items.forEach(it => {
-      const mapping = it.tiktok_sku_id ? mappingBySku[String(it.tiktok_sku_id)] : null;
-      const productId = it.product_id || mapping?.product_id;
-      if (productId) {
-        const prod = catalog.find(p => p.id === productId);
-        seed[it.id] = {
-          id: productId,
-          name: prod?.name || it.product_name || it.sku_name || '',
-          model_code: prod?.model_code,
-          current_stock: prod?.current_stock,
-        };
-        if (mapping?.product_id && isGenericTikTokSku(it)) {
-          matchSeed[it.id] = true;
-        }
+      const items = o.items || [];
+      let catalog = products;
+      if (!catalog.length) {
+        catalog = await loadCatalog({ quiet: true });
       }
-    });
-    setPicks(seed);
-    setMatchConfirmed(matchSeed);
-    setSubstitutionMeta({});
-    setNet('');
-    setDeferNet(false);
-    if (!products.length && catalog.length) {
-      setProducts(catalog);
+
+      const skuIds = items.map(it => it.tiktok_sku_id).filter(Boolean);
+      let mappings = [];
+      try {
+        mappings = await fetchTikTokMappingsBySkuIds(skuIds);
+      } catch { /* pre-fill is best-effort */ }
+      const mappingBySku = Object.fromEntries(
+        mappings.map(m => [String(m.tiktok_sku_id), m]),
+      );
+
+      const seed = {};
+      const matchSeed = {};
+      items.forEach(it => {
+        const mapping = it.tiktok_sku_id ? mappingBySku[String(it.tiktok_sku_id)] : null;
+        const productId = it.product_id || mapping?.product_id;
+        if (productId) {
+          const prod = catalog.find(p => p.id === productId);
+          seed[it.id] = {
+            id: productId,
+            name: prod?.name || it.product_name || it.sku_name || '',
+            model_code: prod?.model_code,
+            current_stock: prod?.current_stock,
+          };
+          if (mapping?.product_id && isGenericTikTokSku(it)) {
+            matchSeed[it.id] = true;
+          }
+        }
+      });
+      setPicks(seed);
+      setMatchConfirmed(matchSeed);
+      setSubstitutionMeta({});
+      setNet('');
+      setDeferNet(false);
+      if (!products.length && catalog.length) {
+        setProducts(catalog);
+      }
+      setActiveId(o.id);
+    } finally {
+      setOpeningId(null);
     }
   };
 
   const backToList = () => {
+    setOpeningId(null);
     setActiveId(null);
     setPicks({});
     setSubstitutionMeta({});
@@ -331,9 +339,12 @@ export default function TikTokConfirmPanel({ toast, onConfirmed }) {
           title={TTC_COPY.badgeLabel}
           className="ttc-pending-icon-btn icon-btn-44 btn-ghost !p-0"
         >
-          <Icon name="shop-bag" size={20} strokeWidth={1.85} />
-          <span className="nav-count-badge ttc-pending-icon-btn__count" aria-hidden="true">
-            {countLabel}
+          <EcommerceBrandIcon brand="tiktok" size={18} />
+          <span
+            className="ttc-pending-icon-btn__count ttc-pending-badge__count ttc-pending-badge__count--sm"
+            aria-hidden="true"
+          >
+            <span className="ttc-pending-badge__count-num">{countLabel}</span>
           </span>
         </button>
       </div>
@@ -347,7 +358,7 @@ export default function TikTokConfirmPanel({ toast, onConfirmed }) {
           <span className="ttc-pending-badge__count">
             <span className="ttc-pending-badge__count-num">{countLabel}</span>
           </span>
-          <span className="ttc-pending-badge__label">{TTC_COPY.badgeLabel}</span>
+          <span className="ttc-pending-badge__label">{TTC_COPY.badgeLabelShort}</span>
         </button>
       </div>
     </>
@@ -368,6 +379,7 @@ export default function TikTokConfirmPanel({ toast, onConfirmed }) {
           sortOrder={sortOrder}
           onSortChange={setSortOrder}
           onOpenOrder={openOrder}
+          openingId={openingId}
           refreshing={refreshing}
           syncPct={syncProgress.pct}
           onSync={syncFromTikTok}

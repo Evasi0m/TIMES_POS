@@ -47,14 +47,10 @@
   top: -2px;
   right: -2px;
   z-index: 1;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  font-size: 10px;
   pointer-events: none;
   box-shadow:
     0 0 0 2px rgb(var(--c-surface-strong)),
-    0 1px 2px rgba(0, 0, 0, 0.18);
+    0 1px 3px rgba(244, 47, 104, 0.28);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -189,7 +185,7 @@
     pointer-events: none;
   }
   .kind-tabs__btn.ai-tab-inactive .kind-tabs__label {
-    background: linear-gradient(135deg, #f97316 0%, #dc2626 50%, #7c3aed 100%);
+    background: linear-gradient(135deg, #f97316 0%, #dc2626 32%, #2563eb 62%, #7c3aed 100%);
     background-clip: text;
     -webkit-background-clip: text;
     color: transparent;

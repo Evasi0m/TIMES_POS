@@ -2,6 +2,40 @@
   "schemaVersion": 1,
   "patches": [
     {
+      "id": "2026-06-26-json-bill-import",
+      "date": "2026-06-26",
+      "title": "รับเข้า ×10 — นำเข้าบิลจาก JSON (Gemini Gem)",
+      "tags": ["ใหม่", "AI", "รับเข้า"],
+      "items": [
+        "หน้า landing แยก 2 ทาง: สแกนรูปด้วย AI หรือนำเข้าไฟล์ JSON จาก Gemini Gem",
+        "schema เดียวกับ AI parse — สูงสุด 10 บิล/ไฟล์ ตรวจเลขแถวก่อนเข้า review ไม่ใช้ AI quota",
+        "รองรับลากไฟล์ / วาง JSON / พิมพ์ใน modal · แสดง preview จำนวนบิลและแถวก่อนยืนยัน",
+        "บันทึกด้วย created_via json_cmg · badge JSON ในประวัติรับของ · ข้อความแจ้งเตือนปรับให้เหมาะกับ JSON"
+      ]
+    },
+    {
+      "id": "2026-06-26-tiktok-confirm-coral-ui",
+      "date": "2026-06-26",
+      "title": "TikTok ยืนยันขาย — UI coral mesh + drill-in",
+      "tags": ["ปรับปรุง", "TikTok", "UI"],
+      "items": [
+        "modal รอยืนยัน: header coral mesh ใหม่ แทน brown frame · animation drill-in ระหว่างรายการกับยืนยัน",
+        "รายการออเดอร์: ขอบ scroll frosted blur · การ์ด hover coral · loading ตอนเปิดออเดอร์กันซ้ำ",
+        "badge ออเดอร์รอ: ไอคอน TikTok Shop + ตัวเลข · Sidebar ไฮไลต์เมนูขายเมื่อมีคิวรอยืนยัน",
+        "usePendingTikTokOrderCount แชร์ count ระหว่าง header/sidebar · refresh ทุก 60 วิ + ตอน focus"
+      ]
+    },
+    {
+      "id": "2026-06-26-thai-encoding-fixes",
+      "date": "2026-06-26",
+      "title": "แก้ข้อความไทยเสียในปรับสต็อกกลุ่ม + Telegram",
+      "tags": ["แก้ไข"],
+      "items": [
+        "หน้าปรับสต็อกกลุ่ม แสดงภาษาไทยถูกต้องอีกครั้ง (ปุ่ม, placeholder, toast)",
+        "แจ้งเตือน Telegram ตอนปรับสต็อก แสดงไทยครบ — เหตุผล, รายการ, ผู้ทำ"
+      ]
+    },
+    {
       "id": "2026-06-21-ai-scan-bug-fixes",
       "date": "2026-06-21",
       "title": "แก้บั๊ก AI scan บิล (รับเข้า ×10)",

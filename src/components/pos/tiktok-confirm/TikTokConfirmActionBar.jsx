@@ -13,7 +13,7 @@ function NetReceivedCard({ showNet, deferNet, setDeferNet, net, setNet, saving }
     >
       <div className="relative min-w-0">
         <div className="flex items-center justify-between gap-2 mb-2">
-          <div className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#b3261e]">
+          <div className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider ttc-net-card__label">
             <Icon name="store" size={11}/> เงินที่ร้านได้รับ
             <span className="text-muted-soft ml-0.5 font-normal normal-case tracking-normal">(TikTok)</span>
           </div>
@@ -96,7 +96,7 @@ export default function TikTokConfirmActionBar({
   const blocked = reviewReady && (stockBlocked || resolutionBlocked);
 
   return (
-    <div className="px-4 py-3 border-t-2 border-ink/10 bg-surface-cream-strong shrink-0 space-y-2.5 min-w-0 overflow-hidden">
+    <div className="px-4 py-3 ttc-confirm-footer bg-surface-cream-strong shrink-0 space-y-2.5 min-w-0 overflow-hidden">
       {reviewReady ? (
         <NetReceivedCard
           showNet={showNet}
@@ -119,7 +119,7 @@ export default function TikTokConfirmActionBar({
 
       <button
         type="button"
-        className={'btn-primary w-full !py-3.5 !text-base inline-flex items-center justify-center gap-2 min-h-[48px] ' + (!canConfirm ? 'opacity-60 cursor-not-allowed' : '')}
+        className={'btn-ttc-coral-mesh w-full !py-3.5 !text-base inline-flex items-center justify-center gap-2 min-h-[48px] ' + (!canConfirm ? 'opacity-60 cursor-not-allowed' : '')}
         onClick={onConfirm}
         disabled={!canConfirm}
       >
