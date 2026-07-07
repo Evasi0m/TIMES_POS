@@ -305,6 +305,15 @@ describe('sortProducts', () => {
     expect(sortProducts(items, 'name').map(p => p.name)).toEqual(['A', 'B', 'C']);
   });
 
+  it('sorts by stock descending', () => {
+    const stockItems = [
+      { id: 1, current_stock: 2 },
+      { id: 2, current_stock: 10 },
+      { id: 3, current_stock: 0 },
+    ];
+    expect(sortProducts(stockItems, 'stock-desc').map(p => p.id)).toEqual([2, 1, 3]);
+  });
+
   it('returns a new array (does not mutate input)', () => {
     const orig = [...items];
     sortProducts(items, 'name');

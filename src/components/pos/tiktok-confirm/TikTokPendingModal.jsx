@@ -53,8 +53,7 @@ export default function TikTokPendingModal({
     <div
       className={
         'fixed inset-0 z-[130] flex p-0 sm:p-4 ' +
-        (mobile ? 'items-end justify-center ' : 'items-center justify-center p-3 ') +
-        (closing ? 'overlay-out' : 'overlay-in')
+        (mobile ? 'items-end justify-center ' : 'items-center justify-center p-3 ')
       }
       onClick={onClose}
     >

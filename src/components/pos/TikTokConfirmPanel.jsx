@@ -26,8 +26,6 @@ import {
 } from '../../lib/tiktok-inventory-sync.js';
 import { logMirrorBackgroundError } from '../../lib/tiktok-mirror-helpers.js';
 import { isGenericTikTokSku } from './tiktok-confirm/helpers.js';
-import EcommerceBrandIcon from '../ecommerce/EcommerceBrandIcon.jsx';
-
 export default function TikTokConfirmPanel({ toast, onConfirmed }) {
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
@@ -328,23 +326,26 @@ export default function TikTokConfirmPanel({ toast, onConfirmed }) {
 
   const countLabel = count > 99 ? '99+' : count;
   const badgeAria = `${TTC_COPY.badgeLabel} ${count} รายการ`;
+  const mobileBtnSize = 40;
+  const mobileCountFont = Math.max(11, Math.round(mobileBtnSize * 0.35));
 
   const badge = (
     <>
-      <div className="pending-bell lg:hidden">
+      <div className="ttc-pending-mobile lg:hidden">
         <button
           type="button"
           onClick={() => setOpen(true)}
           aria-label={badgeAria}
           title={TTC_COPY.badgeLabel}
-          className="ttc-pending-icon-btn icon-btn-44 btn-ghost !p-0"
+          className="ttc-pending-count-btn"
+          style={{ width: mobileBtnSize, height: mobileBtnSize }}
         >
-          <EcommerceBrandIcon brand="tiktok" size={18} />
           <span
-            className="ttc-pending-icon-btn__count ttc-pending-badge__count ttc-pending-badge__count--sm"
+            className="ttc-pending-count-btn__num"
+            style={{ fontSize: mobileCountFont }}
             aria-hidden="true"
           >
-            <span className="ttc-pending-badge__count-num">{countLabel}</span>
+            {countLabel}
           </span>
         </button>
       </div>

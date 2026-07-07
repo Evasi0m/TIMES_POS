@@ -43,11 +43,10 @@ export async function searchProducts(sb, query, { limit = PRODUCT_SEARCH_LIMIT }
     .from('products')
     .select(SEARCH_SELECT)
     .ilike('name', `%${q}%`)
+    .order('current_stock', { ascending: false })
     .limit(limit);
 
-  const rows = (data || []).map(normalizeSearchRow);
-  rows.sort((a, b) => (Number(b.current_stock) || 0) - (Number(a.current_stock) || 0));
-  return { data: rows, error };
+  return { data: (data || []).map(normalizeSearchRow), error };
 }
 
 /** True when chip / advanced filters need the full in-memory catalog. */

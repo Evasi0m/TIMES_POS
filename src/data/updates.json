@@ -2,6 +2,19 @@
   "schemaVersion": 1,
   "patches": [
     {
+      "id": "2026-07-07-products-stock-ui-polish",
+      "date": "2026-07-07",
+      "title": "หน้าสินค้า + TikTok — สต็อก ไอคอน และ modal ลื่นขึ้น",
+      "tags": ["ปรับปรุง", "UI", "TikTok"],
+      "items": [
+        "ค้นสินค้า: เรียงสต็อกมาก→น้อยอัตโนมัติ · dropdown เพิ่มตัวเลือกสต็อก",
+        "รายการสินค้า: แถบซ้ายสีเขียว/แดงแทนจุดสต็อก — desktop + mobile เหมือนกัน",
+        "toolbar สินค้า: ไอคอน filter/export/ปรับสต็อกกลุ่ม แบบ minimal premium",
+        "มือถือ topbar: ปุ่ม TikTok รอยืนยันเป็นวงกลมตัวเลข coral gradient ขนาดเท่ากระดิ่ง",
+        "แก้ modal backdrop กระตุก — animate แค่ opacity ไม่ animate blur (TikTok pending, JSON/bulk bill, sync overlay)"
+      ]
+    },
+    {
       "id": "2026-06-26-json-bill-import",
       "date": "2026-06-26",
       "title": "รับเข้า ×10 — นำเข้าบิลจาก JSON (Gemini Gem)",

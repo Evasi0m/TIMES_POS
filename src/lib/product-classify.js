@@ -231,7 +231,7 @@ export function filterProducts(list, state) {
   return d;
 }
 
-/** Returns a sorted copy of `list`. Modes: newest|oldest|price-asc|price-desc|name. */
+/** Returns a sorted copy of `list`. Modes: newest|oldest|price-asc|price-desc|name|stock-desc. */
 export function sortProducts(list, mode) {
   const arr = [...list];
   switch (mode) {
@@ -239,6 +239,7 @@ export function sortProducts(list, mode) {
     case 'price-asc':  arr.sort((a, b) => (Number(a.retail_price) || 0) - (Number(b.retail_price) || 0)); break;
     case 'price-desc': arr.sort((a, b) => (Number(b.retail_price) || 0) - (Number(a.retail_price) || 0)); break;
     case 'name':       arr.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'th')); break;
+    case 'stock-desc': arr.sort((a, b) => (Number(b.current_stock) || 0) - (Number(a.current_stock) || 0)); break;
     case 'newest':
     default:           arr.sort((a, b) => (b.id || 0) - (a.id || 0));
   }

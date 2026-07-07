@@ -3352,34 +3352,20 @@
   }
 }
 .ttc-sync-overlay--in {
-  animation: ttcSyncFadeIn 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: ttcSyncFadeIn 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: opacity;
 }
 .ttc-sync-overlay--out {
-  animation: ttcSyncFadeOut 0.30s cubic-bezier(0.7, 0, 0.84, 0) forwards;
+  animation: ttcSyncFadeOut 0.20s cubic-bezier(0.4, 0, 1, 1) forwards;
+  will-change: opacity;
 }
 @keyframes ttcSyncFadeIn {
-  from {
-    opacity: 0;
-    backdrop-filter: blur(0px) saturate(100%);
-    -webkit-backdrop-filter: blur(0px) saturate(100%);
-  }
-  to {
-    opacity: 1;
-    backdrop-filter: blur(var(--ttc-sync-blur)) saturate(118%);
-    -webkit-backdrop-filter: blur(var(--ttc-sync-blur)) saturate(118%);
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 @keyframes ttcSyncFadeOut {
-  from {
-    opacity: 1;
-    backdrop-filter: blur(var(--ttc-sync-blur)) saturate(118%);
-    -webkit-backdrop-filter: blur(var(--ttc-sync-blur)) saturate(118%);
-  }
-  to {
-    opacity: 0;
-    backdrop-filter: blur(0px) saturate(100%);
-    -webkit-backdrop-filter: blur(0px) saturate(100%);
-  }
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 :root:not([data-theme="dark"]) .ttc-sync-overlay {
   background: rgba(42, 35, 28, 0.21);
@@ -3404,6 +3390,16 @@
 @keyframes ttcSyncRingFadeOut {
   from { opacity: 1; transform: scale(1); }
   to { opacity: 0; transform: scale(0.98); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ttc-sync-overlay--in,
+  .ttc-sync-overlay--out,
+  .ttc-sync-overlay--page-ring.ttc-sync-overlay--in,
+  .ttc-sync-overlay--page-ring.ttc-sync-overlay--out {
+    animation-duration: 0.12s !important;
+    animation-timing-function: linear !important;
+  }
 }
 
 .ttc-magsafe {

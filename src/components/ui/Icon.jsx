@@ -45,14 +45,15 @@ const Icon = ({ name, size = 20, className = '', strokeWidth = 1.75, color }) =>
     case 'tag':          return <svg {...p}><path d="M4 4h8l8 8-8 8-8-8V4z"/><circle cx="8" cy="8" r="1.5"/></svg>;
     case 'shop-bag':     return <svg {...p}><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>;
     case 'edit':         return <svg {...p}><path d="M12 20h9M16 3l5 5-9 9H7v-5l9-9z"/></svg>;
+    case 'bulk-adjust':  return <svg {...p}><path d="M15.58 3.38 17.58 4.43c2.15 1.13 3.23 1.69 3.82 2.71.6 1.01.6 2.28.6 4.8v.12c0 2.52 0 3.79-.6 4.8-.59 1.02-1.67 1.58-3.82 2.71l-2 1.05C13.82 21.54 12.94 22 12 22s-1.82-.46-3.58-1.27l-2-1.05C4.27 18.44 3.19 17.87 2.6 16.86 2 15.85 2 14.58 2 12.06v-.12C2 9.42 2 8.15 2.6 7.14c.59-1.01 1.67-1.58 3.82-2.71l2-1.05C10.18 2.46 11.06 2 12 2s1.82.46 3.58 1.27C12.94 2 13.82 2.46 15.58 3.38z"/><path d="M21 7.5 12 12 3 7.5M12 12v9.5" strokeOpacity=".45"/></svg>;
     case 'chevron-r':    return <svg {...p}><path d="m9 18 6-6-6-6"/></svg>;
     case 'chevron-d':    return <svg {...p}><path d="m6 9 6 6 6-6"/></svg>;
     case 'chevron-l':    return <svg {...p}><path d="m15 18-6-6 6-6"/></svg>;
     case 'chevron-u':    return <svg {...p}><path d="m6 15 6-6 6 6"/></svg>;
     case 'menu':         return <svg {...p}><path d="M3 6h18M3 12h18M3 18h18"/></svg>;
     case 'filter':       return <svg {...p}><path d="M4 4h16l-6 8v6l-4 2v-8L4 4z"/></svg>;
-    case 'sliders-h':    return <svg {...p}><path d="M4 9h16"/><circle cx="9" cy="9" r="2"/><path d="M4 15h16"/><circle cx="15" cy="15" r="2"/></svg>;
-    case 'csv-export':   return <svg {...p}><rect x="6" y="4" width="12" height="13" rx="1.5"/><path d="M9 8h6"/><path d="M9 11h4"/><path d="M12 17v3"/><path d="M9 20h6"/></svg>;
+    case 'sliders-h':    return <svg {...p}><path d="M4 7h16"/><path d="M7 12h10"/><path d="M10 17h4"/></svg>;
+    case 'csv-export':   return <svg {...p}><path d="M12 4v8"/><path d="M8 10l4 4 4-4"/><path d="M5 19h14"/></svg>;
     case 'check':        return <svg {...p}><path d="m20 6-9 9-5-5"/></svg>;
     case 'alert':        return <svg {...p}><path d="M12 2 2 22h20L12 2z"/><path d="M12 9v6M12 17h.01"/></svg>;
     case 'info':         return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M12 10v6M12 7h.01"/></svg>;

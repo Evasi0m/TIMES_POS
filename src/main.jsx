@@ -6540,6 +6540,8 @@ function ProductsView() {
   // text into `filter.query` after a short idle window so the heavy
   // useMemo over the filtered list doesn't run on every keystroke.
   const [queryInput, setQueryInput] = useState('');
+  const prevSearchQueryRef = useRef('');
+  const prevBrowseModeRef = useRef(false);
   const [filter, setFilter] = useState({
     query: '',
     brand: 'all',           // all | casio | citizen | seiko | alba | other
@@ -6550,7 +6552,7 @@ function ProductsView() {
     minPrice: 0,
     maxPrice: 0,
     inStockOnly: false,
-    sort: 'newest',         // newest | oldest | price-asc | price-desc | name
+    sort: 'newest',         // newest | stock-desc | oldest | price-asc | price-desc | name
   });
 
   // Debounce: 180ms idle before the typed text becomes a filter input. Short
@@ -6735,6 +6737,28 @@ function ProductsView() {
   const catName   = (id) => categories.find(c => c.id === id)?.name;
 
   const browseMode = catalogLoaded && needsBrowseCatalog(filter);
+
+  // Server-search default sort: stock high → low. Browse/chip mode keeps newest.
+  useEffect(() => {
+    const q = filter.query.trim();
+    const prevQ = prevSearchQueryRef.current.trim();
+    const wasBrowse = prevBrowseModeRef.current;
+    prevSearchQueryRef.current = filter.query;
+    prevBrowseModeRef.current = browseMode;
+
+    if (browseMode) {
+      if (filter.sort === 'stock-desc') {
+        setFilter(f => (f.sort === 'stock-desc' ? { ...f, sort: 'newest' } : f));
+      }
+      return;
+    }
+
+    if (q && (!prevQ || wasBrowse)) {
+      setFilter(f => ({ ...f, sort: 'stock-desc' }));
+    } else if (!q && prevQ) {
+      setFilter(f => (f.sort === 'stock-desc' ? { ...f, sort: 'newest' } : f));
+    }
+  }, [filter.query, filter.sort, browseMode]);
 
   // ===== Filter + sort + pagination =====
   const filtered = useMemo(() => {
@@ -6967,6 +6991,7 @@ function ProductsView() {
             onChange={e=>setFilter(f=>({...f, sort: e.target.value}))}
           >
             <option value="newest">ใหม่ล่าสุด</option>
+            <option value="stock-desc">สต็อก มาก → น้อย</option>
             <option value="oldest">เก่าสุด</option>
             <option value="price-asc">ราคา ต่ำ → สูง</option>
             <option value="price-desc">ราคา สูง → ต่ำ</option>
@@ -6998,7 +7023,7 @@ function ProductsView() {
               onClick={() => setBulkAdjustOpen(true)}
               title="ปรับสต็อกหลายรายการ (Super Admin)"
             >
-              <Icon name="edit" size={16} className="shrink-0"/>
+              <Icon name="bulk-adjust" size={16} className="shrink-0"/>
               <span className="hidden sm:inline">ปรับสต็อกกลุ่ม</span>
             </button>
           )}
@@ -7153,9 +7178,10 @@ function ProductsView() {
           {visibleRows.map(p => {
             const lc = latestCostMap[p.id];
             const fmtPlain = (n) => roundMoney(n).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+            const stockRowCls = Number(p.current_stock) > 0 ? 'product-row--in-stock' : 'product-row--out-of-stock';
             return (
               <div key={p.id}
-                className={"grid grid-cols-12 px-4 py-3.5 items-center border-b hairline last:border-0 transition-colors " + (canEdit ? "hover:bg-surface-strong/40 cursor-pointer" : "cursor-default")}
+                className={"product-row " + stockRowCls + " grid grid-cols-12 px-4 py-3.5 items-center border-b hairline last:border-0 transition-colors " + (canEdit ? "hover:bg-surface-strong/40 cursor-pointer" : "cursor-default")}
                 onClick={canEdit ? (()=>openEditor(p)) : undefined}>
                 <div className="col-span-3 font-medium truncate flex items-center gap-2.5">
                   <ProductThumb product={p} size="sm" />
@@ -7218,11 +7244,11 @@ function ProductsView() {
         )}
         {visibleRows.map(p => {
           const lc = latestCostMap[p.id];
+          const stockRowCls = Number(p.current_stock) > 0 ? 'product-row--in-stock' : 'product-row--out-of-stock';
           return (
             <div key={p.id}
-              className={"card-canvas p-3.5 flex items-center gap-3 " + (canEdit ? "pressable" : "cursor-default")}
+              className={"product-row " + stockRowCls + " card-canvas p-3.5 flex items-center gap-3 " + (canEdit ? "pressable" : "cursor-default")}
               onClick={canEdit ? (()=>openEditor(p)) : undefined}>
-              <span className={"stock-dot self-start mt-1.5 " + (p.current_stock<=0 ? 'is-empty' : 'is-ok')} aria-hidden="true" />
               <ProductThumb product={p} size="md" />
               <div className="flex-1 min-w-0">
                 <div className="font-semibold truncate text-[15px] flex items-center gap-1.5 min-w-0">

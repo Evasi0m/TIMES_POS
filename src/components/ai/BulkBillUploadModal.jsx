@@ -200,17 +200,15 @@ function Impl({ onClose, onConfirm, closing }) {
 
   return createPortal(
     <div
-      className={
-        'fixed inset-0 z-[101] bg-black/55 flex items-center justify-center p-3 ' +
-        (closing ? 'holo-backdrop-out' : 'holo-backdrop-in')
-      }
+      className="fixed inset-0 z-[101] flex items-center justify-center p-3"
       onDragOver={canAddMore ? onDragOver : undefined}
       onDragLeave={onDragLeave}
       onDrop={canAddMore ? onDrop : undefined}
     >
+      <div className={'absolute inset-0 modal-overlay ' + (closing ? 'holo-backdrop-out' : 'holo-backdrop-in')} aria-hidden="true" />
       <div
         className={
-          'bg-canvas rounded-2xl shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden ' +
+          'relative bg-canvas rounded-2xl shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden ' +
           (closing ? 'holo-card-out' : 'holo-card-in')
         }
       >
