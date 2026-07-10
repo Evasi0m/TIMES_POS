@@ -10,10 +10,26 @@ vi.mock('../src/lib/sw-self-heal.js', () => ({
   hardReload,
 }));
 
+const mockFetchUpdateLog = vi.fn(async () => ({
+  patches: [{ id: 'remote-patch', title: 'Remote', date: '2026-07-10', tags: ['ใหม่'], items: ['line'] }],
+}));
+
+vi.mock('../src/lib/update-log.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    fetchUpdateLog: (...args) => mockFetchUpdateLog(...args),
+  };
+});
+
 vi.mock('../src/lib/runtime-fetch.js', () => ({
   runtimeFetch: vi.fn(async () => ({
     ok: true,
-    json: async () => ({ buildId: 'remote-build' }),
+    json: async () => ({
+      buildId: 'remote-build',
+      releasePatchId: 'remote-patch',
+      builtAt: '2026-07-10T00:00:00.000Z',
+    }),
   })),
 }));
 
@@ -44,8 +60,8 @@ describe('applyAppUpdate', () => {
     hardReload.mockClear();
     clearSwAndCaches.mockClear();
     vi.stubGlobal('window', {
-      confirm: vi.fn(() => true),
       _getApplyUpdateContext: () => ({ cartCount: 0 }),
+      _listQueuedSales: async () => [],
     });
     vi.stubGlobal('navigator', {
       serviceWorker: {
@@ -70,11 +86,11 @@ describe('applyAppUpdate', () => {
     expect(hardReload).toHaveBeenCalledTimes(1);
   });
 
-  it('returns cancelled when user declines confirm', async () => {
-    window.confirm = vi.fn(() => false);
+  it('blocks when cart or queue has pending work', async () => {
+    window._getApplyUpdateContext = () => ({ cartCount: 2 });
     window._listQueuedSales = async () => [{ id: 1 }];
     const result = await applyAppUpdate();
-    expect(result).toEqual({ ok: false, reason: 'cancelled' });
+    expect(result).toEqual({ ok: false, reason: 'pending_work' });
     expect(clearSwAndCaches).not.toHaveBeenCalled();
     expect(hardReload).not.toHaveBeenCalled();
   });
@@ -82,15 +98,15 @@ describe('applyAppUpdate', () => {
 
 describe('checkForUpdate', () => {
   beforeEach(() => {
-    vi.stubGlobal('localStorage', {
-      store: {},
-      getItem(k) { return this.store[k] ?? null; },
-      setItem(k, v) { this.store[k] = v; },
+    vi.stubGlobal('window', {
+      _getApplyUpdateContext: () => ({ cartCount: 0 }),
+      _listQueuedSales: async () => [],
     });
   });
 
-  it('detects available update from runtime fetch', async () => {
-    const { available } = await checkForUpdate();
+  it('detects available update and loads release patches', async () => {
+    const { available, patches } = await checkForUpdate();
     expect(available).toBe(true);
+    expect(patches?.[0]?.id).toBe('remote-patch');
   });
 });

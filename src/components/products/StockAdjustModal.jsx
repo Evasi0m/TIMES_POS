@@ -236,10 +236,16 @@ export default function StockAdjustModal({
           </div>
 
           <div>
-            <label className="text-xs uppercase tracking-wider text-muted font-medium">หมายเหตุ *</label>
+            <label className="text-xs uppercase tracking-wider text-muted font-medium">
+              หมายเหตุ{subreason === 'other' ? ' *' : ''}
+            </label>
             <textarea
               className="input mt-1 w-full min-h-[88px] resize-y"
-              placeholder={subreason === 'other' ? 'อธิบายเหตุผลอย่างน้อย 20 ตัวอักษร…' : 'อธิบายสั้นๆ ว่าทำไมต้องปรับยอด…'}
+              placeholder={
+                subreason === 'other'
+                  ? 'อธิบายเหตุผลอย่างน้อย 20 ตัวอักษร…'
+                  : 'ไม่บังคับ — เพิ่มรายละเอียดได้ถ้าต้องการ'
+              }
               value={note}
               onChange={(e) => setNote(e.target.value)}
             />
@@ -259,7 +265,9 @@ export default function StockAdjustModal({
               <div><span className="text-muted-soft">ยอดเดิม → ใหม่:</span> <span className="tabular-nums font-medium text-ink">{currentStock} → {targetQty}</span></div>
               <div><span className="text-muted-soft">เปลี่ยนแปลง:</span> <span className="tabular-nums font-medium">{delta > 0 ? '+' : ''}{delta}</span></div>
               <div><span className="text-muted-soft">เหตุผล:</span> {subreasonLabel}</div>
-              <div><span className="text-muted-soft">หมายเหตุ:</span> {note}</div>
+              {note.trim() && (
+                <div><span className="text-muted-soft">หมายเหตุ:</span> {note.trim()}</div>
+              )}
             </div>
           </div>
 

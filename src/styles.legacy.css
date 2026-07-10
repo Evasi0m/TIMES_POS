@@ -1835,61 +1835,6 @@
   }
   .btn-settings-sidebar svg { filter: drop-shadow(0 1px 0 rgba(255, 240, 200, 0.5)); }
 
-  /* Premium emerald "อัปเดตแอป" sidebar button — mirrors the gold
-     `.btn-settings-sidebar` metallic recipe; only rendered when an
-     update is available. */
-  .btn-update-sidebar {
-    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    width: 100%;
-    background:
-      linear-gradient(180deg,
-        #a8e8be 0%,
-        #5ec98a 35%,
-        #2da862 65%,
-        #1a7a42 100%);
-    color: #0a3d1f;
-    text-shadow: 0 1px 0 rgba(210, 255, 225, 0.45);
-    padding: 8px 16px;
-    min-height: 38px;
-    border-radius: 10px;
-    font-weight: 600;
-    font-size: 14px;
-    letter-spacing: 0.2px;
-    border: 1px solid rgba(20, 90, 45, 0.55);
-    box-shadow:
-      0 2px 8px rgba(20, 120, 60, 0.40),
-      0 1px 0 rgba(225, 255, 235, 0.55) inset,
-      0 -1px 0 rgba(15, 60, 30, 0.25) inset;
-    cursor: pointer;
-    transition: all .18s var(--ease-out);
-  }
-  .btn-update-sidebar:hover {
-    background:
-      linear-gradient(180deg,
-        #bff0d0 0%,
-        #72d89f 35%,
-        #38b86e 65%,
-        #208f4e 100%);
-    box-shadow:
-      0 6px 16px rgba(25, 140, 70, 0.55),
-      0 0 0 1px rgba(140, 240, 175, 0.35),
-      0 1px 0 rgba(235, 255, 242, 0.65) inset,
-      0 -1px 0 rgba(15, 60, 30, 0.25) inset;
-    transform: translateY(-1px);
-  }
-  .btn-update-sidebar:active {
-    transform: scale(0.97);
-    box-shadow:
-      0 1px 4px rgba(20, 120, 60, 0.40),
-      0 1px 0 rgba(225, 255, 235, 0.45) inset;
-  }
-  .btn-update-sidebar:disabled {
-    opacity: 0.85;
-    cursor: wait;
-    transform: none;
-  }
-  .btn-update-sidebar svg { filter: drop-shadow(0 1px 0 rgba(200, 255, 220, 0.5)); }
-
   /* Gold premium button matching the "ราคาที่ลูกค้าจ่าย" card —
      uses same 4-stop gold gradient: #f5dc8a → #e2bc55 → #c89a2a → #9a7414
      with subtle gold shimmer glow on hover */
@@ -2768,12 +2713,6 @@
   /* CROWN (user settings) — regal float on hover */
   .btn-settings-sidebar:hover > svg[data-icon="crown"] {
     animation: icon-crown-float .75s ease-in-out infinite;
-    transform: none;
-  }
-
-  /* REFRESH (app update) — spin on hover */
-  .btn-update-sidebar:hover > svg[data-icon="refresh"] {
-    animation: icon-refresh-spin 1.1s linear infinite;
     transform: none;
   }
 

@@ -42,9 +42,11 @@ export function validateManualStockAdjust({ targetQty, subreason, note }) {
     return 'กรุณาเลือกเหตุผล';
   }
   const trimmed = String(note || '').trim();
-  if (!trimmed) return 'กรุณากรอกหมายเหตุ';
-  if (subreason === 'other' && trimmed.length < 20) {
-    return 'กรณี "อื่นๆ" ต้องกรอกหมายเหตุอย่างน้อย 20 ตัวอักษร';
+  if (subreason === 'other') {
+    if (!trimmed) return 'กรณี "อื่นๆ" ต้องกรอกหมายเหตุ';
+    if (trimmed.length < 20) {
+      return 'กรณี "อื่นๆ" ต้องกรอกหมายเหตุอย่างน้อย 20 ตัวอักษร';
+    }
   }
   return null;
 }

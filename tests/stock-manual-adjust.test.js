@@ -25,12 +25,25 @@ describe('validateManualStockAdjust', () => {
     })).toMatch(/0/);
   });
 
-  it('rejects empty note', () => {
+  it('accepts empty note for standard subreasons', () => {
     expect(validateManualStockAdjust({
       targetQty: 0,
       subreason: 'recording_error',
+      note: '',
+    })).toBeNull();
+    expect(validateManualStockAdjust({
+      targetQty: 0,
+      subreason: 'physical_count',
       note: '   ',
-    })).toMatch(/หมายเหตุ/);
+    })).toBeNull();
+  });
+
+  it('rejects empty note for other', () => {
+    expect(validateManualStockAdjust({
+      targetQty: 0,
+      subreason: 'other',
+      note: '   ',
+    })).toMatch(/อื่นๆ/);
   });
 
   it('requires longer note for other', () => {
@@ -60,7 +73,7 @@ describe('parseManualAdjustNotes', () => {
 describe('validateBulkManualStockAdjust', () => {
   const base = {
     subreason: 'physical_count',
-    note: 'นับสต็อกประจำเดือน',
+    note: '',
   };
 
   it('accepts valid bulk payload', () => {

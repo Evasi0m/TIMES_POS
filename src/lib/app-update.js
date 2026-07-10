@@ -1,31 +1,44 @@
-// One-click app update — compares the compile-time build id against
-// dist/version.json (written at build time, never precached by the SW).
-//
-// Flow:
-//   checkForUpdate()  → fetch version.json (cache-busted)
-//   applyAppUpdate()  → reg.update() (best-effort), clearSwAndCaches(),
-//                       hardReload() — always bypasses SW precache + CDN
+// One-click app update — compares compile-time build id against dist/version.json.
+// Mandatory gate: when available, AppUpdateGate blocks UI until user updates.
 
-/* global __APP_BUILD_ID__ */
+/* global __APP_BUILD_ID__, __RELEASE_PATCH_ID__ */
 
 import { runtimeFetch } from './runtime-fetch.js';
 import { clearSwAndCaches, hardReload } from './sw-self-heal.js';
+import { fetchUpdateLog, getPatchesSince } from './update-log.js';
 
 export const APP_BUILD_ID =
   typeof __APP_BUILD_ID__ !== 'undefined' ? __APP_BUILD_ID__ : 'dev';
 
-const SNOOZE_KEY = 'pos.appUpdate.snoozedUntil';
-const SNOOZE_MS = 30 * 60 * 1000;
+export const RELEASE_PATCH_ID =
+  typeof __RELEASE_PATCH_ID__ !== 'undefined' ? __RELEASE_PATCH_ID__ : '';
+
 const DEFAULT_POLL_MS = 60 * 1000;
 const STALE_AFTER_RESET_KEY = 'pos.appUpdate.staleAfterReset';
+const PENDING_POLL_MS = 2000;
 
-/** @type {import('vite-plugin-pwa').RegisterSWOptions extends never ? ServiceWorkerRegistration : ServiceWorkerRegistration | null} */
+/** @type {ServiceWorkerRegistration | null} */
 let _registration = null;
 
-/** @type {{ status: 'idle'|'available'|'applying'|'error', remoteBuildId: string|null, error: string|null }} */
-let _state = { status: 'idle', remoteBuildId: null, error: null };
+/** @type {{
+ *   status: 'idle'|'available'|'applying'|'error',
+ *   remoteBuildId: string|null,
+ *   releasePatchId: string|null,
+ *   patches: object[],
+ *   pendingWork: { cart: number, queue: number },
+ *   error: string|null,
+ * }} */
+let _state = {
+  status: 'idle',
+  remoteBuildId: null,
+  releasePatchId: null,
+  patches: [],
+  pendingWork: { cart: 0, queue: 0 },
+  error: null,
+};
 
 const listeners = new Set();
+let _pendingPollTimer = null;
 
 function emit() {
   for (const cb of listeners) {
@@ -50,27 +63,21 @@ export function setSwRegistration(registration) {
 
 export function isUpdateAvailable(local, remote) {
   if (!remote || typeof remote !== 'string') return false;
-  if (!local || typeof local !== 'string') return true;
+  if (!local || typeof local !== 'string' || local === 'dev') return true;
   return local !== remote;
 }
 
-function isSnoozed() {
-  try {
-    const until = localStorage.getItem(SNOOZE_KEY);
-    if (!until) return false;
-    return Date.now() < new Date(until).getTime();
-  } catch {
-    return false;
-  }
-}
-
-async function fetchRemoteBuildId() {
+async function fetchRemoteVersion() {
   const res = await runtimeFetch('version.json');
   if (!res.ok) throw new Error(`version.json HTTP ${res.status}`);
   const data = await res.json();
   const id = data.buildId ?? data.version ?? null;
   if (!id) throw new Error('version.json missing buildId');
-  return String(id);
+  return {
+    buildId: String(id),
+    releasePatchId: data.releasePatchId ? String(data.releasePatchId) : null,
+    builtAt: data.builtAt ?? null,
+  };
 }
 
 async function getQueueCount() {
@@ -85,26 +92,51 @@ async function getQueueCount() {
   }
 }
 
-/** Confirm when cart or offline queue has pending work. */
-export async function canApplyUpdateSafely() {
+function getCartCount() {
   const ctx =
     typeof window !== 'undefined' && typeof window._getApplyUpdateContext === 'function'
       ? window._getApplyUpdateContext()
       : { cartCount: 0 };
-  const cartCount = Number(ctx?.cartCount) || 0;
-  const queueCount = await getQueueCount();
+  return Number(ctx?.cartCount) || 0;
+}
 
-  if (cartCount <= 0 && queueCount <= 0) return true;
+/** @returns {Promise<{ cart: number, queue: number, blocked: boolean }>} */
+export async function getPendingWork() {
+  const cart = getCartCount();
+  const queue = await getQueueCount();
+  return { cart, queue, blocked: cart > 0 || queue > 0 };
+}
 
-  const parts = [];
-  if (cartCount > 0) parts.push(`ตะกร้ามี ${cartCount} รายการ`);
-  if (queueCount > 0) parts.push(`มีบิลคิวออฟไลน์ ${queueCount} รายการ`);
+function startPendingWorkPoll() {
+  if (_pendingPollTimer) return;
+  const tick = async () => {
+    if (_state.status !== 'available') return;
+    const pending = await getPendingWork();
+    if (
+      pending.cart !== _state.pendingWork.cart
+      || pending.queue !== _state.pendingWork.queue
+    ) {
+      setState({ pendingWork: { cart: pending.cart, queue: pending.queue } });
+    }
+  };
+  tick();
+  _pendingPollTimer = setInterval(tick, PENDING_POLL_MS);
+}
 
-  return window.confirm(
-    `มีงานค้างอยู่ (${parts.join(', ')})\n\n` +
-      'อัปเดตตอนนี้จะรีโหลดหน้า — ข้อมูลที่ยังไม่ได้บันทึกอาจหาย\n\n' +
-      'ต้องการอัปเดตเลยหรือไม่?',
-  );
+function stopPendingWorkPoll() {
+  if (_pendingPollTimer) {
+    clearInterval(_pendingPollTimer);
+    _pendingPollTimer = null;
+  }
+}
+
+async function resolveReleasePatches(remotePatchId) {
+  try {
+    const log = await fetchUpdateLog();
+    return getPatchesSince(log, RELEASE_PATCH_ID || null, remotePatchId);
+  } catch {
+    return [];
+  }
 }
 
 function waitForInstalling(reg, timeoutMs = 3000) {
@@ -140,11 +172,16 @@ export async function checkStaleAfterReset() {
   try {
     if (sessionStorage.getItem(STALE_AFTER_RESET_KEY) !== '1') return;
     sessionStorage.removeItem(STALE_AFTER_RESET_KEY);
-    const remote = await fetchRemoteBuildId();
-    if (isUpdateAvailable(APP_BUILD_ID, remote)) {
+    const remote = await fetchRemoteVersion();
+    if (isUpdateAvailable(APP_BUILD_ID, remote.buildId)) {
+      const patches = await resolveReleasePatches(remote.releasePatchId);
+      const pending = await getPendingWork();
       setState({
         status: 'error',
-        remoteBuildId: remote,
+        remoteBuildId: remote.buildId,
+        releasePatchId: remote.releasePatchId,
+        patches,
+        pendingWork: { cart: pending.cart, queue: pending.queue },
         error: 'เซิร์ฟเวอร์ยัง serve เวอร์ชันเก่า — รอ 1–2 นาทีแล้วกดอัปเดตอีกครั้ง',
       });
     }
@@ -152,47 +189,58 @@ export async function checkStaleAfterReset() {
 }
 
 export async function checkForUpdate() {
-  if (isSnoozed()) {
-    setState({ status: 'idle', remoteBuildId: null, error: null });
-    return { available: false, snoozed: true };
-  }
-
   try {
-    const remote = await fetchRemoteBuildId();
-    const available = isUpdateAvailable(APP_BUILD_ID, remote);
+    const remote = await fetchRemoteVersion();
+    const available = isUpdateAvailable(APP_BUILD_ID, remote.buildId);
+
+    if (!available) {
+      stopPendingWorkPoll();
+      setState({
+        status: 'idle',
+        remoteBuildId: null,
+        releasePatchId: null,
+        patches: [],
+        pendingWork: { cart: 0, queue: 0 },
+        error: null,
+      });
+      return { available: false, remoteBuildId: remote.buildId };
+    }
+
+    const patches = await resolveReleasePatches(remote.releasePatchId);
+    const pending = await getPendingWork();
     setState({
-      status: available ? 'available' : 'idle',
-      remoteBuildId: remote,
+      status: 'available',
+      remoteBuildId: remote.buildId,
+      releasePatchId: remote.releasePatchId,
+      patches,
+      pendingWork: { cart: pending.cart, queue: pending.queue },
       error: null,
     });
-    return { available, remoteBuildId: remote };
+    startPendingWorkPoll();
+    return { available: true, remoteBuildId: remote.buildId, patches };
   } catch (e) {
     const msg = e?.message || String(e);
-    setState({ status: 'error', error: msg });
+    console.warn('[app-update] check failed:', msg);
     return { available: false, error: msg };
   }
-}
-
-export function snoozeUpdate() {
-  try {
-    localStorage.setItem(
-      SNOOZE_KEY,
-      new Date(Date.now() + SNOOZE_MS).toISOString(),
-    );
-  } catch { /* ignore */ }
-  setState({ status: 'idle', remoteBuildId: null, error: null });
 }
 
 /**
  * Hard reset + cache-busted reload so one click always fetches fresh shell.
  */
 export async function applyAppUpdate() {
-  if (!(await canApplyUpdateSafely())) {
-    setState({ status: 'available', error: null });
-    return { ok: false, reason: 'cancelled' };
+  const pending = await getPendingWork();
+  if (pending.blocked) {
+    setState({
+      status: 'available',
+      pendingWork: { cart: pending.cart, queue: pending.queue },
+      error: null,
+    });
+    return { ok: false, reason: 'pending_work' };
   }
 
   setState({ status: 'applying', error: null });
+  stopPendingWorkPoll();
 
   try {
     await triggerSwUpdateCheck();
@@ -229,6 +277,7 @@ export function startUpdatePolling(intervalMs = DEFAULT_POLL_MS, onPoll) {
   document.addEventListener('visibilitychange', onVis);
   return () => {
     clearInterval(timer);
+    stopPendingWorkPoll();
     window.removeEventListener('focus', onFocus);
     document.removeEventListener('visibilitychange', onVis);
   };

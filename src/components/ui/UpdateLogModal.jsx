@@ -4,64 +4,10 @@ import Icon from './Icon.jsx';
 import {
   fetchUpdateLog,
   markUpdatesSeen,
-  formatPatchDate,
-  patchTintTag,
   paginatePatches,
   UPDATE_LOG_PAGE_SIZE,
 } from '../../lib/update-log.js';
-
-function PatchTag({ tag }) {
-  return (
-    <span className={'ul-tag ul-tag--' + (tag === 'แก้บั๊ก' ? 'bug' : tag === 'ปรับปรุง' ? 'tweak' : tag === 'ใหม่' ? 'new' : 'mod')}>
-      {tag}
-    </span>
-  );
-}
-
-function PatchCard({ patch, isLatest = false }) {
-  const tint = patchTintTag(patch.tags);
-  return (
-    <article
-      className={
-        'ul-card ttc-bento rounded-2xl border p-3 min-w-0 flex-none flex flex-col gap-2 min-h-0 ' +
-        (isLatest ? 'ul-card--hero ul-mesh-card' : 'ul-card--' + tint + ' ul-mesh-card--soft')
-      }
-    >
-      <div className="ul-card__top shrink-0">
-        <div className="flex items-start justify-between gap-2 min-w-0">
-          <div className="min-w-0">
-            {isLatest && (
-              <div className="ul-hero__label text-[10px] font-semibold uppercase tracking-wider mb-1">
-                อัปเดตล่าสุด
-              </div>
-            )}
-            <h3 className="text-sm font-semibold text-ink leading-snug line-clamp-2">
-              {patch.title}
-            </h3>
-            <div className="text-[11px] text-muted tabular-nums mt-0.5">
-              {formatPatchDate(patch.date)}
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-1 justify-end shrink-0 max-w-[45%]">
-            {(patch.tags || []).map(t => (
-              <PatchTag key={t} tag={t}/>
-            ))}
-          </div>
-        </div>
-      </div>
-      <div className="ul-card__scroll min-h-0 flex-1 overflow-y-auto overscroll-contain -mx-1 px-1">
-        <ul className="space-y-1.5 text-xs">
-          {(patch.items || []).map((line, i) => (
-            <li key={i} className="flex gap-2 text-ink/90 leading-relaxed">
-              <span className="ul-bullet shrink-0" aria-hidden>✦</span>
-              <span className="min-w-0">{line}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </article>
-  );
-}
+import PatchCard from './PatchCard.jsx';
 
 /** At most `windowSize` page buttons — user steps with prev/next for the rest. */
 function visiblePageNumbers(page, totalPages, windowSize = 3) {

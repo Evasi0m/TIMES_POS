@@ -13,13 +13,24 @@ import react from '@vitejs/plugin-react';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 import { VitePWA } from 'vite-plugin-pwa';
 import { resolveBuildId } from './scripts/resolve-build-id.mjs';
+import { resolveReleasePatchId } from './scripts/resolve-release-patch.mjs';
 
 const buildId = resolveBuildId();
+const releasePatchId = resolveReleasePatchId();
+
+function versionPayload() {
+  return {
+    buildId,
+    builtAt: new Date().toISOString(),
+    ...(releasePatchId ? { releasePatchId } : {}),
+  };
+}
 
 export default defineConfig({
   define: {
     __APP_BUILD_ID__: JSON.stringify(buildId),
     __SW_BUILD_ID__: JSON.stringify(buildId),
+    __RELEASE_PATCH_ID__: JSON.stringify(releasePatchId || ''),
   },
   // Use RELATIVE asset URLs so the same dist/ works whether the app is
   // hosted at the domain root (Cloudflare Pages, S3, custom domain) OR
@@ -78,7 +89,7 @@ export default defineConfig({
           // `npm run dev` returns index.html and app-update throws on res.json().
           if (path === '/version.json' || path === './version.json') {
             res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ buildId, builtAt: new Date().toISOString() }));
+            res.end(JSON.stringify(versionPayload()));
             return;
           }
           next();
@@ -87,7 +98,7 @@ export default defineConfig({
       closeBundle() {
         writeFileSync(
           join('dist', 'version.json'),
-          JSON.stringify({ buildId, builtAt: new Date().toISOString() }, null, 0),
+          JSON.stringify(versionPayload(), null, 0),
         );
         copyFileSync(
           join('src', 'data', 'updates.json'),

@@ -22,6 +22,16 @@ function emptyRow() {
   return { key: Date.now() + Math.random(), product: null, targetQtyStr: '' };
 }
 
+/** Keep one trailing empty row; return next rows + key to focus for search/pick. */
+function withTrailingEmptyRow(rows) {
+  const last = rows[rows.length - 1];
+  if (last && !last.product?.id) {
+    return { rows, activeKey: last.key };
+  }
+  const newRow = emptyRow();
+  return { rows: [...rows, newRow], activeKey: newRow.key };
+}
+
 export default function BulkStockAdjustView({
   open,
   onClose,
@@ -102,23 +112,31 @@ export default function BulkStockAdjustView({
       toast?.push('สินค้านี้มีในรายการแล้ว', 'warning');
       return;
     }
-    setRows((prev) => prev.map((r) => (
-      r.key === activeRowKey
+    const pickedKey = activeRowKey;
+    const updated = rows.map((r) => (
+      r.key === pickedKey
         ? { ...r, product, targetQtyStr: String(product.current_stock ?? 0) }
         : r
-    )));
+    ));
+    const { rows: nextRows, activeKey } = withTrailingEmptyRow(updated);
+    setRows(nextRows);
     setSearchQ('');
     setSearchHits([]);
-    setActiveRowKey(null);
+    setActiveRowKey(activeKey);
   };
 
-  const addRow = () => setRows((prev) => [...prev, emptyRow()]);
+  const addRow = () => {
+    const { rows: nextRows, activeKey } = withTrailingEmptyRow(rows);
+    setRows(nextRows);
+    setActiveRowKey(activeKey);
+  };
 
   const removeRow = (key) => {
-    setRows((prev) => {
-      const next = prev.filter((r) => r.key !== key);
-      return next.length ? next : [emptyRow()];
-    });
+    const next = rows.filter((r) => r.key !== key);
+    const base = next.length ? next : [emptyRow()];
+    const { rows: nextRows, activeKey } = withTrailingEmptyRow(base);
+    setRows(nextRows);
+    setActiveRowKey(activeKey);
   };
 
   const goConfirm = () => {
@@ -361,12 +379,18 @@ export default function BulkStockAdjustView({
               </select>
             </div>
             <div>
-              <label className="text-xs uppercase tracking-wider text-muted font-medium">หมายเหตุ (ใช้ร่วมทั้ง batch) *</label>
+              <label className="text-xs uppercase tracking-wider text-muted font-medium">
+                หมายเหตุ (ใช้ร่วมทั้ง batch){subreason === 'other' ? ' *' : ''}
+              </label>
               <textarea
                 className="input mt-1 w-full min-h-[72px] resize-y"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="อธิบายสั้นๆ ว่าทำไมต้องปรับยอด…"
+                placeholder={
+                  subreason === 'other'
+                    ? 'อธิบายเหตุผลอย่างน้อย 20 ตัวอักษร…'
+                    : 'ไม่บังคับ — เพิ่มรายละเอียดได้ถ้าต้องการ'
+                }
               />
             </div>
           </div>
@@ -380,7 +404,7 @@ export default function BulkStockAdjustView({
           <div className="rounded-xl border border-warning/30 bg-warning/5 p-4 text-sm space-y-2">
             <div className="font-medium text-ink">กำลังปรับสต็อก — {changeCount} รายการจะเปลี่ยน</div>
             <div className="text-muted">เหตุผล: {subreasonLabel}</div>
-            <div className="text-muted">หมายเหตุ: {note}</div>
+            {note.trim() && <div className="text-muted">หมายเหตุ: {note.trim()}</div>}
           </div>
           <div className="max-h-48 overflow-y-auto border hairline rounded-lg divide-y hairline-soft text-sm">
             {adjustItems.filter((it) => it.targetQty !== it.currentStock).map((it) => (

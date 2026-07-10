@@ -33,6 +33,41 @@ export function getLatestPatchId(log) {
   return patches[0]?.id ?? null;
 }
 
+/**
+ * Patches newer than localPatchId (updates.json is newest-first).
+ * @param {object} log
+ * @param {string|null|undefined} localPatchId — compile-time __RELEASE_PATCH_ID__
+ * @param {string|null|undefined} [remotePatchId] — optional headline patch from version.json
+ */
+export function getPatchesSince(log, localPatchId, remotePatchId) {
+  const list = log?.patches;
+  if (!Array.isArray(list) || list.length === 0) return [];
+
+  const local = String(localPatchId || '').trim();
+  const remote = String(remotePatchId || '').trim();
+
+  if (!local) {
+    if (remote) {
+      const hit = list.find((p) => p.id === remote);
+      return hit ? [hit] : [list[0]];
+    }
+    return [list[0]];
+  }
+
+  const localIdx = list.findIndex((p) => p.id === local);
+
+  if (localIdx < 0) {
+    const hit = remote ? list.find((p) => p.id === remote) : list[0];
+    return hit ? [hit] : [list[0]];
+  }
+
+  if (localIdx === 0) {
+    return [list[0]];
+  }
+
+  return list.slice(0, localIdx);
+}
+
 export function computeUnread(log) {
   const latest = getLatestPatchId(log);
   if (!latest) return false;

@@ -1,0 +1,197 @@
+/* Mandatory app-update gate — full-screen blocker */
+
+.aug-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  background: rgba(28, 22, 18, 0.52);
+  animation: augFadeIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (min-width: 640px) {
+  .aug-overlay {
+    align-items: center;
+    padding: 1.5rem;
+  }
+}
+
+.aug-shell {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: 100dvh;
+  background: rgb(var(--c-surface-strong));
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow:
+    0 24px 64px -16px rgba(42, 35, 28, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+  animation: augSlideUp 0.36s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (min-width: 640px) {
+  .aug-shell {
+    width: 100%;
+    max-width: 28rem;
+    max-height: min(88dvh, 640px);
+    border-radius: 1.25rem;
+    overflow: hidden;
+  }
+}
+
+@media (max-width: 639px) {
+  .aug-shell {
+    border-radius: 1.25rem 1.25rem 0 0;
+    max-height: 94dvh;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+.aug-header {
+  flex-shrink: 0;
+  padding: 1.25rem 1.25rem 1rem;
+  background:
+    radial-gradient(ellipse 120% 80% at 0% 0%, rgba(244, 47, 104, 0.18) 0%, transparent 55%),
+    radial-gradient(ellipse 80% 60% at 100% 100%, rgba(12, 191, 186, 0.12) 0%, transparent 50%),
+    linear-gradient(165deg, rgba(255, 252, 248, 0.98) 0%, rgba(250, 245, 238, 0.96) 100%);
+  border-bottom: 1px solid rgba(42, 35, 28, 0.08);
+}
+
+:root[data-theme='dark'] .aug-header {
+  background:
+    radial-gradient(ellipse 120% 80% at 0% 0%, rgba(244, 47, 104, 0.22) 0%, transparent 55%),
+    linear-gradient(165deg, rgba(32, 28, 26, 0.98) 0%, rgba(24, 20, 18, 0.96) 100%);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.aug-header__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #f42f68 0%, #e81e5a 100%);
+  color: #fff;
+  box-shadow: 0 4px 14px -4px rgba(244, 47, 104, 0.55);
+  margin-bottom: 0.75rem;
+}
+
+.aug-header__title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: rgb(var(--c-ink));
+  line-height: 1.25;
+}
+
+.aug-header__sub {
+  margin-top: 0.35rem;
+  font-size: 0.8125rem;
+  color: rgb(var(--c-muted));
+  line-height: 1.45;
+}
+
+.aug-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.aug-body .ul-card-list {
+  gap: 0.75rem;
+}
+
+.aug-body .ul-card-list > .ul-card {
+  min-height: 0;
+}
+
+.aug-warn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: #92400e;
+  background: rgba(251, 191, 36, 0.14);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+}
+
+:root[data-theme='dark'] .aug-warn {
+  color: #fcd34d;
+  background: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.28);
+}
+
+.aug-error {
+  font-size: 0.8125rem;
+  color: rgb(var(--c-error, 220 38 38));
+  text-align: center;
+  padding: 0.5rem 0;
+}
+
+.aug-footer {
+  flex-shrink: 0;
+  padding: 0.875rem 1.25rem 1.25rem;
+  border-top: 1px solid rgba(42, 35, 28, 0.08);
+  background: rgb(var(--c-surface-strong));
+}
+
+:root[data-theme='dark'] .aug-footer {
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+.aug-footer .btn-primary {
+  width: 100%;
+  min-height: 2.75rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.aug-footer .btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.aug-empty-patch {
+  text-align: center;
+  padding: 1.5rem 0.5rem;
+  font-size: 0.875rem;
+  color: rgb(var(--c-muted));
+}
+
+@keyframes augFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes augSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(1.25rem) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aug-overlay,
+  .aug-shell {
+    animation: none !important;
+  }
+}

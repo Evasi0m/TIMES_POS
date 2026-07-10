@@ -21,13 +21,10 @@ import { runSelfHeal, manualReset } from './lib/sw-self-heal.js';
 import {
   setSwRegistration,
   startUpdatePolling,
-  checkForUpdate,
   checkStaleAfterReset,
-  applyAppUpdate,
-  onUpdateStateChange,
 } from './lib/app-update.js';
 import { refreshUpdateLogState } from './lib/update-log.js';
-import AppUpdateBanner from './components/ui/AppUpdateBanner.jsx';
+import AppUpdateGate from './components/ui/AppUpdateGate.jsx';
 import UpdateLogButton from './components/ui/UpdateLogButton.jsx';
 import UpdateLogModal from './components/ui/UpdateLogModal.jsx';
 import { fetchAll, fetchAllFromTable } from './lib/sb-paginate.js';
@@ -191,6 +188,7 @@ import {
 import { logMirrorBackgroundError, mappingRowFromTiktokSku } from './lib/tiktok-mirror-helpers.js';
 import AnimatedLogo from './components/ui/AnimatedLogo.jsx';
 import './styles.css';
+import './styles/app-update-gate.css';
 
 // `supabase.createClient(...)` from the CDN UMD bundle becomes a one-method
 // shim around the real ES-module export. Same shape, no other code changes.
@@ -4344,39 +4342,6 @@ const CLAIM_REASONS = ["ชำรุดจากโรงงาน", "ส่ง�
 /* =========================================================
    DESKTOP SIDEBAR
 ========================================================= */
-function AppUpdateButton({ className = 'btn-update-sidebar', onDone }) {
-  const [state, setState] = useState({ status: 'idle' });
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => onUpdateStateChange(setState), []);
-
-  const available = state.status === 'available';
-  const applying = state.status === 'applying' || busy;
-
-  const handleClick = async () => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      const { available: fresh } = await checkForUpdate();
-      if (fresh || available) {
-        await applyAppUpdate();
-      }
-    } finally {
-      setBusy(false);
-      onDone?.();
-    }
-  };
-
-  if (!available && !applying) return null;
-
-  return (
-    <button type="button" className={className} onClick={handleClick} disabled={applying}>
-      <Icon name="refresh" size={16}/>
-      {applying ? 'กำลังอัปเดต…' : 'อัปเดตแอป'}
-    </button>
-  );
-}
-
 function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagement, onSidebarMouseEnter, onSidebarMouseLeave, onSidebarFocus, onSidebarBlur }) {
   const role = useRole();
   const isSuperAdmin = role === 'super_admin';
@@ -4559,7 +4524,6 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
       </nav>
       <div className="sidebar-footer p-4 border-t space-y-2">
         <UpdateLogButton />
-        <AppUpdateButton />
         {/* User-management button — super_admin only. Reuses the yellow
             `.btn-settings-sidebar` style so it visually contrasts with
             the coral "การตั้งค่า" below and signals "privileged action". */}
@@ -4698,7 +4662,6 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
                   onOpenRequest={() => setUpdateLogOpen(true)}
                   onDone={() => setOpenMenu(false)}
                 />
-                <AppUpdateButton onDone={() => setOpenMenu(false)} />
                 <button className="btn-app-settings-sidebar w-full" onClick={()=>{ setOpenMenu(false); onOpenSettings?.(); }}>
                   <Icon name="settings" size={16}/> การตั้งค่า
                 </button>
@@ -15340,7 +15303,7 @@ function App() {
       <DialogProvider>
       <RoleCtx.Provider value={role}>
       <ShopProvider>
-        <AppUpdateBanner />
+        <AppUpdateGate />
         <OfflineBanner />
         <div
           className={
