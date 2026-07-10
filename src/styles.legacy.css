@@ -285,6 +285,20 @@
     pointer-events: none;
   }
 
+  .animated-logo-tilt {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transform-style: preserve-3d;
+    will-change: transform;
+  }
+
+  .animated-logo-layer svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
   /* Reduced motion — respect user preference */
   @media (prefers-reduced-motion: reduce) {
     .animated-logo--float,
@@ -292,6 +306,9 @@
     .animated-logo--interactive:hover,
     .animated-logo--bounce {
       animation: none !important;
+    }
+    .animated-logo-tilt {
+      transform: none !important;
     }
     .animated-logo__img {
       transition: none !important;
