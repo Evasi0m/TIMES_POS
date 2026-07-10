@@ -85,7 +85,7 @@ describe('JSON import submit pipeline', () => {
         unit_cost: 100,
       }],
     });
-    expect(err).toContain('????????????????');
+    expect(err).toContain('จับคูไม่สมบูรณ์');
   });
 
   it('validateBillRowsForSubmit catches new row without newProduct', () => {
@@ -99,7 +99,7 @@ describe('JSON import submit pipeline', () => {
         unit_cost: 100,
       }],
     });
-    expect(err).toContain('????????????????????????');
+    expect(err).toContain('ยังไม่ได้สร้างสินค้าใหม่');
   });
 
   it('materializeJsonBill does not auto-confirm rows flagged needs_review', () => {
