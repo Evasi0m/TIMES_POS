@@ -664,7 +664,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
       const title = e?.message || mapError(e);
       pushParseLogs(msgParseError(title, ''));
       setError({ title, hint: '', retryable: false });
-      setBills((prev) => prev.map((b) => ({ ...b, parseState: 'failed', parseError: parsed.title })));
+      setBills((prev) => prev.map((b) => ({ ...b, parseState: 'failed', parseError: title })));
       setPhase('error');
     }
   }, [appendParseLog, clearParseLogs, pushParseLogs, toast]);
@@ -1366,8 +1366,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
       if (!submitAttempted) {
         setSubmitting(false);
         setSavingProgress(null);
-        return;
-      }
+      } else {
       // R7 fix: build the summary from the FINAL bills state, not
       // from per-pass local arrays. After a retry-failed pass, the
       // local `savedIdsThisPass` only contains the retry's saves,
@@ -1409,6 +1408,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
       // re-fetch when retry-failed produced zero new saves.
       if (savedIdsThisPass.length > 0) {
         refreshRecentReceives?.().catch(() => {});
+      }
       }
     }
   };
