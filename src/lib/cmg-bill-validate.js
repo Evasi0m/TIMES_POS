@@ -108,14 +108,35 @@ export function validateCmgBill(parsed) {
   return { rows, bill, rowFlags };
 }
 
+/**
+ * Live row math check for review edits (qty/cost vs line_amount).
+ * @returns {{ mismatch: boolean, detail: string | null }}
+ */
+export function validateRowMath(row) {
+  const qty = Math.max(0, Math.round(Number(row?.quantity) || 0));
+  const unitCost = Math.max(0, Number(row?.unit_cost) || 0);
+  const lineAmount = Number(row?.line_amount) || 0;
+  if (!(lineAmount > 0) || qty <= 0 || unitCost <= 0) {
+    return { mismatch: false, detail: null };
+  }
+  const expected = roundMoney(qty * unitCost);
+  if (near(expected, lineAmount, ROW_TOLERANCE)) {
+    return { mismatch: false, detail: null };
+  }
+  return {
+    mismatch: true,
+    detail: `${qty} × ${unitCost} ? ${roundMoney(lineAmount)} (expected ${expected})`,
+  };
+}
+
 /** Human-readable summary for parse activity log. */
 export function formatValidationSummary(validation) {
   if (!validation) return null;
   const rowCount = validation.rows?.length || 0;
   const billCount = validation.bill?.warnings?.length || 0;
-  if (rowCount === 0 && billCount === 0) return '???????: ??????????';
+  if (rowCount === 0 && billCount === 0) return '???????: ????';
   const parts = [];
   if (rowCount > 0) parts.push(`${rowCount} ????????????`);
-  if (billCount > 0) parts.push(`${billCount} ??? footer ??????`);
+  if (billCount > 0) parts.push(`${billCount} ??? footer ???`);
   return `???????: ${parts.join(', ')}`;
 }

@@ -119,6 +119,13 @@ describe('classifyMatch', () => {
     expect(r.status).toBe('auto');
     expect(r.product.id).toBe(1);
   });
+
+  it('auto-matches via model_code when display name differs', () => {
+    const list = [{ id: 9, name: 'นาฬิกา Casio', model_code: 'LTP-1302DS-4AVDF' }];
+    const r = classifyMatch('LTP-1302DS-4AVDF', list);
+    expect(r.status).toBe('auto');
+    expect(r.product.id).toBe(9);
+  });
   it('auto-matches the exact variant even when a longer suffix variant exists', () => {
     // Query "W-218H-8B" matches id=4 exactly (score 1.0) while id=3
     // ("W-218H-8BVDF") scores ~0.7 — gap is large, exact match wins.

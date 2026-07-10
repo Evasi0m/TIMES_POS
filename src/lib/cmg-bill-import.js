@@ -59,7 +59,15 @@ function normalizeItem(raw, billCtx, itemIndex, errors) {
     return null;
   }
 
-  const quantity = Math.max(0, Math.round(coerceNumber(raw.quantity)));
+  const rawQty = coerceNumber(raw.quantity);
+  const quantity = Math.max(0, Math.round(rawQty));
+  if (Number.isFinite(rawQty) && rawQty !== quantity) {
+    const warnList = billCtx._warnings || (billCtx._warnings = []);
+    warnList.push(
+      `${billLabel(billCtx, billCtx._index)} แถว ${itemIndex + 1}: ` +
+      `ปัดจำนวนจาก ${rawQty} เป็น ${quantity}`,
+    );
+  }
   const unit_cost = Math.max(0, coerceNumber(raw.unit_cost));
   const line_amount = coerceNumber(raw.line_amount);
 
@@ -106,7 +114,7 @@ function checkDuplicateInvoices(bills, errors) {
     if (!inv) return;
     if (seen.has(inv)) {
       errors.push(
-        `?????? ${inv} ????????? (?????? ${seen.get(inv) + 1} ??? ${i + 1})`,
+        `เลขบิล ${inv} ซ้ำในไฟล์ (บิลที่ ${seen.get(inv) + 1} และ ${i + 1})`,
       );
     } else {
       seen.set(inv, i);
@@ -168,6 +176,7 @@ function normalizeBill(raw, index, errors) {
     vat_amount: roundMoney(vat_amount),
     grand_total: roundMoney(grand_total),
     items,
+    ...(billCtx._warnings?.length ? { _warnings: billCtx._warnings } : {}),
   };
 }
 
@@ -243,7 +252,13 @@ export function parseCmgBillImportFile(text, opts = {}) {
     return { ok: false, errors };
   }
 
-  return { ok: true, bills };
+  const warnings = [];
+  bills.forEach((bill) => {
+    if (Array.isArray(bill._warnings)) warnings.push(...bill._warnings);
+  });
+  const cleanBills = bills.map(({ _warnings, ...bill }) => bill); // eslint-disable-line no-unused-vars
+
+  return { ok: true, bills: cleanBills, warnings };
 }
 
 /** Read a File/Blob as text and parse. */

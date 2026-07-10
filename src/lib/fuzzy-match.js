@@ -101,7 +101,9 @@ export function findCandidates(query, products, opts = {}) {
 
   const out = [];
   for (const p of products) {
-    const s = similarityScore(query, p.name);
+    const byName = similarityScore(query, p.name);
+    const byCode = p.model_code ? similarityScore(query, p.model_code) : 0;
+    const s = Math.max(byName, byCode);
     if (s >= minScore) out.push({ product: p, score: s });
   }
   out.sort((a, b) => b.score - a.score);

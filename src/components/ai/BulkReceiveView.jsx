@@ -29,6 +29,7 @@ import { getProductListBundle } from '../../lib/product-catalog-cache.js';
 import { mapError } from '../../lib/error-map.js';
 import { VAT_RATE_DEFAULT, fmtTHB } from '../../lib/money.js';
 import { buildReceiveItems, receiveTotals, grossUnitCost } from '../../lib/ai-receive.js';
+import { validateRowMath } from '../../lib/cmg-bill-validate.js';
 import { startOfDayBangkok } from '../../lib/date.js';
 import { todayISO } from '../../lib/server-clock.js';
 import Icon from '../ui/Icon.jsx';
@@ -82,6 +83,24 @@ import {
 import { flushDraftNow, resolveMobileBackAction } from './bulk-receive-mobile-back.js';
 
 const AI_PARSE_CHUNK_SIZE = 1;
+
+function mergeRowPatch(row, patch) {
+  const next = { ...row, ...patch };
+  if ('quantity' in patch || 'unit_cost' in patch) {
+    next.reviewConfirmed = false;
+    const { mismatch, detail } = validateRowMath(next);
+    const issues = (row.validationIssues || []).filter((i) => i !== 'row_math_mismatch');
+    if (mismatch) {
+      issues.push('row_math_mismatch');
+      next.validationIssues = issues;
+      next.validationDetail = detail;
+    } else {
+      next.validationIssues = issues;
+      if (!issues.length) next.validationDetail = null;
+    }
+  }
+  return next;
+}
 
 function aggregateAiUsage(usages) {
   const valid = (usages || []).filter(Boolean);
@@ -462,8 +481,10 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
     try {
       const restoredBills = (draft.bills || []).map((b) => {
         let previewUrl = '';
-        try { previewUrl = URL.createObjectURL(base64ToBlob(b.base64, b.mime)); } catch { /* noop */ }
-        return { ...b, previewUrl };
+        if (b.base64) {
+          try { previewUrl = URL.createObjectURL(base64ToBlob(b.base64, b.mime)); } catch { /* noop */ }
+        }
+        return { ...b, previewUrl, footerConfirmed: b.footerConfirmed ?? false };
       });
       setBills(restoredBills);
       setCurrentIdx(Math.min(draft.currentIdx || 0, Math.max(0, restoredBills.length - 1)));
@@ -562,6 +583,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
       saveState: 'pending',
       savedOrderId: null,
       saveError: null,
+      footerConfirmed: false,
     }));
     setBills(seedBills);
 
@@ -574,6 +596,10 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
       if (catalogError) {
         console.warn('[BulkReceiveView] JSON import catalog load issue:', catalogError);
         pushParseLogs(msgCatalogWarn());
+        toast?.push('โหลดรายการสินค้าไม่สำเร็จ — ต้องจับคู่เองทุกรายการ', 'error');
+        if (catalog.length === 0) {
+          throw new Error('โหลดรายการสินค้าไม่สำเร็จ — ลองใหม่อีกครั้ง');
+        }
       } else {
         pushParseLogs(msgCatalogDone(catalog.length, catalogMs));
       }
@@ -635,13 +661,13 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
       setPhase('review');
     } catch (e) {
       console.warn('[BulkReceiveView] JSON import failed:', e);
-      const parsed = await parseAIError(e);
-      pushParseLogs(msgParseError(parsed.title, parsed.hint));
-      setError({ ...parsed, retryable: false });
-      setBills((prev) => prev.map((b) => ({ ...b, parseState: 'failed', parseError: parsed.title })));
+      const title = e?.message || mapError(e);
+      pushParseLogs(msgParseError(title, ''));
+      setError({ title, hint: '', retryable: false });
+      setBills((prev) => prev.map((b) => ({ ...b, parseState: 'failed', parseError: title })));
       setPhase('error');
     }
-  }, [appendParseLog, clearParseLogs, pushParseLogs]);
+  }, [appendParseLog, clearParseLogs, pushParseLogs, toast]);
 
   // ─── Upload commit → kick off chunked AI parsing ───────────────────
   const handleUploadConfirm = useCallback(async ({ images, retryOnly = false } = {}) => {
@@ -687,6 +713,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
         saveState: 'pending', // pending | saving | saved | failed
         savedOrderId: null,
         saveError: null,
+        footerConfirmed: false,
       }));
       setBills(seedBills);
       setUsage(null);
@@ -705,6 +732,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
       if (catalogError) {
         console.warn('[BulkReceiveView] catalog load issue:', catalogError);
         pushParseLogs(msgCatalogWarn());
+        toast?.push('โหลดรายการสินค้าไม่สำเร็จ — ต้องจับคู่เองทุกรายการ', 'error');
       } else {
         pushParseLogs(msgCatalogDone(catalog.length, catalogMs));
       }
@@ -863,7 +891,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
       )));
       setPhase('error');
     }
-  }, [bills, appendParseLog, clearParseActive, clearParseLogs, pushParseLogs, startWaitTicker]);
+  }, [bills, appendParseLog, clearParseActive, clearParseLogs, pushParseLogs, startWaitTicker, toast]);
 
   // ─── Retry AI on the same images (no re-upload required) ───────────
   // When AI errored after we had already loaded images, the seedBills
@@ -929,7 +957,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
   const updateRow = (uid, patch) =>
     patchCurrent((b) => ({
       ...b,
-      rows: b.rows.map((r) => (r.uid === uid ? { ...r, ...patch } : r)),
+      rows: b.rows.map((r) => (r.uid === uid ? mergeRowPatch(r, patch) : r)),
     }));
   const removeRow = (uid) => {
     const billIdx = currentIdx;
@@ -956,13 +984,16 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
       status: 'auto',
       product,
       newProduct: null,
+      reviewConfirmed: true,
       tiktok_skip: false,
       tiktok_sku: null,
       tiktok_mapping: enrichTiktokMappingFromCatalog(mappingsByProductId[product?.id] || null, tiktokCatalog),
       tiktok_manual: false,
     });
   const setNewProduct = (uid, np) =>
-    updateRow(uid, { status: 'new', product: null, newProduct: np });
+    updateRow(uid, { status: 'new', product: null, newProduct: np, reviewConfirmed: true });
+  const confirmBillFooter = () =>
+    patchCurrent((b) => ({ ...b, footerConfirmed: true }));
 
   const handleTiktokRowMatch = useCallback((rowUid, patch) => {
     const row = billsRef.current[currentIdx]?.rows.find((r) => r.uid === rowUid);
@@ -1230,7 +1261,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
         // path as the regular receive form. Date is today; supplier =
         // CMG; VAT 7% always (CMG always issues VAT invoices).
         const today = todayISO();
-        const isJsonBatch = bills.some((b) => b.importSource === 'json');
+        const isJsonBill = bill.importSource === 'json';
         const header = {
           receive_date: startOfDayBangkok(today),
           total_value: total,
@@ -1242,13 +1273,13 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
           supplier_id: supplier?.id,
           supplier_name: supplier?.business_name || 'CMG',
           supplier_tax_id: supplier?.tax_id || null,
-          created_via: isJsonBatch ? 'json_cmg' : 'ai_cmg',
+          created_via: isJsonBill ? 'json_cmg' : 'ai_cmg',
           // M3: per-bill suffix so two same-second fallbacks differ.
           // `loopIdx + 1` mirrors the user-visible bill number well
           // enough; we don't expose the suffix in UI anywhere.
           supplier_invoice_no:
             bill.supplier_invoice_no?.trim() || autoInvoiceNo(i + 1),
-          notes: isJsonBatch
+          notes: isJsonBill
             ? `JSON import · batch · ${items.length} รายการ`
             : `AI scan · batch · ${items.length} รายการ`,
         };
@@ -1335,8 +1366,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
       if (!submitAttempted) {
         setSubmitting(false);
         setSavingProgress(null);
-        return;
-      }
+      } else {
       // R7 fix: build the summary from the FINAL bills state, not
       // from per-pass local arrays. After a retry-failed pass, the
       // local `savedIdsThisPass` only contains the retry's saves,
@@ -1378,6 +1408,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
       // re-fetch when retry-failed produced zero new saves.
       if (savedIdsThisPass.length > 0) {
         refreshRecentReceives?.().catch(() => {});
+      }
       }
     }
   };
@@ -1522,6 +1553,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
           onRemoveRow={removeRow}
           onPickCandidate={pickCandidate}
           onSetNewProduct={setNewProduct}
+          onConfirmFooter={confirmBillFooter}
           onInvoiceNoChange={updateInvoiceNo}
           onHasVatChange={updateHasVat}
           onRemoveBill={removeCurrentBill}
@@ -1939,7 +1971,7 @@ function ReviewOverflowSheet({
 // ─── Sub: review wizard ───────────────────────────────────────────────
 function ReviewWizard({
   bills, currentIdx, setCurrentIdx, products, recentReceivesMap, usage, summary, submitting,
-  onUpdateRow, onRemoveRow, onPickCandidate, onSetNewProduct,
+  onUpdateRow, onRemoveRow, onPickCandidate, onSetNewProduct, onConfirmFooter,
   onInvoiceNoChange, onHasVatChange, onRemoveBill, onSubmitAll, onCancel, onPauseReview,
   dupInvoices, onZoom, onSetAllVat, savingProgress, supplierName,
   tiktokConnected, syncTikTokAfterReceive, onSyncTikTokChange,
@@ -2073,6 +2105,7 @@ function ReviewWizard({
           onRemoveRow={onRemoveRow}
           onPickCandidate={onPickCandidate}
           onSetNewProduct={onSetNewProduct}
+          onConfirmFooter={onConfirmFooter}
           onInvoiceNoChange={onInvoiceNoChange}
           onHasVatChange={onHasVatChange}
           onRemoveBill={onRemoveBill}
@@ -2382,7 +2415,7 @@ function BillSaveErrorAlert({ rawError }) {
 
 function BillCard({
   bill, billNumber, totalBills, products, recentReceivesMap, dup, onZoom,
-  onUpdateRow, onRemoveRow, onPickCandidate, onSetNewProduct,
+  onUpdateRow, onRemoveRow, onPickCandidate, onSetNewProduct, onConfirmFooter,
   onInvoiceNoChange, onHasVatChange, onRemoveBill, disabled, supplierName,
   tiktokMirrorEnabled = false,
   tiktokCatalog = [],
@@ -2404,6 +2437,8 @@ function BillCard({
 }) {
   const itemCount = bill.rows.length;
   const [alertsOpen, setAlertsOpen] = useState(false);
+  const footerWarningCount = bill.validation?.bill?.warnings?.length || 0;
+  const needsFooterConfirm = footerWarningCount > 0 && !bill.footerConfirmed;
 
   const alerts = useMemo(
     () => collectBillAlerts(bill, { dup, tiktokMirrorEnabled, onZoom }),
@@ -2538,6 +2573,20 @@ function BillCard({
           </div>
         )}
 
+        {needsFooterConfirm && (
+          <div className="brv-bill-head__alerts">
+            <button
+              type="button"
+              className="brv-bill-alert brv-bill-alert--warn brv-bill-alert--click w-full"
+              onClick={() => onConfirmFooter?.()}
+              disabled={disabled}
+            >
+              <Icon name="alert" size={12}/>
+              ผลรวมบิลไม่ตรง footer ({footerWarningCount} จุด) — กดยืนยันหลังตรวจเลขแล้ว
+            </button>
+          </div>
+        )}
+
         {topAlert && topAlert.key !== 'save-failed' && (
           <div className="brv-bill-head__alerts">
             {topAlert.onClick ? (
@@ -2601,6 +2650,7 @@ function BillCard({
           onRemoveRow={onRemoveRow}
           onPickCandidate={onPickCandidate}
           onSetNewProduct={onSetNewProduct}
+          isJsonBill={bill.importSource === 'json'}
           tiktokMirrorEnabled={tiktokMirrorEnabled}
           tiktokCatalog={tiktokCatalog}
           tiktokCatalogLoading={tiktokCatalogLoading}

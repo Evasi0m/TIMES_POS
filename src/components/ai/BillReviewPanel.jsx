@@ -47,6 +47,7 @@ export function buildRowFromAi(it, catalog, opts = {}) {
     unit_cost:  Math.max(0, Number(it.unit_cost) || 0),
     line_amount: Math.max(0, Number(it.line_amount) || 0),
     needsReview: Boolean(it.needs_review) || forceReview,
+    reviewConfirmed: false,
     validationIssues: Array.isArray(validationIssues) ? validationIssues : [],
     validationDetail: validationDetail || null,
     status:     match.status,
@@ -166,6 +167,7 @@ export default function BillReviewPanel({
   onRemoveRow,
   onPickCandidate,
   onSetNewProduct,
+  isJsonBill = false,
   tiktokMirrorEnabled = false,
   tiktokCatalog = [],
   tiktokCatalogLoading = false,
@@ -460,6 +462,7 @@ export default function BillReviewPanel({
           ref={stageRef}
           onLayoutModeChange={handleLayoutModeChange}
           row={activeRow}
+          isJsonBill={isJsonBill}
           rowIndex={activeIndex}
           totalRows={rows.length}
           products={products}

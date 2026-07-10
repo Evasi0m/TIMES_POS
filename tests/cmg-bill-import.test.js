@@ -116,6 +116,7 @@ describe('parseCmgBillImportFile', () => {
     const result = parseCmgBillImportFile(JSON.stringify(dup));
     expect(result.ok).toBe(false);
     expect(result.errors[0]).toMatch(/1312257064/);
+    expect(result.errors[0]).toMatch(/ซ้ำในไฟล์/);
     expect(result.errors.length).toBe(1);
   });
 
