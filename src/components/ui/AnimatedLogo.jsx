@@ -1,4 +1,8 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useMouseFollowTilt } from '../../hooks/useMouseFollowTilt.js';
+import { useEyeTracking } from '../../hooks/useEyeTracking.js';
+import TickLogoSvg from './TickLogoSvg.jsx';
+import { TICK_EYE_CONFIG, TRACKABLE_MOODS } from './tickLogoEyeConfig.js';
 
 /**
  * AnimatedLogo — TICK mascot logo with 5 moods and 3 animation modes.
@@ -14,6 +18,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
  */
 
 const MOODS = ['happy', 'love', 'wink', 'wow', 'sleep'];
+const TRACKABLE = new Set(TRACKABLE_MOODS);
+const ZERO_OFFSETS = [{ x: 0, y: 0 }, { x: 0, y: 0 }];
 const MOOD_SRCS = Object.fromEntries(
   MOODS.map(m => [m, `logo/TICK-${m}.svg`])
 );
@@ -109,12 +115,19 @@ function InteractiveLogo({ size, className, defaultMood }) {
   const [prevMood, setPrevMood] = useState(null);
   const [bouncing, setBouncing] = useState(false);
   const timerRef = useRef(null);
+  const trackRef = useRef(null);
+  const svgRef = useRef(null);
+
+  const eyeConfig = TICK_EYE_CONFIG[mood];
+  const eyes = eyeConfig?.tracking === 'none' ? [] : (eyeConfig?.eyes ?? []);
+  const { rotateX, rotateY } = useMouseFollowTilt(trackRef);
+  const { offsets } = useEyeTracking(trackRef, svgRef, eyes);
 
   const handleClick = useCallback(() => {
     // Pick a random mood different from current
     const others = MOODS.filter(m => m !== mood);
     const pick = others[Math.floor(Math.random() * others.length)];
-    
+
     setPrevMood(mood);
     setMood(pick);
     setBouncing(true);
@@ -135,6 +148,11 @@ function InteractiveLogo({ size, className, defaultMood }) {
     if (timerRef.current) clearTimeout(timerRef.current);
   }, []);
 
+  const tiltStyle = useMemo(
+    () => ({ transform: `perspective(400px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)` }),
+    [rotateX, rotateY],
+  );
+
   return (
     <div
       className={
@@ -146,27 +164,46 @@ function InteractiveLogo({ size, className, defaultMood }) {
       onClick={handleClick}
       title="TICK — คลิกเปลี่ยน mood!"
     >
-      {MOODS.map(m => {
-        const isCurrent = m === mood;
-        const isPrevious = m === prevMood;
-        
-        let layerClass = "animated-logo-layer animated-logo-layer--hidden";
-        if (isCurrent) {
-          layerClass = "animated-logo-layer animated-logo-layer--incoming";
-        } else if (isPrevious) {
-          layerClass = "animated-logo-layer animated-logo-layer--outgoing";
-        }
+      <div
+        ref={trackRef}
+        className="animated-logo-tilt"
+        style={tiltStyle}
+      >
+        {MOODS.map(m => {
+          const isCurrent = m === mood;
+          const isPrevious = m === prevMood;
 
-        return (
-          <img
-            key={m}
-            src={MOOD_SRCS[m]}
-            alt={`TIMES logo — ${m}`}
-            className={layerClass}
-            draggable={false}
-          />
-        );
-      })}
+          let layerClass = 'animated-logo-layer animated-logo-layer--hidden';
+          if (isCurrent) {
+            layerClass = 'animated-logo-layer animated-logo-layer--incoming';
+          } else if (isPrevious) {
+            layerClass = 'animated-logo-layer animated-logo-layer--outgoing';
+          }
+
+          if (TRACKABLE.has(m)) {
+            const pupilOffsets = isCurrent ? offsets : ZERO_OFFSETS;
+            return (
+              <div key={m} className={layerClass}>
+                <TickLogoSvg
+                  mood={m}
+                  pupilOffsets={pupilOffsets.length ? pupilOffsets : ZERO_OFFSETS}
+                  svgRef={isCurrent ? svgRef : null}
+                />
+              </div>
+            );
+          }
+
+          return (
+            <img
+              key={m}
+              src={MOOD_SRCS[m]}
+              alt={`TIMES logo — ${m}`}
+              className={layerClass}
+              draggable={false}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }
