@@ -19,6 +19,8 @@ import {
   getRowAsideImageUrl,
   getWorkspaceLayoutMode,
   isRowComplete,
+  hasRowMathMismatch,
+  needsManualReview,
 } from './bill-review-shared.js';
 
 function CandidateCell({ c, onPick, highlight, dataFirst }) {
@@ -160,7 +162,7 @@ function StageAsideVisual({ row, tiktokCatalog = [], productImagesById = {} }) {
 
 function StageAside({
   rowIndex, row, hasVat, displayState, duplicate, onRemove, tiktokCatalog = [], productImagesById = {},
-  compact = false,
+  compact = false, isJsonBill = false,
 }) {
   const grossCost = hasVat ? addVat(row.unit_cost) : row.unit_cost;
 
@@ -234,7 +236,7 @@ function StageAside({
         {duplicate && (
           <span className="air-chip air-chip--dup" title="model นี้มีมากกว่าหนึ่งบรรทัดในบิล">ซ้ำ?</span>
         )}
-        {row.validationIssues?.includes('row_math_mismatch') && (
+        {hasRowMathMismatch(row) && (
           <span
             className="ai-review-chip ai-review-chip--math"
             title={row.validationDetail || 'qty × ราคา ≠ จำนวนเงินบิล'}
@@ -242,8 +244,8 @@ function StageAside({
             <Icon name="alert" size={10}/> เลขไม่ตรง
           </span>
         )}
-        {row.needsReview && !row.validationIssues?.includes('row_math_mismatch') && (
-          <span className="ai-review-chip"><Icon name="alert" size={10}/> AI ตรวจ</span>
+        {needsManualReview(row) && (
+          <span className="ai-review-chip"><Icon name="alert" size={10}/> {isJsonBill ? 'ต้องตรวจ' : 'AI ตรวจ'}</span>
         )}
       </div>
 
@@ -296,6 +298,7 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
   totalRows = 0,
   products,
   hasVat = false,
+  isJsonBill = false,
   recentInfo = null,
   billComplete = false,
   duplicate = false,
@@ -553,16 +556,31 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
           ความมั่นใจ {Math.round(row.matchScore * 100)}% — ตรวจว่ารุ่นตรงไหม
         </div>
       )}
-      {row.validationIssues?.includes('row_math_mismatch') && (
+      {hasRowMathMismatch(row) && (
         <div className="rrm-alert">
           <Icon name="alert" size={14} className="shrink-0"/>
-          {row.validationDetail || 'qty × ราคา ≠ จำนวนเงินบิล — ตรวจกับรูป'}
+          {row.validationDetail || (isJsonBill
+            ? 'qty × ราคา ≠ จำนวนเงินบิล — ตรวจเลขใน JSON'
+            : 'qty × ราคา ≠ จำนวนเงินบิล — ตรวจกับรูป')}
         </div>
       )}
-      {row.needsReview && !row.validationIssues?.includes('row_math_mismatch') && (
-        <div className="rrm-alert">
-          <Icon name="alert" size={14} className="shrink-0"/>
-          AI ไม่มั่นใจ — ตรวจรุ่นและตัวเลขกับรูปบิล
+      {needsManualReview(row) && (
+        <div className="rrm-alert space-y-2">
+          <div className="flex items-start gap-2">
+            <Icon name="alert" size={14} className="shrink-0"/>
+            <span>
+              {isJsonBill
+                ? 'รายการนี้ต้องตรวจอีกครั้ง — ตรวจรุ่นและตัวเลขกับ JSON'
+                : 'AI ไม่มั่นใจ — ตรวจรุ่นและตัวเลขกับรูปบิล'}
+            </span>
+          </div>
+          <button
+            type="button"
+            className="btn-secondary text-sm"
+            onClick={() => onUpdate({ reviewConfirmed: true })}
+          >
+            <Icon name="check" size={14}/> ยืนยันตรวจแล้ว
+          </button>
         </div>
       )}
     </>
@@ -989,6 +1007,7 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
           tiktokCatalog={tiktokCatalog}
           productImagesById={productImagesById}
           compact={isMobile}
+          isJsonBill={isJsonBill}
         />
 
         <div className="air-stage__main">

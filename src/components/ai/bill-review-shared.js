@@ -1,5 +1,6 @@
 // Shared constants/helpers for AI bill review (BillReviewPanel + ReceiveMatchPanel).
 
+import { validateRowMath } from '../../lib/cmg-bill-validate.js';
 import { tiktokSkuImageUrl } from '../../lib/tiktok-mirror-helpers.js';
 import { productImageUrl } from '../../lib/product-classify.js';
 export const STATUS_META = {
@@ -189,8 +190,12 @@ export function isSoftMatch(row) {
 }
 
 export function hasRowMathMismatch(row) {
-  return Array.isArray(row?.validationIssues)
-    && row.validationIssues.includes('row_math_mismatch');
+  return validateRowMath(row).mismatch;
+}
+
+/** Row flagged needs_review and not yet confirmed by the user. */
+export function needsManualReview(row) {
+  return Boolean(row?.needsReview) && !row?.reviewConfirmed;
 }
 
 function isTikTokLineReady(row) {
@@ -211,9 +216,11 @@ export function computeBillStatus(bill, mirrorOn = false) {
     !(Number(r.unit_cost) > 0) || !(Number(r.quantity) > 0)
   );
   if (incomplete) return 'incomplete';
+  const footerWarnings = bill.validation?.bill?.warnings?.length || 0;
+  if (footerWarnings > 0 && !bill.footerConfirmed) return 'needs_review';
   const flagged = bill.rows.some((r) =>
     (r.status === 'auto' || r.status === 'new') &&
-    (r.needsReview || hasRowMathMismatch(r) || isSoftMatch(r))
+    (needsManualReview(r) || hasRowMathMismatch(r) || isSoftMatch(r))
   );
   if (flagged) return 'needs_review';
   if (mirrorOn) {
@@ -305,7 +312,7 @@ export function rowNeedsAttention(row, tiktokMirrorEnabled = false) {
     !resolved ||
     qtyIncomplete ||
     costIncomplete ||
-    row.needsReview ||
+    needsManualReview(row) ||
     hasRowMathMismatch(row) ||
     isSoftMatch(row) ||
     isTiktokPending(row, tiktokMirrorEnabled)

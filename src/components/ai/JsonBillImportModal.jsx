@@ -96,7 +96,9 @@ function Impl({ open, onClose, onConfirm, closing }) {
     }
     setSourceKind(kind);
     setFile(sourceFile);
-    setPreview(buildPreviewFromBills(result.bills, sizeBytes));
+    const previewData = buildPreviewFromBills(result.bills, sizeBytes);
+    if (result.warnings?.length) previewData.parseWarnings = result.warnings;
+    setPreview(previewData);
     setErrors([]);
   }, []);
 
@@ -285,6 +287,13 @@ function Impl({ open, onClose, onConfirm, closing }) {
               </div>
               {preview.footerWarningBills > 0 && (
                 <div className="text-[11px] text-warning">{preview.footerWarningBills} บิลมี footer warning — ตรวจใน review ก่อนบันทึก</div>
+              )}
+              {preview.parseWarnings?.length > 0 && (
+                <div className="text-[11px] text-warning space-y-0.5">
+                  {preview.parseWarnings.map((w, i) => (
+                    <div key={i}>{w}</div>
+                  ))}
+                </div>
               )}
               <div className="text-[11px] text-muted-soft">กดยืนยันเพื่อเข้าหน้า review · ยังไม่บันทึกเข้าระบบ</div>
             </div>

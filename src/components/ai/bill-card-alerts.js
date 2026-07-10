@@ -101,7 +101,9 @@ export function collectBillAlerts(bill, {
     alerts.push({
       key: 'incomplete',
       severity: 'warn',
-      message: `เหลือ ${incompleteRows} รายการที่ AI อ่าน ทุน/จำนวน ไม่ออก — กรอกให้ครบก่อนบันทึก`,
+      message: isJson
+        ? `เหลือ ${incompleteRows} รายการที่ทุน/จำนวน ไม่ครบ — กรอกให้ครบก่อนบันทึก`
+        : `เหลือ ${incompleteRows} รายการที่ AI อ่าน ทุน/จำนวน ไม่ออก — กรอกให้ครบก่อนบันทึก`,
     });
   }
   if (tiktokMirrorEnabled && !isNonCmg && !isEmpty && unresolved === 0 && incompleteRows === 0) {
@@ -117,13 +119,13 @@ export function collectBillAlerts(bill, {
       });
     }
   }
-  if (validationBillWarnings > 0) {
+  if (validationBillWarnings > 0 && !bill.footerConfirmed) {
     alerts.push({
       key: 'bill-math',
       severity: 'warn',
       message: isJson
-        ? `ผลรวมบิลไม่ตรง footer (${validationBillWarnings} จุด) — ตรวจเลขใน JSON / แถวด้านล่าง`
-        : `ผลรวมบิลไม่ตรง footer (${validationBillWarnings} จุด) — แตะดูรูปเทียบ`,
+        ? `ผลรวมบิลไม่ตรง footer (${validationBillWarnings} จุด) — ตรวจเลขใน JSON แล้วกดยืนยันยอดบิล`
+        : `ผลรวมบิลไม่ตรง footer (${validationBillWarnings} จุด) — แตะดูรูปเทียบแล้วกดยืนยันยอดบิล`,
       onClick: !isJson && bill.previewUrl && onZoom ? () => onZoom(bill.previewUrl) : undefined,
     });
   }

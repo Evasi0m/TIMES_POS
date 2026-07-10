@@ -44,10 +44,37 @@ describe('computeBillStatus', () => {
   it('returns needs_review for row math mismatch', () => {
     const row = {
       ...baseBill().rows[0],
+      quantity: 3,
+      unit_cost: 471.03,
+      line_amount: 2355.15,
       validationIssues: ['row_math_mismatch'],
     };
     expect(hasRowMathMismatch(row)).toBe(true);
     expect(computeBillStatus(baseBill({ rows: [row] }))).toBe('needs_review');
+  });
+
+  it('clears math mismatch after qty/cost fixed', () => {
+    const row = {
+      ...baseBill().rows[0],
+      quantity: 5,
+      unit_cost: 471.03,
+      line_amount: 2355.15,
+    };
+    expect(hasRowMathMismatch(row)).toBe(false);
+    expect(computeBillStatus(baseBill({ rows: [row] }))).toBe('ready');
+  });
+
+  it('needs_review clears after reviewConfirmed', () => {
+    const row = { ...baseBill().rows[0], needsReview: true, reviewConfirmed: true };
+    expect(computeBillStatus(baseBill({ rows: [row] }))).toBe('ready');
+  });
+
+  it('blocks submit when footer warnings and not confirmed', () => {
+    const bill = baseBill({
+      validation: { bill: { warnings: ['sum_mismatch'] }, rows: [] },
+      footerConfirmed: false,
+    });
+    expect(computeBillStatus(bill)).toBe('needs_review');
   });
 
   it('aligns needs_review with rowNeedsAttention for resolved rows', () => {

@@ -3,6 +3,7 @@ import {
   stripCmgModelPrefix,
   validateCmgBill,
   formatValidationSummary,
+  validateRowMath,
   ROW_TOLERANCE,
 } from '../src/lib/cmg-bill-validate.js';
 
@@ -102,7 +103,7 @@ describe('validateCmgBill', () => {
 describe('formatValidationSummary', () => {
   it('returns pass message when clean', () => {
     expect(formatValidationSummary({ rows: [], bill: { warnings: [] } }))
-      .toBe('???????: ??????????');
+      .toBe('???????: ????');
   });
 
   it('summarizes row and bill issues', () => {
@@ -111,6 +112,27 @@ describe('formatValidationSummary', () => {
       bill: { warnings: ['sum_mismatch'] },
     });
     expect(msg).toContain('1 ????????????');
-    expect(msg).toContain('1 ??? footer ??????');
+    expect(msg).toContain('1 ??? footer ???');
+  });
+});
+
+describe('validateRowMath', () => {
+  it('detects mismatch from live row fields', () => {
+    const result = validateRowMath({
+      quantity: 3,
+      unit_cost: 100,
+      line_amount: 500,
+    });
+    expect(result.mismatch).toBe(true);
+    expect(result.detail).toBeTruthy();
+  });
+
+  it('passes when qty × cost matches line_amount', () => {
+    const result = validateRowMath({
+      quantity: 5,
+      unit_cost: 471.03,
+      line_amount: 2355.15,
+    });
+    expect(result.mismatch).toBe(false);
   });
 });
