@@ -2,6 +2,19 @@
   "schemaVersion": 1,
   "patches": [
     {
+      "id": "2026-07-10-update-popup-backdrop",
+      "date": "2026-07-10",
+      "title": "popup อัปเดตแอป — พื้นหลัง blur นุ่มขึ้น",
+      "tags": [
+        "ปรับปรุง",
+        "UI"
+      ],
+      "items": [
+        "พื้นหลัง popup อัปเดตมี blur + dim เบาๆ โฟกัสที่การ์ดอัปเดตชัดขึ้น",
+        "โหมดมืดและ reduced-transparency ปรับให้อ่านง่าย"
+      ]
+    },
+    {
       "id": "2026-07-10-update-popup-thai-fix",
       "date": "2026-07-10",
       "title": "แก้ popup อัปเดตแอป — ข้อความไทยอ่านได้",

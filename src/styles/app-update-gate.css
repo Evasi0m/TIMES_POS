@@ -1,4 +1,4 @@
-/* Mandatory app-update gate ó full-screen blocker */
+/* Mandatory app-update gate ù full-screen blocker */
 
 .aug-overlay {
   position: fixed;
@@ -8,8 +8,16 @@
   align-items: flex-end;
   justify-content: center;
   padding: 0;
-  background: rgba(28, 22, 18, 0.52);
+  background: rgba(42, 35, 28, 0.38);
+  backdrop-filter: blur(10px) saturate(112%);
+  -webkit-backdrop-filter: blur(10px) saturate(112%);
   animation: augFadeIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+:root[data-theme='dark'] .aug-overlay {
+  background: rgba(12, 10, 9, 0.55);
+  backdrop-filter: blur(12px) saturate(108%);
+  -webkit-backdrop-filter: blur(12px) saturate(108%);
 }
 
 @media (min-width: 640px) {
@@ -193,5 +201,17 @@
   .aug-overlay,
   .aug-shell {
     animation: none !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .aug-overlay {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(42, 35, 28, 0.72);
+  }
+
+  :root[data-theme='dark'] .aug-overlay {
+    background: rgba(12, 10, 9, 0.82);
   }
 }
