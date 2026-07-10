@@ -36,7 +36,7 @@ describe('validateCmgBill', () => {
     expect(result.bill.warnings).toHaveLength(0);
   });
 
-  it('flags row when qty � unit_cost ? line_amount', () => {
+  it('flags row when qty � unit_cost ? line_amount', () => {
     const result = validateCmgBill({
       items: [{
         model_code: 'W-218HC-4A2VDF',
@@ -103,7 +103,7 @@ describe('validateCmgBill', () => {
 describe('formatValidationSummary', () => {
   it('returns pass message when clean', () => {
     expect(formatValidationSummary({ rows: [], bill: { warnings: [] } }))
-      .toBe('???????: ????');
+      .toBe('ตรวจเลขผ่าน');
   });
 
   it('summarizes row and bill issues', () => {
@@ -111,8 +111,8 @@ describe('formatValidationSummary', () => {
       rows: [{ index: 0 }],
       bill: { warnings: ['sum_mismatch'] },
     });
-    expect(msg).toContain('1 ????????????');
-    expect(msg).toContain('1 ??? footer ???');
+    expect(msg).toContain('1 แถวเลขไม่ตรง');
+    expect(msg).toContain('footer 1 จุด');
   });
 });
 
@@ -127,7 +127,7 @@ describe('validateRowMath', () => {
     expect(result.detail).toBeTruthy();
   });
 
-  it('passes when qty � cost matches line_amount', () => {
+  it('passes when qty � cost matches line_amount', () => {
     const result = validateRowMath({
       quantity: 5,
       unit_cost: 471.03,

@@ -1,5 +1,7 @@
 // Priority-ordered bill-level alerts for BulkReceiveView BillCard (mobile summary).
 
+import { needsManualReview } from './bill-review-shared.js';
+
 function isTikTokLineReady(row) {
   if (!row || row.tiktok_skip) return true;
   return !!(row.tiktok_sku || row.tiktok_mapping);
@@ -48,10 +50,15 @@ export function collectBillAlerts(bill, {
   const isEmpty = bill.rows.length === 0;
   const unresolved = bill.rows.filter((r) => r.status === 'suggestions' || r.status === 'none').length;
   const incompleteRows = (!isNonCmg && !isEmpty && unresolved === 0)
-    ? bill.rows.filter((r) => !(Number(r.unit_cost) > 0) || !(Number(r.quantity) > 0)).length
+    ? bill.rows.filter((r) =>
+      !(Number(r.unit_cost) > 0) ||
+      !(Number(r.quantity) > 0) ||
+      (r.status === 'auto' && !r.product?.id) ||
+      (r.status === 'new' && !String(r.newProduct?.name || '').trim())
+    ).length
     : 0;
   const reviewRows = (!isNonCmg && !isEmpty)
-    ? bill.rows.filter((r) => r.needsReview).length
+    ? bill.rows.filter((r) => needsManualReview(r)).length
     : 0;
   const validationBillWarnings = bill.validation?.bill?.warnings?.length || 0;
   const validationRowIssues = bill.validation?.rows?.length || 0;

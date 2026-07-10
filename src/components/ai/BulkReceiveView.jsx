@@ -29,11 +29,12 @@ import { getProductListBundle } from '../../lib/product-catalog-cache.js';
 import { mapError } from '../../lib/error-map.js';
 import { VAT_RATE_DEFAULT, fmtTHB } from '../../lib/money.js';
 import { buildReceiveItems, receiveTotals, grossUnitCost } from '../../lib/ai-receive.js';
+import { validateBillRowsForSubmit } from '../../lib/receive-submit-preflight.js';
 import { validateRowMath } from '../../lib/cmg-bill-validate.js';
 import { startOfDayBangkok } from '../../lib/date.js';
 import { todayISO } from '../../lib/server-clock.js';
 import Icon from '../ui/Icon.jsx';
-import BillReviewPanel, { materializeParsedBill, makeRowUid } from './BillReviewPanel.jsx';
+import BillReviewPanel, { materializeJsonBill, materializeParsedBill, makeRowUid } from './BillReviewPanel.jsx';
 import BulkBillUploadModal from './BulkBillUploadModal.jsx';
 import JsonBillImportModal from './JsonBillImportModal.jsx';
 import BillImageLightbox from './BillImageLightbox.jsx';
@@ -610,7 +611,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
         const bill = parsedBills[i];
         const billNo = i + 1;
         const invoiceNo = String(bill?.supplier_invoice_no || '').trim();
-        const materialized = materializeParsedBill(bill, catalog);
+        const materialized = materializeJsonBill(bill, catalog);
         const { rows, validation } = materialized;
         appendParseLog(msgJsonBillReady(billNo, invoiceNo, rows.length));
         const auto = rows.filter((r) => r.status === 'auto' || r.status === 'new').length;
@@ -644,6 +645,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
             grand_total: materialized.grand_total,
             validation: materialized.validation,
             rows: materialized.rows,
+            footerConfirmed: materialized.footerConfirmed,
             parseState: 'parsed',
             parseError: null,
           };
@@ -1150,6 +1152,11 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
         let okProducts = [];
 
         try {
+        const preflightError = validateBillRowsForSubmit(bill);
+        if (preflightError) {
+          throw new Error(preflightError);
+        }
+
         // M4 fix: dedupe new-product rows by trimmed name within this
         // bill. AI may emit the same unreadable model_code twice for
         // multi-line bills — without dedupe we'd insert two products

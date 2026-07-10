@@ -77,4 +77,16 @@ describe('collectBillAlerts', () => {
     expect(BILL_STATUS_LABELS.needs_review).toBe('ตรวจอีกครั้ง');
     expect(BILL_STATUS_CHIP_CLS.needs_review).toBe('brv-status-chip--warn');
   });
+
+  it('does not flag review alert when row is confirmed', () => {
+    const bill = {
+      ...baseBill,
+      rows: [{
+        ...baseBill.rows[0],
+        needsReview: true,
+        reviewConfirmed: true,
+      }],
+    };
+    expect(collectBillAlerts(bill).some((a) => a.key === 'ai-review')).toBe(false);
+  });
 });

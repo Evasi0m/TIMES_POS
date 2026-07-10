@@ -1,5 +1,5 @@
-// CMG bill arithmetic validation � deterministic checks after AI parse.
-// Compares qty � unit_cost vs line_amount and optional footer totals.
+// CMG bill arithmetic validation � deterministic checks after AI parse.
+// Compares qty � unit_cost vs line_amount and optional footer totals.
 
 import { roundMoney } from './money.js';
 
@@ -66,7 +66,7 @@ export function validateCmgBill(parsed) {
         rows.push({
           index,
           issues,
-          detail: `${qty} � ${unitCost} ? ${lineAmount} (expected ${expected})`,
+          detail: `${qty} � ${unitCost} ? ${lineAmount} (expected ${expected})`,
         });
       }
     }
@@ -125,7 +125,7 @@ export function validateRowMath(row) {
   }
   return {
     mismatch: true,
-    detail: `${qty} � ${unitCost} ? ${roundMoney(lineAmount)} (expected ${expected})`,
+    detail: `${qty} � ${unitCost} ? ${roundMoney(lineAmount)} (expected ${expected})`,
   };
 }
 
@@ -134,9 +134,9 @@ export function formatValidationSummary(validation) {
   if (!validation) return null;
   const rowCount = validation.rows?.length || 0;
   const billCount = validation.bill?.warnings?.length || 0;
-  if (rowCount === 0 && billCount === 0) return '???????: ????';
+  if (rowCount === 0 && billCount === 0) return 'ตรวจเลขผ่าน';
   const parts = [];
-  if (rowCount > 0) parts.push(`${rowCount} ????????????`);
-  if (billCount > 0) parts.push(`${billCount} ??? footer ???`);
-  return `???????: ${parts.join(', ')}`;
+  if (rowCount > 0) parts.push(`${rowCount} แถวเลขไม่ตรง`);
+  if (billCount > 0) parts.push(`footer ${billCount} จุด`);
+  return `ตรวจเลข — ${parts.join(', ')}`;
 }

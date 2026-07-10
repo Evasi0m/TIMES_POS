@@ -104,6 +104,12 @@ function isResolved(row) {
   return row.status === 'auto' || row.status === 'new';
 }
 
+function isRowProductIncomplete(row) {
+  if (row.status === 'auto' && !row.product?.id) return true;
+  if (row.status === 'new' && !String(row.newProduct?.name || '').trim()) return true;
+  return false;
+}
+
 /** SKU for stepper chip tooltips — POS code when matched, else AI scan. */
 export function getRowStepperSku(row) {
   if (!row) return '';
@@ -213,7 +219,9 @@ export function computeBillStatus(bill, mirrorOn = false) {
   const unresolved = bill.rows.filter((r) => r.status === 'suggestions' || r.status === 'none').length;
   if (unresolved > 0) return 'unresolved';
   const incomplete = bill.rows.some((r) =>
-    !(Number(r.unit_cost) > 0) || !(Number(r.quantity) > 0)
+    !(Number(r.unit_cost) > 0) ||
+    !(Number(r.quantity) > 0) ||
+    isRowProductIncomplete(r)
   );
   if (incomplete) return 'incomplete';
   const footerWarnings = bill.validation?.bill?.warnings?.length || 0;
@@ -241,7 +249,10 @@ export function getRowDisplayState(row, tiktokMirrorEnabled = false) {
 
   const costIncomplete = !(Number(row.unit_cost) > 0);
   const qtyIncomplete = !(Number(row.quantity) > 0);
-  if (isResolved(row) && (costIncomplete || qtyIncomplete)) {
+  if (isResolved(row) && (costIncomplete || qtyIncomplete || isRowProductIncomplete(row))) {
+    if (isRowProductIncomplete(row) && !costIncomplete && !qtyIncomplete) {
+      return DISPLAY_STATE_META.missing;
+    }
     return DISPLAY_STATE_META.incomplete;
   }
 
@@ -310,6 +321,7 @@ export function rowNeedsAttention(row, tiktokMirrorEnabled = false) {
   const resolved = isResolved(row);
   return (
     !resolved ||
+    isRowProductIncomplete(row) ||
     qtyIncomplete ||
     costIncomplete ||
     needsManualReview(row) ||

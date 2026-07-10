@@ -82,4 +82,27 @@ describe('computeBillStatus', () => {
     expect(rowNeedsAttention(row, false)).toBe(true);
     expect(computeBillStatus(baseBill({ rows: [row] }))).toBe('needs_review');
   });
+
+  it('returns incomplete when auto row lacks product.id', () => {
+    const row = {
+      ...baseBill().rows[0],
+      product: { name: 'GA-100' },
+    };
+    delete row.product.id;
+    expect(rowNeedsAttention(row, false)).toBe(true);
+    expect(computeBillStatus(baseBill({ rows: [row] }))).toBe('incomplete');
+  });
+
+  it('returns incomplete when new row lacks newProduct name', () => {
+    const row = {
+      status: 'new',
+      newProduct: null,
+      quantity: 2,
+      unit_cost: 100,
+      needsReview: false,
+      validationIssues: [],
+    };
+    expect(rowNeedsAttention(row, false)).toBe(true);
+    expect(computeBillStatus(baseBill({ rows: [row] }))).toBe('incomplete');
+  });
 });
