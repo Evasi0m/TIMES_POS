@@ -9,11 +9,18 @@ import Icon from './Icon.jsx';
 export default function ProductImageLightbox({ src, alt, onClose }) {
   const [closing, setClosing] = useState(false);
 
-  const requestClose = useCallback(() => {
+  const requestClose = useCallback((e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
     if (closing) return;
     setClosing(true);
     window.setTimeout(() => onClose?.(), 220);
   }, [closing, onClose]);
+
+  const swallowPointer = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') requestClose(); };
@@ -29,7 +36,8 @@ export default function ProductImageLightbox({ src, alt, onClose }) {
   return createPortal(
     <div
       className="fixed inset-0 z-[160] flex items-center justify-center p-4"
-      onClick={requestClose}
+      onClick={swallowPointer}
+      onMouseDown={swallowPointer}
       role="dialog"
       aria-modal="true"
       aria-label={alt || 'ขยายภาพสินค้า'}
@@ -39,13 +47,17 @@ export default function ProductImageLightbox({ src, alt, onClose }) {
           'absolute inset-0 product-img-lightbox-backdrop ' +
           (closing ? 'holo-backdrop-out' : 'holo-backdrop-in')
         }
+        onClick={requestClose}
+        onMouseDown={swallowPointer}
+        aria-hidden="true"
       />
 
       <button
         type="button"
         aria-label="ปิด"
         className="absolute top-3 right-3 z-10 lightbox-btn"
-        onClick={(e) => { e.stopPropagation(); requestClose(); }}
+        onClick={requestClose}
+        onMouseDown={swallowPointer}
       >
         <Icon name="x" size={18}/>
       </button>
@@ -56,7 +68,8 @@ export default function ProductImageLightbox({ src, alt, onClose }) {
         draggable={false}
         className={imgClass}
         referrerPolicy="no-referrer"
-        onClick={(e) => e.stopPropagation()}
+        onClick={swallowPointer}
+        onMouseDown={swallowPointer}
       />
     </div>,
     document.body,

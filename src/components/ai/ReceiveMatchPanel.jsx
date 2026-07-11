@@ -932,7 +932,7 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
                     onChange={(patch) => {
                       const full = { ...patch, tiktok_manual: true };
                       onUpdate(full);
-                      onTiktokRowMatch?.(full);
+                      onTiktokRowMatch?.(row.uid, full);
                     }}
                   />
                 )}

@@ -13,7 +13,11 @@
 @import './styles/mobile-shell.css';
 @import './styles/sidebar-collapsible.css';
 @import './styles/order-status-dot.css';
+@import './styles/stock-movement-detail.css';
 @import './styles/products-toolbar.css';
+@import './styles/product-editor.css';
+@import './styles/stock-gem.css';
+@import './styles/price-gem.css';
 @import './styles/receive-review-mobile.css';
 @import './styles/receive-step-progress.css';
 @import './styles/payment-method-icon.css';
@@ -278,6 +282,46 @@
     linear-gradient(135deg, rgba(249, 245, 238, 0.98), rgba(238, 229, 216, 0.88));
   border-color: rgb(var(--c-accent-amber) / 0.20);
   box-shadow: var(--shadow-low);
+}
+
+/* Sales history — shop-revenue pill (ChannelBadge shape, card-cream brown tones) */
+.sales-shop-revenue-pill {
+  display: inline-block;
+  width: fit-content;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  backdrop-filter: blur(8px) saturate(140%);
+  -webkit-backdrop-filter: blur(8px) saturate(140%);
+  background:
+    radial-gradient(circle at 14% 8%, rgba(204, 120, 92, 0.22), transparent 34%),
+    radial-gradient(circle at 90% 18%, rgba(232, 165, 90, 0.18), transparent 32%),
+    radial-gradient(circle at 50% 105%, rgba(239, 233, 222, 0.50), transparent 44%),
+    linear-gradient(135deg, rgba(221, 196, 168, 0.92), rgba(204, 170, 130, 0.78));
+  border: 1px solid rgba(169, 88, 62, 0.35);
+  color: #5c3d28;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.85) inset,
+    0 -1px 0 rgba(169, 88, 62, 0.10) inset,
+    0 4px 14px -4px rgba(20, 20, 19, 0.08);
+}
+
+:root[data-theme="dark"] .sales-shop-revenue-pill {
+  background:
+    radial-gradient(circle at 14% 8%, rgba(204, 120, 92, 0.28), transparent 34%),
+    radial-gradient(circle at 90% 18%, rgba(232, 165, 90, 0.22), transparent 32%),
+    radial-gradient(circle at 50% 105%, rgba(56, 50, 42, 0.50), transparent 44%),
+    linear-gradient(135deg, rgba(90, 72, 56, 0.92), rgba(72, 58, 45, 0.88));
+  border: 1px solid rgba(232, 165, 90, 0.25);
+  color: #f5ede4;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.12) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.20) inset,
+    0 4px 14px -4px rgba(0, 0, 0, 0.25);
 }
 
 :root:not([data-theme="dark"]) .card-dark,

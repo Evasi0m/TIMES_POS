@@ -42,6 +42,25 @@ export function isTikTokLineReady(line) {
   return !!(line.tiktok_sku || line.tiktok_mapping);
 }
 
+/** Persist TikTok mappings for resolved receive rows (after product ids exist). */
+export async function persistResolvedRowMappings(rows, { persist, onError } = {}) {
+  if (!persist) return { failed: 0, persisted: 0 };
+  let failed = 0;
+  let persisted = 0;
+  for (const r of rows || []) {
+    const pid = r.product?.id;
+    if (!shouldPersistTiktokMatch(pid, r)) continue;
+    try {
+      await persist(pid, r);
+      persisted += 1;
+    } catch (e) {
+      failed += 1;
+      onError?.(e, { row: r, productId: pid });
+    }
+  }
+  return { failed, persisted };
+}
+
 /** Count ready lines among non-skipped mirror targets. */
 export function countTikTokMirrorReady(lines) {
   const active = (lines || []).filter(l => !l.tiktok_skip);

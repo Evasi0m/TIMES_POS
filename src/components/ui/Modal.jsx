@@ -13,7 +13,7 @@ const isMobileViewport = () =>
   typeof window.matchMedia === 'function' &&
   window.matchMedia('(max-width: 1023px)').matches;
 
-export default function Modal({ open, onClose, title, children, footer, wide }) {
+export default function Modal({ open, onClose, title, children, footer, wide, extraWide }) {
   const { render, closing } = useMountedToggle(open, 220);
   const dialogRef = useRef(null);
   const previousFocusRef = useRef(null);
@@ -72,7 +72,7 @@ export default function Modal({ open, onClose, title, children, footer, wide }) 
         aria-modal="true"
         aria-label={typeof title === 'string' ? title : undefined}
         tabIndex={-1}
-        className={'bg-surface-strong rounded-t-2xl lg:rounded-lg shadow-2xl w-full ' + (wide ? 'lg:max-w-3xl' : 'lg:max-w-lg') + ' max-h-[92vh] flex flex-col ' + (closing ? 'sheet-out' : 'sheet-anim')}
+        className={'bg-surface-strong rounded-t-2xl lg:rounded-lg shadow-2xl w-full ' + (extraWide ? 'lg:max-w-4xl' : wide ? 'lg:max-w-3xl' : 'lg:max-w-lg') + ' max-h-[92vh] flex flex-col ' + (closing ? 'sheet-out' : 'sheet-anim')}
         onClick={e => e.stopPropagation()}
       >
         <div className="px-5 py-4 border-b hairline flex items-center justify-between flex-shrink-0">

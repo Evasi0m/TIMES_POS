@@ -17,7 +17,12 @@ import {
   formatReturnMirrorToast,
   formatReturnVoidMirrorToast,
   normalizeSyncOperation,
+  persistResolvedRowMappings,
 } from '../src/lib/tiktok-mirror-helpers.js';
+import {
+  notifyTiktokMappingChanged,
+  subscribeTiktokMappingChanges,
+} from '../src/lib/tiktok-mapping-bus.js';
 
 describe('isTikTokLineReady', () => {
   it('ready when skipped', () => {
@@ -325,5 +330,49 @@ describe('tiktokSkuDisplayLabel', () => {
   });
   it('returns empty string for null', () => {
     expect(tiktokSkuDisplayLabel(null)).toBe('');
+  });
+});
+
+describe('persistResolvedRowMappings', () => {
+  it('persists rows with product id and tiktok match', async () => {
+    const calls = [];
+    const result = await persistResolvedRowMappings([
+      { product: { id: 1 }, tiktok_sku: { tiktok_sku_id: 'a' } },
+      { product: { id: 2 }, tiktok_skip: true, tiktok_sku: { tiktok_sku_id: 'b' } },
+      { product: { id: 3 } },
+    ], {
+      persist: async (pid, row) => { calls.push({ pid, row }); },
+    });
+    expect(result).toEqual({ failed: 0, persisted: 1 });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].pid).toBe(1);
+  });
+
+  it('counts failures and invokes onError', async () => {
+    const errors = [];
+    const result = await persistResolvedRowMappings([
+      { product: { id: 10 }, tiktok_mapping: { tiktok_sku_id: 'x' } },
+      { product: { id: 11 }, tiktok_sku: { tiktok_sku_id: 'y' } },
+    ], {
+      persist: async (pid) => {
+        if (pid === 11) throw new Error('fail');
+      },
+      onError: (e, ctx) => errors.push({ e, ctx }),
+    });
+    expect(result).toEqual({ failed: 1, persisted: 1 });
+    expect(errors).toHaveLength(1);
+    expect(errors[0].ctx.productId).toBe(11);
+  });
+});
+
+describe('subscribeTiktokMappingChanges', () => {
+  it('notifies listeners with productId', () => {
+    const seen = [];
+    const unsub = subscribeTiktokMappingChanges((id) => seen.push(id));
+    notifyTiktokMappingChanged(42);
+    notifyTiktokMappingChanged(null);
+    unsub();
+    notifyTiktokMappingChanged(99);
+    expect(seen).toEqual([42]);
   });
 });

@@ -79,6 +79,7 @@ import {
   getTikTokConnectionStatus,
   isTikTokLineReady,
   mirrorStockToTikTok,
+  persistResolvedRowMappings,
   persistTiktokMatchMapping,
 } from '../../lib/tiktok-inventory-sync.js';
 import { flushDraftNow, resolveMobileBackAction } from './bulk-receive-mobile-back.js';
@@ -1000,12 +1001,14 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
   const handleTiktokRowMatch = useCallback((rowUid, patch) => {
     const row = billsRef.current[currentIdx]?.rows.find((r) => r.uid === rowUid);
     const productId = row?.product?.id;
-    if (!productId) return;
-    // In-memory patch on the row; mapping is persisted again after product insert on save.
+    if (!productId) return; // new products: mapping persisted in submitAll after insert
     persistTiktokMatchMapping(productId, patch, {
       onPersisted: (id) => refreshMappings([id]),
-    }).catch((e) => console.warn('[BulkReceiveView] TikTok mapping persist failed:', e));
-  }, [currentIdx, refreshMappings]);
+    }).catch((e) => {
+      console.warn('[BulkReceiveView] TikTok mapping persist failed:', e);
+      toast?.push('บันทึก mapping TikTok ไม่สำเร็จ: ' + mapError(e), 'error');
+    });
+  }, [currentIdx, refreshMappings, toast]);
   const updateInvoiceNo = (val) =>
     patchCurrent((b) => ({ ...b, supplier_invoice_no: val }));
   const updateHasVat = (val) =>
@@ -1298,18 +1301,24 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
         });
         if (rpcErr) throw rpcErr;
 
+        const { failed: mappingPersistFailed } = await persistResolvedRowMappings(resolvedRows, {
+          persist: (pid, r) => persistTiktokMatchMapping(pid, r, {
+            onPersisted: (id) => refreshMappings([id]),
+          }),
+          onError: (persistErr) => {
+            console.warn('[BulkReceiveView] TikTok mapping persist on save failed:', persistErr);
+          },
+        });
+        if (mappingPersistFailed > 0) {
+          toast?.push(
+            `บันทึก mapping TikTok ไม่ครบ (${mappingPersistFailed} รายการ) — ลองจับคู่ใหม่ที่หน้าสินค้า`,
+            'error',
+          );
+        }
+
         if (tiktokMirrorOn) {
           try {
             const productIds = resolvedRows.map(r => r.product?.id).filter(Boolean);
-            for (const r of resolvedRows) {
-              const pid = r.product?.id;
-              if (!pid || r.tiktok_skip) continue;
-              try {
-                await persistTiktokMatchMapping(pid, r);
-              } catch (persistErr) {
-                console.warn('[BulkReceiveView] TikTok mapping persist on save failed:', persistErr);
-              }
-            }
             if (productIds.length) {
               await refreshMappings(productIds).catch(() => {});
             }

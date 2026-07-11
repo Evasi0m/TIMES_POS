@@ -446,11 +446,7 @@ export default function BillReviewPanel({
           onTiktokRetryCatalog={onTiktokRetryCatalog}
           tiktokMinPct={tiktokMinPct}
           onTiktokMinPctChange={onTiktokMinPctChange}
-          onTiktokRowMatch={
-            activeUid && onTiktokRowMatch
-              ? (patch) => onTiktokRowMatch(activeUid, patch)
-              : undefined
-          }
+          onTiktokRowMatch={onTiktokRowMatch}
           productImagesById={productImagesById}
         />
       </div>

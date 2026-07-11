@@ -1,6 +1,10 @@
 // Read-only TikTok product mappings for POS / catalog badge display.
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { fetchTikTokMappings, getTikTokConnectionStatus } from '../lib/tiktok-inventory-sync.js';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  fetchTikTokMappings,
+  getTikTokConnectionStatus,
+  subscribeTiktokMappingChanges,
+} from '../lib/tiktok-inventory-sync.js';
 
 function idsSignature(productIds) {
   return [...new Set((productIds || []).filter(Boolean))].sort((a, b) => a - b).join('|');
@@ -17,6 +21,31 @@ export function useTikTokProductMappings(productIds, { enabled = true } = {}) {
     () => sig ? sig.split('|').map(n => Number(n)).filter(n => Number.isFinite(n)) : [],
     [sig],
   );
+  const idsRef = useRef(ids);
+  idsRef.current = ids;
+
+  const loadMappings = useCallback(async () => {
+    if (!enabled || !connected || !ids.length) {
+      setMappingsByProductId({});
+      setLoading(false);
+      return;
+    }
+    const reqId = ++reqIdRef.current;
+    setLoading(true);
+    try {
+      const rows = await fetchTikTokMappings(ids);
+      if (reqId !== reqIdRef.current) return;
+      const map = {};
+      for (const row of rows || []) {
+        if (row?.product_id != null) map[row.product_id] = row;
+      }
+      setMappingsByProductId(map);
+    } catch {
+      if (reqId === reqIdRef.current) setMappingsByProductId({});
+    } finally {
+      if (reqId === reqIdRef.current) setLoading(false);
+    }
+  }, [enabled, connected, ids]);
 
   useEffect(() => {
     if (!enabled) {
@@ -33,45 +62,36 @@ export function useTikTokProductMappings(productIds, { enabled = true } = {}) {
         setConnected(ok);
         if (!ok) {
           setMappingsByProductId({});
-          return;
         }
       } catch {
         if (!cancel) {
           setConnected(false);
           setMappingsByProductId({});
         }
-        return;
       }
     })();
     return () => { cancel = true; };
   }, [enabled]);
 
+  useEffect(() => { loadMappings(); }, [loadMappings]);
+
   useEffect(() => {
-    if (!enabled || !connected || !ids.length) {
-      setMappingsByProductId({});
-      setLoading(false);
-      return;
-    }
-    const reqId = ++reqIdRef.current;
-    setLoading(true);
-    let cancel = false;
-    (async () => {
-      try {
-        const rows = await fetchTikTokMappings(ids);
-        if (cancel || reqId !== reqIdRef.current) return;
-        const map = {};
-        for (const row of rows || []) {
-          if (row?.product_id != null) map[row.product_id] = row;
-        }
-        setMappingsByProductId(map);
-      } catch {
-        if (!cancel && reqId === reqIdRef.current) setMappingsByProductId({});
-      } finally {
-        if (!cancel && reqId === reqIdRef.current) setLoading(false);
-      }
-    })();
-    return () => { cancel = true; };
-  }, [enabled, connected, sig, ids]);
+    if (!enabled || !connected || !ids.length) return undefined;
+    const idSet = new Set(ids);
+    let timer = null;
+    const scheduleRefetch = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { loadMappings(); }, 200);
+    };
+    const unsub = subscribeTiktokMappingChanges((productId) => {
+      const pid = Number(productId);
+      if (idSet.has(pid) || idSet.has(productId)) scheduleRefetch();
+    });
+    return () => {
+      unsub();
+      if (timer) clearTimeout(timer);
+    };
+  }, [enabled, connected, sig, ids, loadMappings]);
 
   return { connected, mappingsByProductId, loading };
 }

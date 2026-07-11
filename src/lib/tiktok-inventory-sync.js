@@ -21,9 +21,11 @@ import {
   normalizeSyncOperation,
   pickCatalogSkuForMapping,
   shouldPersistTiktokMatch,
+  persistResolvedRowMappings,
   tiktokSkuImageUrl,
   voidMirrorToastDurationMs,
 } from './tiktok-mirror-helpers.js';
+import { notifyTiktokMappingChanged } from './tiktok-mapping-bus.js';
 import { filterTikTokSkusByTerm, posSkuSearchVariants } from './tiktok-receive-match.js';
 
 export {
@@ -43,10 +45,13 @@ export {
   logMirrorBackgroundError,
   voidMirrorToastDurationMs,
   shouldPersistTiktokMatch,
+  persistResolvedRowMappings,
   normalizeSyncOperation,
   mappingNeedsProductId,
   pickCatalogSkuForMapping,
 };
+
+export { subscribeTiktokMappingChanges, notifyTiktokMappingChanged } from './tiktok-mapping-bus.js';
 
 /** Pull `{ error }` from supabase-js FunctionsHttpError (non-2xx body). */
 export async function parseFunctionsInvokeError(error, fallback = 'เรียก Edge Function ไม่สำเร็จ') {
@@ -160,6 +165,7 @@ export async function persistTiktokMatchMapping(productId, patch, { onPersisted,
     });
   }
   await onPersisted?.(productId);
+  notifyTiktokMappingChanged(productId);
 }
 
 export async function searchTikTokCatalog(query, {

@@ -6,6 +6,7 @@ import {
   fetchPosStocks,
   fetchTikTokMappings,
   searchTikTokCatalog,
+  subscribeTiktokMappingChanges,
 } from '../lib/tiktok-inventory-sync.js';
 
 // The shop's full active TikTok catalog is small enough (~2k SKUs) to pull once
@@ -129,6 +130,18 @@ export function useTikTokMirrorCatalog({ enabled, mirrorEnabled = enabled, lines
     setMappingsByProductId(prev => ({ ...prev, ...patch }));
     return patch;
   }, []);
+
+  useEffect(() => {
+    if (!mirrorEnabled) return undefined;
+    const unsub = subscribeTiktokMappingChanges((productId) => {
+      const pid = Number(productId);
+      const watched = productIdsFromLines(linesRef.current);
+      if (watched.includes(pid) || watched.includes(productId)) {
+        refreshMappings([pid || productId]).catch(() => {});
+      }
+    });
+    return unsub;
+  }, [mirrorEnabled, refreshMappings]);
 
   return {
     catalog,

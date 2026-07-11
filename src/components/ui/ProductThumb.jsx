@@ -28,8 +28,11 @@ const BRAND_MONO = {
   citizen: { letter: 'C', gradient: 'linear-gradient(180deg, #a03030 0%, #7f1d1d 50%, #5f1515 100%)', ink: '#fbd5d5' }, // deep red
 };
 
-export default function ProductThumb({ product, size = 'md', className = '' }) {
+export default function ProductThumb({ product, size = 'md', fill = false, className = '' }) {
   const px = SIZES[size] || SIZES.md;
+  const boxStyle = fill
+    ? { width: '100%', height: '100%', aspectRatio: '1' }
+    : { width: px, height: px };
   const url = product?._imageUrl ?? productImageUrl(product);
   const [broken, setBroken] = useState(false);
 
@@ -61,11 +64,11 @@ export default function ProductThumb({ product, size = 'md', className = '' }) {
         src={url}
         alt={product?.name || ''}
         className={photoTile}
-        style={{ width: px, height: px }}
+        style={boxStyle}
         imgClassName="w-full h-full object-contain rounded-[10px]"
         onImageError={() => setBroken(true)}
         placeholder={
-          <div className={photoTile} style={{ width: px, height: px }}>
+          <div className={photoTile} style={boxStyle}>
             <span className="skeleton absolute inset-0 rounded-[10px]" aria-hidden="true"/>
           </div>
         }
@@ -82,9 +85,9 @@ export default function ProductThumb({ product, size = 'md', className = '' }) {
       <div
         className={tileBase + ' font-display font-semibold select-none group ' + glassOverlay}
         style={{
-          width: px, height: px,
+          ...boxStyle,
           background: mono.gradient, color: mono.ink,
-          fontSize: Math.round(px * 0.42), lineHeight: 1,
+          fontSize: fill ? '2.75rem' : Math.round(px * 0.42), lineHeight: 1,
           textShadow: '0 1px 2px rgba(0,0,0,0.3)',
         }}
         aria-hidden="true"
@@ -100,11 +103,11 @@ export default function ProductThumb({ product, size = 'md', className = '' }) {
   return (
     <div
       className={tileBase + ' bg-surface-soft text-muted-soft group ' + glassOverlay}
-      style={{ width: px, height: px }}
+      style={boxStyle}
       aria-hidden="true"
     >
       <span className="transition-all duration-300 group-hover:scale-110 group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]">
-        <Icon name="watch" size={Math.round(px * 0.5)} />
+        <Icon name="watch" size={fill ? 48 : Math.round(px * 0.5)} />
       </span>
     </div>
   );

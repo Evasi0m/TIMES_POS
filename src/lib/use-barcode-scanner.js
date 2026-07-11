@@ -12,8 +12,14 @@
 // tracks (so the device LED actually goes dark) and any zxing reader.
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-
-const FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'qr_code'];
+import {
+  RETAIL_BARCODE_FORMATS,
+  buildCameraConstraints,
+  cropVideoToReticleCanvas,
+  intersectFormats,
+  nativeScanIntervalMs,
+  isIOSDevice,
+} from './barcode-scan-helpers.js';
 
 // Cache support detection across hook instances.
 let _supportPromise = null;
@@ -33,11 +39,30 @@ export function detectBarcodeSupport() {
   return _supportPromise;
 }
 
-// Lazy-loaded zxing reader (~50 KB gz).
+// Lazy-loaded zxing reader (~50 KB gz) with retail-only format hints.
 let _zxingPromise = null;
-function loadZxing() {
+function loadZxingReader() {
   if (_zxingPromise) return _zxingPromise;
-  _zxingPromise = import('@zxing/browser').then(m => m.BrowserMultiFormatReader);
+  _zxingPromise = (async () => {
+    const [{ BrowserMultiFormatReader }, lib] = await Promise.all([
+      import('@zxing/browser'),
+      import('@zxing/library'),
+    ]);
+    const hints = new Map();
+    hints.set(lib.DecodeHintType.POSSIBLE_FORMATS, [
+      lib.BarcodeFormat.EAN_13,
+      lib.BarcodeFormat.EAN_8,
+      lib.BarcodeFormat.UPC_A,
+      lib.BarcodeFormat.UPC_E,
+      lib.BarcodeFormat.CODE_128,
+    ]);
+    hints.set(lib.DecodeHintType.TRY_HARDER, true);
+    const ios = isIOSDevice();
+    return new BrowserMultiFormatReader(hints, {
+      delayBetweenScanAttempts: ios ? 90 : 70,
+      delayBetweenScanSuccess: 600,
+    });
+  })();
   return _zxingPromise;
 }
 
@@ -49,15 +74,21 @@ export function setPreferredFacing(v) {
   try { localStorage.setItem(FACING_KEY, v); } catch {}
 }
 
+function clearScanTimer(id) {
+  if (!id) return;
+  try { clearTimeout(id); } catch {}
+  try { cancelAnimationFrame(id); } catch {}
+}
+
 /**
  * @param {Object} opts
  * @param {React.RefObject<HTMLVideoElement>} opts.videoRef
  * @param {boolean} opts.enabled  — when false, stream is stopped
  * @param {(code:string)=>void} opts.onDetect  — fires per accepted code
- * @param {number} [opts.debounceMs=1500] — same code within this window is ignored
+ * @param {number} [opts.debounceMs=700] — same code within this window is ignored
  * @param {'environment'|'user'} [opts.facing='environment']
  */
-export function useBarcodeScanner({ videoRef, enabled, onDetect, debounceMs = 1500, facing = 'environment' }) {
+export function useBarcodeScanner({ videoRef, enabled, onDetect, debounceMs = 700, facing = 'environment' }) {
   const [status, setStatus] = useState('idle'); // 'idle' | 'starting' | 'running' | 'denied' | 'unsupported' | 'error'
   const [supportMode, setSupportMode] = useState(null); // 'native' | 'zxing'
   const [torchSupported, setTorchSupported] = useState(false);
@@ -67,7 +98,8 @@ export function useBarcodeScanner({ videoRef, enabled, onDetect, debounceMs = 15
   const trackRef  = useRef(null);
   const detectorRef = useRef(null);  // native BarcodeDetector
   const readerRef = useRef(null);    // zxing reader
-  const rafRef = useRef(0);
+  const cropCanvasRef = useRef(null);
+  const scanTimerRef = useRef(0);
   const stoppedRef = useRef(false);
   const lastHitRef = useRef({ code: '', at: 0 });
   const onDetectRef = useRef(onDetect);
@@ -86,11 +118,12 @@ export function useBarcodeScanner({ videoRef, enabled, onDetect, debounceMs = 15
 
   const stop = useCallback(() => {
     stoppedRef.current = true;
-    cancelAnimationFrame(rafRef.current);
-    rafRef.current = 0;
+    clearScanTimer(scanTimerRef.current);
+    scanTimerRef.current = 0;
     try { readerRef.current?.reset?.(); } catch {}
     readerRef.current = null;
     detectorRef.current = null;
+    cropCanvasRef.current = null;
     const s = streamRef.current;
     if (s) {
       try { s.getTracks().forEach(t => t.stop()); } catch {}
@@ -117,23 +150,24 @@ export function useBarcodeScanner({ videoRef, enabled, onDetect, debounceMs = 15
       if (mode === 'none') { setStatus('unsupported'); return; }
       setSupportMode(mode);
 
-      // Request camera with the preferred facing. `ideal` so devices that
-      // only have one camera don't fail the constraint outright.
       let stream = null;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: facing },
-            width:  { ideal: 1280 },
-            height: { ideal: 720 },
-          },
+          video: buildCameraConstraints(facing),
           audio: false,
         });
       } catch (e) {
-        if (cancelled) return;
-        if (e?.name === 'NotAllowedError' || e?.name === 'SecurityError') setStatus('denied');
-        else setStatus('error');
-        return;
+        // iOS / older browsers may reject focusMode — retry without it.
+        try {
+          const { focusMode, ...video } = buildCameraConstraints(facing);
+          stream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
+        } catch (e2) {
+          if (cancelled) return;
+          const err = e2 || e;
+          if (err?.name === 'NotAllowedError' || err?.name === 'SecurityError') setStatus('denied');
+          else setStatus('error');
+          return;
+        }
       }
       if (cancelled || stoppedRef.current) {
         try { stream.getTracks().forEach(t => t.stop()); } catch {}
@@ -143,7 +177,6 @@ export function useBarcodeScanner({ videoRef, enabled, onDetect, debounceMs = 15
       streamRef.current = stream;
       trackRef.current  = stream.getVideoTracks()[0] || null;
 
-      // Probe torch capability (Chrome/Android exposes it; iOS does not).
       try {
         const caps = trackRef.current?.getCapabilities?.();
         if (caps && 'torch' in caps) setTorchSupported(true);
@@ -153,6 +186,7 @@ export function useBarcodeScanner({ videoRef, enabled, onDetect, debounceMs = 15
       if (!v) { stop(); return; }
       v.srcObject = stream;
       v.setAttribute('playsinline', 'true');
+      v.setAttribute('webkit-playsinline', 'true');
       v.muted = true;
       try { await v.play(); } catch {}
 
@@ -160,38 +194,62 @@ export function useBarcodeScanner({ videoRef, enabled, onDetect, debounceMs = 15
       setStatus('running');
 
       if (mode === 'native') {
+        let formats = RETAIL_BARCODE_FORMATS;
         try {
-          detectorRef.current = new window.BarcodeDetector({ formats: FORMATS });
+          const supported = await window.BarcodeDetector.getSupportedFormats();
+          formats = intersectFormats(RETAIL_BARCODE_FORMATS, supported);
+        } catch {}
+        try {
+          detectorRef.current = new window.BarcodeDetector({ formats });
         } catch {
-          // Some Safari versions throw on unsupported formats — retry without filter.
           detectorRef.current = new window.BarcodeDetector();
         }
-        const tick = async () => {
+
+        if (!cropCanvasRef.current && typeof document !== 'undefined') {
+          cropCanvasRef.current = document.createElement('canvas');
+        }
+
+        const interval = nativeScanIntervalMs();
+        let lastScanAt = 0;
+        let inFlight = false;
+
+        const tick = (now) => {
           if (stoppedRef.current || !detectorRef.current) return;
+          scanTimerRef.current = requestAnimationFrame(tick);
+          const ts = typeof now === 'number' ? now : performance.now();
+          if (inFlight || ts - lastScanAt < interval) return;
+
           const vid = videoRef.current;
-          if (vid && vid.readyState >= 2) {
+          if (!vid || vid.readyState < 2) return;
+
+          lastScanAt = ts;
+          inFlight = true;
+          (async () => {
             try {
-              const codes = await detectorRef.current.detect(vid);
-              if (codes && codes.length) handleHit(codes[0].rawValue);
-            } catch {}
-          }
-          // ~6 fps — good balance between battery and responsiveness.
-          rafRef.current = window.setTimeout(tick, 160);
+              const canvas = cropCanvasRef.current;
+              const source = canvas
+                ? (cropVideoToReticleCanvas(vid, canvas) || vid)
+                : vid;
+              const codes = await detectorRef.current.detect(source);
+              if (codes?.length) handleHit(codes[0].rawValue);
+            } catch {
+              // ignore frame errors
+            } finally {
+              inFlight = false;
+            }
+          })();
         };
-        tick();
+        scanTimerRef.current = requestAnimationFrame(tick);
       } else {
-        // zxing path
         try {
-          const Reader = await loadZxing();
+          const reader = await loadZxingReader();
           if (cancelled || stoppedRef.current) return;
-          const reader = new Reader();
           readerRef.current = reader;
-          // Reader pulls frames from the existing srcObject's video element.
-          reader.decodeFromVideoElement(v, (result, err) => {
+          reader.decodeFromVideoElement(v, (result) => {
             if (stoppedRef.current) return;
             if (result) handleHit(result.getText());
           });
-        } catch (e) {
+        } catch {
           if (cancelled) return;
           setStatus('error');
         }
@@ -200,8 +258,7 @@ export function useBarcodeScanner({ videoRef, enabled, onDetect, debounceMs = 15
 
     return () => {
       cancelled = true;
-      // setTimeout id stored in rafRef; reuse cancel for both safety
-      try { clearTimeout(rafRef.current); } catch {}
+      clearScanTimer(scanTimerRef.current);
       stop();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps

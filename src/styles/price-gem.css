@@ -1,0 +1,110 @@
+/* Product retail price badge — patch-log mesh (black palette) + drift */
+
+.price-gem {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  min-width: 5.5rem;
+  height: 2.25rem;
+  padding: 0 0.75rem;
+  border-radius: 10px;
+  color: #fff;
+  border: 1px solid rgba(79, 79, 79, 0.38);
+  background:
+    radial-gradient(circle at 14% 22%, #4f4f4f 0%, transparent 52%),
+    radial-gradient(circle at 86% 18%, #1c1c1c 0%, transparent 48%),
+    radial-gradient(circle at 52% 108%, #000000 0%, transparent 58%),
+    radial-gradient(circle at 72% 55%, #1c1c1c 0%, transparent 42%),
+    linear-gradient(135deg, #1c1c1c 0%, #000000 42%, #1c1c1c 100%);
+  background-size: 180% 180%, 180% 180%, 180% 180%, 180% 180%, 200% 200%;
+  background-position:
+    12% 28%,
+    88% 12%,
+    48% 92%,
+    68% 38%,
+    8% 8%;
+  animation: stockGemDrift 28s ease-in-out infinite;
+  animation-delay: -2s;
+  box-shadow:
+    0 2px 10px rgba(0, 0, 0, 0.42),
+    0 1px 0 rgba(255, 255, 255, 0.22) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.55) inset;
+}
+
+.price-gem::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent);
+  pointer-events: none;
+}
+
+.price-gem::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.035) 0,
+      rgba(255, 255, 255, 0.035) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.035) 0,
+      rgba(255, 255, 255, 0.035) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.price-gem__num {
+  position: relative;
+  z-index: 1;
+  font-family: 'Taviraj', var(--font-display, serif);
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.62),
+    0 2px 4px rgba(0, 0, 0, 0.45);
+}
+
+:root[data-theme="dark"] .price-gem {
+  border-color: rgba(160, 160, 160, 0.28);
+  background-image:
+    radial-gradient(circle at 14% 22%, rgba(79, 79, 79, 0.95) 0%, transparent 52%),
+    radial-gradient(circle at 86% 18%, rgba(28, 28, 28, 0.98) 0%, transparent 48%),
+    radial-gradient(circle at 52% 108%, rgba(0, 0, 0, 1) 0%, transparent 58%),
+    radial-gradient(circle at 72% 55%, rgba(28, 28, 28, 0.95) 0%, transparent 42%),
+    linear-gradient(135deg, #1c1c1c 0%, #000000 42%, #2a2a2a 100%);
+  box-shadow:
+    0 2px 12px rgba(0, 0, 0, 0.55),
+    0 1px 0 rgba(255, 255, 255, 0.12) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.62) inset;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .price-gem {
+    animation: none;
+    background-size: auto;
+    background-position: 0 0;
+  }
+}

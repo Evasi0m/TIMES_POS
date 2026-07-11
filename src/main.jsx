@@ -99,9 +99,10 @@ import {
   PRODUCTS_EXPORT_PENDING_KEY,
 } from './lib/export-auth.js';
 import { logStockExport, fetchStockExportLogs } from './lib/stock-export-log.js';
-import { parseManualAdjustNotes } from './lib/stock-manual-adjust.js';
 import StockAdjustModal from './components/products/StockAdjustModal.jsx';
 import BulkStockAdjustView from './components/products/BulkStockAdjustView.jsx';
+import StockHistoryPanel from './components/products/StockHistoryPanel.jsx';
+import { PRODUCT_EDITOR_UI, PRODUCT_COST_HISTORY_UI } from './lib/product-editor-ui.js';
 import Icon from './components/ui/Icon.jsx';
 import Modal from './components/ui/Modal.jsx';
 import { useMountedToggle } from './lib/use-mounted-toggle.js';
@@ -6901,57 +6902,60 @@ function ProductsView() {
 
   return (
     <div className="px-4 py-4 lg:px-10 lg:py-6 lg:h-[calc(100vh-180px)] lg:flex lg:flex-col">
-      {/* Top bar: mobile 2 rows — search+filter, then sort+brand+export */}
+      {/* Toolbar: 2 rows mobile — search+filter / sort+actions; 1 row on lg+ */}
       <div className="products-toolbar mb-2 flex-shrink-0">
-        <div className="products-search-wrap">
-          <span className="products-search-icon" aria-hidden="true">
-            <Icon name="search" size={18} strokeWidth={2.25}/>
-          </span>
-          <input
-            className={"input products-search-input w-full !h-12" + (queryInput ? ' has-clear' : '')}
-            placeholder="ชื่อรุ่น หรือ บาร์โค้ด"
-            value={queryInput}
-            onChange={e=>setQueryInput(e.target.value)}
-            autoFocus={!isMobileViewport()}
-          />
-          {queryInput && (
+        <div className="products-toolbar__line products-toolbar__line--search">
+          <div className="products-search-wrap">
+            <span className="products-search-icon" aria-hidden="true">
+              <Icon name="search" size={17} strokeWidth={2.25}/>
+            </span>
+            <input
+              className={"input products-search-input w-full !h-11 !text-sm" + (queryInput ? ' has-clear' : '')}
+              placeholder="ชื่อรุ่น หรือ บาร์โค้ด"
+              value={queryInput}
+              onChange={e=>setQueryInput(e.target.value)}
+              autoFocus={!isMobileViewport()}
+            />
+            {queryInput && (
+              <button
+                type="button"
+                onClick={()=>{ setQueryInput(''); setFilter(f=>({...f, query: ''})); }}
+                className="products-search-clear"
+                aria-label="ล้างคำค้น"
+              >
+                <Icon name="x" size={14}/>
+              </button>
+            )}
             <button
               type="button"
-              onClick={()=>{ setQueryInput(''); setFilter(f=>({...f, query: ''})); }}
-              className="products-search-clear"
-              aria-label="ล้างคำค้น"
+              className="scan-inline-btn scan-inline-btn--in-field"
+              onClick={()=>setScannerOpen(true)}
+              aria-label="สแกนด้วยกล้อง"
             >
-              <Icon name="x" size={14}/>
+              <Icon name="camera" size={17}/>
             </button>
-          )}
+          </div>
           <button
             type="button"
-            className="scan-inline-btn scan-inline-btn--in-field"
-            onClick={()=>setScannerOpen(true)}
-            aria-label="สแกนด้วยกล้อง"
+            className="products-toolbar__filter products-toolbar__icon-btn btn-secondary relative icon-btn-44 !p-0 !w-11 !h-11 flex-shrink-0"
+            onClick={openFilterSheet}
+            title="ตัวกรองขั้นสูง (วัสดุ / สี / ราคา / สต็อก)"
+            aria-label="ตัวกรองขั้นสูง"
           >
-            <Icon name="camera" size={18}/>
+            <Icon name="sliders-h" size={20} strokeWidth={1.75}/>
+            {advancedCount > 0 && (
+              <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-on-primary text-[10px] font-bold tabular-nums border border-canvas">
+                {advancedCount}
+              </span>
+            )}
           </button>
         </div>
-        <button
-          type="button"
-          className="products-toolbar__filter btn-secondary relative icon-btn-44 !p-0 !w-12 !h-12 flex-shrink-0"
-          onClick={openFilterSheet}
-          title="ตัวกรองขั้นสูง (วัสดุ / สี / ราคา / สต็อก)"
-          aria-label="ตัวกรองขั้นสูง"
-        >
-          <Icon name="sliders-h" size={22} strokeWidth={1.75}/>
-          {advancedCount > 0 && (
-            <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-on-primary text-[10px] font-bold tabular-nums border border-canvas">
-              {advancedCount}
-            </span>
-          )}
-        </button>
-        <div className="products-toolbar__actions">
+        <div className="products-toolbar__line products-toolbar__line--controls">
           <select
-            className="input products-toolbar__sort !py-2 !text-sm !h-12"
+            className="input products-toolbar__sort !py-1.5 !text-sm !h-11"
             value={filter.sort}
             onChange={e=>setFilter(f=>({...f, sort: e.target.value}))}
+            aria-label="เรียงลำดับสินค้า"
           >
             <option value="newest">ใหม่ล่าสุด</option>
             <option value="stock-desc">สต็อก มาก → น้อย</option>
@@ -6962,27 +6966,28 @@ function ProductsView() {
           </select>
           <button
             type="button"
-            className="products-toolbar__brand btn-secondary !h-12 !px-3 !text-sm lg:hidden"
+            className="products-toolbar__brand btn-secondary !h-11 !px-2.5 !text-sm lg:hidden"
             onClick={openBrandPicker}
             aria-label="เลือกแบรนด์"
           >
             <Icon name="tag" size={14} className="shrink-0"/>
-            <span className="truncate max-w-[5.5rem]">{brandFilterLabel}</span>
+            <span className="truncate max-w-[5rem]">{brandFilterLabel}</span>
             <Icon name="chevron-d" size={12} className="shrink-0 opacity-70"/>
           </button>
+          <span className="products-toolbar__line-spacer" aria-hidden="true"/>
           <button
             type="button"
-            className="products-toolbar__export btn-secondary icon-btn-44 !p-0 !w-12 !h-12 flex-shrink-0"
+            className="products-toolbar__export products-toolbar__icon-btn btn-secondary icon-btn-44 !p-0 !w-11 !h-11 flex-shrink-0"
             onClick={openExport}
             title="Export สต็อกเป็น CSV"
             aria-label="Export สต็อกเป็น CSV"
           >
-            <Icon name="csv-export" size={22} strokeWidth={1.75}/>
+            <Icon name="csv-export" size={20} strokeWidth={1.75}/>
           </button>
           {isSuperAdmin && (
             <button
               type="button"
-              className="products-toolbar__bulk-adjust btn-secondary !h-12 !px-3 !text-sm whitespace-nowrap flex-shrink-0"
+              className="products-toolbar__bulk-adjust btn-secondary !h-11 !px-2.5 !text-sm whitespace-nowrap flex-shrink-0 inline-flex items-center gap-1.5"
               onClick={() => setBulkAdjustOpen(true)}
               title="ปรับสต็อกหลายรายการ (Super Admin)"
             >
@@ -7166,19 +7171,16 @@ function ProductsView() {
                   )}
                 </div>
                 <div className="col-span-2 flex justify-center">
-                  <div className="tile-sapphire-premium inline-flex items-center justify-center min-w-[88px] h-9 px-3 rounded-[10px] font-display text-sm leading-none tabular-nums font-semibold">
-                    {fmtPlain(p.retail_price)}
+                  <div className="price-gem">
+                    <span className="price-gem__num">{fmtPlain(p.retail_price)}</span>
                   </div>
                 </div>
                 <div className="col-span-1 flex justify-center">
-                  {/* Stock badge — emerald-premium when in stock, ruby-premium
-                      when sold out. Same metallic chrome as the gold price
-                      tile so the row reads as one cohesive premium strip. */}
                   <div className={
-                    'flex items-center justify-center w-10 h-10 rounded-[10px] font-display text-base leading-none tabular-nums font-semibold ' +
-                    (p.current_stock <= 0 ? 'tile-ruby-premium' : 'tile-emerald-premium')
+                    'stock-gem stock-gem--md ' +
+                    (p.current_stock <= 0 ? 'stock-gem--out' : 'stock-gem--in')
                   }>
-                    {p.current_stock}
+                    <span className="stock-gem__num">{p.current_stock}</span>
                   </div>
                 </div>
               </div>
@@ -7234,10 +7236,10 @@ function ProductsView() {
                 )}
               </div>
               <div className={
-                'flex-shrink-0 flex items-center justify-center w-14 h-14 rounded-[10px] font-display text-2xl leading-none tabular-nums font-semibold ' +
-                (p.current_stock <= 0 ? 'tile-ruby-premium' : 'tile-emerald-premium')
+                'stock-gem stock-gem--lg ' +
+                (p.current_stock <= 0 ? 'stock-gem--out' : 'stock-gem--in')
               }>
-                {p.current_stock}
+                <span className="stock-gem__num">{p.current_stock}</span>
               </div>
             </div>
           );
@@ -7696,97 +7698,6 @@ function ProductFilterSheet({ open, onClose, filter, setFilter, materialCounts, 
   );
 }
 
-const STOCK_REASON_LABELS = {
-  sale:                { label: "ขาย",              tone: "red"   },
-  sale_void:           { label: "ยกเลิกขาย",         tone: "green" },
-  receive:             { label: "รับเข้า",           tone: "green" },
-  receive_void:        { label: "ยกเลิกรับเข้า",     tone: "red"   },
-  return_in:           { label: "คืนเข้า",           tone: "green" },
-  return_void:         { label: "ยกเลิกรับคืน",      tone: "red"   },
-  manual_adjust:       { label: "ปรับสต็อก (มือ)",   tone: "gray"  },
-  stock_reconcile:     { label: "ปรับสต็อก TikTok", tone: "gray"  },
-  initial:             { label: "ตั้งต้น",            tone: "gray"  },
-  supplier_claim:      { label: "ส่งเคลม/คืนบริษัท", tone: "red"   },
-  supplier_claim_void: { label: "ยกเลิกส่งเคลม",     tone: "green" },
-};
-
-function StockHistoryPanel({ productId, reloadToken = 0 }) {
-  const [open, setOpen] = useState(false);
-  const [rows, setRows] = useState(null);
-  const [loading, setLoading] = useState(false);
-
-  const load = async () => {
-    setLoading(true);
-    const { data } = await sb.from('stock_movements')
-      .select('*').eq('product_id', productId)
-      .order('created_at', { ascending: false }).limit(50);
-    setRows(data || []);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    if (!productId) return;
-    setRows(null);
-  }, [productId, reloadToken]);
-
-  useEffect(() => {
-    if (!productId || !open) return;
-    load();
-  }, [productId, reloadToken, open]);
-
-  const toggle = () => {
-    if (!open && rows === null) load();
-    setOpen(o => !o);
-  };
-
-  return (
-    <div className="border hairline rounded-xl bg-surface-strong/80">
-      <button type="button" onClick={toggle}
-        className="w-full flex items-center justify-between px-4 py-3 bg-surface-strong/80 hover:bg-surface-soft rounded-xl">
-        <span className="flex items-center gap-2 text-sm font-medium">
-          <Icon name="trend-up" size={16}/> ประวัติสต็อก
-          {rows && <span className="badge-pill !text-xs">{rows.length} รายการ</span>}
-        </span>
-        <Icon name={open?"chevron-d":"chevron-r"} size={16} className="text-muted"/>
-      </button>
-      {open && (
-        <div className="border-t hairline p-3 max-h-72 overflow-y-auto fade-in">
-          {loading && <div className="text-muted text-sm p-2 flex items-center gap-2"><span className="spinner"/>กำลังโหลด...</div>}
-          {!loading && rows && rows.length===0 && <div className="text-muted text-sm p-2">ยังไม่มีประวัติ</div>}
-          {!loading && rows && rows.map(m => {
-            const meta = STOCK_REASON_LABELS[m.reason] || { label: m.reason, tone: "gray" };
-            const isPos = m.qty_delta > 0;
-            const manualMeta = m.reason === 'manual_adjust' ? parseManualAdjustNotes(m.notes) : null;
-            return (
-              <div key={m.id} className="flex items-center gap-3 py-2 border-b hairline-soft last:border-0">
-                <div className={"w-14 text-right font-mono font-medium tabular-nums " + (isPos?"text-success":"text-error")}>
-                  {isPos?"+":""}{m.qty_delta}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm flex items-center gap-2 flex-wrap">
-                    <span className={"badge-pill !text-xs " + (meta.tone==='red'?'!bg-error/10 !text-error':meta.tone==='green'?'!bg-success/15 !text-[#2c6b3a]':'')}>{meta.label}</span>
-                    {manualMeta?.subreasonLabel && (
-                      <span className="badge-pill !text-xs !bg-surface-strong text-muted">{manualMeta.subreasonLabel}</span>
-                    )}
-                    {m.ref_table && m.ref_id && m.reason !== 'manual_adjust' && (
-                      <span className="text-xs text-muted-soft font-mono">{m.ref_table.replace('_orders','')}#{m.ref_id}</span>
-                    )}
-                  </div>
-                  {manualMeta?.note && (
-                    <div className="text-xs text-muted mt-0.5 leading-snug">{manualMeta.note}</div>
-                  )}
-                  <div className="text-xs text-muted mt-0.5">{fmtDateTime(m.created_at)}</div>
-                </div>
-                <div className="text-xs text-muted-soft tabular-nums">→ {m.balance_after}</div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /* ProductCostHistory — shows the full receive history (date + supplier + cost)
    for a single product. Used inside ProductEditor (edit mode) so the user can
    see why "ทุน" in reports may differ from the catalog's cost_price.
@@ -7847,26 +7758,26 @@ function ProductCostHistory({ productId }) {
   }, [rows]);
 
   return (
-    <div className="rounded-xl border hairline bg-surface-strong/60 overflow-hidden">
-      <div className="px-4 py-3 border-b hairline-soft bg-surface-soft">
+    <div className="pe-cost-history">
+      <div className="pe-cost-history__head">
         <div className="flex items-center gap-2">
           <Icon name="trend-up" size={14} className="text-muted"/>
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted">ประวัติต้นทุน (บิลรับเข้า)</span>
-          {rows && <span className="badge-pill !text-[10px] ml-auto">{rows.length} บิล</span>}
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted">{PRODUCT_COST_HISTORY_UI.title}</span>
+          {rows && <span className="badge-pill !text-[10px] ml-auto">{rows.length} {PRODUCT_COST_HISTORY_UI.billCount}</span>}
         </div>
-        <div className="mt-2 flex items-start gap-2 text-[11px] text-muted leading-relaxed">
+        <div className="pe-cost-history__info">
           <Icon name="info" size={12} className="text-muted-soft flex-shrink-0 mt-0.5"/>
-          <div>รายงานกำไรจะใช้ทุนตามวันที่บิลรับเข้าโดยอัตโนมัติ — ทุนในช่อง "ราคาทุน" ด้านบนเป็นค่าตั้งต้น/override สำหรับการขายในอนาคตเมื่อยังไม่มีบิลรับเข้าใหม่</div>
+          <div>{PRODUCT_COST_HISTORY_UI.info}</div>
         </div>
       </div>
 
       {rows && rows.length > 0 && (
-        <div className="px-4 py-2 border-b hairline-soft">
+        <div className="pe-cost-history__search">
           <div className="relative">
             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-muted-soft"><Icon name="search" size={13}/></span>
             <input
-              className="input !h-8 !text-xs !pl-7"
-              placeholder="ค้นหาผู้ขาย / เลขบิล…"
+              className="input !h-9 !text-xs !pl-7 w-full"
+              placeholder={PRODUCT_COST_HISTORY_UI.searchPlaceholder}
               value={query}
               onChange={e => setQuery(e.target.value)}
             />
@@ -7875,27 +7786,27 @@ function ProductCostHistory({ productId }) {
       )}
 
       {/* Table — desktop */}
-      <div className="max-h-[280px] overflow-y-auto hidden lg:block">
+      <div className="pe-cost-history__scroll hidden lg:block">
         {rows === null && (
-          <div className="p-4 text-xs text-muted flex items-center gap-2"><span className="spinner"/>กำลังโหลด…</div>
+          <div className="p-4 text-xs text-muted flex items-center gap-2"><span className="spinner"/>{PRODUCT_COST_HISTORY_UI.loading}</div>
         )}
         {rows && rows.length === 0 && (
-          <div className="p-4 text-xs text-muted-soft">ยังไม่มีประวัติรับเข้า</div>
+          <div className="p-4 text-xs text-muted-soft">{PRODUCT_COST_HISTORY_UI.empty}</div>
         )}
         {rows && rows.length > 0 && (
           <table className="w-full text-xs">
             <thead className="sticky top-0 bg-surface-soft border-b hairline-soft text-muted text-[10px] uppercase tracking-wider">
               <tr>
-                <th className="text-left px-3 py-2 font-medium">วันที่</th>
-                <th className="text-left px-3 py-2 font-medium">ผู้ขาย</th>
-                <th className="text-left px-3 py-2 font-medium">เลขบิล</th>
-                <th className="text-right px-3 py-2 font-medium">จำนวน</th>
-                <th className="text-right px-3 py-2 font-medium">ทุน/หน่วย</th>
+                <th className="text-left px-3 py-2 font-medium">{PRODUCT_COST_HISTORY_UI.colDate}</th>
+                <th className="text-left px-3 py-2 font-medium">{PRODUCT_COST_HISTORY_UI.colSupplier}</th>
+                <th className="text-left px-3 py-2 font-medium">{PRODUCT_COST_HISTORY_UI.colInvoice}</th>
+                <th className="text-right px-3 py-2 font-medium">{PRODUCT_COST_HISTORY_UI.colQty}</th>
+                <th className="text-right px-3 py-2 font-medium">{PRODUCT_COST_HISTORY_UI.colUnit}</th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={5} className="p-4 text-center text-muted-soft">ไม่พบรายการที่ตรงคำค้น</td></tr>
+                <tr><td colSpan={5} className="p-4 text-center text-muted-soft">{PRODUCT_COST_HISTORY_UI.noMatch}</td></tr>
               )}
               {filtered.map((r, i) => (
                 <tr key={`${r.id}-${i}`} className="border-b hairline-soft last:border-0 hover:bg-surface-strong/60">
@@ -7912,15 +7823,15 @@ function ProductCostHistory({ productId }) {
       </div>
 
       {/* Cards — mobile */}
-      <div className="max-h-[280px] overflow-y-auto lg:hidden">
+      <div className="pe-cost-history__scroll lg:hidden">
         {rows === null && (
-          <div className="p-4 text-xs text-muted flex items-center gap-2"><span className="spinner"/>กำลังโหลด…</div>
+          <div className="p-4 text-xs text-muted flex items-center gap-2"><span className="spinner"/>{PRODUCT_COST_HISTORY_UI.loading}</div>
         )}
         {rows && rows.length === 0 && (
-          <div className="p-4 text-xs text-muted-soft">ยังไม่มีประวัติรับเข้า</div>
+          <div className="p-4 text-xs text-muted-soft">{PRODUCT_COST_HISTORY_UI.empty}</div>
         )}
         {rows && rows.length > 0 && filtered.length === 0 && (
-          <div className="p-4 text-xs text-muted-soft text-center">ไม่พบรายการที่ตรงคำค้น</div>
+          <div className="p-4 text-xs text-muted-soft text-center">{PRODUCT_COST_HISTORY_UI.noMatch}</div>
         )}
         {rows && filtered.length > 0 && (
           <div className="divide-y hairline-soft">
@@ -7942,8 +7853,8 @@ function ProductCostHistory({ productId }) {
       </div>
 
       {avg != null && (
-        <div className="px-4 py-2 border-t hairline-soft bg-surface-strong/40 text-xs text-muted flex items-center justify-between">
-          <span>ทุนเฉลี่ย (ถ่วงน้ำหนักด้วยจำนวน)</span>
+        <div className="pe-cost-history__footer">
+          <span>{PRODUCT_COST_HISTORY_UI.avgLabel}</span>
           <span className="font-semibold text-ink tabular-nums">{fmtTHB(avg)}</span>
         </div>
       )}
@@ -7952,6 +7863,7 @@ function ProductCostHistory({ productId }) {
 }
 
 function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories, addBrand, addCategory, createHint }) {
+  const { render: editorRender } = useMountedToggle(!!editing, 220);
   const [draft, setDraft] = useState(null);
   const [barcodeEdit, setBarcodeEdit] = useState(false);
   const [manualApproved, setManualApproved] = useState(false);
@@ -7962,6 +7874,7 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
   const [deleting, setDeleting] = useState(false);
   const [stockAdjustOpen, setStockAdjustOpen] = useState(false);
   const [stockHistoryReload, setStockHistoryReload] = useState(0);
+  const [historyTab, setHistoryTab] = useState('cost');
   const [userEmail, setUserEmail] = useState('');
   const isSuperAdmin = useIsSuperAdmin();
   const barcodeRef = useRef(null);
@@ -7975,13 +7888,14 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
     setAutoPct(null);
     setCustomPctStr('');
     setStockAdjustOpen(false);
+    setHistoryTab('cost');
   }, [editing]);
   useEffect(() => {
     sb.auth.getSession().then(({ data }) => {
       setUserEmail(data.session?.user?.email || '');
     });
   }, []);
-  if (!draft) return null;
+  if (!editorRender || !draft) return null;
   const set = (k,v)=> setDraft(d=>({...d,[k]:v}));
 
   // Cost-calculator helpers (used in CREATE mode only)
@@ -8121,263 +8035,307 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
     marginPct >= 10 ? 'badge-pill !bg-warning/15 !text-[#8a6500]' :
     'badge-pill !bg-error/10 !text-error';
 
-  const labelCls = "text-[11px] font-semibold uppercase tracking-[1.5px] text-muted";
-  const fieldLabel = "text-xs uppercase tracking-wider text-muted";
+  const openBarcodeScanner = () => {
+    if (draft.id && !barcodeEdit) {
+      setBarcodeEdit(true);
+      setManualApproved(true);
+    }
+    setScannerOpen(true);
+  };
+  const lockBarcodeField = () => {
+    setBarcodeEdit(false);
+    setManualApproved(false);
+  };
+
+  const UI = PRODUCT_EDITOR_UI;
 
   return (
     <>
-    <Modal open={!!draft} onClose={onClose} wide title={draft.id ? "แก้ไขสินค้า" : "เพิ่มสินค้าใหม่"}
+    <Modal open={!!editing} onClose={onClose} extraWide title={draft.id ? UI.modalTitleEdit : UI.modalTitleCreate}
       footer={<>
         {draft.id && isSuperAdmin && (
           <button className="btn-secondary !text-error hover:!bg-error/10 lg:mr-auto" onClick={handleDelete} disabled={deleting || saving}>
-            {deleting ? <span className="spinner"/> : <Icon name="trash" size={16}/>} ลบสินค้า
+            {deleting ? <span className="spinner"/> : <Icon name="trash" size={16}/>} {UI.delete}
           </button>
         )}
-        <button className="btn-secondary" onClick={onClose}>ยกเลิก</button>
+        <button className="btn-secondary" onClick={onClose}>{UI.cancel}</button>
         <button className="btn-primary" onClick={handleSave} disabled={saving || deleting}>
-          {saving ? 'กำลังตรวจสอบ…' : <><Icon name="check" size={16}/>บันทึก</>}
+          {saving ? UI.saving : <><Icon name="check" size={16}/>{UI.save}</>}
         </button>
       </>}>
 
-      <div className="grid grid-cols-1 lg:grid-cols-6 gap-3">
-
-        {/* ── ข้อมูลสินค้า (horizontal: thumb + fields) ── */}
-        <div className="lg:col-span-4 rounded-xl border hairline p-4">
-          <div className="mb-3">
-            <div className="inline-flex items-center gap-1.5 bg-ink/[0.06] rounded-md px-2 py-1">
-              <Icon name="box" size={12} className="text-muted"/>
-              <span className={labelCls}>ข้อมูลสินค้า</span>
-            </div>
-          </div>
-          <div className="flex items-start gap-4">
-            <ProductThumb product={draft} size="lg" className="shrink-0" />
-            <div className="flex-1 min-w-0 space-y-3">
-              <div>
-                <label className={fieldLabel}>ชื่อรุ่น</label>
-                <input className="input mt-1" value={draft.name||""} onChange={e=>set('name', e.target.value)} />
+      <div className="product-editor">
+        <div className="product-editor__form">
+          <div className="product-editor__grid-top">
+            <div className="product-editor__card">
+              <div className="product-editor__section-head">
+                <Icon name="box" size={12} className="text-muted"/>
+                <span className="product-editor__section-label">{UI.sectionProduct}</span>
               </div>
-              <div>
-                <label className={fieldLabel + " flex items-center gap-2"}>
-                  บาร์โค้ด
-                  {draft.id && !barcodeEdit && (
-                    <button type="button" className="inline-flex items-center gap-1 text-xs text-[#6b3a26] bg-[#6b3a26]/10 hover:bg-[#6b3a26]/20 px-2 py-0.5 rounded-md transition-colors normal-case tracking-normal font-medium" onClick={()=>{ setBarcodeEdit(true); setTimeout(()=>barcodeRef.current?.focus(), 50); }}>
-                      <Icon name="barcode" size={11}/> แก้ไข Barcode
-                    </button>
-                  )}
-                  {draft.id && barcodeEdit && (
-                    <span className="inline-flex items-center gap-1 text-xs text-success normal-case tracking-normal font-medium">
-                      <Icon name="barcode" size={11}/> พร้อมสแกน
-                    </span>
-                  )}
-                  {!draft.id && (
-                    <span className="inline-flex items-center gap-1 text-muted-soft normal-case tracking-normal font-normal text-xs">
-                      <Icon name="barcode" size={12}/> สแกน หรือ พิมพ์
-                    </span>
-                  )}
-                  {/* Mobile-only camera scan button — desktop hides via .scan-inline-btn @media. */}
-                  <button type="button" className="scan-inline-btn ml-auto !h-11 !w-11" onClick={()=>setScannerOpen(true)} aria-label="สแกนด้วยกล้อง">
-                    <Icon name="camera" size={16}/>
-                  </button>
-                </label>
-                <input
-                  ref={barcodeRef}
-                  className={"input mt-1 font-mono" + (draft.id && !barcodeEdit ? " opacity-60 cursor-not-allowed" : "")}
-                  placeholder="วางหัวอ่านแล้วสแกน หรือพิมพ์ตรงนี้..."
-                  inputMode="text"
-                  autoFocus={!draft.id}
-                  readOnly={!!(draft.id && !barcodeEdit)}
-                  value={draft.barcode||""}
-                  onChange={e=>set('barcode', e.target.value)}
-                  onMouseDown={e=>{ if (draft.id && barcodeEdit && !manualApproved) { e.preventDefault(); confirmManualBarcode(); } }}
-                  onTouchStart={e=>{ if (draft.id && barcodeEdit && !manualApproved) { e.preventDefault(); confirmManualBarcode(); } }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── หมวดหมู่ (stacked, narrow column) ── */}
-        <div className="lg:col-span-2 rounded-xl border hairline bg-surface-soft p-4">
-          <div className="mb-3">
-            <div className="inline-flex items-center gap-1.5 bg-ink/[0.06] rounded-md px-2 py-1">
-              <Icon name="tag" size={12} className="text-muted"/>
-              <span className={labelCls}>หมวดหมู่</span>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 lg:grid-cols-1 gap-3">
-            <div>
-              <label className={fieldLabel}>แบรนด์</label>
-              <select className="input mt-1" value={draft.brand_id||""} onChange={e=>onBrandChange(e.target.value)}>
-                <option value="">— ไม่ระบุ —</option>
-                {brands.map(b=> <option key={b.id} value={b.id}>{b.name}</option>)}
-                <option value="__new__">+ เพิ่มแบรนด์ใหม่…</option>
-              </select>
-            </div>
-            <div>
-              <label className={fieldLabel}>หมวดหมู่</label>
-              <select className="input mt-1" value={draft.category_id||""} onChange={e=>onCatChange(e.target.value)}>
-                <option value="">— ไม่ระบุ —</option>
-                {categories.map(c=> <option key={c.id} value={c.id}>{c.name}</option>)}
-                <option value="__new__">+ เพิ่มหมวดใหม่…</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* ── ราคา & สต็อก (full row) ── */}
-        <div className="lg:col-span-6 rounded-xl border hairline p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="inline-flex items-center gap-1.5 bg-ink/[0.06] rounded-md px-2 py-1">
-              <Icon name="credit-card" size={12} className="text-muted"/>
-              <span className={labelCls}>ราคา & สต็อก</span>
-            </div>
-            {marginPct != null && (
-              <span className={marginBadgeClass}>กำไร {marginPct.toFixed(0)}%</span>
-            )}
-          </div>
-          {!draft.id ? (
-            // CREATE mode — cost captured here so catalog never has cost=0.
-            // Stock still flows only through stock_movements, so we hide qty.
-            <div className="space-y-3">
-              {/* ราคาป้าย — primary field, larger text. Catalog data, always editable. */}
-              <div>
-                <label className={fieldLabel}>ราคาขาย (ป้าย)</label>
-                <input type="number" inputMode="decimal" className="input mt-1 !text-lg !font-display !tabular-nums"
-                  value={draft.retail_price||0} onChange={e=>set('retail_price', Number(e.target.value))} />
-              </div>
-              {/* ── Cost calculator card ── */}
-              <div className="rounded-xl border hairline bg-[#fdf5ef] p-3 space-y-2.5">
-                <div className="text-xs font-semibold text-muted uppercase tracking-wider flex items-center gap-1.5">
-                  <Icon name="credit-card" size={12}/>
-                  คิดต้นทุนจากราคาขาย
+              <div className="product-editor__hero">
+                <div className="product-editor__hero-thumb">
+                  <ProductThumb product={draft} fill className="w-full h-full" />
                 </div>
-
-                {/* Preset chips */}
-                <div className="flex flex-wrap gap-1.5">
-                  {COST_PRESETS.map(pct => (
-                    <button
-                      key={pct}
-                      type="button"
-                      onClick={() => applyCostPct(pct)}
-                      className={"flex-none px-3 py-2 rounded-lg text-sm font-medium border transition min-w-[56px] text-center " + (
-                        autoPct === pct
-                          ? "bg-primary text-on-primary border-primary shadow-sm"
-                          : "bg-surface-strong text-muted border-hairline hover:text-ink hover:border-primary/40"
+                <div className="product-editor__hero-field">
+                  <label className="product-editor__field-label">{UI.fieldName}</label>
+                  <input className="input mt-1 w-full" value={draft.name||""} onChange={e=>set('name', e.target.value)} />
+                </div>
+                <div className="product-editor__hero-field">
+                  <div className="product-editor__barcode-head">
+                    <label className="product-editor__field-label mb-0" htmlFor="product-editor-barcode">
+                      {UI.fieldBarcode}
+                    </label>
+                    <div className="product-editor__barcode-actions">
+                      {draft.id && (
+                        <div className="product-editor__barcode-slot">
+                          {!barcodeEdit ? (
+                            <button
+                              type="button"
+                              className="product-editor__barcode-action"
+                              onClick={()=>{ setBarcodeEdit(true); setTimeout(()=>barcodeRef.current?.focus(), 50); }}
+                            >
+                              <Icon name="barcode" size={12}/>
+                              {UI.editBarcode}
+                            </button>
+                          ) : (
+                            <>
+                              <span className="product-editor__barcode-status product-editor__barcode-status--inline" role="status">
+                                <span className="product-editor__barcode-status-dot" aria-hidden="true"/>
+                                <span>{UI.readyScan}</span>
+                              </span>
+                              <button
+                                type="button"
+                                className="product-editor__barcode-lock"
+                                onClick={lockBarcodeField}
+                              >
+                                {UI.lockBarcode}
+                              </button>
+                            </>
+                          )}
+                        </div>
                       )}
-                    >
-                      ลด {pct}%
-                    </button>
-                  ))}
-
-                  {/* Custom % input */}
-                  <div className="flex items-center gap-1.5 ml-auto">
-                    <span className="text-xs text-muted whitespace-nowrap">หรือกำหนดเอง</span>
-                    <div className="relative">
-                      <input
-                        type="number" inputMode="decimal"
-                        className="input !h-9 !w-[72px] !text-sm text-center !pr-7 !pl-2"
-                        placeholder="—"
-                        value={customPctStr}
-                        min="1" max="99"
-                        onChange={e => {
-                          setCustomPctStr(e.target.value);
-                          const n = Number(e.target.value);
-                          if (n > 0 && n < 100) applyCostPct(n);
-                        }}
-                      />
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted pointer-events-none">%</span>
+                      {!draft.id && (
+                        <span className="product-editor__barcode-hint">
+                          <Icon name="barcode" size={12}/>
+                          {UI.scanOrType}
+                        </span>
+                      )}
                     </div>
                   </div>
-                </div>
-
-                {/* Live preview */}
-                {autoPct != null && Number(draft.retail_price) > 0 && (
-                  <div className="text-xs text-muted bg-surface-strong/70 rounded-lg px-3 py-1.5 border hairline-soft tabular-nums">
-                    {fmtTHB(Number(draft.retail_price))} × (100−{autoPct})% = <span className="font-semibold text-ink">{fmtTHB(Math.round(Number(draft.retail_price) * (100 - autoPct) / 100 * 100) / 100)}</span>
+                  <div className="product-editor__barcode-input-wrap">
+                    <input
+                      id="product-editor-barcode"
+                      ref={barcodeRef}
+                      className={
+                        'input product-editor__barcode-input font-mono w-full'
+                        + (draft.id && !barcodeEdit ? ' opacity-60 cursor-not-allowed' : '')
+                        + (draft.id && barcodeEdit ? ' product-editor__input--scan-ready has-camera' : ' has-camera')
+                      }
+                      placeholder={UI.barcodePlaceholder}
+                      inputMode="text"
+                      autoFocus={!draft.id}
+                      readOnly={!!(draft.id && !barcodeEdit)}
+                      value={draft.barcode||""}
+                      onChange={e=>set('barcode', e.target.value)}
+                      onMouseDown={e=>{ if (draft.id && barcodeEdit && !manualApproved) { e.preventDefault(); confirmManualBarcode(); } }}
+                      onTouchStart={e=>{ if (draft.id && barcodeEdit && !manualApproved) { e.preventDefault(); confirmManualBarcode(); } }}
+                    />
+                    <button
+                      type="button"
+                      className="scan-inline-btn scan-inline-btn--in-field product-editor__barcode-camera"
+                      onClick={openBarcodeScanner}
+                      aria-label={UI.scanCamera}
+                      title={UI.scanCamera}
+                    >
+                      <Icon name="camera" size={17}/>
+                    </button>
                   </div>
-                )}
-              </div>
-
-              {/* Cost input */}
-              <div>
-                <label className={fieldLabel}>ราคาทุน *</label>
-                <input
-                  type="number" inputMode="decimal"
-                  className="input mt-1 !text-lg !font-display tabular-nums"
-                  placeholder="0"
-                  value={draft.cost_price || ""}
-                  onChange={e=>{ set('cost_price', Number(e.target.value)); }}
-                />
-              </div>
-              <div className="rounded-lg bg-surface-soft border hairline-soft p-3 flex items-start gap-2 text-xs text-muted">
-                <Icon name="info" size={14} className="text-muted-soft flex-shrink-0 mt-0.5"/>
-                <div>
-                  {createHint || <>สต็อกจะถูกบันทึกเมื่อ <span className="font-medium text-ink">รับเข้าครั้งแรก</span> — หลังบันทึกแล้ว ไปหน้า <span className="font-medium text-ink">"รับเข้า"</span> เพื่อเพิ่มสต็อก</>}
                 </div>
               </div>
             </div>
-          ) : (
-            // EDIT mode — cost editable (running average override), stock read-only.
-            // current_stock can only change via create_stock_movement_with_items RPC.
-            <div className="space-y-2.5">
-              {/* 3 horizontal value cells: ราคาขาย · ราคาทุน · คงเหลือ */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+
+            <div className="product-editor__card product-editor__card--meta">
+              <div className="product-editor__section-head">
+                <Icon name="tag" size={12} className="text-muted"/>
+                <span className="product-editor__section-label">{UI.sectionCategory}</span>
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-1 gap-3">
                 <div>
-                  <label className={fieldLabel}>ราคาขาย (ป้าย)</label>
-                  <input type="number" inputMode="decimal" className="input mt-1 !text-lg !font-display !tabular-nums"
+                  <label className="product-editor__field-label">{UI.fieldBrand}</label>
+                  <select className="input mt-1 w-full" value={draft.brand_id||""} onChange={e=>onBrandChange(e.target.value)}>
+                    <option value="">{UI.noBrand}</option>
+                    {brands.map(b=> <option key={b.id} value={b.id}>{b.name}</option>)}
+                    <option value="__new__">{UI.addBrand}</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="product-editor__field-label">{UI.fieldCategory}</label>
+                  <select className="input mt-1 w-full" value={draft.category_id||""} onChange={e=>onCatChange(e.target.value)}>
+                    <option value="">{UI.noBrand}</option>
+                    {categories.map(c=> <option key={c.id} value={c.id}>{c.name}</option>)}
+                    <option value="__new__">{UI.addCategory}</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="product-editor__card">
+            <div className="flex items-center justify-between mb-3">
+              <div className="product-editor__section-head mb-0">
+                <Icon name="credit-card" size={12} className="text-muted"/>
+                <span className="product-editor__section-label">{UI.sectionPricing}</span>
+              </div>
+              {marginPct != null && (
+                <span className={marginBadgeClass}>{UI.margin} {marginPct.toFixed(0)}%</span>
+              )}
+            </div>
+            {!draft.id ? (
+              <div className="space-y-3">
+                <div>
+                  <label className="product-editor__field-label">{UI.fieldRetail}</label>
+                  <input type="number" inputMode="decimal" className="input mt-1 !text-lg !font-display !tabular-nums w-full"
                     value={draft.retail_price||0} onChange={e=>set('retail_price', Number(e.target.value))} />
                 </div>
-                <div>
-                  <label className={fieldLabel}>ราคาทุน (ตั้งต้น)</label>
-                  <input type="number" inputMode="decimal" className="input mt-1 !text-lg !font-display tabular-nums"
-                    value={draft.cost_price||0} onChange={e=>set('cost_price', Number(e.target.value))} />
-                </div>
-                <div>
-                  <label className={fieldLabel}>คงเหลือ</label>
-                  {isSuperAdmin ? (
-                    <div className="mt-1 flex gap-2 items-stretch">
-                      <div className="input !flex items-center flex-1 min-w-0 bg-surface-soft">
-                        <span className="font-display text-lg tabular-nums">{draft.current_stock||0}</span>
-                      </div>
+                <div className="product-editor__cost-calc">
+                  <div className="text-xs font-semibold text-muted uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                    <Icon name="credit-card" size={12}/>
+                    {UI.costCalcTitle}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {COST_PRESETS.map(pct => (
                       <button
+                        key={pct}
                         type="button"
-                        className="btn-secondary !px-3 !text-sm whitespace-nowrap flex-shrink-0"
-                        onClick={()=>setStockAdjustOpen(true)}
+                        onClick={() => applyCostPct(pct)}
+                        className={"product-editor__preset " + (autoPct === pct ? 'product-editor__preset--active' : 'product-editor__preset--idle')}
                       >
-                        <Icon name="edit" size={16}/> ปรับสต็อก
+                        {UI.discountPct} {pct}%
                       </button>
+                    ))}
+                    <div className="flex items-center gap-1.5 ml-auto">
+                      <span className="text-xs text-muted whitespace-nowrap">{UI.costCustom}</span>
+                      <div className="relative">
+                        <input
+                          type="number" inputMode="decimal"
+                          className="input !h-9 !w-[72px] !text-sm text-center !pr-7 !pl-2"
+                          placeholder="—"
+                          value={customPctStr}
+                          min="1" max="99"
+                          onChange={e => {
+                            setCustomPctStr(e.target.value);
+                            const n = Number(e.target.value);
+                            if (n > 0 && n < 100) applyCostPct(n);
+                          }}
+                        />
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted pointer-events-none">%</span>
+                      </div>
                     </div>
-                  ) : (
-                    <div className="mt-1 input !flex items-center justify-between !cursor-not-allowed opacity-80 bg-surface-soft">
-                      <span className="font-display text-lg tabular-nums">{draft.current_stock||0}</span>
-                      <span className="text-xs text-muted-soft">read-only</span>
+                  </div>
+                  {autoPct != null && Number(draft.retail_price) > 0 && (
+                    <div className="text-xs text-muted bg-surface-strong/70 rounded-lg px-3 py-1.5 border hairline-soft tabular-nums mt-2">
+                      {fmtTHB(Number(draft.retail_price))} × (100−{autoPct})% = <span className="font-semibold text-ink">{fmtTHB(Math.round(Number(draft.retail_price) * (100 - autoPct) / 100 * 100) / 100)}</span>
                     </div>
                   )}
                 </div>
+                <div>
+                  <label className="product-editor__field-label">{UI.fieldCostCreate}</label>
+                  <input
+                    type="number" inputMode="decimal"
+                    className="input mt-1 !text-lg !font-display tabular-nums w-full"
+                    placeholder="0"
+                    value={draft.cost_price || ""}
+                    onChange={e=>{ set('cost_price', Number(e.target.value)); }}
+                  />
+                </div>
+                <div className="product-editor__hint rounded-lg bg-surface-soft border hairline-soft p-3">
+                  <Icon name="info" size={14} className="text-muted-soft flex-shrink-0 mt-0.5"/>
+                  <div>{createHint || <>สต็อกจะถูกบันทึกเมื่อ <span className="font-medium text-ink">รับเข้าครั้งแรก</span> — หลังบันทึกแล้ว ไปหน้า <span className="font-medium text-ink">"รับเข้า"</span> เพื่อเพิ่มสต็อก</>}</div>
+                </div>
               </div>
-              <div className="text-xs text-muted-soft leading-snug flex items-center gap-1.5">
-                <Icon name="info" size={13} className="text-muted-soft shrink-0"/>
-                <span>
-                  {isSuperAdmin
-                    ? <>ปรับสต็อกด้วยปุ่ม <span className="font-medium">ปรับสต็อก</span> (บันทึก audit) หรือผ่านหน้า <span className="font-medium">รับเข้า / ส่งเคลม / คืน</span></>
-                    : <>ปรับสต็อกผ่านหน้า <span className="font-medium">รับเข้า / ส่งเคลม / คืน</span></>}
-                </span>
+            ) : (
+              <div className="space-y-2.5">
+                <div className="product-editor__pricing-grid">
+                  <div>
+                    <label className="product-editor__field-label">{UI.fieldRetail}</label>
+                    <input type="number" inputMode="decimal" className="input mt-1 !text-lg !font-display !tabular-nums w-full"
+                      value={draft.retail_price||0} onChange={e=>set('retail_price', Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label className="product-editor__field-label">{UI.fieldCost}</label>
+                    <input type="number" inputMode="decimal" className="input mt-1 !text-lg !font-display tabular-nums w-full"
+                      value={draft.cost_price||0} onChange={e=>set('cost_price', Number(e.target.value))} />
+                  </div>
+                  <div className="product-editor__stock-cell">
+                    <label className="product-editor__field-label">{UI.fieldStock}</label>
+                    {isSuperAdmin ? (
+                      <div className="product-editor__stock-actions">
+                        <div className="product-editor__stock-value">
+                          <span className="product-editor__stock-num">{draft.current_stock||0}</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn-secondary !px-3 !text-sm whitespace-nowrap"
+                          onClick={()=>setStockAdjustOpen(true)}
+                        >
+                          <Icon name="edit" size={16}/> {UI.adjustStock}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="product-editor__stock-value opacity-80">
+                        <span className="product-editor__stock-num">{draft.current_stock||0}</span>
+                        <span className="text-xs text-muted-soft">{UI.readOnly}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {draft.id && (
+                  <div className="product-editor__hint product-editor__hint--callout">
+                    <Icon name="info" size={13} className="shrink-0 mt-0.5"/>
+                    <span>{UI.costOverrideHint}</span>
+                  </div>
+                )}
+                <div className="product-editor__hint">
+                  <Icon name="info" size={13} className="shrink-0"/>
+                  <span>{isSuperAdmin ? UI.stockHintAdmin : UI.stockHintUser}</span>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
-        {/* ── ประวัติต้นทุน (บิลรับเข้า) — edit mode only ── */}
         {draft.id && (
-          <div className="lg:col-span-6 rounded-xl border hairline p-4">
-            <ProductCostHistory productId={draft.id}/>
-          </div>
-        )}
-
-        {/* ── ประวัติสต็อก — edit mode only ── */}
-        {draft.id && (
-          <div className="lg:col-span-6 rounded-xl border hairline bg-surface-soft p-4">
-            <StockHistoryPanel productId={draft.id} reloadToken={stockHistoryReload}/>
+          <div className="product-editor__reference">
+            <div className="product-editor__ref-label">{UI.sectionReference}</div>
+            <div className="product-editor__tabs" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={historyTab === 'cost'}
+                className={'product-editor__tab product-editor__tab--cost' + (historyTab === 'cost' ? ' product-editor__tab--active' : '')}
+                onClick={() => setHistoryTab('cost')}
+              >
+                <Icon name="trend-up" size={14}/>
+                {UI.tabCost}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={historyTab === 'stock'}
+                className={'product-editor__tab product-editor__tab--stock' + (historyTab === 'stock' ? ' product-editor__tab--active' : '')}
+                onClick={() => setHistoryTab('stock')}
+              >
+                <Icon name="box" size={14}/>
+                {UI.tabStock}
+              </button>
+            </div>
+            <div className={'product-editor__ref-panel product-editor__ref-panel--' + historyTab}>
+              {historyTab === 'cost' ? (
+                <ProductCostHistory productId={draft.id}/>
+              ) : (
+                <StockHistoryPanel productId={draft.id} reloadToken={stockHistoryReload} embedded/>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -8403,7 +8361,10 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
       mode="single"
       title="สแกนบาร์โค้ดสินค้า"
       onScan={(code)=>{
-        if (draft.id && !barcodeEdit) return false; // shouldn't happen — button gated, but be safe
+        if (draft.id && !barcodeEdit) {
+          setBarcodeEdit(true);
+          setManualApproved(true);
+        }
         set('barcode', code);
         return true;
       }}
@@ -8930,6 +8891,15 @@ function SalesView({ onGoPOS }) {
   };
 
   const total = useMemo(()=> filteredOrders.reduce((s,o)=> s + Number(o.grand_total||0), 0), [filteredOrders]);
+  // Shop revenue — net_received for e-commerce when entered, else grand_total.
+  // Matches Dashboard / P&L / staff commission; active bills only.
+  const totalShopRevenue = useMemo(() => filteredOrders
+    .filter(o => o.status === 'active')
+    .reduce((s, o) => {
+      const v = (ECOMMERCE_CHANNELS.has(o.channel) && o.net_received != null)
+        ? Number(o.net_received) : Number(o.grand_total) || 0;
+      return s + v;
+    }, 0), [filteredOrders]);
   // Sum of per-order computed profit (revenue − cost, voided bills = 0).
   // Depends on `orderSummary` being populated by load(); shows ฿0 briefly
   // on first paint, which is fine — same single source of truth as the
@@ -9038,6 +9008,9 @@ function SalesView({ onGoPOS }) {
           <div className="text-xs uppercase tracking-wider text-muted">รวมทั้งหมด</div>
           <div className="font-display text-3xl lg:text-4xl mt-1 tabular-nums">{fmtTHB(total)}</div>
           <div className="text-xs text-muted mt-1">{filteredOrders.length} บิล</div>
+          <span className="sales-shop-revenue-pill mt-2">
+            ร้านได้รับจริง {fmtTHB(totalShopRevenue)}
+          </span>
         </div>
         {/* Profit — simple liquid-glass card tinted tiffany blue (same
             recipe family as card-cream, just shifted into the teal hue).

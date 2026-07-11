@@ -38,9 +38,13 @@ export default function ExpandableImageThumb({
     );
   }
 
-  const openLightbox = (e) => {
+  const swallowPointer = (e) => {
     e.preventDefault();
     e.stopPropagation();
+  };
+
+  const openLightbox = (e) => {
+    swallowPointer(e);
     if (loaded) setOpen(true);
   };
 
@@ -52,6 +56,8 @@ export default function ExpandableImageThumb({
         className={'product-img-expandable product-img-shadow border-0 p-0 bg-transparent ' + className}
         style={style}
         onClick={openLightbox}
+        onMouseDown={swallowPointer}
+        onPointerDown={swallowPointer}
         onKeyDown={(e) => {
           if (loaded && (e.key === 'Enter' || e.key === ' ')) {
             e.preventDefault();
