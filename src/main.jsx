@@ -168,7 +168,7 @@ import FullTaxInvoiceA4 from './components/invoice/FullTaxInvoiceA4.jsx';
 import BulkReceiveView from './components/ai/BulkReceiveView.jsx';
 import PendingNetBell from './components/pos/PendingNetBell.jsx';
 import DeferNetButton from './components/pos/DeferNetButton.jsx';
-import TikTokConfirmPanel from './components/pos/TikTokConfirmPanel.jsx';
+import TikTokPosBadges from './components/pos/TikTokPosBadges.jsx';
 import { usePendingTikTokOrderCount } from './hooks/usePendingTikTokOrderCount.js';
 import { useTikTokMirrorCatalog } from './hooks/useTikTokMirrorCatalog.js';
 import { useTikTokProductMappings } from './hooks/useTikTokProductMappings.js';
@@ -4586,7 +4586,7 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
         <div className="mobile-topbar__actions">
           {isAdminPlus && (
             <>
-              {view === 'pos' && <TikTokConfirmPanel toast={toast.push} />}
+              {view === 'pos' && <TikTokPosBadges toast={toast.push} />}
               <PendingNetBell toast={toast.push} size={40} placement="header" />
             </>
           )}
@@ -5951,7 +5951,7 @@ function POSView() {
       <PageHeader
         title="ขายสินค้า"
         subtitle="POS"
-        right={<div className="flex items-center gap-3"><CartGlowBadge count={totalQty}/><TikTokConfirmPanel toast={toast.push} onConfirmed={setReceiptOrderId}/></div>}
+        right={<div className="flex items-center gap-3"><CartGlowBadge count={totalQty}/><TikTokPosBadges toast={toast.push} onConfirmed={setReceiptOrderId}/></div>}
         farRight={<PendingNetBell toast={toast.push} size={50}/>}
       />
       {/* DESKTOP LAYOUT */}

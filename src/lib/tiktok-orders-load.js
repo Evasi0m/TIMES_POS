@@ -15,7 +15,8 @@ export const TIKTOK_ORDER_SELECT =
   'id, sale_date, status, channel, grand_total, net_received, net_received_pending, payment_method, ' +
   'tiktok_order_id, tiktok_order_status, tiktok_shipping_type, tracking_number, ' +
   'buyer_name, buyer_address, buyer_tax_id, buyer_branch, ' +
-  'shipping_recipient_name, shipping_address, tax_invoice_no, vat_amount, void_reason';
+  'shipping_recipient_name, shipping_address, tax_invoice_no, vat_amount, void_reason, ' +
+  'tiktok_resolution_kind, stock_resolution, stock_resolved_at';
 
 const ORDER_ID_CHUNK = 150;
 

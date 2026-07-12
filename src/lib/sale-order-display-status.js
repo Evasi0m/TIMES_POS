@@ -1,7 +1,16 @@
 /** Display status codes for sale order list badges (one badge per row). */
+import {
+  RESOLUTION_KIND,
+  STOCK_RESOLUTION,
+} from './tiktok-stock-resolution.js';
+
 export const DISPLAY_STATUS = {
   CANCELLED: 'cancelled',
   CANCELLED_TIKTOK: 'cancelled_tiktok',
+  TIKTOK_AWAITING_RETURN: 'tiktok_awaiting_return',
+  TIKTOK_RETURNED: 'tiktok_returned',
+  TIKTOK_RETURN_LOST: 'tiktok_return_lost',
+  TIKTOK_CANCEL_PRE_SHIP: 'tiktok_cancel_pre_ship',
   PENDING_CONFIRM: 'pending_confirm',
   SUBSTITUTION: 'substitution',
   PENDING_PRICE: 'pending_price',
@@ -9,28 +18,80 @@ export const DISPLAY_STATUS = {
   NORMAL: 'normal',
 };
 
-function isTikTokCancelVoid(order) {
-  return order.channel === 'tiktok'
-    && String(order.void_reason || '').toLowerCase().includes('cancel');
+function isTikTokChannel(order) {
+  return order?.channel === 'tiktok' && order?.tiktok_order_id;
+}
+
+function resolveVoidedTikTokStatus(order) {
+  const res = order.stock_resolution;
+  const kind = order.tiktok_resolution_kind;
+
+  if (res === STOCK_RESOLUTION.AWAITING) {
+    const label = kind === RESOLUTION_KIND.CANCEL_PRE_SHIP
+      ? 'ยกเลิกก่อนส่ง'
+      : 'รอตีกลับ';
+    return {
+      code: DISPLAY_STATUS.TIKTOK_AWAITING_RETURN,
+      label,
+      title: 'รอยืนยันว่าได้รับสินค้าคืนหรือของหาย',
+      tone: 'amber',
+    };
+  }
+
+  if (res === STOCK_RESOLUTION.RESTOCKED) {
+    if (kind === RESOLUTION_KIND.CANCEL_PRE_SHIP) {
+      return {
+        code: DISPLAY_STATUS.TIKTOK_CANCEL_PRE_SHIP,
+        label: 'ยกเลิกก่อนส่ง',
+        title: 'ยกเลิกก่อนส่ง — ได้รับของคืนแล้ว',
+        tone: 'teal',
+      };
+    }
+    return {
+      code: DISPLAY_STATUS.TIKTOK_RETURNED,
+      label: 'ได้ของคืนแล้ว',
+      title: 'บันทึกรับคืนและบวกสต็อกแล้ว',
+      tone: 'green',
+    };
+  }
+
+  if (res === STOCK_RESOLUTION.LOST) {
+    return {
+      code: DISPLAY_STATUS.TIKTOK_RETURN_LOST,
+      label: 'ตีกลับ (ของหาย)',
+      title: 'บันทึกเงินคืนโดยไม่บวกสต็อก',
+      tone: 'amber',
+    };
+  }
+
+  const reason = String(order.void_reason || '').toLowerCase();
+  const tiktokCancel = reason.includes('tiktok') && (
+    reason.includes('cancel') || reason.includes('return')
+  );
+  return {
+    code: tiktokCancel ? DISPLAY_STATUS.CANCELLED_TIKTOK : DISPLAY_STATUS.CANCELLED,
+    label: tiktokCancel ? 'ยกเลิก TikTok' : 'ยกเลิก',
+    title: order.void_reason || 'ยกเลิกแล้ว',
+    tone: tiktokCancel ? 'tiktok_red' : 'red',
+  };
 }
 
 /**
  * Resolve a single display status for a sale_orders row.
  * Priority: voided > pending > substitution > pending_price > edited > normal
- *
- * @param {object|null} order — sale_orders row (may include has_substitution, has_edits)
- * @param {{ hasSubstitution?: boolean }} [opts] — fallback when DB column not yet deployed
  */
 export function resolveSaleOrderDisplayStatus(order, opts = {}) {
   if (!order) return null;
 
   if (order.status === 'voided') {
-    const tiktok = isTikTokCancelVoid(order);
+    if (isTikTokChannel(order)) {
+      return resolveVoidedTikTokStatus(order);
+    }
     return {
-      code: tiktok ? DISPLAY_STATUS.CANCELLED_TIKTOK : DISPLAY_STATUS.CANCELLED,
-      label: tiktok ? 'ยกเลิก TikTok' : 'ยกเลิก',
+      code: DISPLAY_STATUS.CANCELLED,
+      label: 'ยกเลิก',
       title: order.void_reason || 'ยกเลิกแล้ว',
-      tone: tiktok ? 'tiktok_red' : 'red',
+      tone: 'red',
     };
   }
 

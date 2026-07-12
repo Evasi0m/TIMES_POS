@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { isTikTokCancelledVoid } from '../../../lib/tiktok-cancel-return.js';
+import {
+  STOCK_RESOLUTION,
+  resolvedStockLabel,
+  resolutionKindLabel,
+} from '../../../lib/tiktok-stock-resolution.js';
 import { useMountedToggle } from '../../../lib/use-mounted-toggle.js';
 import VoidStockStatusBadge from '../../sales/VoidStockStatusBadge.jsx';
 import Icon from '../../ui/Icon.jsx';
@@ -349,16 +354,39 @@ function ActiveOrderActions({
 }
 
 function CancelledOrderActions({ order, voidStockStatus, onReturnGoods }) {
+  const stockMeta = resolvedStockLabel(order.stock_resolution);
+  const awaiting = order.stock_resolution === STOCK_RESOLUTION.AWAITING;
+  const kindLabel = order.tiktok_resolution_kind
+    ? resolutionKindLabel(order.tiktok_resolution_kind)
+    : null;
+
   return (
     <>
       <div className="hidden lg:flex flex-col gap-2 w-full lg:items-end">
         <span className="badge-pill !bg-error/10 !text-error text-[10px] w-full text-center lg:text-right">
           ยกเลิก TikTok
         </span>
-        {voidStockStatus && (
-          <VoidStockStatusBadge status={voidStockStatus} className="w-full text-center lg:text-right"/>
+        {kindLabel && (
+          <span className="badge-pill !bg-warning/15 !text-[#8a6500] text-[10px] w-full text-center lg:text-right">
+            {kindLabel}
+          </span>
         )}
-        {onReturnGoods && (
+        {stockMeta ? (
+          <span
+            className="badge-pill !bg-warning/15 !text-[#8a6500] text-[10px] w-full text-center lg:text-right"
+            title={stockMeta.title}
+          >
+            {stockMeta.label}
+          </span>
+        ) : voidStockStatus ? (
+          <VoidStockStatusBadge status={voidStockStatus} className="w-full text-center lg:text-right"/>
+        ) : null}
+        {awaiting && (
+          <p className="text-[10px] text-muted text-center lg:text-right leading-snug">
+            ไปที่ POS → ปุ่ม「รอตีกลับ」เพื่อยืนยันสต็อก
+          </p>
+        )}
+        {onReturnGoods && !awaiting && (
           <TikTokGlassBtn
             variant="coral"
             className="tt-glass__btn--lg w-full whitespace-nowrap"
@@ -373,9 +401,21 @@ function CancelledOrderActions({ order, voidStockStatus, onReturnGoods }) {
       <div className="lg:hidden flex flex-col gap-2 w-full">
         <div className="flex flex-wrap items-center gap-2">
           <span className="badge-pill !bg-error/10 !text-error text-[10px]">ยกเลิก TikTok</span>
-          {voidStockStatus && <VoidStockStatusBadge status={voidStockStatus} />}
+          {kindLabel && (
+            <span className="badge-pill !bg-warning/15 !text-[#8a6500] text-[10px]">{kindLabel}</span>
+          )}
+          {stockMeta ? (
+            <span className="badge-pill !bg-warning/15 !text-[#8a6500] text-[10px]" title={stockMeta.title}>
+              {stockMeta.label}
+            </span>
+          ) : voidStockStatus ? (
+            <VoidStockStatusBadge status={voidStockStatus} />
+          ) : null}
         </div>
-        {onReturnGoods && (
+        {awaiting && (
+          <p className="text-[10px] text-muted leading-snug">ไปที่ POS → ปุ่ม「รอตีกลับ」</p>
+        )}
+        {onReturnGoods && !awaiting && (
           <TikTokGlassBtn
             variant="coral"
             className="tt-glass__btn--lg w-full min-h-[44px]"

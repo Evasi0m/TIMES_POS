@@ -17,11 +17,49 @@ describe('resolveSaleOrderDisplayStatus', () => {
     const r = resolveSaleOrderDisplayStatus({
       status: 'voided',
       channel: 'tiktok',
+      tiktok_order_id: '5761234567890',
       void_reason: 'TikTok order cancelled',
+      stock_resolution: 'n_a',
     });
     expect(r.code).toBe(DISPLAY_STATUS.CANCELLED_TIKTOK);
     expect(r.label).toBe('ยกเลิก TikTok');
     expect(r.tone).toBe('tiktok_red');
+  });
+
+  it('voided TikTok awaiting return → รอตีกลับ', () => {
+    const r = resolveSaleOrderDisplayStatus({
+      status: 'voided',
+      channel: 'tiktok',
+      tiktok_order_id: '123',
+      stock_resolution: 'awaiting',
+      tiktok_resolution_kind: 'return_post_ship',
+    });
+    expect(r.code).toBe(DISPLAY_STATUS.TIKTOK_AWAITING_RETURN);
+    expect(r.label).toBe('รอตีกลับ');
+    expect(r.tone).toBe('amber');
+  });
+
+  it('voided TikTok restocked → ได้ของคืนแล้ว', () => {
+    const r = resolveSaleOrderDisplayStatus({
+      status: 'voided',
+      channel: 'tiktok',
+      tiktok_order_id: '123',
+      stock_resolution: 'restocked',
+      tiktok_resolution_kind: 'return_post_ship',
+    });
+    expect(r.code).toBe(DISPLAY_STATUS.TIKTOK_RETURNED);
+    expect(r.label).toBe('ได้ของคืนแล้ว');
+  });
+
+  it('voided TikTok lost → ตีกลับ (ของหาย)', () => {
+    const r = resolveSaleOrderDisplayStatus({
+      status: 'voided',
+      channel: 'tiktok',
+      tiktok_order_id: '123',
+      stock_resolution: 'lost',
+    });
+    expect(r.code).toBe(DISPLAY_STATUS.TIKTOK_RETURN_LOST);
+    expect(r.label).toBe('ตีกลับ (ของหาย)');
   });
 
   it('pending → รอยืนยัน', () => {
