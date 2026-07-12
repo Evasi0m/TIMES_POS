@@ -71,12 +71,12 @@ export default function AppUpdateGate() {
             <Icon name="refresh" size={20} color="#fff" />
           </div>
           <h2 id="aug-title" className="aug-header__title">
-            {isApplying ? 'กำลังอัปเดตแอป…' : 'มีเวอรฌชันใหม่'}
+            {isApplying ? 'กำลังอัปเดตแอป…' : 'New Version'}
           </h2>
           <p id="aug-desc" className="aug-header__sub">
             {isApplying
               ? 'กำลังล้างแคชและโหลดใหม่ — อย่าปิดหน้าต่าง'
-              : 'อัปเดตเพื่อใช้ฟีเจอร์ล่าสุด — กดปุ่มด้านล่างเพื่อโหลดเวอรฌชันใหม่'}
+              : 'อัปเดตเพื่อใช้ฟีเจอร์ล่าสุด — กดปุ่มด้านล่างเพื่อโหลดเวอร์ชันใหม่'}
           </p>
         </header>
 
@@ -100,7 +100,7 @@ export default function AppUpdateGate() {
 
           {!isApplying && !isError && patches.length === 0 && (
             <div className="aug-empty-patch">
-              มีเวอรฌชันใหม่ — รายละเอียดแพตชยังโหลดไม่สำเร็จ
+              New Version — รายละเอียดแพตชยังโหลดไม่สำเร็จ
             </div>
           )}
 
