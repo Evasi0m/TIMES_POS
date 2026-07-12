@@ -27,10 +27,10 @@ describe('tiktokOrderWasShipped', () => {
 
 describe('resolutionKindLabel', () => {
   it('maps known kinds', () => {
-    expect(resolutionKindLabel(RESOLUTION_KIND.CANCEL_PRE_SHIP)).toBe('?????????????');
-    expect(resolutionKindLabel(RESOLUTION_KIND.RETURN_POST_SHIP)).toBe('?????????????');
-    expect(resolutionKindLabel(RESOLUTION_KIND.RETURN_REFUND)).toBe('?????????/??????? TikTok');
-    expect(resolutionKindLabel(RESOLUTION_KIND.REFUND_ONLY)).toBe('?????????????????');
+    expect(resolutionKindLabel(RESOLUTION_KIND.CANCEL_PRE_SHIP)).toBe('ยกเลิกก่อนส่ง');
+    expect(resolutionKindLabel(RESOLUTION_KIND.RETURN_POST_SHIP)).toBe('ตีกลับหลังส่ง');
+    expect(resolutionKindLabel(RESOLUTION_KIND.RETURN_REFUND)).toBe('คืนสินค้า/คืนเงิน TikTok');
+    expect(resolutionKindLabel(RESOLUTION_KIND.REFUND_ONLY)).toBe('คืนเงินอย่างเดียว');
   });
 });
 
@@ -51,9 +51,9 @@ describe('defaultGoodsReturnedForKind', () => {
 
 describe('resolvedStockLabel', () => {
   it('labels awaiting and resolved states', () => {
-    expect(resolvedStockLabel(STOCK_RESOLUTION.AWAITING)?.label).toBe('????????');
-    expect(resolvedStockLabel(STOCK_RESOLUTION.RESTOCKED)?.label).toBe('?????????????');
-    expect(resolvedStockLabel(STOCK_RESOLUTION.LOST)?.label).toBe('?????? (??????)');
+    expect(resolvedStockLabel(STOCK_RESOLUTION.AWAITING)?.label).toBe('รอตีกลับ');
+    expect(resolvedStockLabel(STOCK_RESOLUTION.RESTOCKED)?.label).toBe('ได้ของคืนแล้ว');
+    expect(resolvedStockLabel(STOCK_RESOLUTION.LOST)?.label).toBe('ตีกลับ (ของหาย)');
     expect(resolvedStockLabel(STOCK_RESOLUTION.NA)).toBeNull();
   });
 });

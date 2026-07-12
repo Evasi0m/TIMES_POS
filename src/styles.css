@@ -6284,7 +6284,64 @@
 /* TikTok return-resolution badge (amber) — mirrors ttc-pending-badge */
 @keyframes ttcReturnGlow {
   0%, 100% { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.12); }
-  50% { box-shadow: 0 0 18px 2px rgba(217, 119, 6, 0.18); }
+  50% { box-shadow: 0 0 18px 2px rgba(217, 119, 6, 0.22); }
+}
+
+.ttc-amber-mesh-surface {
+  background:
+    radial-gradient(circle at 12% 18%, rgba(217, 119, 6, 0.22) 0%, transparent 55%),
+    radial-gradient(circle at 88% 28%, rgba(251, 191, 36, 0.18) 0%, transparent 52%),
+    radial-gradient(circle at 50% 110%, rgba(217, 119, 6, 0.10) 0%, transparent 60%),
+    linear-gradient(135deg,
+      rgba(255, 251, 235, 0.96) 0%,
+      rgba(254, 243, 199, 0.88) 48%,
+      rgba(255, 250, 240, 0.92) 100%);
+  border: 1px solid rgba(217, 119, 6, 0.28);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+}
+
+.ttc-amber-mesh-chip,
+.ttc-return-badge__count {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.375rem;
+  height: 2.375rem;
+  padding: 0 0.3125rem;
+  flex-shrink: 0;
+  border-radius: 0.5625rem;
+  background:
+    radial-gradient(circle at 20% 20%, #fbbf24 0%, transparent 55%),
+    radial-gradient(circle at 80% 80%, #f59e0b 0%, transparent 45%),
+    linear-gradient(135deg, #f59e0b 0%, #d97706 55%, #b45309 100%);
+  border: 2px solid rgba(255, 255, 255, 0.46);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.38),
+    0 0 8px 0 rgba(217, 119, 6, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.30),
+    inset 0 -2px 4px rgba(180, 83, 9, 0.24);
+}
+.ttc-amber-mesh-chip--header {
+  min-width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.5rem;
+  animation: none;
+}
+.ttc-amber-mesh-chip--header .ttc-return-badge__count-num {
+  font-size: 0.9375rem;
+  color: #fff;
+}
+.ttc-amber-mesh-chip::before,
+.ttc-return-badge__count::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  pointer-events: none;
 }
 
 .ttc-return-badge {
@@ -6305,13 +6362,15 @@
   flex-shrink: 0;
   user-select: none;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 12% 18%, rgba(217, 119, 6, 0.22) 0%, transparent 55%),
-    radial-gradient(circle at 88% 28%, rgba(251, 191, 36, 0.18) 0%, transparent 52%),
-    linear-gradient(135deg, rgba(255, 251, 235, 0.96), rgba(254, 243, 199, 0.88));
-  border: 1px solid rgba(217, 119, 6, 0.28);
-  backdrop-filter: blur(12px) saturate(140%);
   animation: ttcReturnGlow 3.6s ease-in-out infinite;
+}
+.ttc-return-badge::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), transparent 45%);
+  pointer-events: none;
 }
 .ttc-return-badge:hover { filter: brightness(1.02); }
 .ttc-return-badge:active { transform: scale(0.98); }
@@ -6330,23 +6389,12 @@
   box-shadow: none;
 }
 
-.ttc-return-badge__count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 2.25rem;
-  height: 2.25rem;
-  margin-left: 0.125rem;
-  border-radius: 0.625rem;
-  background: linear-gradient(145deg, #f59e0b, #d97706);
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.35);
-}
 .ttc-return-badge__count-num {
   font-family: 'Taviraj', serif;
   font-size: 1.125rem;
   font-weight: 700;
   line-height: 1;
+  color: #fff;
 }
 .ttc-return-badge__label {
   font-size: 1.0625rem;
@@ -6374,17 +6422,51 @@
   border-bottom: 1px solid rgba(217, 119, 6, 0.2);
 }
 
-.ttc-amber-mesh-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 2rem;
-  height: 2rem;
-  padding: 0 0.5rem;
-  border-radius: 0.5rem;
-  background: rgba(217, 119, 6, 0.15);
-  color: #92400e;
-  font-weight: 700;
+.ttc-return-card .ttc-row-cta {
+  color: #d97706;
+}
+.ttc-return-card:hover .ttc-row-cta {
+  color: #b45309;
+}
+.ttc-return-card.glass-soft {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: rgb(var(--c-surface-strong, 255 253 248) / 0.92);
+}
+:root[data-theme='dark'] .ttc-return-card.glass-soft {
+  background: rgb(var(--c-surface-strong, 36 32 27) / 0.92);
+}
+.ttc-return-modal.ttc-modal-card.glass-strong {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+:root:not([data-theme='dark']) .ttc-return-modal.ttc-modal-card.glass-strong {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(217, 119, 6, 0.055), transparent 38%),
+    linear-gradient(135deg, rgba(255, 251, 235, 0.98), rgba(254, 243, 199, 0.96));
+}
+:root[data-theme='dark'] .ttc-return-modal.ttc-modal-card.glass-strong {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(251, 191, 36, 0.08), transparent 38%),
+    linear-gradient(135deg, rgba(41, 37, 36, 0.98), rgba(29, 25, 21, 0.96));
+}
+.ttc-return-card--opening {
+  opacity: 0.72;
+  transform: scale(0.985);
+}
+.ttc-return-card:active {
+  transform: scale(0.99);
+}
+.ttc-return-modal {
+  display: flex;
+  flex-direction: column;
+}
+@media (min-width: 1024px) {
+  .ttc-return-modal.ttc-modal-card {
+    transition:
+      max-width 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      height 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
 }
 
 .ttc-return-modal.ttc-modal-card--list {
@@ -6398,10 +6480,19 @@
   max-height: min(90vh, 760px);
 }
 
-:root[data-theme="dark"] .ttc-return-badge {
+:root[data-theme="dark"] .ttc-return-badge.ttc-amber-mesh-surface {
   background:
     radial-gradient(circle at 12% 18%, rgba(251, 191, 36, 0.15) 0%, transparent 55%),
     linear-gradient(135deg, rgba(41, 37, 36, 0.95), rgba(68, 64, 60, 0.9));
   border-color: rgba(251, 191, 36, 0.25);
+}
+:root[data-theme="dark"] .ttc-return-badge::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 45%);
+}
+:root[data-theme="dark"] .ttc-amber-header {
+  background:
+    radial-gradient(circle at 10% 20%, rgba(251, 191, 36, 0.12), transparent 50%),
+    linear-gradient(135deg, rgba(41, 37, 36, 0.98), rgba(29, 25, 21, 0.96));
+  border-bottom-color: rgba(251, 191, 36, 0.15);
 }
 

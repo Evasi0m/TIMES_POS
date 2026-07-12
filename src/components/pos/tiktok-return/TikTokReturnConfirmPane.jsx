@@ -50,14 +50,14 @@ export default function TikTokReturnConfirmPane({
       </div>
 
       <div className="tt-glass__notice text-xs leading-relaxed">
-        {TTR_COPY.confirmHint} � {hint}
+        {TTR_COPY.confirmHint} · {hint}
       </div>
 
       <ul className="space-y-2">
         {items.map((it) => (
           <li key={it.id} className="flex justify-between gap-2 text-sm py-2 border-b hairline last:border-0">
             <span className="min-w-0 truncate" title={itemSkuLabel(it)}>{itemSkuLabel(it)}</span>
-            <span className="tabular-nums shrink-0">�{it.quantity}</span>
+            <span className="tabular-nums shrink-0">×{it.quantity}</span>
           </li>
         ))}
       </ul>
@@ -106,14 +106,14 @@ export default function TikTokReturnConfirmPane({
       )}
 
       <div>
-        <label className="text-xs uppercase tracking-wider text-muted">???????? (?????)</label>
+        <label className="text-xs uppercase tracking-wider text-muted">หมายเหตุ (ไม่บังคับ)</label>
         <textarea
           className="input mt-1 w-full"
           rows={2}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           disabled={saving}
-          placeholder="???? ?????????? / ???????????????..."
+          placeholder="เช่น ของเสียหาย / สาเหตุการตีกลับ..."
         />
       </div>
     </div>

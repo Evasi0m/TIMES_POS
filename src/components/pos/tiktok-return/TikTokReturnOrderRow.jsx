@@ -41,15 +41,16 @@ export default function TikTokReturnOrderRow({ order, onOpen, opening = false })
                   <div className="text-base sm:text-[17px] font-semibold text-ink leading-snug line-clamp-2" title={itemSkuLabel(firstItem)}>
                     {itemSkuLabel(firstItem)}
                     {extraCount > 0 && (
-                      <span className="text-muted font-medium text-sm ml-1">+{extraCount} ??????</span>
+                      <span className="text-muted font-medium text-sm ml-1">+{extraCount} รายการ</span>
                     )}
                   </div>
                   <div className="text-sm text-muted tabular-nums mt-0.5">
-                    POS #{order.id} � {items.length} ????
+                    {items.length} รายการ
+                    {Number(firstItem.quantity) > 1 && ` · ×${firstItem.quantity}`}
                   </div>
                 </>
               ) : (
-                <div className="text-sm text-muted">?????????????????</div>
+                <div className="text-sm text-muted">ไม่มีรายการสินค้า</div>
               )}
             </div>
             <div className="text-right shrink-0">
@@ -70,8 +71,23 @@ export default function TikTokReturnOrderRow({ order, onOpen, opening = false })
             />
           </div>
 
-          <div className="mt-2 text-[11px] text-muted-soft font-mono truncate" title={order.tiktok_order_id}>
-            TikTok {order.tiktok_order_id}
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <div className="text-[11px] text-muted-soft font-mono truncate" title={order.tiktok_order_id}>
+              #{order.tiktok_order_id}
+            </div>
+            <span className="ttc-row-cta inline-flex items-center gap-1 text-sm font-medium group-hover:gap-1.5 transition-all shrink-0">
+              {opening ? (
+                <>
+                  <span className="spinner" aria-hidden="true"/>
+                  กำลังเปิด…
+                </>
+              ) : (
+                <>
+                  ยืนยัน
+                  <Icon name="chevron-r" size={14}/>
+                </>
+              )}
+            </span>
           </div>
         </div>
       </div>
