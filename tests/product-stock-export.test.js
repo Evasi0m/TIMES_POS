@@ -16,11 +16,6 @@ const sampleProducts = [
   enrichProduct({ id: 5, name: 'ORIENT-XYZ', barcode: '555', cost_price: 2000, retail_price: 3500, current_stock: 3 }),
 ].map((p) => ({ ...p, _brand: p._brand }));
 
-const latestCostMap = {
-  1: { unit_price: 4800, receive_date: '2026-05-01T10:00:00+07:00' },
-  2: { unit_price: 750, receive_date: '2026-06-10T08:00:00+07:00' },
-};
-
 describe('EXPORT_BRAND_OPTIONS', () => {
   it('includes all and named brands only', () => {
     expect(EXPORT_BRAND_OPTIONS.map((o) => o.id)).toEqual(['all', 'seiko', 'alba', 'citizen', 'casio']);
@@ -50,7 +45,6 @@ describe('buildStockExportLines', () => {
   it('includes metadata and column headers', () => {
     const lines = buildStockExportLines({
       products: sampleProducts,
-      latestCostMap,
       scope: 'casio',
       shopName: 'TIMES TEST',
       exportedAt: new Date('2026-06-12T14:30:00+07:00'),
@@ -75,7 +69,6 @@ describe('buildStockExportLines', () => {
   it('fills Casio facet columns for casio products', () => {
     const lines = buildStockExportLines({
       products: sampleProducts,
-      latestCostMap,
       scope: 'casio',
     });
     const dataRow = lines.find((row) => row[1] === 'MTP-1302D-7A2');
@@ -83,16 +76,15 @@ describe('buildStockExportLines', () => {
     expect(dataRow[3]).toBeTruthy(); // Series
     expect(dataRow[4]).toBe('สแตนเลส'); // Material D
     expect(dataRow[5]).toBe('ขาว/เงิน'); // Color 7
-    expect(dataRow[7]).toBe('750.00'); // latest cost
-    expect(dataRow[8]).toMatch(/\d+ .+\. \d{4}/); // Thai receive date
-    expect(dataRow[11]).toBe('6450.00'); // retail * stock = 1290 * 5
-    expect(dataRow[12]).toBe('4000.00'); // cost * stock = 800 * 5
+    expect(dataRow[6]).toBe('800.00'); // catalog cost
+    expect(dataRow[7]).toBe('1290.00'); // retail
+    expect(dataRow[9]).toBe('6450.00'); // retail * stock = 1290 * 5
+    expect(dataRow[10]).toBe('4000.00'); // cost * stock = 800 * 5
   });
 
   it('groups by brand with subtotals when scope is all', () => {
     const lines = buildStockExportLines({
       products: sampleProducts,
-      latestCostMap,
       scope: 'all',
     });
     const banners = lines.filter((row) => String(row[0]).startsWith('【 '));
@@ -114,13 +106,12 @@ describe('buildStockExportLines', () => {
   it('computes seiko subtotal correctly', () => {
     const lines = buildStockExportLines({
       products: sampleProducts,
-      latestCostMap,
       scope: 'seiko',
     });
     const subtotal = lines.find((row) => row[0] === 'สรุป Seiko');
-    expect(subtotal[11]).toMatch(/มูลค่าป้าย 17,800\.00/); // 8900 * 2
-    expect(subtotal[11]).toMatch(/มูลค่าทุน 10,000\.00/); // 5000 * 2
-    expect(subtotal[11]).toMatch(/สต็อก 2 ชิ้น/);
+    expect(subtotal[9]).toMatch(/มูลค่าป้าย 17,800\.00/); // 8900 * 2
+    expect(subtotal[9]).toMatch(/มูลค่าทุน 10,000\.00/); // 5000 * 2
+    expect(subtotal[9]).toMatch(/สต็อก 2 ชิ้น/);
   });
 
   it('skips empty brand sections', () => {

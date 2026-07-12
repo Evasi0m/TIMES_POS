@@ -3,7 +3,6 @@
 
 import { fetchAllFromTable } from './sb-paginate.js';
 import { findSkuCandidates } from './fuzzy-match.js';
-import { fetchLatestReceiveCostMap } from './receive-cost.js';
 
 export const PRODUCT_CATALOG_SELECT = 'id, name, barcode, retail_price, current_stock';
 
@@ -11,7 +10,7 @@ export const PRODUCT_CATALOG_SELECT = 'id, name, barcode, retail_price, current_
 export const PRODUCT_LIST_SELECT =
   'id, name, barcode, retail_price, cost_price, current_stock, brand_id, category_id, created_at';
 
-/** @typedef {{ products: object[], imageByProductId: Map<number, object>, latestCostMap: object }} ProductListBundle */
+/** @typedef {{ products: object[], imageByProductId: Map<number, object> }} ProductListBundle */
 
 /** @type {ProductListBundle | null} */
 let _bundle = null;
@@ -36,14 +35,13 @@ async function fetchProductImages(sb) {
 }
 
 async function loadBundleFromNetwork(sb) {
-  const [productsRes, imgs, costRes] = await Promise.all([
+  const [productsRes, imgs] = await Promise.all([
     fetchAllFromTable(sb, 'products', {
       select: PRODUCT_LIST_SELECT,
       orderColumn: 'id',
       ascending: true,
     }),
     fetchProductImages(sb).catch(() => []),
-    fetchLatestReceiveCostMap(sb),
   ]);
 
   if (productsRes.error) {
@@ -53,13 +51,12 @@ async function loadBundleFromNetwork(sb) {
   const bundle = {
     products: productsRes.data || [],
     imageByProductId: buildImageMap(imgs),
-    latestCostMap: costRes.error ? {} : (costRes.map || {}),
   };
   return { bundle, error: null };
 }
 
 /**
- * Full catalog bundle (products + images + latest receive costs).
+ * Full catalog bundle (products + images).
  * Cached for the browser session; dedupes concurrent in-flight loads.
  *
  * @returns {Promise<{ bundle: ProductListBundle | null, error: Error | null, fromCache: boolean }>}
@@ -113,14 +110,6 @@ export function patchProductStockInCache(productId, currentStock) {
   if (!_bundle || productId == null) return;
   const row = _bundle.products.find((p) => p.id === productId);
   if (row) row.current_stock = currentStock;
-}
-
-/** Refresh latest receive costs only (after receive docs change). */
-export async function refreshLatestCostsInCache(sb) {
-  const { map, error } = await fetchLatestReceiveCostMap(sb);
-  if (error || !_bundle) return { map: map || {}, error };
-  _bundle.latestCostMap = map || {};
-  return { map: _bundle.latestCostMap, error: null };
 }
 
 /** Clear cache (e.g. after bulk product import or catalog edit). */

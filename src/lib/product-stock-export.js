@@ -29,8 +29,6 @@ const COLUMNS = [
   'วัสดุ',
   'สี',
   'ทุนตั้งต้น',
-  'ทุนล่าสุด',
-  'วันที่รับล่าสุด',
   'ราคาป้าย',
   'คงเหลือ',
   'มูลค่าป้ายรวม',
@@ -87,8 +85,7 @@ function scopeLabel(scope) {
   return `ขอบเขต: ${brandLabel(scope)}`;
 }
 
-function productRow(p, index, latestCostMap) {
-  const lc = latestCostMap?.[p.id];
+function productRow(p, index) {
   const stock = Number(p.current_stock) || 0;
   const retail = Number(p.retail_price) || 0;
   const cost = Number(p.cost_price) || 0;
@@ -100,8 +97,6 @@ function productRow(p, index, latestCostMap) {
     materialLabel(p),
     colorLabel(p),
     num(cost),
-    lc?.unit_price != null ? num(lc.unit_price) : '',
-    lc?.receive_date ? fmtThaiDateShort(lc.receive_date) : '',
     num(retail),
     stock,
     num(retail * stock),
@@ -131,7 +126,7 @@ function subtotalRow(brandId, totals) {
     `สต็อก ${totals.stockQty.toLocaleString('th-TH')} ชิ้น · ` +
     `มูลค่าป้าย ${fmtSummaryMoney(totals.retailValue)} · ` +
     `มูลค่าทุน ${fmtSummaryMoney(totals.costValue)}`;
-  return [`สรุป ${label}`, '', '', '', '', '', '', '', '', '', '', summary, ''];
+  return [`สรุป ${label}`, '', '', '', '', '', '', '', '', summary, ''];
 }
 
 function grandTotalRow(totals) {
@@ -140,7 +135,7 @@ function grandTotalRow(totals) {
     `สต็อก ${totals.stockQty.toLocaleString('th-TH')} ชิ้น · ` +
     `มูลค่าป้าย ${fmtSummaryMoney(totals.retailValue)} · ` +
     `มูลค่าทุน ${fmtSummaryMoney(totals.costValue)}`;
-  return ['สรุปรวมทั้งหมด', '', '', '', '', '', '', '', '', '', '', summary, ''];
+  return ['สรุปรวมทั้งหมด', '', '', '', '', '', '', '', '', summary, ''];
 }
 
 /**
@@ -148,7 +143,6 @@ function grandTotalRow(totals) {
  */
 export function buildStockExportLines({
   products,
-  latestCostMap = {},
   scope = 'all',
   shopName = 'TIMES',
   exportedAt = new Date(),
@@ -194,7 +188,7 @@ export function buildStockExportLines({
 
     lines.push([`【 ${brandLabel(brandId).toUpperCase()} 】  รายการ ${totals.skuCount.toLocaleString('th-TH')} รุ่น`]);
     lines.push([...COLUMNS]);
-    sectionRows.forEach((p, i) => lines.push(productRow(p, i + 1, latestCostMap)));
+    sectionRows.forEach((p, i) => lines.push(productRow(p, i + 1)));
     lines.push(subtotalRow(brandId, totals));
     sectionIndex += 1;
   }
@@ -223,7 +217,6 @@ export function stockExportFilename(scope, exportedAt = new Date()) {
  */
 export function downloadProductStockCsv({
   products,
-  latestCostMap,
   scope,
   shopName,
   exportedAt = new Date(),
@@ -233,7 +226,6 @@ export function downloadProductStockCsv({
   if (!count) return 0;
   const lines = buildStockExportLines({
     products,
-    latestCostMap,
     scope,
     shopName,
     exportedAt,

@@ -18,7 +18,7 @@ export default function TikTokPendingOrderRow({ order, onOpen, opening = false }
       type="button"
       onClick={() => onOpen(order)}
       className={
-        'ttc-pending-card w-full text-left glass-soft !bg-surface-strong/75 ring-1 ring-hairline hover:ring-[#f42f68]/20 shadow-sm rounded-lg hover-lift p-4 group transition-all ' +
+        'ttc-pending-card w-full text-left glass-soft !bg-surface-strong/90 ring-1 ring-hairline hover:ring-[#f42f68]/20 shadow-sm rounded-lg hover-lift p-4 group transition-[box-shadow,transform,ring-color] ' +
         (opening ? 'ttc-pending-card--opening' : '')
       }
       disabled={opening}

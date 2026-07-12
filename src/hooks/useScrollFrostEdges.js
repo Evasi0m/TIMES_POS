@@ -16,9 +16,14 @@ export function computeScrollEdges(el) {
 export function useScrollFrostEdges(deps = []) {
   const ref = useRef(null);
   const [edges, setEdges] = useState({ top: false, bottom: false });
+  const edgesRef = useRef(edges);
+  edgesRef.current = edges;
 
   const update = useCallback(() => {
-    setEdges(computeScrollEdges(ref.current));
+    const next = computeScrollEdges(ref.current);
+    const prev = edgesRef.current;
+    if (prev.top === next.top && prev.bottom === next.bottom) return;
+    setEdges(next);
   }, []);
 
   useEffect(() => {

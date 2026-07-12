@@ -118,7 +118,6 @@ import {
   getProductListBundle,
   invalidateProductCatalogCache,
   patchProductStockInCache,
-  refreshLatestCostsInCache,
 } from './lib/product-catalog-cache.js';
 import { searchProducts, needsBrowseCatalog } from './lib/product-search.js';
 import {
@@ -6484,10 +6483,6 @@ function ProductsView() {
   const openEditor = (p) => { if (canEdit) setEditing(p); };
   const [brands, setBrands] = useState([]);
   const [categories, setCategories] = useState([]);
-  // latestCostMap[product_id] = { unit_price, receive_date } from the most
-  // recent active receive batch — surfaces "current cost" alongside the catalog
-  // cost_price so the user can spot drift without opening each product.
-  const [latestCostMap, setLatestCostMap] = useState({});
   const [sheetOpen, setSheetOpen] = useState(false);
   const [exportAuthOpen, setExportAuthOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -6566,13 +6561,6 @@ function ProductsView() {
     setCategories(c.data || []);
   }, []);
 
-  const loadLatestCosts = useCallback(async () => {
-    try {
-      const { map, error } = await refreshLatestCostsInCache(sb);
-      if (!error) setLatestCostMap(map);
-    } catch { /* non-fatal — table still renders without "ทุนล่าสุด" */ }
-  }, []);
-
   const loadProducts = useCallback(async ({ force = false } = {}) => {
     const { bundle, error, fromCache } = await getProductListBundle(sb, { force });
     if (!fromCache) setLoading(true);
@@ -6588,7 +6576,6 @@ function ProductsView() {
       _imageRow: imgMap.get(p.id) || null,
     }));
     setAllRows(enriched);
-    setLatestCostMap(bundle.latestCostMap || {});
     setCatalogLoaded(true);
     setLoading(false);
 
@@ -6655,8 +6642,7 @@ function ProductsView() {
     });
   }, [exportAuthOpen, exportOpen]);
   // Realtime: stock-only UPDATE patches one row in memory; INSERT/DELETE or
-  // catalog field changes debounce a full reload. Receive docs refresh only
-  // latestCostMap (~6k rows via RPC, not 27k receive lines).
+  // catalog field changes debounce a full reload.
   useEffect(() => {
     const { schedule: scheduleReload, dispose } = createDebouncedInvalidate({
       debounceMs: 300,
@@ -6666,10 +6652,6 @@ function ProductsView() {
         setCatalogLoaded(false);
         loadProducts({ force: true });
       },
-    });
-    const { schedule: scheduleCost, dispose: disposeCost } = createDebouncedInvalidate({
-      debounceMs: 300,
-      onInvalidate: () => loadLatestCosts(),
     });
 
     const patchStockIfOnlyChange = (payload) => {
@@ -6700,15 +6682,12 @@ function ProductsView() {
         }
         if (!patchStockIfOnlyChange(payload)) scheduleReload();
       }),
-      subscribeTable(sb, 'receive_orders', () => scheduleCost()),
-      subscribeTable(sb, 'receive_order_items', () => scheduleCost()),
     ];
     return () => {
       dispose();
-      disposeCost();
       unsubs.forEach(u => u());
     };
-  }, [loadProducts, loadLatestCosts]);
+  }, [loadProducts]);
 
   const brandName = (id) => brands.find(b => b.id === id)?.name;
   const catName   = (id) => categories.find(c => c.id === id)?.name;
@@ -7169,7 +7148,6 @@ function ProductsView() {
                   <ProductCatalogCard
                     key={p.id}
                     product={p}
-                    latestCost={latestCostMap[p.id] || null}
                     canEdit={canEdit}
                     onOpen={openEditor}
                     showTikTokBadge={tiktokBadgeOn}
@@ -7197,9 +7175,8 @@ function ProductsView() {
           <div className="col-span-3">ชื่อรุ่น</div>
           <div className="col-span-2">บาร์โค้ด</div>
           <div className="col-span-2 text-right" title="ทุนตั้งต้น (catalog)">ทุนตั้งต้น</div>
-          <div className="col-span-2 text-right" title="ทุนจากบิลรับเข้าล่าสุด">ทุนล่าสุด</div>
-          <div className="col-span-2 text-center">ราคาป้าย</div>
-          <div className="col-span-1 text-center">คงเหลือ</div>
+          <div className="col-span-3 text-center">ราคาป้าย</div>
+          <div className="col-span-2 text-center">คงเหลือ</div>
         </div>
         <div className="flex-1 overflow-y-auto min-h-0">
           {loading && browseMode && <SkeletonRows n={8} label="กำลังโหลดสินค้า" />}
@@ -7212,7 +7189,6 @@ function ProductsView() {
             </div>
           )}
           {visibleRows.map(p => {
-            const lc = latestCostMap[p.id];
             const fmtPlain = (n) => roundMoney(n).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
             const stockRowCls = Number(p.current_stock) > 0 ? 'product-row--in-stock' : 'product-row--out-of-stock';
             return (
@@ -7230,20 +7206,13 @@ function ProductsView() {
                   </span>
                 </div>
                 <div className="col-span-2 font-mono text-sm text-muted truncate">{p.barcode||'—'}</div>
-                <div className={"col-span-2 text-right tabular-nums " + (lc ? 'text-muted-soft' : 'font-medium text-ink')}>{fmtPlain(p.cost_price)}</div>
-                <div className="col-span-2 text-right tabular-nums">
-                  {lc ? (
-                    <span className="font-medium text-ink">{fmtPlain(lc.unit_price)}</span>
-                  ) : (
-                    <span className="text-muted-soft text-xs" title="ยังไม่เคยรับเข้า">—</span>
-                  )}
-                </div>
-                <div className="col-span-2 flex justify-center">
+                <div className="col-span-2 text-right tabular-nums font-medium text-ink">{fmtPlain(p.cost_price)}</div>
+                <div className="col-span-3 flex justify-center">
                   <div className="price-gem">
                     <span className="price-gem__num">{fmtPlain(p.retail_price)}</span>
                   </div>
                 </div>
-                <div className="col-span-1 flex justify-center">
+                <div className="col-span-2 flex justify-center">
                   <div className={
                     'stock-gem stock-gem--md ' +
                     (p.current_stock <= 0 ? 'stock-gem--out' : 'stock-gem--in')
@@ -7278,7 +7247,6 @@ function ProductsView() {
           </div>
         )}
         {visibleRows.map(p => {
-          const lc = latestCostMap[p.id];
           const stockRowCls = Number(p.current_stock) > 0 ? 'product-row--in-stock' : 'product-row--out-of-stock';
           return (
             <div key={p.id}
@@ -7296,7 +7264,7 @@ function ProductsView() {
                 <div className="flex items-baseline gap-2 mt-1.5 min-w-0 text-sm">
                   <span className="tabular-nums text-primary truncate">ป้าย {roundMoney(p.retail_price).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
                   <span className="text-muted-soft leading-none">|</span>
-                  <span className={"tabular-nums truncate " + (lc ? 'text-muted' : 'text-ink font-medium')}>ต้นทุน {roundMoney(lc ? lc.unit_price : p.cost_price).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                  <span className="tabular-nums truncate text-ink font-medium">ต้นทุน {roundMoney(p.cost_price).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
                 </div>
                 {p.barcode && (
                   <div className="flex items-center gap-1 mt-1 text-[11px] text-muted-soft font-mono" title={p.barcode}>
@@ -7375,7 +7343,6 @@ function ProductsView() {
         scope={exportScope}
         onScopeChange={setExportScope}
         products={allRows}
-        latestCostMap={latestCostMap}
         shopName={shop?.shop_name}
         exporter={{ email: exportUserEmail, name: exportUserName }}
         toast={toast}
@@ -7476,7 +7443,7 @@ function ProductStockExportAuthModal({ open, onClose, email, onSuccess }) {
 }
 
 /* ProductStockExportModal — pick brand scope and download structured stock CSV. */
-function ProductStockExportModal({ open, onClose, scope, onScopeChange, products, latestCostMap, shopName, exporter, toast }) {
+function ProductStockExportModal({ open, onClose, scope, onScopeChange, products, shopName, exporter, toast }) {
   const exportCount = filterByExportScope(products, scope).length;
   const chipCls = (active) =>
     'w-full text-left py-2.5 px-3 rounded-lg text-sm font-medium border transition-all ' +
@@ -7489,7 +7456,6 @@ function ProductStockExportModal({ open, onClose, scope, onScopeChange, products
     const exportedAt = new Date();
     const count = downloadProductStockCsv({
       products,
-      latestCostMap,
       scope,
       shopName,
       exportedAt,

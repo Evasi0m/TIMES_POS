@@ -23,7 +23,6 @@ function fmtPlain(n) {
  */
 function ProductCatalogCard({
   product,
-  latestCost = null,
   canEdit = false,
   onOpen,
   tiktokMapping = null,
@@ -32,7 +31,7 @@ function ProductCatalogCard({
 }) {
   const stock = Number(product?.current_stock) || 0;
   const oos = stock <= 0;
-  const name = product?.name || '—';
+  const name = product?.name || '�';
   const nameCls = nameLengthClass(name);
   const showTikTok = Boolean(showTikTokBadge && tiktokMapping);
 
@@ -59,11 +58,11 @@ function ProductCatalogCard({
         (canEdit ? ' product-catalog-card--clickable' : '') +
         (oos ? ' product-catalog-card--oos' : '')
       }
-      title={canEdit ? `แก้ไข: ${name}` : name}
+      title={canEdit ? `?????: ${name}` : name}
     >
       <div
         className="product-catalog-card__stock"
-        aria-label={oos ? 'หมดสต็อก' : `คงเหลือ ${stock}`}
+        aria-label={oos ? '????????' : `??????? ${stock}`}
       >
         <div
           className={
@@ -98,18 +97,14 @@ function ProductCatalogCard({
           </span>
           {isNew && (
             <span className="product-catalog-card__badges">
-              <span className="new-product-badge shrink-0">ใหม่</span>
+              <span className="new-product-badge shrink-0">????</span>
             </span>
           )}
         </div>
 
-        <div className="product-catalog-card__costs" title="ทุนตั้งต้น | ทุนล่าสุด">
-          <span className={latestCost ? 'text-muted-soft' : 'text-ink font-medium'}>
+        <div className="product-catalog-card__costs" title="??????????">
+          <span className="text-ink font-medium">
             {fmtPlain(product?.cost_price)}
-          </span>
-          <span className="product-catalog-card__costs-sep" aria-hidden="true">|</span>
-          <span className={latestCost ? 'text-ink font-medium' : 'text-muted-soft'}>
-            {latestCost ? fmtPlain(latestCost.unit_price) : '—'}
           </span>
         </div>
 

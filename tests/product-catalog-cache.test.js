@@ -4,18 +4,12 @@ vi.mock('../src/lib/sb-paginate.js', () => ({
   fetchAllFromTable: vi.fn(),
 }));
 
-vi.mock('../src/lib/receive-cost.js', () => ({
-  fetchLatestReceiveCostMap: vi.fn(),
-}));
-
 import { fetchAllFromTable } from '../src/lib/sb-paginate.js';
-import { fetchLatestReceiveCostMap } from '../src/lib/receive-cost.js';
 import {
   getProductListBundle,
   getProductCatalog,
   invalidateProductCatalogCache,
   patchProductStockInCache,
-  refreshLatestCostsInCache,
   _resetProductCatalogCacheForTests,
 } from '../src/lib/product-catalog-cache.js';
 
@@ -31,9 +25,8 @@ function makeSb() {
   };
 }
 
-function stubNetwork(products = [{ id: 1, name: 'A' }], imgs = [], costMap = { 1: { unit_price: 10 } }) {
+function stubNetwork(products = [{ id: 1, name: 'A' }], imgs = []) {
   fetchAllFromTable.mockResolvedValue({ data: products, error: null });
-  fetchLatestReceiveCostMap.mockResolvedValue({ map: costMap, error: null });
   const sb = makeSb();
   sb.from.mockReturnValue({
     select: vi.fn().mockReturnValue({
@@ -56,13 +49,11 @@ describe('product-catalog-cache', () => {
     expect(first.fromCache).toBe(false);
     expect(first.bundle?.products).toHaveLength(1);
     expect(fetchAllFromTable).toHaveBeenCalledTimes(1);
-    expect(fetchLatestReceiveCostMap).toHaveBeenCalledTimes(1);
 
     const second = await getProductListBundle(sb);
     expect(second.fromCache).toBe(true);
     expect(second.bundle?.products).toHaveLength(1);
     expect(fetchAllFromTable).toHaveBeenCalledTimes(1);
-    expect(fetchLatestReceiveCostMap).toHaveBeenCalledTimes(1);
   });
 
   it('concurrent loads share one in-flight promise', async () => {
@@ -113,21 +104,5 @@ describe('product-catalog-cache', () => {
     const { bundle } = await getProductListBundle(sb);
     expect(bundle?.products[0].current_stock).toBe(10);
     expect(fetchAllFromTable).toHaveBeenCalledTimes(1);
-  });
-
-  it('refreshLatestCostsInCache updates map without refetching products', async () => {
-    const sb = stubNetwork([{ id: 8, name: 'H' }], [], { 8: { unit_price: 1 } });
-    await getProductListBundle(sb);
-
-    fetchLatestReceiveCostMap.mockResolvedValue({
-      map: { 8: { unit_price: 55, receive_date: '2026-01-01' } },
-      error: null,
-    });
-
-    const { map, error } = await refreshLatestCostsInCache(sb);
-    expect(error).toBeNull();
-    expect(map[8].unit_price).toBe(55);
-    expect(fetchAllFromTable).toHaveBeenCalledTimes(1);
-    expect(fetchLatestReceiveCostMap).toHaveBeenCalledTimes(2);
   });
 });

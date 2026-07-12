@@ -1,22 +1,7 @@
-// Receive-cost helpers — thin client over get_product_latest_receive_costs /
-// get_receive_cost_timeline RPCs (see migration 071).
+// Receive-cost helpers — thin client over get_receive_cost_timeline RPC
+// (see migration 071). Used by profit reports for as-of-sale cost lookup.
 
 const ID_CHUNK = 500;
-
-/** Build latestCostMap shape used by ProductsView / stock export. */
-export function buildLatestCostMap(rows) {
-  const map = {};
-  for (const r of rows || []) {
-    if (!r?.product_id) continue;
-    const receive_date = r.receive_date;
-    map[r.product_id] = {
-      unit_price: Number(r.unit_price) || 0,
-      receive_date,
-      ts: receive_date ? new Date(receive_date).getTime() : 0,
-    };
-  }
-  return map;
-}
 
 /** Per-product sorted receive timeline for as-of-sale cost in reports. */
 export function buildReceiveCostTimeline(rows) {
@@ -32,13 +17,6 @@ export function buildReceiveCostTimeline(rows) {
     arr.sort((a, b) => b.date - a.date);
   }
   return map;
-}
-
-/** Latest active receive cost per catalog SKU (~6k rows, single RPC). */
-export async function fetchLatestReceiveCostMap(sb) {
-  const { data, error } = await sb.rpc('get_product_latest_receive_costs');
-  if (error) return { map: {}, error };
-  return { map: buildLatestCostMap(data), error: null };
 }
 
 /** Receive timeline for report product ids (chunked .in() on the RPC arg). */
