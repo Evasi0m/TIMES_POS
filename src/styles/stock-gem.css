@@ -64,6 +64,29 @@
   border-radius: 12px;
 }
 
+/* Circular notification-style badge (catalog cards) */
+.stock-gem--circle {
+  border-radius: 9999px;
+}
+
+.stock-gem--circle.stock-gem--sm {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.stock-gem--circle.stock-gem--md {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+.stock-gem--circle.stock-gem--sm .stock-gem__num {
+  font-size: 0.75rem;
+}
+
+.stock-gem--circle.stock-gem--md .stock-gem__num {
+  font-size: 0.875rem;
+}
+
 .stock-gem__num {
   position: relative;
   z-index: 1;

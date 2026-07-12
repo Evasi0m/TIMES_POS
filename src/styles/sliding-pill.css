@@ -1,0 +1,100 @@
+/* Sliding active-pill for KindTabs / Segment / similar glass chip bars
+ *
+ * Track shell uses rounded-xl (12px) + p-1 (4px).
+ * Pill radius = shell ? inset ? 8px, visually softened to 10px so it
+ * reads as the same family as the outer frame (not a sharp inner square).
+ */
+
+.sliding-pill-track {
+  position: relative;
+  --sliding-pill-radius: 0.625rem; /* 10px */
+}
+
+.sliding-pill {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: var(--sliding-pill-radius);
+  background: rgb(var(--c-surface-strong, 255 255 255));
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.06),
+    0 0 0 1px rgb(var(--c-hairline, 0 0 0) / 0.1);
+  opacity: 0;
+  transition:
+    left 0.3s var(--ease-out, cubic-bezier(0.2, 0.7, 0.2, 1)),
+    top 0.3s var(--ease-out, cubic-bezier(0.2, 0.7, 0.2, 1)),
+    width 0.3s var(--ease-out, cubic-bezier(0.2, 0.7, 0.2, 1)),
+    height 0.3s var(--ease-out, cubic-bezier(0.2, 0.7, 0.2, 1)),
+    opacity 0.18s var(--ease-out, cubic-bezier(0.2, 0.7, 0.2, 1)),
+    background 0.25s var(--ease-out, cubic-bezier(0.2, 0.7, 0.2, 1)),
+    box-shadow 0.25s var(--ease-out, cubic-bezier(0.2, 0.7, 0.2, 1));
+}
+
+.sliding-pill--ready {
+  opacity: 1;
+}
+
+/* AI active variant — mesh on the moving pill */
+.sliding-pill--ai {
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  background:
+    radial-gradient(circle at 8% 12%, #fbbf24 0%, transparent 32%),
+    radial-gradient(circle at 92% 88%, #f59e0b 0%, transparent 28%),
+    radial-gradient(circle at 78% 18%, #60a5fa 0%, transparent 38%),
+    radial-gradient(circle at 15% 20%, #fb923c 0%, transparent 55%),
+    radial-gradient(circle at 85% 25%, #ef4444 0%, transparent 55%),
+    radial-gradient(circle at 50% 110%, #8b5cf6 0%, transparent 65%),
+    linear-gradient(135deg, #f97316 0%, #dc2626 30%, #2563eb 58%, #1d4ed8 78%, #7c3aed 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.35) inset,
+    0 -1px 0 rgba(15, 23, 42, 0.28) inset,
+    0 4px 12px -2px rgba(220, 38, 38, 0.38),
+    0 4px 12px -2px rgba(30, 64, 175, 0.30),
+    0 0 16px 0 rgba(249, 115, 22, 0.28),
+    0 0 14px 0 rgba(37, 99, 235, 0.22);
+}
+
+.sliding-pill--ai::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 50%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent);
+  pointer-events: none;
+}
+
+/* Tab buttons sit above the pill — same radius as the pill */
+.sliding-pill-track .kind-tabs__btn,
+.sliding-pill-track .sliding-pill-tab {
+  position: relative;
+  z-index: 1;
+  border-radius: var(--sliding-pill-radius) !important;
+  box-shadow: none !important;
+}
+
+/* Active label on default pill */
+.sliding-pill-tab--active {
+  color: rgb(var(--c-ink, 26 26 26));
+}
+
+/* Active label when pill is AI mesh */
+.sliding-pill-tab--on-ai {
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+  font-weight: 600;
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.45),
+    0 0 8px rgba(15, 23, 42, 0.20);
+}
+
+.sliding-pill-tab--on-ai svg {
+  color: #fff !important;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sliding-pill {
+    transition: none;
+  }
+}

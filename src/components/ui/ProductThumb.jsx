@@ -28,7 +28,15 @@ const BRAND_MONO = {
   citizen: { letter: 'C', gradient: 'linear-gradient(180deg, #a03030 0%, #7f1d1d 50%, #5f1515 100%)', ink: '#fbd5d5' }, // deep red
 };
 
-export default function ProductThumb({ product, size = 'md', fill = false, className = '' }) {
+export default function ProductThumb({
+  product,
+  size = 'md',
+  fill = false,
+  className = '',
+  expandable = true,
+  /** 'brand' = monogram letter (default); 'sku' = one-line product name */
+  fallback = 'brand',
+}) {
   const px = SIZES[size] || SIZES.md;
   const boxStyle = fill
     ? { width: '100%', height: '100%', aspectRatio: '1' }
@@ -67,6 +75,7 @@ export default function ProductThumb({ product, size = 'md', fill = false, class
         style={boxStyle}
         imgClassName="w-full h-full object-contain rounded-[10px]"
         onImageError={() => setBroken(true)}
+        expandable={expandable}
         placeholder={
           <div className={photoTile} style={boxStyle}>
             <span className="skeleton absolute inset-0 rounded-[10px]" aria-hidden="true"/>
@@ -80,6 +89,46 @@ export default function ProductThumb({ product, size = 'md', fill = false, class
   // products, so derive the brand on the fly when it's absent.
   const brand = product?._brand ?? classifyBrand(product?.name);
   const mono = BRAND_MONO[brand];
+  const sku = String(product?.name || '').trim();
+
+  // Catalog cards (unmatched TikTok): show SKU text instead of brand letter.
+  if (fallback === 'sku' && sku) {
+    const len = sku.length;
+    const skuSize =
+      len > 22 ? '0.55rem' :
+      len > 16 ? '0.65rem' :
+      len > 12 ? '0.75rem' :
+      fill ? '0.85rem' : '0.7rem';
+    return (
+      <div
+        className={tileBase + ' font-display font-semibold select-none ' + glassOverlay}
+        style={{
+          ...boxStyle,
+          background: mono?.gradient || 'linear-gradient(180deg, #3a3530 0%, #2a2623 100%)',
+          color: mono?.ink || '#f5f0ea',
+          padding: fill ? '0.55rem' : '0.35rem',
+        }}
+        title={sku}
+        aria-hidden="true"
+      >
+        <span
+          className="product-thumb-sku relative z-[1] block w-full min-w-0 text-center"
+          style={{
+            fontSize: skuSize,
+            lineHeight: 1.15,
+            letterSpacing: '-0.02em',
+            overflow: 'hidden',
+            whiteSpace: 'nowrap',
+            textOverflow: 'ellipsis',
+            textShadow: '0 1px 2px rgba(0,0,0,0.35)',
+          }}
+        >
+          {sku}
+        </span>
+      </div>
+    );
+  }
+
   if (mono) {
     return (
       <div

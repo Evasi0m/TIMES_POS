@@ -5,6 +5,7 @@ import ProductImageLightbox from './ProductImageLightbox.jsx';
 /**
  * Thumbnail with expand-on-click when a real image URL is available.
  * Placeholder children render without expand affordance.
+ * Pass `expandable={false}` for dense grids (avoids lightbox listeners).
  */
 export default function ExpandableImageThumb({
   src,
@@ -18,6 +19,7 @@ export default function ExpandableImageThumb({
   placeholder,
   onImageError,
   onImageLoad,
+  expandable = true,
 }) {
   const [open, setOpen] = useState(false);
   const [broken, setBroken] = useState(false);
@@ -34,6 +36,24 @@ export default function ExpandableImageThumb({
         aria-hidden="true"
       >
         <Icon name="image" size={22}/>
+      </div>
+    );
+  }
+
+  if (!expandable) {
+    return (
+      <div className={'relative ' + className} style={style}>
+        {!loaded && <span className="skeleton absolute inset-0 rounded-[inherit]" aria-hidden="true"/>}
+        <img
+          src={src}
+          alt={alt}
+          loading={loading}
+          decoding={decoding}
+          referrerPolicy={referrerPolicy}
+          className={imgClassName + (loaded ? ' opacity-100' : ' opacity-0')}
+          onLoad={() => { setLoaded(true); onImageLoad?.(); }}
+          onError={() => { setBroken(true); onImageError?.(); }}
+        />
       </div>
     );
   }

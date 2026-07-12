@@ -201,7 +201,7 @@
   .kind-tabs__icon-wrap svg {
     transition: transform 0.2s ease;
   }
-  .kind-tabs__btn[aria-selected='true']:not(.ai-tab-active) .kind-tabs__icon-wrap svg {
+  .kind-tabs__btn[aria-selected='true']:not(.ai-tab-active):not(.sliding-pill-tab--on-ai) .kind-tabs__icon-wrap svg {
     transform: scale(1.06);
   }
   .kind-tabs__ai-badge {
@@ -220,7 +220,8 @@
     color: transparent;
     -webkit-text-fill-color: transparent;
   }
-  .kind-tabs__btn.ai-tab-active .kind-tabs__label {
+  .kind-tabs__btn.ai-tab-active .kind-tabs__label,
+  .kind-tabs__btn.sliding-pill-tab--on-ai .kind-tabs__label {
     color: #fff;
     -webkit-text-fill-color: #fff;
     font-weight: 600;

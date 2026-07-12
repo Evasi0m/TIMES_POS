@@ -101,6 +101,7 @@ import {
 import { logStockExport, fetchStockExportLogs } from './lib/stock-export-log.js';
 import StockAdjustModal from './components/products/StockAdjustModal.jsx';
 import BulkStockAdjustView from './components/products/BulkStockAdjustView.jsx';
+import ProductCatalogCard from './components/products/ProductCatalogCard.jsx';
 import StockHistoryPanel from './components/products/StockHistoryPanel.jsx';
 import { PRODUCT_EDITOR_UI, PRODUCT_COST_HISTORY_UI } from './lib/product-editor-ui.js';
 import Icon from './components/ui/Icon.jsx';
@@ -135,6 +136,7 @@ import { useNumberTween } from './lib/use-number-tween.js';
 import { useBarcodeScanner, getPreferredFacing, setPreferredFacing } from './lib/use-barcode-scanner.js';
 import { playScanBeep, playScanError, vibrateScan, vibrateError } from './lib/barcode-feedback.js';
 import KindTabs from './components/movement/KindTabs.jsx';
+import SlidingSegment from './components/ui/SlidingSegment.jsx';
 import CostPercentToggle from './components/movement/CostPercentToggle.jsx';
 import MovementItemsPanel from './components/movement/MovementItemsPanel.jsx';
 import { useRecentReceivesMap } from './lib/recent-receives.js';
@@ -6496,6 +6498,17 @@ function ProductsView() {
   const [brandPickerOpen, setBrandPickerOpen] = useState(false);
   const [bulkAdjustOpen, setBulkAdjustOpen] = useState(false);
   const [bulkAdjustUserEmail, setBulkAdjustUserEmail] = useState('');
+  // Catalog display: 'grid' (Catalog Cards, default) | 'list' (legacy table/cards).
+  const [viewMode, setViewMode] = useState(() => {
+    try {
+      const v = localStorage.getItem('times-pos.products.viewMode');
+      return v === 'list' || v === 'grid' ? v : 'grid';
+    } catch { return 'grid'; }
+  });
+  const setProductsViewMode = (k) => {
+    setViewMode(k);
+    try { localStorage.setItem('times-pos.products.viewMode', k); } catch { /* private mode */ }
+  };
   // Render only the first N filtered rows; "ดูเพิ่ม" button bumps this. Keeps
   // initial paint fast even when the brand chip is "ทั้งหมด" (6k items).
   const [pageSize, setPageSize] = useState(200);
@@ -6975,6 +6988,17 @@ function ProductsView() {
             <Icon name="chevron-d" size={12} className="shrink-0 opacity-70"/>
           </button>
           <span className="products-toolbar__line-spacer" aria-hidden="true"/>
+          <KindTabs
+            className="products-view-tabs"
+            ariaLabel="รูปแบบการแสดงผลสินค้า"
+            current={viewMode}
+            onChange={setProductsViewMode}
+            Icon={Icon}
+            tabs={[
+              { k: 'grid', label: 'การ์ด', shortLabel: 'การ์ด', icon: 'layout-grid' },
+              { k: 'list', label: 'รายการ', shortLabel: 'รายการ', icon: 'layout-list' },
+            ]}
+          />
           <button
             type="button"
             className="products-toolbar__export products-toolbar__icon-btn btn-secondary icon-btn-44 !p-0 !w-11 !h-11 flex-shrink-0"
@@ -7123,7 +7147,51 @@ function ProductsView() {
         )}
       </div>
 
-      {/* Desktop table */}
+      {/* Catalog grid (default) — same outer frame as list mode */}
+      {viewMode === 'grid' && (
+        <div className="flex flex-col flex-1 min-h-0 card-canvas overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-y-auto product-catalog-scroll">
+            {(loading && browseMode) || (searchLoading && !browseMode) ? (
+              <div className="p-4 text-muted text-sm flex items-center gap-2">
+                <span className="spinner"/>
+                {browseMode ? 'กำลังโหลดสินค้า...' : 'กำลังค้นหา...'}
+              </div>
+            ) : (
+              <div className="product-catalog-grid">
+                {!loading && !searchLoading && filtered.length === 0 && (
+                  <div className="product-catalog-empty">
+                    {browseMode && hasAnyFilter ? 'ไม่พบสินค้าตรงกับตัวกรอง'
+                      : filter.query.trim() ? 'ไม่พบสินค้า — ลองคำค้นอื่น'
+                      : 'พิมพ์ชื่อรุ่นหรือบาร์โค้ดเพื่อค้นหา'}
+                  </div>
+                )}
+                {visibleRows.map(p => (
+                  <ProductCatalogCard
+                    key={p.id}
+                    product={p}
+                    latestCost={latestCostMap[p.id] || null}
+                    canEdit={canEdit}
+                    onOpen={openEditor}
+                    showTikTokBadge={tiktokBadgeOn}
+                    tiktokMapping={tiktokBadgeByProductId[p.id] || null}
+                    isNew={isNewProduct(p)}
+                  />
+                ))}
+              </div>
+            )}
+            {filtered.length > visibleRows.length && (
+              <div className="pt-2 pb-3 flex justify-center">
+                <button type="button" className="btn-secondary !py-2 !text-sm" onClick={()=>setPageSize(n => n + 200)}>
+                  ดูเพิ่ม ({(filtered.length - visibleRows.length).toLocaleString('th-TH')} รายการ)
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Legacy list: desktop table */}
+      {viewMode === 'list' && (
       <div className="hidden lg:flex lg:flex-col lg:flex-1 lg:min-h-0 card-canvas overflow-hidden">
         <div className="grid grid-cols-12 px-4 py-3 text-xs uppercase tracking-wider text-muted border-b hairline bg-surface-soft flex-shrink-0">
           <div className="col-span-3">ชื่อรุ่น</div>
@@ -7195,8 +7263,10 @@ function ProductsView() {
           )}
         </div>
       </div>
+      )}
 
-      {/* Mobile cards */}
+      {/* Legacy list: mobile cards */}
+      {viewMode === 'list' && (
       <div className="lg:hidden space-y-2">
         {(loading && browseMode) && <div className="p-4 text-muted text-sm flex items-center gap-2"><span className="spinner"/>กำลังโหลด...</div>}
         {searchLoading && !browseMode && <div className="p-4 text-muted text-sm flex items-center gap-2"><span className="spinner"/>กำลังค้นหา...</div>}
@@ -7252,6 +7322,7 @@ function ProductsView() {
           </div>
         )}
       </div>
+      )}
 
       <ProductEditor editing={editing} onClose={()=>setEditing(null)} onSave={save}
         onDeleted={async () => {
@@ -7863,7 +7934,7 @@ function ProductCostHistory({ productId }) {
 }
 
 function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories, addBrand, addCategory, createHint }) {
-  const { render: editorRender } = useMountedToggle(!!editing, 220);
+  const { render: editorRender } = useMountedToggle(!!editing, 280);
   const [draft, setDraft] = useState(null);
   const [barcodeEdit, setBarcodeEdit] = useState(false);
   const [manualApproved, setManualApproved] = useState(false);
@@ -7882,7 +7953,10 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
   const askConfirm = useConfirm();
   const tryToast = useToast();
   useEffect(()=>{
-    setDraft(editing? {...editing} : null);
+    // Keep the last draft while the modal exit animation plays — clearing
+    // it here would unmount <Modal> instantly and skip sheet-out / overlay-out.
+    if (!editing) return;
+    setDraft({...editing});
     setBarcodeEdit(false);
     setManualApproved(false);
     setAutoPct(null);
@@ -12813,37 +12887,14 @@ function OverviewView() {
     if (tab === 'anomalies' && !isSuperAdmin) setTab('dashboard');
   }, [tab, isSuperAdmin]);
 
-  // Tab pill bar styled after `KindTabs` (stock-in page): glass-soft
-  // rounded chip with the active button getting a solid white pill +
-  // shadow + hairline ring so it pops above the bar. `superAdminOnly`
-  // tabs are visible to regular admins but disabled (lock icon + dim).
-  const Segment = ({ className = '' }) => (
-    <div className={'inline-flex glass-soft rounded-xl p-1 shadow-sm ' + className}>
-      {TABS.map((t) => {
-        const active = tab === t.k;
-        const disabled = t.superAdminOnly && !isSuperAdmin;
-        return (
-          <button key={t.k} type="button"
-            disabled={disabled}
-            onClick={disabled ? undefined : () => setTab(t.k)}
-            title={disabled ? 'เฉพาะ super admin เท่านั้น' : undefined}
-            aria-label={t.label}
-            className={
-              'px-2.5 sm:px-4 py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-1.5 transition-all flex-1 sm:flex-none ' +
-              (disabled
-                ? 'text-muted-soft opacity-40 cursor-not-allowed'
-                : active
-                  ? 'bg-surface-strong text-ink shadow-md ring-1 ring-hairline'
-                  : 'text-muted hover:text-ink hover:bg-surface-strong/40')
-            }>
-            <Icon name={t.icon} size={18} />
-            <span className="hidden sm:inline">{t.label}</span>
-            {disabled && <Icon name="lock" size={11} className="opacity-70 hidden sm:inline"/>}
-          </button>
-        );
-      })}
-    </div>
-  );
+  const segmentProps = {
+    tabs: TABS,
+    current: tab,
+    onChange: setTab,
+    Icon,
+    ariaLabel: 'มุมมองภาพรวม',
+    isTabDisabled: (t) => Boolean(t.superAdminOnly && !isSuperAdmin),
+  };
 
   return (
     <div className="space-y-4 lg:space-y-6">
@@ -12881,14 +12932,14 @@ function OverviewView() {
               </div>
             );
           })()}
-          <Segment />
+          <SlidingSegment {...segmentProps} />
         </div>
       </header>
 
       {/* Mobile header — MobileTopBar already shows the page title, so
           here we surface segment + date picker (dashboard / VAT). */}
       <div className="lg:hidden px-4 pt-3 space-y-2">
-        <Segment className="w-full !flex overflow-x-auto" />
+        <SlidingSegment {...segmentProps} className="w-full !flex overflow-x-auto" />
         {(tab === 'dashboard' || tab === 'vat') && (() => {
           const val = tab === 'vat' ? vatDateRange : dateRange;
           const setVal = tab === 'vat' ? setVatDateRange : setDateRange;
@@ -15075,6 +15126,12 @@ function App() {
     const p = new URLSearchParams(window.location.search);
     return p.get('tiktok') === 'connected' ? ECOMMERCE_DEFAULT_VIEW : 'pos';
   });
+  // Keep ProductsView mounted after first visit so search/filter/scroll
+  // survive sidebar navigation (avoids remount "reset" + repeat searches).
+  const [productsKeptAlive, setProductsKeptAlive] = useState(() => view === 'products');
+  useEffect(() => {
+    if (view === 'products') setProductsKeptAlive(true);
+  }, [view]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [userMgmtOpen, setUserMgmtOpen] = useState(false);
   const [sidebarStart, setSidebarStartRaw] = useSidebarStart();
@@ -15311,17 +15368,30 @@ function App() {
             {!['dashboard', 'ecommerce', ...ECOMMERCE_VIEWS, 'receive', 'return', 'pos'].includes(view) && (
               <PageHeader title={titles[view].t} subtitle={titles[view].s} />
             )}
-            <div key={view} className="view-fade">
-              {view==='pos' && <POSView />}
-              {view==='products' && <ProductsView />}
-              {view==='sales' && <SalesView onGoPOS={()=>setView('pos')} />}
-              {/* admin-or-above gate matches DB-side is_admin() — super_admin
-                  inherits everything an admin can do. */}
-              {view==='receive'   && (role==='admin' || role==='super_admin') && <ReceiveView />}
-              {view==='return' && <ReturnView />}
-              {view==='dashboard' && (role==='admin' || role==='super_admin') && <OverviewView />}
-              {isEcommerceView(view) && (role==='admin' || role==='super_admin') && (
-                <ECommerceViewHost view={view} setView={setView} />
+            <div className="relative">
+              {/* Products keep-alive: hide without unmounting so catalog UI state persists. */}
+              {productsKeptAlive && (
+                <div
+                  className={view === 'products' ? 'view-fade' : ''}
+                  hidden={view !== 'products'}
+                  aria-hidden={view !== 'products'}
+                >
+                  <ProductsView />
+                </div>
+              )}
+              {view !== 'products' && (
+                <div key={view} className="view-fade">
+                  {view==='pos' && <POSView />}
+                  {view==='sales' && <SalesView onGoPOS={()=>setView('pos')} />}
+                  {/* admin-or-above gate matches DB-side is_admin() — super_admin
+                      inherits everything an admin can do. */}
+                  {view==='receive'   && (role==='admin' || role==='super_admin') && <ReceiveView />}
+                  {view==='return' && <ReturnView />}
+                  {view==='dashboard' && (role==='admin' || role==='super_admin') && <OverviewView />}
+                  {isEcommerceView(view) && (role==='admin' || role==='super_admin') && (
+                    <ECommerceViewHost view={view} setView={setView} />
+                  )}
+                </div>
               )}
             </div>
           </main>

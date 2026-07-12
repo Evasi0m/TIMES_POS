@@ -18,6 +18,8 @@
 @import './styles/product-editor.css';
 @import './styles/stock-gem.css';
 @import './styles/price-gem.css';
+@import './styles/product-catalog-card.css';
+@import './styles/sliding-pill.css';
 @import './styles/receive-review-mobile.css';
 @import './styles/receive-step-progress.css';
 @import './styles/payment-method-icon.css';

@@ -14,7 +14,7 @@ const isMobileViewport = () =>
   window.matchMedia('(max-width: 1023px)').matches;
 
 export default function Modal({ open, onClose, title, children, footer, wide, extraWide }) {
-  const { render, closing } = useMountedToggle(open, 220);
+  const { render, closing } = useMountedToggle(open, 280);
   const dialogRef = useRef(null);
   const previousFocusRef = useRef(null);
   const onCloseRef = useRef(onClose);
