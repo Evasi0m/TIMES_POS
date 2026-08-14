@@ -1,4 +1,4 @@
-// CMG bill parser v8 — arithmetic fields + CE/CB prefix strip + per-item needs_review.
+// CMG bill parser v9 — Gemini 3.5/3.1 cascade + skip retired model 404s.
 //
 // Accepts one OR many base64-encoded photos of Central Trading (CMG)
 // supplier invoices, sends them to Gemini in ONE request with a strict
@@ -13,18 +13,17 @@
 //
 // Cascade strategy is MODEL-FIRST, KEY-SECOND:
 //
-//    for each model (gemini-2.5-flash, gemini-3-flash-preview):
+//    for each model (gemini-3.5-flash-lite, gemini-3.1-flash-lite, gemini-3.5-flash):
 //      for each key (priority ASC):
 //         try (key, model)
 //         on 429/5xx → mark key.last_error, try next combo
+//         on 404     → model retired/missing — skip remaining keys for THIS model
 //         on 401/403 → mark key bad, try next KEY (skip this key's models)
 //         on success → stamp key.last_used_at, log + return
 //
 // Why model-first? The shop may register many API keys. If key 1's
 // primary-model request overloads or times out, we should try key 2 on
-// the same fast/cheap GA model before falling back to the preview model.
-// This uses the key pool as intended and keeps the slower fallback model
-// as a true last resort.
+// the same cheap GA model before falling back to a more expensive one.
 //
 // Why this lives in an Edge Function:
 //   The Gemini API keys are admin-only sensitive material. If we let the
@@ -86,16 +85,18 @@ const MIN_ATTEMPT_REMAINING_MS = 8_000;
 // the audit log records the rate that was actually charged.
 // Source: https://ai.google.dev/gemini-api/docs/pricing (2026-05)
 //
-// Order rationale (changed 2026-06): the GA `gemini-2.5-flash` is tried
-// FIRST because the `gemini-3-flash-preview` capacity became unreliable —
-// it started returning 503 "overloaded" on nearly every call, which both
-// slowed every scan (wait for the preview 503, THEN fall back) and made
-// the whole request fail whenever 2.5 was momentarily busy too. 2.5-flash
-// is GA, faster to respond, ~7× cheaper, and accurate enough for this OCR
-// task. The preview model stays as a secondary fallback.
+// Order rationale (changed 2026-08): `gemini-2.5-flash` and
+// `gemini-3-flash-preview` started 404 / hanging (35s timeout × N keys),
+// which made the POS scan spinner look stuck for ~2 minutes then fail.
+// Current GA OCR-capable Flash models, cheapest first:
+//   3.5-flash-lite  — current cheap GA, vision + structured JSON
+//   3.1-flash-lite  — cheaper fallback if 3.5-lite is busy/missing
+//   3.5-flash       — quality fallback (more expensive)
+// Source: https://ai.google.dev/gemini-api/docs/pricing (2026-08)
 const MODELS = [
-  { id: 'gemini-2.5-flash',       priceInUsdPerM: 0.075, priceOutUsdPerM: 0.30 },
-  { id: 'gemini-3-flash-preview', priceInUsdPerM: 0.50,  priceOutUsdPerM: 3.00 },
+  { id: 'gemini-3.5-flash-lite', priceInUsdPerM: 0.30, priceOutUsdPerM: 2.50 },
+  { id: 'gemini-3.1-flash-lite', priceInUsdPerM: 0.25, priceOutUsdPerM: 1.50 },
+  { id: 'gemini-3.5-flash',      priceInUsdPerM: 1.50, priceOutUsdPerM: 9.00 },
 ];
 const USD_TO_THB = 36;
 
@@ -191,6 +192,7 @@ function numField(v: unknown): number {
 
 // Outcomes from a single Gemini attempt.
 //   `transient`  → 429 / 5xx — safe to try next (model or key)
+//   `modelGone`  → 404 — this model id is retired; skip remaining keys for it
 //   `badKey`     → 401 / 403 — this key is bad, skip rest of its models
 //   `clientErr`  → other 4xx — our request is malformed; don't retry
 //   `network`    → fetch threw — connectivity issue, won't help to retry
@@ -198,6 +200,7 @@ function numField(v: unknown): number {
 type Attempt =
   | { kind: 'ok'; rawText: string; promptTokens: number; outputTokens: number; elapsedMs: number }
   | { kind: 'transient'; status: number; detail: string }
+  | { kind: 'modelGone'; status: number; detail: string }
   | { kind: 'badKey'; status: number; detail: string }
   | { kind: 'clientErr'; status: number; detail: string }
   | { kind: 'network'; detail: string }
@@ -255,6 +258,9 @@ async function callGemini(
     if (res.status === 429 || res.status >= 500) {
       return { kind: 'transient', status: res.status, detail: text.slice(0, 500) };
     }
+    if (res.status === 404) {
+      return { kind: 'modelGone', status: 404, detail: text.slice(0, 500) };
+    }
     if (res.status === 401 || res.status === 403) {
       return { kind: 'badKey', status: res.status, detail: text.slice(0, 500) };
     }
@@ -282,6 +288,7 @@ function shortError(status: number, detail: string): string {
   if (status === 429) return 'quota exhausted (429)';
   if (status === 401) return 'unauthorized (401) — key invalid or revoked';
   if (status === 403) return 'forbidden (403) — key disabled or wrong scope';
+  if (status === 404) return 'model not found (404)';
   if (status === 504 && /timeout/i.test(detail)) return 'Gemini timed out (504)';
   if (status === 503) return 'Gemini overloaded (503)';
   if (status >= 500)  return `Gemini server error (${status})`;
@@ -454,6 +461,24 @@ Deno.serve(async (req: Request) => {
         continue; // try next key on the same model first
       }
 
+      if (attempt.kind === 'modelGone') {
+        lastTransient = { status: attempt.status, detail: attempt.detail };
+        const shortMsg = shortError(attempt.status, attempt.detail);
+        console.warn('[cmg-bill-parse] model gone, skip remaining keys for this model', {
+          req_id: reqId,
+          key_label: keyLabel,
+          model: m.id,
+          attempt_ms: attemptMs,
+          detail: attempt.detail.slice(0, 180),
+        });
+        await logUsage(
+          adminClient, userId, k.id, m.id, images.length, 0, 0, false,
+          `${keyLabel} · ${m.id} · ${shortMsg} · attempt_ms=${attemptMs} · req_id=${reqId}`,
+        );
+        trace.push(`${m.id} ไม่มีใน API แล้ว (${shortMsg}) → ข้ามโมเดลนี้`);
+        break; // next model — keys are fine, this model id is retired
+      }
+
       if (attempt.kind === 'badKey') {
         const shortMsg = shortError(attempt.status, attempt.detail);
         console.warn('[cmg-bill-parse] bad key attempt failed', {
@@ -601,13 +626,18 @@ Deno.serve(async (req: Request) => {
 
   // Every key × every model failed with transient. Forward the most
   // recent status so the frontend can pick the right friendly message.
-  const status = lastTransient?.status ?? 503;
+  const status = lastTransient?.status === 404 ? 503 : (lastTransient?.status ?? 503);
+  const allModelsGone = lastTransient?.status === 404;
   return j(status, {
-    error: `Gemini ${status} — ทุก key / model ไม่พร้อมใช้งาน`,
+    error: allModelsGone
+      ? 'Gemini หาโมเดลอ่านบิลไม่เจอ — ลองใหม่ในอีกสักครู่'
+      : `Gemini ${status} — ทุก key / model ไม่พร้อมใช้งาน`,
     detail: `${lastTransient?.detail ?? 'unknown'}; req_id=${reqId}`,
     req_id: reqId,
     trace,
-    hint: 'ตรวจสอบว่า API key ทุกตัวใน Settings → AI ยังใช้งานได้ หรือรอจนโควต้ารีเซ็ต (เที่ยงคืน Pacific Time)',
+    hint: allModelsGone
+      ? 'โมเดล Gemini ที่ตั้งไว้ถูกเลิกแล้ว — แจ้งผู้ดูแลให้อัปเดต cascade'
+      : 'ตรวจสอบว่า API key ทุกตัวใน Settings → AI ยังใช้งานได้ หรือรอจนโควต้ารีเซ็ต (เที่ยงคืน Pacific Time)',
   });
 });
 

@@ -2,6 +2,20 @@
   "schemaVersion": 1,
   "patches": [
     {
+      "id": "2026-08-14-cmg-bill-parse-gemini-35",
+      "date": "2026-08-14",
+      "title": "สแกนบิล AI — อัปเดตโมเดล Gemini",
+      "tags": [
+        "แก้ไข",
+        "AI",
+        "รับเข้า"
+      ],
+      "items": [
+        "สแกนบิล CMG ใช้ Gemini 3.5 Flash-Lite (สำรอง 3.1 Flash-Lite / 3.5 Flash) แทน 2.5 Flash ที่ค้าง/หาไม่เจอ",
+        "ถ้า Google ส่ง 404 โมเดลเก่า ระบบข้ามไปโมเดลถัดไป ไม่ตัดจบทั้งคำขอ"
+      ]
+    },
+    {
       "id": "2026-07-12-tiktok-return-golive",
       "date": "2026-07-12",
       "title": "TikTok รอตีกลับ — go-live + UI ใหม่",

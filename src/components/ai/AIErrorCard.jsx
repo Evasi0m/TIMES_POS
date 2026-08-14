@@ -69,23 +69,43 @@ export async function parseAIError(err) {
       // v6+: cascade now covers multiple keys × multiple models.
       // "ทุก key ในระบบใช้ครบโควต้าแล้ว" is accurate regardless of how
       // many keys the admin has registered — they're all exhausted.
-      body: 'ทุก API key ในระบบใช้ครบโควต้าวันนี้แล้ว (ทั้ง Gemini 3 Flash และ 2.5 Flash)',
+      body: 'ทุก API key ในระบบใช้ครบโควต้าวันนี้แล้ว',
       hint: 'เพิ่ม API key อีกตัวที่ Settings → AI (ขอฟรีที่ aistudio.google.com/apikey) หรือรอถึงเที่ยงคืน Pacific Time (~14:00 เวลาไทย) ให้โควต้ารีเซ็ต',
       retryable: false,
       detail: geminiStatus || body?.detail || null,
       rawStatus: status,
     };
   }
+  if (status === 404) {
+    return {
+      kind: 'overload',
+      severity: 'warning',
+      icon: 'refresh',
+      title: 'AI หาโมเดลอ่านบิลไม่เจอ',
+      body: 'Google เลิกโมเดลที่ระบบใช้อยู่ หรือโมเดลยังไม่พร้อมในขณะนี้',
+      hint: 'กดลองอีกครั้ง ถ้ายังไม่ได้ให้ผู้ดูแลตรวจสอบโมเดล AI',
+      retryable: true,
+      detail: geminiStatus || body?.detail || null,
+      rawStatus: status,
+    };
+  }
   if (status === 503) {
+    const modelGone = /โมเดลอ่านบิลไม่เจอ|model not found|NOT_FOUND/i.test(
+      String(body?.error || '') + String(body?.detail || '') + String(body?.hint || ''),
+    );
     return {
       kind: 'overload',
       severity: 'info',
       icon: 'refresh',
-      title: 'AI งานเข้าเยอะเกินไป',
-      body: 'เซิร์ฟเวอร์ AI ของ Google กำลังรับงานหนัก ไม่ได้เป็นปัญหาที่ร้าน',
-      hint: 'รอ 1-2 นาทีแล้วกดลองอีกครั้ง โดยทั่วไประบบจะกลับมาเร็ว',
+      title: modelGone ? 'AI หาโมเดลอ่านบิลไม่เจอ' : 'AI งานเข้าเยอะเกินไป',
+      body: modelGone
+        ? 'Google เลิกโมเดลที่ระบบใช้อยู่ หรือโมเดลยังไม่พร้อมในขณะนี้'
+        : 'เซิร์ฟเวอร์ AI ของ Google กำลังรับงานหนัก ไม่ได้เป็นปัญหาที่ร้าน',
+      hint: modelGone
+        ? 'กดลองอีกครั้ง ถ้ายังไม่ได้ให้ผู้ดูแลอัปเดตโมเดล Gemini'
+        : 'รอ 1-2 นาทีแล้วกดลองอีกครั้ง โดยทั่วไประบบจะกลับมาเร็ว',
       retryable: true,
-      detail: geminiStatus || null,
+      detail: geminiStatus || body?.detail || null,
       rawStatus: status,
     };
   }
