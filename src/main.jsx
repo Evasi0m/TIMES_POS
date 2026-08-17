@@ -54,7 +54,7 @@ import {
   classifyBrand, classifySeries, parseCasioModel, enrichProduct,
   matchSubType, getEffectivePrice, filterProducts, sortProducts,
 } from './lib/product-classify.js';
-import { NAV, navForRole, canNavigate, VISITOR_VIEW } from './lib/nav-config.js';
+import { NAV, navForRole, canNavigate, VISITOR_VIEW, VISITOR_VIEWS } from './lib/nav-config.js';
 import {
   ECOMMERCE_DEFAULT_VIEW,
   ECOMMERCE_PLATFORMS,
@@ -73,6 +73,7 @@ import {
   mergePaylaterConfig,
   DEFAULT_PAYLATER_CONFIG,
 } from './lib/money.js';
+import { mergeCustomerPriceConfig } from './lib/customer-price.js';
 import { bahtText } from './lib/baht-text.js';
 import { fullBuyerValid } from './lib/tax-buyer.js';
 import { ECOMMERCE_CHANNELS, excludePendingTikTok, isApiImportedOrder } from './lib/ecommerce-channels.js';
@@ -102,6 +103,8 @@ import { logStockExport, fetchStockExportLogs } from './lib/stock-export-log.js'
 import StockAdjustModal from './components/products/StockAdjustModal.jsx';
 import BulkStockAdjustView from './components/products/BulkStockAdjustView.jsx';
 import ProductCatalogCard from './components/products/ProductCatalogCard.jsx';
+import ProductBrandPickerSheet from './components/products/ProductBrandPickerSheet.jsx';
+import ProductFilterSheet from './components/products/ProductFilterSheet.jsx';
 import StockHistoryPanel from './components/products/StockHistoryPanel.jsx';
 import { PRODUCT_EDITOR_UI, PRODUCT_COST_HISTORY_UI } from './lib/product-editor-ui.js';
 import Icon from './components/ui/Icon.jsx';
@@ -160,8 +163,10 @@ import {
   normalizeReturnLookupSale,
 } from './lib/tiktok-cancel-return.js';
 import InsightsView from './views/InsightsView.jsx';
+import CustomerPriceView from './views/CustomerPriceView.jsx';
 import AISettings from './components/settings/AISettings.jsx';
 import TelegramSettings from './components/settings/TelegramSettings.jsx';
+import CustomerPriceSettings from './components/settings/CustomerPriceSettings.jsx';
 import InvoiceRequestView from './views/InvoiceRequestView.jsx';
 import ECommerceView from './views/ECommerceView.jsx';
 import FullTaxInvoiceA4 from './components/invoice/FullTaxInvoiceA4.jsx';
@@ -1556,12 +1561,15 @@ function AppSettingsModal({ open, onClose, onSidebarStartChange }) {
   // draft) so its save flow + PIN gate don't entangle with the main "บันทึก".
   const [paylaterDraft, setPaylaterDraft] = useState(null);
   const [paylaterBusy, setPaylaterBusy] = useState(false);
+  const [customerPriceDraft, setCustomerPriceDraft] = useState(null);
+  const [customerPriceBusy, setCustomerPriceBusy] = useState(false);
   const [pinOpen, setPinOpen] = useState(false);
 
   useEffect(() => {
     if (open && shop) {
       setDraft({ ...shop });
       setPaylaterDraft(mergePaylaterConfig(shop?.paylater_config));
+      setCustomerPriceDraft(mergeCustomerPriceConfig(shop?.customer_price_config));
       setActiveTab('display');
     }
     if (!open) { setPinOpen(false); }
@@ -1589,6 +1597,24 @@ function AppSettingsModal({ open, onClose, onSidebarStartChange }) {
   // also clicks "บันทึกสูตร" + enters the PIN).
   const resetPaylaterToDefaults = () => {
     setPaylaterDraft(mergePaylaterConfig(null));
+    toast.push("รีเซ็ตเป็นค่าเริ่มต้นแล้ว — กดบันทึกเพื่อยืนยัน", 'info');
+  };
+
+  const saveCustomerPriceConfig = async () => {
+    if (!isSuperAdmin || !customerPriceDraft) return;
+    setCustomerPriceBusy(true);
+    const payload = mergeCustomerPriceConfig(customerPriceDraft);
+    const { error } = await sb.from('shop_settings').update({
+      customer_price_config: payload,
+    }).eq('id', 1);
+    setCustomerPriceBusy(false);
+    if (error) { toast.push("บันทึกสูตรราคาไม่ได้: " + mapError(error), 'error'); return; }
+    toast.push("บันทึกสูตรราคาลูกค้าแล้ว", 'success');
+    await refreshShop();
+  };
+
+  const resetCustomerPriceToDefaults = () => {
+    setCustomerPriceDraft(mergeCustomerPriceConfig(null));
     toast.push("รีเซ็ตเป็นค่าเริ่มต้นแล้ว — กดบันทึกเพื่อยืนยัน", 'info');
   };
 
@@ -1624,6 +1650,7 @@ function AppSettingsModal({ open, onClose, onSidebarStartChange }) {
     { id: 'telegram', label: 'Telegram',     shortLabel: 'TG',     icon: 'bell',       adminOnly: true, superAdminOnly: true },
     { id: 'ai',       label: 'AI',           shortLabel: 'AI',     icon: 'scan',       adminOnly: true, superAdminOnly: true },
     { id: 'paylater', label: 'สูตรคำนวณ',    shortLabel: 'สูตร',   icon: 'calculator', adminOnly: true, superAdminOnly: true },
+    { id: 'customer-price', label: 'ราคาลูกค้า', shortLabel: 'ราคา', icon: 'tag', adminOnly: true, superAdminOnly: true },
   ];
   // Visitor: only `display`. admin+: every tab (but superAdminOnly ones are
   // disabled at click time for admin — see below).
@@ -1788,6 +1815,18 @@ function AppSettingsModal({ open, onClose, onSidebarStartChange }) {
                 onSave={() => setPinOpen(true)}
                 onReset={resetPaylaterToDefaults}
                 busy={paylaterBusy}
+              />
+            </div>
+          )}
+
+          {activeTab === 'customer-price' && isSuperAdmin && customerPriceDraft && (
+            <div className="fade-in">
+              <CustomerPriceSettings
+                draft={customerPriceDraft}
+                onChange={setCustomerPriceDraft}
+                onSave={saveCustomerPriceConfig}
+                onReset={resetCustomerPriceToDefaults}
+                busy={customerPriceBusy}
               />
             </div>
           )}
@@ -4561,7 +4600,7 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
   const isSuperAdmin = role === 'super_admin';
   const roleTag = role === 'super_admin' ? 'super admin' : role === 'admin' ? 'admin' : 'visitor';
   const roleColour = role === 'super_admin' ? 'text-gold-premium' : role === 'admin' ? 'text-primary' : 'text-muted-soft';
-  const drawerActive = view === 'dashboard' || isEcommerceView(view);
+  const drawerActive = view === 'dashboard' || view === 'return' || isEcommerceView(view);
   const { render: drawerRender, closing: drawerClosing } = useMountedToggle(openMenu, 220);
 
   const closeUpdateLog = useCallback(() => {
@@ -4612,6 +4651,22 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
           <div className="p-4 space-y-5 overflow-y-auto max-h-[calc(100vh-4rem)]">
             {isAdminPlus && (
               <>
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-muted mb-2">รับคืน</div>
+                  <div className="mobile-drawer-nav">
+                    <button
+                      type="button"
+                      className={'mobile-drawer-item ' + (view === 'return' ? 'active' : '')}
+                      onClick={() => { setView('return'); setOpenMenu(false); }}
+                    >
+                      <Icon name="arrow-down" size={18} className="shrink-0 mt-0.5"/>
+                      <span className="min-w-0">
+                        <span className="block font-medium">รับคืนจากลูกค้า</span>
+                        <span className="mobile-drawer-item__hint">รับของคืน · ใบลดหนี้</span>
+                      </span>
+                    </button>
+                  </div>
+                </div>
                 <div>
                   <div className="text-xs uppercase tracking-wider text-muted mb-2">รายงาน</div>
                   <div className="mobile-drawer-nav">
@@ -4694,15 +4749,16 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
 }
 
 // Phase 5 redesign: floating pill bar with a center FAB ("ขาย").
-// - All other tabs sit in two halves around the FAB notch (admin: 3-FAB-3,
-//   cashier: 2-FAB-1) so every menu remains visible without an overflow sheet.
+// - Tabs sit in two halves around the FAB (admin: 2-FAB-2 — สินค้า /
+//   ราคาลูกค้า | ขาย | ประวัติ / รับเข้า). รับคืน lives in the hamburger
+//   drawer with ภาพรวม + E-Commerce so the bar stays 4 slots, not 5.
 // - FAB doubles as an offline-queue indicator: a red badge with the pending
 //   sale count appears whenever `onQueueChange` reports >0 queued items.
 function MobileTabBar({ view, setView }) {
   const role = useRole();
   const all = navForRole(role);
   const posItem = all.find(it => it.k === 'pos');
-  const others  = all.filter(it => it.k !== 'pos' && it.k !== 'dashboard' && it.k !== 'pnl' && it.k !== 'ecommerce');
+  const others  = all.filter(it => it.k !== 'pos' && it.k !== 'dashboard' && it.k !== 'pnl' && it.k !== 'ecommerce' && it.k !== 'return');
   const visibleOthers = others.filter(it => canNavigate(role, it));
   const leftCount = Math.floor(visibleOthers.length / 2);
   const left  = visibleOthers.slice(0, leftCount);
@@ -7522,216 +7578,6 @@ function ProductStockExportModal({ open, onClose, scope, onScopeChange, products
         {shopName ? <> · ร้าน <span className="text-ink">{shopName}</span></> : null}
       </div>
     </Modal>
-  );
-}
-
-/* ProductBrandPickerSheet — mobile brand facet menu (replaces horizontal chips). */
-function ProductBrandPickerSheet({ open, onClose, filter, brandCounts, catalogLoaded, onPick }) {
-  const rowCls = (active) =>
-    'w-full flex items-center justify-between gap-3 px-4 py-3.5 text-left text-sm font-medium border-b hairline last:border-0 transition-colors ' +
-    (active ? 'bg-primary/8 text-primary' : 'text-ink hover:bg-surface-strong/60');
-
-  return (
-    <BottomSheet open={open} onClose={onClose} title="เลือกแบรนด์">
-      <button type="button" className={rowCls(filter.brand === 'all')} onClick={() => onPick('all')}>
-        <span>ทั้งหมด</span>
-        {catalogLoaded && <span className="text-xs text-muted-soft tabular-nums">{brandCounts.all || 0}</span>}
-      </button>
-      {BRAND_RULES.map((b) => {
-        const count = catalogLoaded ? (brandCounts[b.id] || 0) : null;
-        if (catalogLoaded && count === 0 && filter.brand !== b.id) return null;
-        return (
-          <button key={b.id} type="button" className={rowCls(filter.brand === b.id)} onClick={() => onPick(b.id)}>
-            <span>{b.label}</span>
-            {count != null && <span className="text-xs text-muted-soft tabular-nums">{count}</span>}
-          </button>
-        );
-      })}
-    </BottomSheet>
-  );
-}
-
-/* ProductFilterSheet — bottom-sheet/modal for advanced filters
-   (price / material / color / stock-only). Reads + writes the parent's
-   `filter` object directly so changes apply live (no Apply button). The
-   trigger lives in ProductsView's top bar with a count badge.
-   Material + color show counts in the *current* filtered context so users
-   never see "0 results" facets unless they're already selected. */
-function ProductFilterSheet({ open, onClose, filter, setFilter, materialCounts, colorCounts, showCasioFacets, seriesCounts, subTypeCounts, setSeries, setSubType }) {
-  if (!open) return null;
-  const setMaterial = (m) => setFilter(f => ({ ...f, material: m === f.material ? '' : m, color: '' }));
-  const setColor    = (c) => setFilter(f => ({ ...f, color: c === f.color ? '' : c }));
-  const chipCls = (active) =>
-    'py-1.5 px-3 rounded-full text-xs font-medium border inline-flex items-center gap-1.5 transition-all ' +
-    (active ? 'bg-ink text-canvas border-ink shadow-sm' : 'bg-surface-strong text-ink border-hairline hover:bg-surface-strong/80');
-  const setPricePreset = (preset) => setFilter(f => {
-    const same = f.minPrice === preset.min && f.maxPrice === preset.max;
-    return { ...f, minPrice: same ? 0 : preset.min, maxPrice: same ? 0 : preset.max };
-  });
-
-  return (
-    <div className="fixed inset-0 z-[120] flex items-end sm:items-center sm:justify-center" onClick={onClose}>
-      <div className="absolute inset-0 bg-nightshade/40 fade-in"/>
-      {/* `overflow-hidden` clips the footer's `bg-surface-soft` block to
-          the sheet's rounded corners — without it, the footer extended
-          past the sheet's top-rounding and showed sharp bottom corners
-          on mobile. Also dropped `rounded-t-2xl` only → `rounded-2xl`
-          so the bottom edges are softened too. */}
-      <div className="relative w-full sm:max-w-lg bg-canvas rounded-2xl shadow-2xl border hairline max-h-[85vh] flex flex-col fade-in overflow-hidden" onClick={e=>e.stopPropagation()}>
-        <div className="flex items-center justify-between px-4 py-3 border-b hairline">
-          <div className="font-display text-lg flex items-center gap-2"><Icon name="filter" size={18}/> ตัวกรอง</div>
-          <button type="button" className="btn-ghost !py-1.5 !px-2" onClick={onClose} aria-label="ปิด">
-            <Icon name="x" size={18}/>
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-5">
-          {/* Stock-only */}
-          <label className="flex items-center justify-between gap-3 cursor-pointer">
-            <div>
-              <div className="text-sm font-medium">เฉพาะของพร้อมขาย</div>
-              <div className="text-xs text-muted-soft">ซ่อนสินค้าที่สต็อก ≤ 0</div>
-            </div>
-            <input type="checkbox" className="w-5 h-5 accent-primary" checked={filter.inStockOnly}
-              onChange={e=>setFilter(f=>({...f, inStockOnly: e.target.checked}))}/>
-          </label>
-
-          {/* Price preset */}
-          <div>
-            <div className="text-xs uppercase tracking-wider text-muted mb-2">ช่วงราคา</div>
-            <div className="grid grid-cols-2 gap-2">
-              {PRICE_PRESETS.map(p => {
-                const active = filter.minPrice === p.min && filter.maxPrice === p.max;
-                return (
-                  <button key={p.id} type="button" onClick={()=>setPricePreset(p)}
-                    className={"py-2 px-3 rounded-lg text-sm font-medium border transition-all " +
-                      (active
-                        ? "bg-ink text-canvas border-ink shadow-sm"
-                        : "bg-surface-strong text-ink border-hairline hover:bg-surface-strong/80")}>
-                    {p.label}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="mt-2 flex items-center gap-2">
-              <input type="number" inputMode="numeric" placeholder="ต่ำสุด" className="input !py-2 !text-sm flex-1 tabular-nums"
-                value={filter.minPrice || ''} onChange={e=>setFilter(f=>({...f, minPrice: Math.max(0, Number(e.target.value)||0)}))}/>
-              <span className="text-muted-soft">–</span>
-              <input type="number" inputMode="numeric" placeholder="สูงสุด" className="input !py-2 !text-sm flex-1 tabular-nums"
-                value={filter.maxPrice || ''} onChange={e=>setFilter(f=>({...f, maxPrice: Math.max(0, Number(e.target.value)||0)}))}/>
-            </div>
-          </div>
-
-          {/* CASIO-only facets — series / subtype / material / color */}
-          {showCasioFacets && (
-            <>
-              {Object.keys(seriesCounts).length > 0 && (
-                <div>
-                  <div className="text-xs uppercase tracking-wider text-muted mb-2">Series</div>
-                  <div className="flex flex-wrap gap-2">
-                    <button type="button" onClick={()=>setSeries?.('')} className={chipCls(!filter.series)}>
-                      ทุก Series <span className="opacity-60 tabular-nums">{seriesCounts.__total || 0}</span>
-                    </button>
-                    {SERIES_RULES.map(s => {
-                      const count = seriesCounts[s.id] || 0;
-                      if (count === 0 && filter.series !== s.id) return null;
-                      return (
-                        <button key={s.id} type="button" onClick={()=>setSeries?.(s.id)} className={chipCls(filter.series === s.id)}>
-                          {s.label} <span className="opacity-60 tabular-nums">{count}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {filter.series && SERIES_SUBS[filter.series] && (
-                <div>
-                  <div className="text-xs uppercase tracking-wider text-muted mb-2">ประเภท</div>
-                  <div className="flex flex-wrap gap-2">
-                    <button type="button" onClick={()=>setSubType?.('')} className={chipCls(!filter.subType)}>
-                      ทุกประเภท <span className="opacity-60 tabular-nums">{subTypeCounts?.__total || 0}</span>
-                    </button>
-                    {SERIES_SUBS[filter.series].map(s => {
-                      const count = subTypeCounts?.[s.id] || 0;
-                      if (count === 0 && filter.subType !== s.id) return null;
-                      return (
-                        <button key={s.id} type="button" onClick={()=>setSubType?.(s.id)} className={chipCls(filter.subType === s.id)}>
-                          {s.label} <span className="opacity-60 tabular-nums">{count}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {Object.keys(materialCounts).length > 0 && (
-                <div>
-                  <div className="text-xs uppercase tracking-wider text-muted mb-2">วัสดุสาย</div>
-                  <div className="flex flex-wrap gap-2">
-                    {Object.entries(materialCounts)
-                      .sort((a, b) => b[1] - a[1])
-                      .map(([code, count]) => {
-                        const meta = MATERIAL_MAP[code];
-                        if (!meta) return null;
-                        const active = filter.material === code;
-                        return (
-                          <button key={code} type="button" onClick={()=>setMaterial(code)}
-                            className={"py-1.5 px-3 rounded-full text-xs font-medium border inline-flex items-center gap-1.5 transition-all " +
-                              (active
-                                ? "bg-ink text-canvas border-ink shadow-sm"
-                                : "bg-surface-strong text-ink border-hairline hover:bg-surface-strong/80")}>
-                            <span className="inline-block w-3 h-3 rounded-full border border-white/40" style={{background: meta.swatch}}/>
-                            {meta.label}
-                            <span className="opacity-60 tabular-nums">{count}</span>
-                          </button>
-                        );
-                      })}
-                  </div>
-                </div>
-              )}
-
-              {Object.keys(colorCounts).length > 0 && (
-                <div>
-                  <div className="text-xs uppercase tracking-wider text-muted mb-2">โทนสี</div>
-                  <div className="flex flex-wrap gap-2">
-                    {Object.keys(COLOR_MAP)
-                      .filter(c => (colorCounts[c] || 0) > 0)
-                      .map(code => {
-                        const meta = COLOR_MAP[code];
-                        const count = colorCounts[code] || 0;
-                        const active = filter.color === code;
-                        return (
-                          <button key={code} type="button" onClick={()=>setColor(code)}
-                            className={"py-1.5 px-3 rounded-full text-xs font-medium border inline-flex items-center gap-1.5 transition-all " +
-                              (active
-                                ? "bg-ink text-canvas border-ink shadow-sm"
-                                : "bg-surface-strong text-ink border-hairline hover:bg-surface-strong/80")}>
-                            <span className="inline-block w-3 h-3 rounded-full border border-white/40" style={{background: meta.hex}}/>
-                            {meta.label}
-                            <span className="opacity-60 tabular-nums">{count}</span>
-                          </button>
-                        );
-                      })}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        <div className="flex gap-2 px-4 py-3 border-t hairline bg-surface-soft pb-safe">
-          <button type="button" className="btn-ghost flex-1" onClick={()=>setFilter(f => ({
-            ...f, series: '', subType: '', material: '', color: '', minPrice: 0, maxPrice: 0, inStockOnly: false,
-          }))}>
-            ล้างตัวกรอง
-          </button>
-          <button type="button" className="btn-primary flex-1" onClick={onClose}>
-            เสร็จสิ้น
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -15079,6 +14925,15 @@ function ECommerceViewHost({ view, setView }) {
   );
 }
 
+function CustomerPriceViewHost() {
+  const { shop } = useShop();
+  const config = React.useMemo(
+    () => mergeCustomerPriceConfig(shop?.customer_price_config),
+    [shop?.customer_price_config],
+  );
+  return <CustomerPriceView config={config} />;
+}
+
 function App() {
   const [publicRoute] = useState(() => {
     const p = new URLSearchParams(window.location.search);
@@ -15205,8 +15060,9 @@ function App() {
   }, [session?.access_token, mfaTick]);
 
   // Defensive: if the current view isn't allowed for this role (visitor on
-  // a non-products view, role flip during a session, etc.) redirect:
-  //   visitor  → products (their only legal view)
+  // a non-products / non-customer-price view, role flip during a session,
+  // etc.) redirect:
+  //   visitor  → products (or stay on customer-price)
   //   admin+   → pos      (sensible default landing)
   useEffect(() => {
     if (!session) return;
@@ -15217,7 +15073,7 @@ function App() {
   useEffect(() => {
     if (!session) return;
     if (role === 'visitor') {
-      if (view !== VISITOR_VIEW) setView(VISITOR_VIEW);
+      if (!VISITOR_VIEWS.includes(view)) setView(VISITOR_VIEW);
       return;
     }
     const allowed = routableViews(role, navForRole(role));
@@ -15283,6 +15139,7 @@ function App() {
   const titles = {
     pos:       { t: "ขายสินค้า",            s: "POS" },
     products:  { t: "สินค้า",                s: "Inventory" },
+    'customer-price': { t: "ราคาลูกค้า",     s: "Quote" },
     sales:     { t: "ประวัติการขาย",          s: "Sales History" },
     receive:   { t: "รับสินค้าจากบริษัท",    s: "Stock In · From Supplier" },
     return:    { t: "รับคืนจากลูกค้า",       s: "Customer Return" },
@@ -15348,6 +15205,7 @@ function App() {
               {view !== 'products' && (
                 <div key={view} className="view-fade">
                   {view==='pos' && <POSView />}
+                  {view==='customer-price' && <CustomerPriceViewHost />}
                   {view==='sales' && <SalesView onGoPOS={()=>setView('pos')} />}
                   {/* admin-or-above gate matches DB-side is_admin() — super_admin
                       inherits everything an admin can do. */}

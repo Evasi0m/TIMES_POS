@@ -26,7 +26,7 @@ export default function BottomSheet({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={title || '???'}
+        aria-label={title || 'เมนู'}
         className={
           'relative w-full lg:max-w-lg glass-strong rounded-t-2xl lg:rounded-2xl border-t lg:border hairline flex flex-col overflow-hidden ' +
           (closing ? 'sheet-out' : 'sheet-anim') +
@@ -38,7 +38,7 @@ export default function BottomSheet({
         {title && (
           <div className="shrink-0 flex items-center justify-between gap-2 px-4 py-3 border-b hairline-soft">
             <div className="font-display text-base font-semibold min-w-0 truncate">{title}</div>
-            <button type="button" className="btn-ghost !py-1.5 !px-2 shrink-0" onClick={onClose} aria-label="???">
+            <button type="button" className="btn-ghost !py-1.5 !px-2 shrink-0" onClick={onClose} aria-label="ปิด">
               <Icon name="x" size={18}/>
             </button>
           </div>

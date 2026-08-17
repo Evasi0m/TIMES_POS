@@ -178,6 +178,25 @@
   }
 }
 
+/* Customer-price tab: no in-field camera — normal right padding on all breakpoints */
+.products-search-input--no-camera {
+  padding-right: 0.625rem !important;
+}
+
+.products-search-input--no-camera.has-clear {
+  padding-right: 2.125rem !important;
+}
+
+@media (min-width: 1024px) {
+  .products-search-input--no-camera {
+    padding-right: 0.625rem !important;
+  }
+
+  .products-search-input--no-camera.has-clear {
+    padding-right: 2.125rem !important;
+  }
+}
+
 /* Product list rows — left accent glow E (mesh drift + soft edge + core + halo). */
 .product-row {
   position: relative;
