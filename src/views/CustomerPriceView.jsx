@@ -48,12 +48,27 @@ const DEFAULT_FILTER = {
 };
 
 function CustomerPriceCard({ product, quote, onOpen }) {
+  const stock = Number(product?.current_stock) || 0;
+  const oos = stock <= 0;
   return (
     <button
       type="button"
-      className="customer-price-card"
+      className={'customer-price-card' + (oos ? ' customer-price-card--oos' : '')}
       onClick={() => onOpen(product)}
     >
+      <div
+        className="customer-price-card__stock"
+        aria-label={oos ? 'หมดสต็อก' : `คงเหลือ ${stock}`}
+      >
+        <div
+          className={
+            'stock-gem stock-gem--circle stock-gem--md ' +
+            (oos ? 'stock-gem--out' : 'stock-gem--in')
+          }
+        >
+          <span className="stock-gem__num">{stock}</span>
+        </div>
+      </div>
       <div className="customer-price-card__media">
         {quote.strikeRetail && (
           <span className="customer-price-card__badge">-{quote.discountPct}%</span>
@@ -548,6 +563,11 @@ export default function CustomerPriceView({ config }) {
             {!openQuote.hasSell && openQuote.retail > 0 && (
               <div className="text-sm text-muted mt-1">ป้าย {fmtCatalogPrice(openQuote.retail)}</div>
             )}
+            <div className="customer-price-overlay__stock">
+              {(Number(open.current_stock) || 0) <= 0
+                ? 'หมดสต็อก'
+                : `คงเหลือ ${Number(open.current_stock) || 0} ชิ้น`}
+            </div>
           </div>
         </div>
       )}
