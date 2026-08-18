@@ -5,7 +5,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  overflow: visible;
+  overflow: hidden;
   border-radius: 12px;
   background: rgb(var(--c-surface-card, 255 255 255));
   border: 1px solid rgb(var(--c-hairline, 0 0 0) / 0.08);
@@ -22,14 +22,6 @@
 
 .customer-price-card--oos {
   opacity: 0.72;
-}
-
-.customer-price-card__stock {
-  position: absolute;
-  top: 0.35rem;
-  right: 0.35rem;
-  z-index: 4;
-  pointer-events: none;
 }
 
 .customer-price-card:hover {
@@ -106,6 +98,38 @@
   gap: 2px;
   align-items: flex-start;
   min-width: 0;
+}
+
+.customer-price-card__row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.customer-price-card__meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.customer-price-card__stock {
+  flex-shrink: 0;
+  line-height: 0;
+  pointer-events: none;
+}
+
+.customer-price-card__stock .stock-gem--md {
+  width: 1.65rem;
+  height: 1.65rem;
+}
+
+.customer-price-card__stock .stock-gem--md .stock-gem__num {
+  font-size: 0.7rem;
 }
 
 .customer-price-card__name {

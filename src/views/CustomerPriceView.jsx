@@ -56,19 +56,6 @@ function CustomerPriceCard({ product, quote, onOpen }) {
       className={'customer-price-card' + (oos ? ' customer-price-card--oos' : '')}
       onClick={() => onOpen(product)}
     >
-      <div
-        className="customer-price-card__stock"
-        aria-label={oos ? 'หมดสต็อก' : `คงเหลือ ${stock}`}
-      >
-        <div
-          className={
-            'stock-gem stock-gem--circle stock-gem--md ' +
-            (oos ? 'stock-gem--out' : 'stock-gem--in')
-          }
-        >
-          <span className="stock-gem__num">{stock}</span>
-        </div>
-      </div>
       <div className="customer-price-card__media">
         {quote.strikeRetail && (
           <span className="customer-price-card__badge">-{quote.discountPct}%</span>
@@ -79,17 +66,34 @@ function CustomerPriceCard({ product, quote, onOpen }) {
       </div>
       <div className="customer-price-card__body">
         <div className="customer-price-card__name" title={product.name}>{product.name}</div>
-        {quote.hasSell ? (
-          <div className="customer-price-card__sell">{fmtCatalogPrice(quote.sell)}</div>
-        ) : (
-          <div className="customer-price-card__na">ยังไม่มีราคาขาย</div>
-        )}
-        {quote.strikeRetail && (
-          <div className="customer-price-card__retail">ราคาปกติ {fmtCatalogPrice(quote.retail).replace('.-', '')} บาท</div>
-        )}
-        {!quote.hasSell && quote.retail > 0 && (
-          <div className="customer-price-card__tag">ป้าย {fmtCatalogPrice(quote.retail)}</div>
-        )}
+        <div className="customer-price-card__row">
+          <div className="customer-price-card__meta">
+            {quote.hasSell ? (
+              <div className="customer-price-card__sell">{fmtCatalogPrice(quote.sell)}</div>
+            ) : (
+              <div className="customer-price-card__na">ยังไม่มีราคาขาย</div>
+            )}
+            {quote.strikeRetail && (
+              <div className="customer-price-card__retail">ราคาปกติ {fmtCatalogPrice(quote.retail).replace('.-', '')} บาท</div>
+            )}
+            {!quote.hasSell && quote.retail > 0 && (
+              <div className="customer-price-card__tag">ป้าย {fmtCatalogPrice(quote.retail)}</div>
+            )}
+          </div>
+          <div
+            className="customer-price-card__stock"
+            aria-label={oos ? 'หมดสต็อก' : `คงเหลือ ${stock}`}
+          >
+            <div
+              className={
+                'stock-gem stock-gem--circle stock-gem--md ' +
+                (oos ? 'stock-gem--out' : 'stock-gem--in')
+              }
+            >
+              <span className="stock-gem__num">{stock}</span>
+            </div>
+          </div>
+        </div>
       </div>
     </button>
   );
