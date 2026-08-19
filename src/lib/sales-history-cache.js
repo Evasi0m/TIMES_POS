@@ -32,8 +32,13 @@ function normalizeCostToGross(snapCost, latestRecvPrice) {
   return c;
 }
 
-export function buildSalesFilterKey({ from, to, channel, excludeVoided }) {
-  return `${from}_${to}_${channel}_${excludeVoided}`;
+function normalizeChannels({ channel, channels } = {}) {
+  const values = Array.isArray(channels) ? channels : (channel ? [channel] : []);
+  return [...new Set(values.filter(Boolean))].sort();
+}
+
+export function buildSalesFilterKey({ from, to, channel, channels, excludeVoided }) {
+  return `${from}_${to}_${normalizeChannels({ channel, channels }).join(',')}_${excludeVoided}`;
 }
 
 export function getCachedFilterKey() {
@@ -110,14 +115,16 @@ function recomputeOrderSummaryEntry(order, itemsByOrder, recvMap, prodMap) {
   return partial[order.id] ?? null;
 }
 
-async function loadBundleFromNetwork(sb, { from, to, channel, excludeVoided }) {
+async function loadBundleFromNetwork(sb, { from, to, channel, channels, excludeVoided }) {
+  const selectedChannels = normalizeChannels({ channel, channels });
   const { data, error } = await fetchAll((fromIdx, toIdx) => {
     let q = excludePendingTikTok(sb.from('sale_orders').select(SALE_ORDER_LIST_SELECT))
       .gte('sale_date', startOfDayBangkok(from))
       .lte('sale_date', endOfDayBangkok(to))
       .order('sale_date', { ascending: false })
       .range(fromIdx, toIdx);
-    if (channel) q = q.eq('channel', channel);
+    if (selectedChannels.length === 1) q = q.eq('channel', selectedChannels[0]);
+    if (selectedChannels.length > 1) q = q.in('channel', selectedChannels);
     if (excludeVoided) q = q.eq('status', 'active');
     return q;
   });
@@ -184,8 +191,8 @@ async function loadBundleFromNetwork(sb, { from, to, channel, excludeVoided }) {
 /**
  * @returns {Promise<{ bundle: SalesHistoryBundle | null, error: Error | null, fromCache: boolean, filterKey: string }>}
  */
-export async function getSalesHistoryBundle(sb, { from, to, channel, excludeVoided, force = false } = {}) {
-  const filterKey = buildSalesFilterKey({ from, to, channel, excludeVoided });
+export async function getSalesHistoryBundle(sb, { from, to, channel, channels, excludeVoided, force = false } = {}) {
+  const filterKey = buildSalesFilterKey({ from, to, channel, channels, excludeVoided });
 
   if (!force && _cacheByKey.has(filterKey)) {
     _activeFilterKey = filterKey;
@@ -206,7 +213,7 @@ export async function getSalesHistoryBundle(sb, { from, to, channel, excludeVoid
     _cacheByKey.delete(filterKey);
   }
 
-  const promise = loadBundleFromNetwork(sb, { from, to, channel, excludeVoided }).then((res) => {
+  const promise = loadBundleFromNetwork(sb, { from, to, channel, channels, excludeVoided }).then((res) => {
     _loadingByKey.delete(filterKey);
     if (res.error) return res;
     _cacheByKey.set(filterKey, res.bundle);

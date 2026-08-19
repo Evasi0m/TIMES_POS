@@ -131,6 +131,11 @@ import {
   invalidateSalesHistoryCache,
 } from './lib/sales-history-cache.js';
 import {
+  buildSalesHistoryExportRows,
+  downloadSalesHistoryXlsx,
+  salesHistoryExportFilename,
+} from './lib/sales-history-export.js';
+import {
   SALE_ORDER_ITEM_DETAIL_SELECT,
   SALE_ORDER_ITEM_SUMMARY_SELECT,
 } from './lib/sale-query-select.js';
@@ -8275,7 +8280,7 @@ function SalesView({ onGoPOS }) {
   const [issueOpen, setIssueOpen] = useState(false);
   const [issueBuyer, setIssueBuyer] = useState({ name: "", taxId: "", address: "", branch: "สำนักงานใหญ่" });
   const [issuing, setIssuing] = useState(false);
-  const [channel, setChannel] = useState("");
+  const [selectedChannels, setSelectedChannels] = useState([]);
   const [excludeVoided, setExcludeVoided] = useState(true);
   // Free-text search across bill IDs + product names within the
   // currently-loaded date range. Empty string = no filtering. We don't
@@ -8317,7 +8322,11 @@ function SalesView({ onGoPOS }) {
   const [editHistory, setEditHistory] = useState([]);
   const [historyOpen, setHistoryOpen] = useState(false);
 
-  const filterKey = `${from}_${to}_${channel}_${excludeVoided}`;
+  const normalizedChannels = useMemo(
+    () => [...new Set(selectedChannels.filter(Boolean))].sort(),
+    [selectedChannels],
+  );
+  const filterKey = `${from}_${to}_${normalizedChannels.join(',')}_${excludeVoided}`;
 
   const applySalesBundle = useCallback((bundle) => {
     setOrders(bundle.orders);
@@ -8343,7 +8352,7 @@ function SalesView({ onGoPOS }) {
 
     try {
       const { bundle, error } = await getSalesHistoryBundle(sb, {
-        from, to, channel, excludeVoided, force,
+        from, to, channels: normalizedChannels, excludeVoided, force,
       });
       if (gen !== loadGenRef.current) return;
       if (error) {
@@ -8361,7 +8370,7 @@ function SalesView({ onGoPOS }) {
         setRefreshing(false);
       }
     }
-  }, [from, to, channel, excludeVoided, filterKey, toast, applySalesBundle]);
+  }, [from, to, normalizedChannels, excludeVoided, filterKey, toast, applySalesBundle]);
 
   // When active-only list hides a voided bill the user searched by ID, offer shortcut.
   useEffect(() => {
@@ -8793,6 +8802,25 @@ function SalesView({ onGoPOS }) {
   const totalProfit = useMemo(()=> filteredOrders.reduce((s,o)=> s + (orderSummary[o.id]?.profit || 0), 0), [filteredOrders, orderSummary]);
   const totalProfitAfterVat = totalProfit / 1.07;
 
+  const toggleSalesChannel = (value) => {
+    setSelectedChannels((current) => current.includes(value)
+      ? current.filter((channelValue) => channelValue !== value)
+      : [...current, value]);
+  };
+
+  const exportSalesHistory = () => {
+    if (loadedFilterRef.current !== filterKey || !filteredOrders.length) return;
+    const rows = buildSalesHistoryExportRows(sortedOrders, orderSummary, {
+      channelLabels: CHANNEL_LABELS,
+      paymentLabels: PAYMENT_LABELS,
+    });
+    const downloaded = downloadSalesHistoryXlsx(
+      salesHistoryExportFilename({ from, to, channels: normalizedChannels }),
+      rows,
+    );
+    if (downloaded) toast.push(`ส่งออกยอดขาย ${rows.length.toLocaleString('th-TH')} บิลแล้ว`, 'success');
+  };
+
 
   const FilterControls = (
     <div className="space-y-3">
@@ -8804,12 +8832,43 @@ function SalesView({ onGoPOS }) {
           <DatePicker mode="range" value={range} onChange={handleRangeChange}
             placeholder="เลือกช่วงวันที่" className="mt-1 w-full"/>
         </div>
-        <div className="min-w-0">
-          <label className="text-xs uppercase tracking-wider text-muted">ช่องทาง</label>
-          <select className="input mt-1 w-full" value={channel} onChange={e=>setChannel(e.target.value)}>
-            <option value="">ทุกช่องทาง</option>
-            {CHANNELS.map(c=> <option key={c.v} value={c.v}>{c.label}</option>)}
-          </select>
+        <div className="min-w-0 sm:col-span-2">
+          <label className="text-xs uppercase tracking-wider text-muted">Platform</label>
+          <div className="flex flex-wrap gap-2 mt-1.5">
+            <button
+              type="button"
+              className={'px-3 py-1.5 rounded-full text-xs font-medium border transition ' +
+                (!normalizedChannels.length
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-surface-strong/40 text-muted border-hairline hover:text-ink')}
+              aria-pressed={!normalizedChannels.length}
+              onClick={() => setSelectedChannels([])}
+            >
+              ทุก Platform
+            </button>
+            {CHANNELS.map((c) => {
+              const active = normalizedChannels.includes(c.v);
+              return (
+                <button
+                  key={c.v}
+                  type="button"
+                  className={'px-3 py-1.5 rounded-full text-xs font-medium border transition ' +
+                    (active
+                      ? 'bg-primary text-white border-primary'
+                      : 'bg-surface-strong/40 text-muted border-hairline hover:text-ink')}
+                  aria-pressed={active}
+                  onClick={() => toggleSalesChannel(c.v)}
+                >
+                  {c.label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="text-[11px] text-muted-soft mt-1.5">
+            {normalizedChannels.length
+              ? `เลือก ${normalizedChannels.length} Platform · ระบบจะรวมไว้ในไฟล์เดียว`
+              : 'ไม่เลือก Platform = รวมทุกช่องทาง'}
+          </div>
         </div>
       </div>
       {/* Free-text search — bill ID or product name. Searches only
@@ -8914,6 +8973,22 @@ function SalesView({ onGoPOS }) {
             หลังหัก VAT {totalProfitAfterVat >= 0 ? '+' : '−'}{fmtTHB(Math.abs(totalProfitAfterVat))}
           </div>
         </div>
+      </div>
+
+      <div className="flex justify-end mb-3">
+        <button
+          type="button"
+          className="btn-primary !py-2.5 !px-4 !text-sm w-full sm:w-auto"
+          onClick={exportSalesHistory}
+          disabled={loading || loadedFilterRef.current !== filterKey || !filteredOrders.length}
+          title="ส่งออกยอดขายตามช่วงวันที่ Platform และคำค้นหาที่เลือกเป็นไฟล์ Excel เดียว"
+        >
+          <Icon name="download" size={15}/>
+          Export Excel
+          {filteredOrders.length > 0 && (
+            <span className="opacity-75">· {filteredOrders.length.toLocaleString('th-TH')} บิล</span>
+          )}
+        </button>
       </div>
 
       {/* Mobile — date range always visible; filter icon toggles the rest */}
