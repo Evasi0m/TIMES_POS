@@ -8850,17 +8850,27 @@ function SalesView({ onGoPOS }) {
     }
   };
 
+  const salesExportButton = (
+    <button
+      type="button"
+      className="btn-primary !py-2.5 !px-4 !text-sm w-full sm:w-auto"
+      onClick={openSalesHistoryExport}
+      disabled={loading || loadedFilterRef.current !== filterKey || !filteredOrders.length}
+      title="ส่งออกยอดขายตามช่วงวันที่ Platform และคำค้นหาที่เลือกเป็นไฟล์ Excel เดียว"
+    >
+      <Icon name="download" size={15}/>
+      Export Excel
+      {filteredOrders.length > 0 && (
+        <span className="opacity-75">· {filteredOrders.length.toLocaleString('th-TH')} บิล</span>
+      )}
+    </button>
+  );
 
   const FilterControls = (
     <div className="space-y-3">
-      {/* Two filter controls side-by-side at sm+ — date is lg-only here;
-          mobile shows date + filter toggle in a dedicated row above. */}
+      {/* Platform stays full-width so the date/export toolbar above remains
+          compact on tablet and desktop. Mobile keeps the same filter drawer. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="min-w-0 hidden lg:block">
-          <label className="text-xs uppercase tracking-wider text-muted">ช่วงวันที่</label>
-          <DatePicker mode="range" value={range} onChange={handleRangeChange}
-            placeholder="เลือกช่วงวันที่" className="mt-1 w-full"/>
-        </div>
         <div className="min-w-0 sm:col-span-2">
           <label className="text-xs uppercase tracking-wider text-muted">Platform</label>
           <div className="flex flex-wrap gap-2 mt-1.5">
@@ -9004,24 +9014,39 @@ function SalesView({ onGoPOS }) {
         </div>
       </div>
 
-      <div className="flex justify-end mb-3">
-        <button
-          type="button"
-          className="btn-primary !py-2.5 !px-4 !text-sm w-full sm:w-auto"
-          onClick={openSalesHistoryExport}
-          disabled={loading || loadedFilterRef.current !== filterKey || !filteredOrders.length}
-          title="ส่งออกยอดขายตามช่วงวันที่ Platform และคำค้นหาที่เลือกเป็นไฟล์ Excel เดียว"
-        >
-          <Icon name="download" size={15}/>
-          Export Excel
-          {filteredOrders.length > 0 && (
-            <span className="opacity-75">· {filteredOrders.length.toLocaleString('th-TH')} บิล</span>
-          )}
-        </button>
+      {/* Tablet/desktop: keep date range and export action on one compact row. */}
+      <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_auto] gap-3 items-end mb-3">
+        <div className="min-w-0">
+          <label className="text-xs uppercase tracking-wider text-muted">ช่วงวันที่</label>
+          <DatePicker
+            mode="range"
+            value={range}
+            onChange={handleRangeChange}
+            placeholder="เลือกช่วงวันที่"
+            className="mt-1 w-full"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="lg:hidden icon-btn-44 btn-secondary !p-0 !w-12 !h-12"
+            onClick={()=>setFilterOpen(o=>!o)}
+            aria-label="ตัวกรอง"
+            aria-expanded={filterOpen}
+          >
+            <Icon name="filter" size={20}/>
+          </button>
+          {salesExportButton}
+        </div>
+      </div>
+
+      {/* Mobile: preserve the stacked export/date/filter arrangement. */}
+      <div className="md:hidden flex justify-end mb-3">
+        {salesExportButton}
       </div>
 
       {/* Mobile — date range always visible; filter icon toggles the rest */}
-      <div className="lg:hidden mb-3 sales-date-toolbar">
+      <div className="md:hidden mb-3 sales-date-toolbar">
         <label className="text-xs uppercase tracking-wider text-muted">ช่วงวันที่</label>
         <div className="grid grid-cols-2 gap-2 items-stretch mt-1">
           <DatePicker
