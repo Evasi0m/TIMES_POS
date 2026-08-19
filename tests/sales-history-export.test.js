@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildSalesHistorySheetData,
   buildSalesHistoryExportRows,
   SALES_HISTORY_EXPORT_COLUMNS,
   salesHistoryExportFilename,
@@ -61,6 +62,21 @@ describe('sales-history-export', () => {
         'ร้านได้รับจริง',
       ])
     );
+  });
+
+  it('projects only selected columns into the worksheet data', () => {
+    expect(
+      buildSalesHistorySheetData(
+        [{ เลขที่บิล: 1, กำไร: 250, Platform: 'Shopee' }],
+        ['เลขที่บิล', 'Platform']
+      )
+    ).toEqual({
+      headers: ['เลขที่บิล', 'Platform'],
+      lines: [
+        ['เลขที่บิล', 'Platform'],
+        [1, 'Shopee'],
+      ],
+    });
   });
 
   it('creates a single xlsx filename that identifies selected platforms', () => {

@@ -117,11 +117,23 @@ export function salesHistoryExportFilename({ from, to, channels = [] } = {}) {
   return `ยอดขาย_${from}_ถึง_${to}${platformSuffix}.xlsx`;
 }
 
+/**
+ * Project rows into a strict 2D sheet shape. SheetJS' json_to_sheet keeps
+ * object keys that are not listed in `header`, so using an array-of-arrays is
+ * intentional here: an unchecked column cannot leak into the workbook.
+ */
+export function buildSalesHistorySheetData(rows = [], columns) {
+  if (!rows.length) return { headers: [], lines: [] };
+  const headers = columns?.length ? columns : Object.keys(rows[0]);
+  const lines = [headers, ...rows.map((row) => headers.map((key) => row[key] ?? ''))];
+  return { headers, lines };
+}
+
 /** Download a real .xlsx workbook containing the selected sales columns. */
 export function downloadSalesHistoryXlsx(filename, rows, columns) {
   if (!rows?.length) return false;
-  const headers = columns?.length ? columns : Object.keys(rows[0]);
-  const worksheet = XLSX.utils.json_to_sheet(rows, { header: headers });
+  const { headers, lines } = buildSalesHistorySheetData(rows, columns);
+  const worksheet = XLSX.utils.aoa_to_sheet(lines);
   worksheet['!cols'] = headers.map((key) => ({
     wch: Math.min(32, Math.max(12, key.length + 2)),
   }));
