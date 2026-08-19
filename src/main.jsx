@@ -133,6 +133,7 @@ import {
 import {
   buildSalesHistoryExportRows,
   downloadSalesHistoryXlsx,
+  SALES_HISTORY_EXPORT_COLUMNS,
   salesHistoryExportFilename,
 } from './lib/sales-history-export.js';
 import {
@@ -8281,6 +8282,10 @@ function SalesView({ onGoPOS }) {
   const [issueBuyer, setIssueBuyer] = useState({ name: "", taxId: "", address: "", branch: "สำนักงานใหญ่" });
   const [issuing, setIssuing] = useState(false);
   const [selectedChannels, setSelectedChannels] = useState([]);
+  const [salesExportOpen, setSalesExportOpen] = useState(false);
+  const [salesExportColumns, setSalesExportColumns] = useState(() =>
+    SALES_HISTORY_EXPORT_COLUMNS.filter((column) => column.default).map((column) => column.key),
+  );
   const [excludeVoided, setExcludeVoided] = useState(true);
   // Free-text search across bill IDs + product names within the
   // currently-loaded date range. Empty string = no filtering. We don't
@@ -8808,8 +8813,22 @@ function SalesView({ onGoPOS }) {
       : [...current, value]);
   };
 
-  const exportSalesHistory = () => {
+  const openSalesHistoryExport = () => {
     if (loadedFilterRef.current !== filterKey || !filteredOrders.length) return;
+    setSalesExportOpen(true);
+  };
+
+  const toggleSalesExportColumn = (key) => {
+    setSalesExportColumns((current) => current.includes(key)
+      ? current.filter((columnKey) => columnKey !== key)
+      : [...current, key]);
+  };
+
+  const confirmSalesHistoryExport = () => {
+    if (!salesExportColumns.length || loadedFilterRef.current !== filterKey || !filteredOrders.length) return;
+    const columns = SALES_HISTORY_EXPORT_COLUMNS
+      .filter((column) => salesExportColumns.includes(column.key))
+      .map((column) => column.key);
     const rows = buildSalesHistoryExportRows(sortedOrders, orderSummary, {
       channelLabels: CHANNEL_LABELS,
       paymentLabels: PAYMENT_LABELS,
@@ -8817,8 +8836,12 @@ function SalesView({ onGoPOS }) {
     const downloaded = downloadSalesHistoryXlsx(
       salesHistoryExportFilename({ from, to, channels: normalizedChannels }),
       rows,
+      columns,
     );
-    if (downloaded) toast.push(`ส่งออกยอดขาย ${rows.length.toLocaleString('th-TH')} บิลแล้ว`, 'success');
+    if (downloaded) {
+      setSalesExportOpen(false);
+      toast.push(`ส่งออกยอดขาย ${rows.length.toLocaleString('th-TH')} บิล · ${columns.length} คอลัมน์แล้ว`, 'success');
+    }
   };
 
 
@@ -8979,7 +9002,7 @@ function SalesView({ onGoPOS }) {
         <button
           type="button"
           className="btn-primary !py-2.5 !px-4 !text-sm w-full sm:w-auto"
-          onClick={exportSalesHistory}
+          onClick={openSalesHistoryExport}
           disabled={loading || loadedFilterRef.current !== filterKey || !filteredOrders.length}
           title="ส่งออกยอดขายตามช่วงวันที่ Platform และคำค้นหาที่เลือกเป็นไฟล์ Excel เดียว"
         >
@@ -9564,6 +9587,87 @@ function SalesView({ onGoPOS }) {
 
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={salesExportOpen}
+        onClose={() => setSalesExportOpen(false)}
+        wide
+        title="เลือกคอลัมน์สำหรับ Export ยอดขาย"
+        footer={<>
+          <div className="flex-1 text-xs text-muted-soft hidden sm:block">
+            เลือกแล้ว {salesExportColumns.length} / {SALES_HISTORY_EXPORT_COLUMNS.length} คอลัมน์
+          </div>
+          <button type="button" className="btn-secondary" onClick={() => setSalesExportOpen(false)}>
+            ยกเลิก
+          </button>
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={!salesExportColumns.length}
+            onClick={confirmSalesHistoryExport}
+          >
+            <Icon name="download" size={15}/>
+            Export Excel
+          </button>
+        </>}
+      >
+        <div className="space-y-4">
+          <div className="rounded-xl border border-primary/20 bg-primary/5 px-3.5 py-3 text-sm leading-relaxed">
+            เลือกเฉพาะคอลัมน์ที่ต้องการส่งให้บัญชีได้ ไฟล์จะรวมเฉพาะบิลตามช่วงวันที่ Platform
+            คำค้นหา และตัวกรองที่เลือกไว้ในหน้านี้
+          </div>
+
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="text-sm font-medium">คอลัมน์ในไฟล์ Excel</div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="btn-ghost !py-1.5 !px-2.5 !text-xs"
+                onClick={() => setSalesExportColumns(SALES_HISTORY_EXPORT_COLUMNS.map((column) => column.key))}
+              >
+                เลือกทั้งหมด
+              </button>
+              <button
+                type="button"
+                className="btn-ghost !py-1.5 !px-2.5 !text-xs"
+                onClick={() => setSalesExportColumns([])}
+              >
+                ไม่เลือกเลย
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[55vh] overflow-y-auto pr-1">
+            {SALES_HISTORY_EXPORT_COLUMNS.map((column, index) => (
+              <React.Fragment key={column.key}>
+                {(index === 0 || SALES_HISTORY_EXPORT_COLUMNS[index - 1].group !== column.group) && (
+                  <div className="sm:col-span-2 text-xs font-semibold uppercase tracking-wider text-muted pt-2 first:pt-0">
+                    {column.group}
+                  </div>
+                )}
+                <label className="flex items-center gap-3 rounded-xl border hairline px-3 py-2.5 cursor-pointer hover:bg-surface-strong/40 transition">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 accent-[rgb(var(--c-primary))]"
+                    checked={salesExportColumns.includes(column.key)}
+                    onChange={() => toggleSalesExportColumn(column.key)}
+                  />
+                  <span className="text-sm">{column.label}</span>
+                </label>
+              </React.Fragment>
+            ))}
+          </div>
+
+          {!salesExportColumns.length && (
+            <div className="text-sm text-error">กรุณาเลือกอย่างน้อย 1 คอลัมน์ก่อน Export</div>
+          )}
+
+          <div className="text-[11px] text-muted-soft leading-relaxed border-t hairline pt-3">
+            หมายเหตุ: ข้อมูลในไฟล์เป็นข้อมูลจากระบบ POS สำหรับให้บัญชีตรวจสอบและจัดทำเอกสารต่อ
+            ควรให้ผู้ทำบัญชีตรวจสอบรูปแบบและเอกสารประกอบที่กรมสรรพากรกำหนดก่อนนำไปยื่นจริง
+          </div>
+        </div>
       </Modal>
 
       <ReceiptModal open={!!reprintId} onClose={()=>{ setReprintId(null); setReprintVariant(undefined); }} orderId={reprintId} initialVariant={reprintVariant}/>

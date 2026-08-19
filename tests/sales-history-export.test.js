@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildSalesHistoryExportRows,
+  SALES_HISTORY_EXPORT_COLUMNS,
   salesHistoryExportFilename,
 } from '../src/lib/sales-history-export.js';
 
@@ -40,9 +41,26 @@ describe('sales-history-export', () => {
       ยอดขายรวม: 1000,
       VAT: 65.42,
       ร้านได้รับจริง: 920,
+      'ยอดก่อน VAT': 934.58,
       กำไร: 320,
       'กำไรหลัง VAT': 320 / 1.07,
     });
+  });
+
+  it('includes detailed accounting and tax columns in the picker catalogue', () => {
+    const keys = SALES_HISTORY_EXPORT_COLUMNS.map((column) => column.key);
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        'Platform',
+        'เลขที่ใบกำกับภาษี',
+        'เลขประจำตัวผู้เสียภาษีผู้ซื้อ',
+        'สาขาผู้ซื้อ',
+        'ที่อยู่ผู้ซื้อ',
+        'ยอดก่อน VAT',
+        'VAT',
+        'ร้านได้รับจริง',
+      ])
+    );
   });
 
   it('creates a single xlsx filename that identifies selected platforms', () => {

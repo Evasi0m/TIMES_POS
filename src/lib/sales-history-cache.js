@@ -98,11 +98,13 @@ export function buildOrderSummary(ordersList, itemsByOrder, recvMap, prodMap) {
     const productLabel = lines.length === 0 ? '—'
       : lines.length === 1 ? saleLineSku(lines[0])
         : `${saleLineSku(lines[0])} +${lines.length - 1}`;
+    const totalQuantity = lines.reduce((sum, line) => sum + (Number(line.quantity) || 0), 0);
     summary[o.id] = {
       productLabel,
       allProductNames: lines.map((l) => saleLineSearchText(l)),
       profit: (o.status === 'voided' || o.net_received_pending) ? 0 : totalProfit,
       itemCount: lines.length,
+      totalQuantity,
       costApprox,
       hasSubstitution: o.has_substitution ?? lines.some((l) => saleLineIsSubstitution(l)),
     };
