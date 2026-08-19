@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   buildSalesHistorySheetData,
   buildSalesHistoryExportRows,
+  defaultSalesHistoryExportColumns,
+  normalizeSalesHistoryExportColumns,
   SALES_HISTORY_EXPORT_COLUMNS,
   salesHistoryExportFilename,
 } from '../src/lib/sales-history-export.js';
@@ -75,8 +77,27 @@ describe('sales-history-export', () => {
       lines: [
         ['เลขที่บิล', 'Platform'],
         [1, 'Shopee'],
+        ['รวม', ''],
       ],
     });
+  });
+
+  it('adds a bottom total row for selected numeric columns', () => {
+    expect(
+      buildSalesHistorySheetData(
+        [
+          { ลำดับ: 1, 'จำนวนชิ้น': 2, ยอดขายรวม: 100, Platform: 'Shopee' },
+          { ลำดับ: 2, 'จำนวนชิ้น': 3, ยอดขายรวม: 250, Platform: 'หน้าร้าน' },
+        ],
+        ['ลำดับ', 'จำนวนชิ้น', 'ยอดขายรวม', 'Platform']
+      ).lines.at(-1)
+    ).toEqual(['รวม', 5, 350, '']);
+  });
+
+  it('keeps the default column selection and removes unknown saved keys', () => {
+    expect(defaultSalesHistoryExportColumns().length).toBeGreaterThan(0);
+    expect(normalizeSalesHistoryExportColumns(['กำไร', 'unknown', 'กำไร'])).toEqual(['กำไร']);
+    expect(normalizeSalesHistoryExportColumns([])).toEqual([]);
   });
 
   it('creates a single xlsx filename that identifies selected platforms', () => {

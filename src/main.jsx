@@ -134,6 +134,9 @@ import {
   buildSalesHistoryExportRows,
   downloadSalesHistoryXlsx,
   SALES_HISTORY_EXPORT_COLUMNS,
+  defaultSalesHistoryExportColumns,
+  loadSalesHistoryExportColumns,
+  saveSalesHistoryExportColumns,
   salesHistoryExportFilename,
 } from './lib/sales-history-export.js';
 import {
@@ -8284,8 +8287,11 @@ function SalesView({ onGoPOS }) {
   const [selectedChannels, setSelectedChannels] = useState([]);
   const [salesExportOpen, setSalesExportOpen] = useState(false);
   const [salesExportColumns, setSalesExportColumns] = useState(() =>
-    SALES_HISTORY_EXPORT_COLUMNS.filter((column) => column.default).map((column) => column.key),
+    loadSalesHistoryExportColumns() || defaultSalesHistoryExportColumns(),
   );
+  useEffect(() => {
+    saveSalesHistoryExportColumns(salesExportColumns);
+  }, [salesExportColumns]);
   const [excludeVoided, setExcludeVoided] = useState(true);
   // Free-text search across bill IDs + product names within the
   // currently-loaded date range. Empty string = no filtering. We don't
@@ -9615,7 +9621,8 @@ function SalesView({ onGoPOS }) {
         <div className="space-y-4">
           <div className="rounded-xl border border-primary/20 bg-primary/5 px-3.5 py-3 text-sm leading-relaxed">
             เลือกเฉพาะคอลัมน์ที่ต้องการส่งให้บัญชีได้ ไฟล์จะรวมเฉพาะบิลตามช่วงวันที่ Platform
-            คำค้นหา และตัวกรองที่เลือกไว้ในหน้านี้
+            คำค้นหา และตัวกรองที่เลือกไว้ในหน้านี้ ระบบจะจำคอลัมน์ที่เลือกไว้สำหรับครั้งถัดไป
+            และเพิ่มบรรทัด “รวม” ท้ายไฟล์สำหรับจำนวนกับยอดตัวเลขที่เลือก
           </div>
 
           <div className="flex items-center justify-between gap-2 flex-wrap">

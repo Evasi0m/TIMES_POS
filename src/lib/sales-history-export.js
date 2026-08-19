@@ -2,6 +2,8 @@ import * as XLSX from 'xlsx';
 import { ECOMMERCE_CHANNELS } from './ecommerce-channels.js';
 import { bangkokDateKey, fmtTimeBangkok } from './date.js';
 
+export const SALES_HISTORY_EXPORT_COLUMNS_STORAGE_KEY = 'times-pos.sales-history-export-columns.v1';
+
 const STATUS_LABELS = {
   active: 'ขายแล้ว',
   voided: 'ยกเลิก',
@@ -10,23 +12,23 @@ const STATUS_LABELS = {
 
 /** Column catalogue shown in the pre-export picker. */
 export const SALES_HISTORY_EXPORT_COLUMNS = [
-  { key: 'ลำดับ', label: 'ลำดับ', group: 'ข้อมูลรายการ', default: true },
-  { key: 'เลขที่บิล', label: 'เลขที่บิล', group: 'ข้อมูลรายการ', default: true },
+  { key: 'ลำดับ', label: 'ลำดับ', group: 'ข้อมูลรายการ', default: true, summaryLabel: true },
+  { key: 'เลขที่บิล', label: 'เลขที่บิล', group: 'ข้อมูลรายการ', default: true, summaryLabel: true },
   { key: 'วันที่', label: 'วันที่ขาย', group: 'ข้อมูลรายการ', default: true },
   { key: 'เวลา', label: 'เวลาขาย', group: 'ข้อมูลรายการ', default: true },
   { key: 'Platform', label: 'Platform', group: 'ข้อมูลรายการ', default: true },
   { key: 'สถานะ', label: 'สถานะบิล', group: 'ข้อมูลรายการ', default: true },
   { key: 'วิธีชำระ', label: 'วิธีชำระเงิน', group: 'ข้อมูลรายการ', default: true },
   { key: 'รายการสินค้า', label: 'รายการสินค้า / SKU', group: 'สินค้า', default: true },
-  { key: 'จำนวนรายการ', label: 'จำนวนรายการสินค้า', group: 'สินค้า', default: true },
-  { key: 'จำนวนชิ้น', label: 'จำนวนชิ้นรวม', group: 'สินค้า', default: true },
-  { key: 'ยอดก่อน VAT', label: 'ยอดก่อน VAT', group: 'ยอดเงิน', default: true },
-  { key: 'VAT', label: 'VAT', group: 'ยอดเงิน', default: true },
-  { key: 'ยอดขายรวม', label: 'ยอดขายรวม (รวม VAT)', group: 'ยอดเงิน', default: true },
-  { key: 'ร้านได้รับจริง', label: 'เงินที่ร้านได้รับจริง', group: 'ยอดเงิน', default: true },
-  { key: 'ส่วนลด', label: 'ส่วนลด', group: 'ยอดเงิน', default: false },
-  { key: 'กำไร', label: 'กำไร', group: 'ยอดเงิน', default: false },
-  { key: 'กำไรหลัง VAT', label: 'กำไรหลัง VAT', group: 'ยอดเงิน', default: false },
+  { key: 'จำนวนรายการ', label: 'จำนวนรายการสินค้า', group: 'สินค้า', default: true, sum: true },
+  { key: 'จำนวนชิ้น', label: 'จำนวนชิ้นรวม', group: 'สินค้า', default: true, sum: true },
+  { key: 'ยอดก่อน VAT', label: 'ยอดก่อน VAT', group: 'ยอดเงิน', default: true, sum: true },
+  { key: 'VAT', label: 'VAT', group: 'ยอดเงิน', default: true, sum: true },
+  { key: 'ยอดขายรวม', label: 'ยอดขายรวม (รวม VAT)', group: 'ยอดเงิน', default: true, sum: true },
+  { key: 'ร้านได้รับจริง', label: 'เงินที่ร้านได้รับจริง', group: 'ยอดเงิน', default: true, sum: true },
+  { key: 'ส่วนลด', label: 'ส่วนลด', group: 'ยอดเงิน', default: false, sum: true },
+  { key: 'กำไร', label: 'กำไร', group: 'ยอดเงิน', default: false, sum: true },
+  { key: 'กำไรหลัง VAT', label: 'กำไรหลัง VAT', group: 'ยอดเงิน', default: false, sum: true },
   {
     key: 'เลขที่ใบกำกับภาษี',
     label: 'เลขที่ใบกำกับภาษี',
@@ -49,6 +51,45 @@ export const SALES_HISTORY_EXPORT_COLUMNS = [
   { key: 'ที่อยู่ผู้ซื้อ', label: 'ที่อยู่ผู้ซื้อ', group: 'ข้อมูลผู้ซื้อ/ภาษี', default: true },
   { key: 'หมายเหตุ', label: 'หมายเหตุ', group: 'ข้อมูลเพิ่มเติม', default: false },
 ];
+
+const SALES_HISTORY_EXPORT_COLUMN_MAP = new Map(
+  SALES_HISTORY_EXPORT_COLUMNS.map((column) => [column.key, column]),
+);
+
+export function defaultSalesHistoryExportColumns() {
+  return SALES_HISTORY_EXPORT_COLUMNS
+    .filter((column) => column.default)
+    .map((column) => column.key);
+}
+
+export function normalizeSalesHistoryExportColumns(columns) {
+  if (!Array.isArray(columns)) return defaultSalesHistoryExportColumns();
+  return [...new Set(columns.filter((key) => SALES_HISTORY_EXPORT_COLUMN_MAP.has(key)))];
+}
+
+export function loadSalesHistoryExportColumns() {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const stored = localStorage.getItem(SALES_HISTORY_EXPORT_COLUMNS_STORAGE_KEY);
+    if (stored == null) return null;
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? normalizeSalesHistoryExportColumns(parsed) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveSalesHistoryExportColumns(columns) {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(
+      SALES_HISTORY_EXPORT_COLUMNS_STORAGE_KEY,
+      JSON.stringify(normalizeSalesHistoryExportColumns(columns)),
+    );
+  } catch {
+    // Private browsing or a full storage quota should not prevent exporting.
+  }
+}
 
 const toNumber = (value) => {
   const n = Number(value);
@@ -125,7 +166,21 @@ export function salesHistoryExportFilename({ from, to, channels = [] } = {}) {
 export function buildSalesHistorySheetData(rows = [], columns) {
   if (!rows.length) return { headers: [], lines: [] };
   const headers = columns?.length ? columns : Object.keys(rows[0]);
-  const lines = [headers, ...rows.map((row) => headers.map((key) => row[key] ?? ''))];
+  const dataLines = rows.map((row) => headers.map((key) => row[key] ?? ''));
+  const summaryLabelIndex = headers.findIndex((key) => {
+    const column = SALES_HISTORY_EXPORT_COLUMN_MAP.get(key);
+    return column?.summaryLabel || (!column?.sum && column != null);
+  });
+  const totalLine = headers.map((key, index) => {
+    if (index === summaryLabelIndex) return 'รวม';
+    const column = SALES_HISTORY_EXPORT_COLUMN_MAP.get(key);
+    if (!column?.sum) return '';
+    return rows.reduce((sum, row) => {
+      const value = Number(row[key]);
+      return Number.isFinite(value) ? sum + value : sum;
+    }, 0);
+  });
+  const lines = [headers, ...dataLines, totalLine];
   return { headers, lines };
 }
 
