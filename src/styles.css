@@ -6497,3 +6497,66 @@
   border-bottom-color: rgba(251, 191, 36, 0.15);
 }
 
+/* Excel export — keeps the update-log action shape and mesh treatment,
+   recoloured to the familiar Microsoft Excel green palette. */
+:root:not([data-theme="dark"]) .btn-excel-export {
+  background:
+    radial-gradient(circle at 14% 0%, rgba(220, 252, 231, 0.58), transparent 44%),
+    radial-gradient(circle at 86% 0%, rgba(134, 239, 172, 0.34), transparent 42%),
+    linear-gradient(135deg, #34d399 0%, #21a366 48%, #107c41 100%) !important;
+  border-color: rgba(16, 124, 65, 0.34) !important;
+  color: #f0fdf4 !important;
+  text-shadow: 0 1px 0 rgba(5, 46, 22, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 12px 28px -18px rgba(16, 124, 65, 0.48) !important;
+}
+:root:not([data-theme="dark"]) .btn-excel-export:hover {
+  background:
+    radial-gradient(circle at 14% 0%, rgba(236, 253, 245, 0.68), transparent 44%),
+    radial-gradient(circle at 86% 0%, rgba(167, 243, 208, 0.42), transparent 42%),
+    linear-gradient(135deg, #4ade80 0%, #21a366 48%, #0b6b36 100%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 16px 32px -18px rgba(16, 124, 65, 0.58) !important;
+}
+:root[data-theme="dark"] .btn-excel-export {
+  background:
+    radial-gradient(circle at 14% 0%, rgba(134, 239, 172, 0.28), transparent 44%),
+    radial-gradient(circle at 86% 0%, rgba(74, 222, 128, 0.22), transparent 42%),
+    linear-gradient(135deg, #22c55e 0%, #15803d 48%, #14532d 100%) !important;
+  border-color: rgba(134, 239, 172, 0.28) !important;
+  color: #ecfdf5 !important;
+  text-shadow: 0 1px 0 rgba(5, 46, 22, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    inset 0 -1px 0 rgba(5, 46, 22, 0.34),
+    0 12px 28px -16px rgba(21, 128, 61, 0.58) !important;
+}
+:root[data-theme="dark"] .btn-excel-export:hover {
+  background:
+    radial-gradient(circle at 14% 0%, rgba(187, 247, 208, 0.34), transparent 44%),
+    radial-gradient(circle at 86% 0%, rgba(134, 239, 172, 0.28), transparent 42%),
+    linear-gradient(135deg, #4ade80 0%, #16a34a 48%, #166534 100%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -1px 0 rgba(5, 46, 22, 0.38),
+    0 16px 32px -18px rgba(21, 128, 61, 0.68) !important;
+}
+:root:not([data-theme="dark"]) .btn-excel-export:active,
+:root[data-theme="dark"] .btn-excel-export:active {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 1px 4px rgba(16, 124, 65, 0.42) !important;
+}
+:root:not([data-theme="dark"]) .btn-excel-export:disabled,
+:root[data-theme="dark"] .btn-excel-export:disabled {
+  background: rgb(var(--c-primary-disabled)) !important;
+  border-color: transparent !important;
+  color: rgb(var(--c-muted)) !important;
+  text-shadow: none;
+  box-shadow: none !important;
+}
+.btn-excel-export svg {
+  filter: drop-shadow(0 1px 1px rgba(5, 46, 22, 0.40));
+}

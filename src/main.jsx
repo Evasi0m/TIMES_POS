@@ -8853,7 +8853,7 @@ function SalesView({ onGoPOS }) {
   const salesExportButton = (
     <button
       type="button"
-      className="btn-primary !py-2.5 !px-4 !text-sm w-full sm:w-auto"
+      className="btn-patch-log-action btn-excel-export w-full sm:w-auto"
       onClick={openSalesHistoryExport}
       disabled={loading || loadedFilterRef.current !== filterKey || !filteredOrders.length}
       title="ส่งออกยอดขายตามช่วงวันที่ Platform และคำค้นหาที่เลือกเป็นไฟล์ Excel เดียว"
