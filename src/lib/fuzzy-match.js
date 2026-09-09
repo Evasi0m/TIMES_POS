@@ -95,6 +95,26 @@ export function similarityScore(a, b) {
  *                                      "missing trailing VDF" cases
  * @returns {Array<{product, score}>} highest score first
  */
+/** Exact barcode match against catalog (CMG รหัสสินค้า column). */
+export function findProductByBarcode(barcode, products) {
+  const wanted = String(barcode || '').replace(/\D/g, '').trim();
+  if (!wanted) return null;
+  for (const p of products || []) {
+    const bc = String(p.barcode || '').replace(/\D/g, '').trim();
+    if (bc && bc === wanted) return p;
+  }
+  return null;
+}
+
+/** True when the bill model code is longer than the matched product SKU (OCR suffix risk). */
+export function billCodeLongerThanProduct(query, product) {
+  const q = normalizeCode(query);
+  if (!q || !product) return false;
+  const p = normalizeCode(product.model_code || product.name);
+  if (!p) return false;
+  return q.length > p.length;
+}
+
 export function findCandidates(query, products, opts = {}) {
   const { limit = 5, minScore = 0.5 } = opts;
   if (!query || !Array.isArray(products) || products.length === 0) return [];
@@ -127,6 +147,9 @@ export function classifyMatch(query, products, opts = {}) {
   // exist and the user meant the longer one.
   const runnerUp = candidates[1]?.score ?? 0;
   if (top.score >= 0.94 && top.score - runnerUp >= 0.06) {
+    if (billCodeLongerThanProduct(query, top.product)) {
+      return { status: 'suggestions', candidates };
+    }
     return { status: 'auto', product: top.product, score: top.score, candidates };
   }
   return { status: 'suggestions', candidates };

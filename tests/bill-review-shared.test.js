@@ -9,6 +9,7 @@ import {
 const baseBill = (overrides = {}) => ({
   is_cmg_bill: true,
   saveState: 'pending',
+  supplier_invoice_no: '1312257064',
   rows: [
     {
       status: 'auto',
@@ -67,6 +68,16 @@ describe('computeBillStatus', () => {
   it('needs_review clears after reviewConfirmed', () => {
     const row = { ...baseBill().rows[0], needsReview: true, reviewConfirmed: true };
     expect(computeBillStatus(baseBill({ rows: [row] }))).toBe('ready');
+  });
+
+  it('soft match clears after reviewConfirmed', () => {
+    const row = { ...baseBill().rows[0], matchScore: 0.95, reviewConfirmed: true };
+    expect(isSoftMatch(row)).toBe(false);
+    expect(computeBillStatus(baseBill({ rows: [row] }))).toBe('ready');
+  });
+
+  it('blocks submit when invoice number is not 10 digits', () => {
+    expect(computeBillStatus(baseBill({ supplier_invoice_no: '12345' }))).toBe('needs_review');
   });
 
   it('blocks submit when footer warnings and not confirmed', () => {

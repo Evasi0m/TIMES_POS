@@ -551,9 +551,18 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
   const rowWarnings = (
     <>
       {softMatch && (
-        <div className="rrm-alert">
-          <Icon name="alert" size={14} className="shrink-0"/>
-          ความมั่นใจ {Math.round(row.matchScore * 100)}% — ตรวจว่ารุ่นตรงไหม
+        <div className="rrm-alert space-y-2">
+          <div className="flex items-start gap-2">
+            <Icon name="alert" size={14} className="shrink-0"/>
+            <span>ความมั่นใจ {Math.round(row.matchScore * 100)}% — ตรวจว่ารุ่นตรงไหม</span>
+          </div>
+          <button
+            type="button"
+            className="btn-secondary text-sm"
+            onClick={() => onUpdate({ reviewConfirmed: true })}
+          >
+            <Icon name="check" size={14}/> ยืนยันตรวจแล้ว
+          </button>
         </div>
       )}
       {hasRowMathMismatch(row) && (

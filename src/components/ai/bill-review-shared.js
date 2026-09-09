@@ -1,6 +1,6 @@
 // Shared constants/helpers for AI bill review (BillReviewPanel + ReceiveMatchPanel).
 
-import { validateRowMath } from '../../lib/cmg-bill-validate.js';
+import { isValidCmgInvoiceNo, validateRowMath } from '../../lib/cmg-bill-validate.js';
 import { tiktokSkuImageUrl } from '../../lib/tiktok-mirror-helpers.js';
 import { productImageUrl } from '../../lib/product-classify.js';
 export const STATUS_META = {
@@ -188,6 +188,7 @@ function isTiktokPending(row, tiktokMirrorEnabled) {
 }
 
 export function isSoftMatch(row) {
+  if (row?.reviewConfirmed) return false;
   return (
     row.status === 'auto' &&
     typeof row.matchScore === 'number' &&
@@ -216,6 +217,8 @@ export function computeBillStatus(bill, mirrorOn = false) {
   if (bill.saveState === 'failed') return 'failed';
   if (bill.saveState === 'saving') return 'saving';
   if (!bill.is_cmg_bill || bill.rows.length === 0) return 'empty';
+  const inv = bill.supplier_invoice_no?.trim();
+  if (inv && !isValidCmgInvoiceNo(inv)) return 'needs_review';
   const unresolved = bill.rows.filter((r) => r.status === 'suggestions' || r.status === 'none').length;
   if (unresolved > 0) return 'unresolved';
   const incomplete = bill.rows.some((r) =>

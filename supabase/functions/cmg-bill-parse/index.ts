@@ -62,6 +62,7 @@
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { applyValidationToParsedBill } from '../_shared/cmg-bill-validate.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -106,7 +107,8 @@ Rules:
 1. For each bill, confirm the bill header includes "Central Trading" or "เซ็นทรัลเทรดดิ้ง". If it does NOT, set is_cmg_bill=false for that bill and return an empty items array for it.
 2. Read each bill's invoice number from the "เลขที่:" field at the top-right (10-digit code, NOT the barcode or SKU).
 3. For each product row inside a bill, extract:
-   - model_code: the watch model from the "รายการสินค้า" / Description column (NOT the 13-digit barcode in รหัสสินค้า). STRIP any leading "CE " or "CB " prefix. Example: "CE LTP-1302DS-4AVDF" → "LTP-1302DS-4AVDF", "CB W-738H-1BVDF" → "W-738H-1BVDF".
+   - model_code: the watch model from the "รายการสินค้า" / Description column. STRIP any leading "CE " or "CB " prefix. Example: "CE LTP-1302DS-4AVDF" → "LTP-1302DS-4AVDF", "CB W-738H-1BVDF" → "W-738H-1BVDF".
+   - barcode:    the 13-digit product code from the "รหัสสินค้า" column when clearly readable (digits only, no spaces). Use empty string if unreadable — do NOT guess.
    - quantity:   integer in the จำนวน column (the printed number only — ignore handwritten checkmarks/ticks beside it).
    - unit_cost:  the ราคาต่อหน่วย / ราคา/หน่วย column. Numbers use comma thousands separator — parse "1,138.32" as 1138.32. This is the PRE-VAT cost per single piece.
    - line_amount: the จำนวนเงิน / Amount column for that row (pre-VAT line total). Parse commas the same way.
@@ -143,12 +145,13 @@ const RESPONSE_SCHEMA = {
               type: 'OBJECT',
               properties: {
                 model_code:   { type: 'STRING' },
+                barcode:      { type: 'STRING' },
                 quantity:     { type: 'INTEGER' },
                 unit_cost:    { type: 'NUMBER' },
                 line_amount:  { type: 'NUMBER' },
                 needs_review: { type: 'BOOLEAN' },
               },
-              required: ['model_code', 'quantity', 'unit_cost', 'line_amount', 'needs_review'],
+              required: ['model_code', 'barcode', 'quantity', 'unit_cost', 'line_amount', 'needs_review'],
             },
           },
         },
@@ -183,6 +186,10 @@ function j(status: number, body: unknown) {
 
 function stripCmgModelPrefix(code: string): string {
   return String(code || '').trim().replace(/^(CE|CB)\s+/i, '');
+}
+
+function normalizeBarcode(raw: unknown): string {
+  return String(raw ?? '').replace(/\D/g, '').trim().slice(0, 13);
 }
 
 function numField(v: unknown): number {
@@ -546,6 +553,7 @@ Deno.serve(async (req: Request) => {
         const hasRaw = b && typeof b === 'object';
         const items = hasRaw && Array.isArray(b.items) ? b.items.map((x: any) => ({
           model_code:   stripCmgModelPrefix(String(x?.model_code ?? '')),
+          barcode:      normalizeBarcode(x?.barcode),
           quantity:     Math.max(0, Math.round(Number(x?.quantity) || 0)),
           unit_cost:    Math.max(0, Number(x?.unit_cost) || 0),
           line_amount:  Math.max(0, Number(x?.line_amount) || 0),
@@ -566,7 +574,7 @@ Deno.serve(async (req: Request) => {
             parse_warning: 'empty_slot',
           };
         }
-        return {
+        const rawBill = {
           is_cmg_bill:         Boolean(b.is_cmg_bill),
           supplier_invoice_no: String(b.supplier_invoice_no ?? '').trim(),
           bill_subtotal:       numField(b.bill_subtotal),
@@ -575,6 +583,7 @@ Deno.serve(async (req: Request) => {
           grand_total:         numField(b.grand_total),
           items,
         };
+        return applyValidationToParsedBill(rawBill);
       });
 
       const estUsd =

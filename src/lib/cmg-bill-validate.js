@@ -1,11 +1,17 @@
-// CMG bill arithmetic validation � deterministic checks after AI parse.
-// Compares qty � unit_cost vs line_amount and optional footer totals.
+// CMG bill arithmetic validation — deterministic checks after AI parse.
+// Compares qty × unit_cost vs line_amount and optional footer totals.
 
 import { roundMoney } from './money.js';
 
 export const ROW_TOLERANCE = 0.02;
 export const BILL_TOLERANCE = 0.05;
 export const VAT_RATE = 0.07;
+export const CMG_INVOICE_RE = /^\d{10}$/;
+
+/** CMG supplier invoice numbers are 10-digit codes from เลขที่: field. */
+export function isValidCmgInvoiceNo(invoiceNo) {
+  return CMG_INVOICE_RE.test(String(invoiceNo || '').trim());
+}
 
 /** Strip CMG distributor prefixes from model description text. */
 export function stripCmgModelPrefix(code) {
@@ -25,7 +31,7 @@ function positiveNumber(n) {
 
 /**
  * @param {object} parsed
- * @param {Array<{ model_code?, quantity?, unit_cost?, line_amount?, needs_review? }>} parsed.items
+ * @param {Array<{ model_code?, barcode?, quantity?, unit_cost?, line_amount?, needs_review? }>} parsed.items
  * @param {number} [parsed.bill_subtotal]
  * @param {number} [parsed.total_qty]
  * @param {number} [parsed.vat_amount]
@@ -66,7 +72,7 @@ export function validateCmgBill(parsed) {
         rows.push({
           index,
           issues,
-          detail: `${qty} � ${unitCost} ? ${lineAmount} (expected ${expected})`,
+          detail: `${qty} × ${unitCost} ≠ ${lineAmount} (expected ${expected})`,
         });
       }
     }
@@ -76,6 +82,15 @@ export function validateCmgBill(parsed) {
   const totalQty = Number(parsed?.total_qty) || 0;
   const vatAmount = Number(parsed?.vat_amount) || 0;
   const grandTotal = Number(parsed?.grand_total) || 0;
+
+  const inv = String(parsed?.supplier_invoice_no || '').trim();
+  if (parsed?.is_cmg_bill && inv && !isValidCmgInvoiceNo(inv)) {
+    bill.warnings.push('invoice_format_invalid');
+  }
+
+  if (hasLineAmounts && !positiveNumber(billSubtotal) && !positiveNumber(grandTotal)) {
+    bill.warnings.push('footer_unverified');
+  }
 
   if (hasLineAmounts && positiveNumber(billSubtotal)) {
     if (!near(sumLineAmount, billSubtotal, BILL_TOLERANCE)) {
@@ -108,6 +123,16 @@ export function validateCmgBill(parsed) {
   return { rows, bill, rowFlags };
 }
 
+/** Merge validation row flags into parsed items (used after AI parse). */
+export function applyValidationToParsedBill(parsed) {
+  const validation = validateCmgBill(parsed);
+  const items = (parsed?.items || []).map((it, i) => ({
+    ...it,
+    needs_review: Boolean(it.needs_review) || validation.rowFlags[i],
+  }));
+  return { ...parsed, items, validation };
+}
+
 /**
  * Live row math check for review edits (qty/cost vs line_amount).
  * @returns {{ mismatch: boolean, detail: string | null }}
@@ -125,7 +150,7 @@ export function validateRowMath(row) {
   }
   return {
     mismatch: true,
-    detail: `${qty} � ${unitCost} ? ${roundMoney(lineAmount)} (expected ${expected})`,
+    detail: `${qty} × ${unitCost} ≠ ${roundMoney(lineAmount)} (expected ${expected})`,
   };
 }
 

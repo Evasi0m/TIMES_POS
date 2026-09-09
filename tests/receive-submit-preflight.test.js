@@ -26,6 +26,12 @@ describe('validateBillRowsForSubmit', () => {
     expect(err).toContain(BLOCK_DUP_MSG);
   });
 
+  it('blocks invalid invoice number format', () => {
+    const err = validateBillRowsForSubmit({ ...baseBill, supplier_invoice_no: '12345' });
+    expect(err).toBeTruthy();
+    expect(err).toContain('12345');
+  });
+
   it('ignores dupInvoice when invoice number is blank', () => {
     expect(validateBillRowsForSubmit(
       { ...baseBill, supplier_invoice_no: '  ' },

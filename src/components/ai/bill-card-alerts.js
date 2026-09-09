@@ -2,6 +2,7 @@
 
 import { needsManualReview } from './bill-review-shared.js';
 import { findDuplicateProductsInBill } from '../../lib/ai-receive.js';
+import { isValidCmgInvoiceNo } from '../../lib/cmg-bill-validate.js';
 
 function isTikTokLineReady(row) {
   if (!row || row.tiktok_skip) return true;
@@ -61,9 +62,37 @@ export function collectBillAlerts(bill, {
   const reviewRows = (!isNonCmg && !isEmpty)
     ? bill.rows.filter((r) => needsManualReview(r)).length
     : 0;
-  const validationBillWarnings = bill.validation?.bill?.warnings?.length || 0;
+  const billWarnings = bill.validation?.bill?.warnings || [];
+  const footerMathWarnings = billWarnings.filter((w) =>
+    !['footer_unverified', 'qty_total_mismatch', 'invoice_format_invalid'].includes(w),
+  );
+  const validationBillWarnings = footerMathWarnings.length;
   const validationRowIssues = bill.validation?.rows?.length || 0;
 
+  const invNo = bill.supplier_invoice_no?.trim();
+  if (!isNonCmg && invNo && !isValidCmgInvoiceNo(invNo)) {
+    alerts.push({
+      key: 'invoice-format',
+      severity: 'error',
+      message: `เลขบิล "${invNo}" ไม่ใช่ 10 หลัก — ตรวจกับรูปแล้วแก้เลขบิล`,
+    });
+  }
+  if (!isNonCmg && !isEmpty && billWarnings.includes('footer_unverified') && !bill.footerConfirmed) {
+    alerts.push({
+      key: 'footer-unverified',
+      severity: 'warn',
+      message: 'ยอดท้ายบิลอ่านไม่ได้ — ตรวจแถวกับรูปแล้วกดยืนยันยอดบิล',
+      onClick: !isJson && bill.previewUrl && onZoom ? () => onZoom(bill.previewUrl) : undefined,
+    });
+  }
+  if (!isNonCmg && !isEmpty && billWarnings.includes('qty_total_mismatch') && !bill.footerConfirmed) {
+    alerts.push({
+      key: 'qty-total',
+      severity: 'warn',
+      message: 'จำนวนชิ้นรวมไม่ตรง footer — อาจข้ามแถว ตรวจกับรูป',
+      onClick: !isJson && bill.previewUrl && onZoom ? () => onZoom(bill.previewUrl) : undefined,
+    });
+  }
   if (dup) {
     alerts.push({
       key: 'dup',

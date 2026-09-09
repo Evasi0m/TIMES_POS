@@ -60,7 +60,7 @@ describe('parseCmgBillImportFile', () => {
   it('rejects more than MAX_IMPORT_BILLS', () => {
     const bills = Array.from({ length: MAX_IMPORT_BILLS + 1 }, (_, i) => ({
       ...validOneBill.bills[0],
-      supplier_invoice_no: String(1000 + i),
+      supplier_invoice_no: String(1312257000 + i),
     }));
     const result = parseCmgBillImportFile(JSON.stringify({ bills }));
     expect(result.ok).toBe(false);
@@ -118,6 +118,15 @@ describe('parseCmgBillImportFile', () => {
     expect(result.errors[0]).toMatch(/1312257064/);
     expect(result.errors[0]).toMatch(/ซ้ำในไฟล์/);
     expect(result.errors.length).toBe(1);
+  });
+
+  it('rejects invalid supplier_invoice_no format', () => {
+    const bad = {
+      bills: [{ ...validOneBill.bills[0], supplier_invoice_no: '12345' }],
+    };
+    const result = parseCmgBillImportFile(JSON.stringify(bad));
+    expect(result.ok).toBe(false);
+    expect(result.errors[0]).toMatch(/10 หลัก/);
   });
 
   it('rejects is_cmg_bill false', () => {

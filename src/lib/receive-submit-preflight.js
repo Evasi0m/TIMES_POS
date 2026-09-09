@@ -1,4 +1,5 @@
 import { buildReceiveItems } from './ai-receive.js';
+import { isValidCmgInvoiceNo } from './cmg-bill-validate.js';
 
 function rowLabel(row) {
   return row.model_code || row.product?.name || row.newProduct?.name || 'ไม่ทราบรุ่น';
@@ -13,6 +14,9 @@ export function validateBillRowsForSubmit(bill, { dupInvoice } = {}) {
   if (!rows.length) return 'ไม่มีรายการในบิลนี้';
 
   const inv = bill?.supplier_invoice_no?.trim();
+  if (inv && !isValidCmgInvoiceNo(inv)) {
+    return `เลขบิล ${inv} ไม่ใช่ 10 หลัก — ตรวจกับรูปบิลแล้วแก้เลขบิล`;
+  }
   if (inv && dupInvoice) {
     const dateStr = dupInvoice.date
       ? new Date(dupInvoice.date).toLocaleDateString('th-TH', { day: '2-digit', month: 'short' })

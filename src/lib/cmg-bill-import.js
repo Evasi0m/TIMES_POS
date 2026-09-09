@@ -2,7 +2,7 @@
 // entering BulkReceiveView review (no AI / edge function).
 
 import { roundMoney } from './money.js';
-import { stripCmgModelPrefix, ROW_TOLERANCE } from './cmg-bill-validate.js';
+import { isValidCmgInvoiceNo, stripCmgModelPrefix, ROW_TOLERANCE } from './cmg-bill-validate.js';
 
 export const MAX_IMPORT_BILLS = 10;
 export const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
@@ -24,6 +24,8 @@ const ITEM_FIELDS = [
   'line_amount',
   'needs_review',
 ];
+
+const OPTIONAL_ITEM_FIELDS = ['barcode'];
 
 function near(a, b, tolerance) {
   return Math.abs(roundMoney(a) - roundMoney(b)) <= tolerance;
@@ -90,12 +92,17 @@ function normalizeItem(raw, billCtx, itemIndex, errors) {
     return null;
   }
 
+  const barcodeRaw = OPTIONAL_ITEM_FIELDS.includes('barcode') && raw.barcode != null
+    ? String(raw.barcode).replace(/\D/g, '').trim()
+    : '';
+
   return {
     model_code,
     quantity,
     unit_cost: roundMoney(unit_cost),
     line_amount: roundMoney(line_amount),
     needs_review: Boolean(raw.needs_review),
+    ...(barcodeRaw ? { barcode: barcodeRaw } : {}),
   };
 }
 
@@ -140,6 +147,14 @@ function normalizeBill(raw, index, errors) {
     return null;
   }
 
+  const supplier_invoice_no = String(raw.supplier_invoice_no ?? '').trim();
+  if (!isValidCmgInvoiceNo(supplier_invoice_no)) {
+    errors.push(
+      `${billLabel(raw, index)}: เลขบิล "${supplier_invoice_no || '—'}" ต้องเป็นตัวเลข 10 หลัก`,
+    );
+    return null;
+  }
+
   if (!Array.isArray(raw.items) || raw.items.length === 0) {
     errors.push(`${billLabel(raw, index)}: \u0e44\u0e21\u0e48\u0e21\u0e35\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32`);
     return null;
@@ -170,7 +185,7 @@ function normalizeBill(raw, index, errors) {
 
   return {
     is_cmg_bill: Boolean(raw.is_cmg_bill),
-    supplier_invoice_no: String(raw.supplier_invoice_no ?? '').trim(),
+    supplier_invoice_no,
     bill_subtotal: roundMoney(bill_subtotal),
     total_qty,
     vat_amount: roundMoney(vat_amount),

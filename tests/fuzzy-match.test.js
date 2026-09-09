@@ -3,6 +3,8 @@ import {
   normalizeCode,
   similarityScore,
   findCandidates,
+  findProductByBarcode,
+  billCodeLongerThanProduct,
   classifyMatch,
   skuMatchTier,
   findSkuCandidates,
@@ -106,6 +108,30 @@ describe('findCandidates', () => {
   });
 });
 
+describe('findProductByBarcode', () => {
+  const products = [
+    { id: 1, name: 'GA-100', barcode: '8851234567890' },
+    { id: 2, name: 'GA-200', barcode: '8859876543210' },
+  ];
+
+  it('finds product by exact barcode digits', () => {
+    expect(findProductByBarcode('8851234567890', products)?.id).toBe(1);
+    expect(findProductByBarcode('885-1234-567890', products)?.id).toBe(1);
+  });
+
+  it('returns null when barcode unknown', () => {
+    expect(findProductByBarcode('000', products)).toBeNull();
+  });
+});
+
+describe('billCodeLongerThanProduct', () => {
+  it('detects when bill code is longer than matched product code', () => {
+    const p = { name: 'W-218H-8B', model_code: 'W-218H-8B' };
+    expect(billCodeLongerThanProduct('W-218H-8BVDF', p)).toBe(true);
+    expect(billCodeLongerThanProduct('W-218H-8B', p)).toBe(false);
+  });
+});
+
 describe('classifyMatch', () => {
   const products = [
     { id: 1, name: 'LTP-1302DS-4AVDF' },
@@ -140,6 +166,15 @@ describe('classifyMatch', () => {
     expect(r.status).toBe('none');
     expect(r.candidates).toEqual([]);
   });
+  it('does not auto-match when bill code is longer than the top product code', () => {
+    const list = [
+      { id: 4, name: 'W-218H-8B' },
+      { id: 3, name: 'W-218H-8BVDF' },
+    ];
+    const r = classifyMatch('W-218H-8BVDFX', list);
+    expect(r.status).toBe('suggestions');
+  });
+
   it('returns "suggestions" for the missing-suffix case (bill spec example)', () => {
     // The plan's canonical example: bill says "W-218H-8BVDF", DB has
     // "W-218H-8B" instead — should surface as a suggestion for the user

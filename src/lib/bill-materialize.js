@@ -1,4 +1,4 @@
-import { classifyMatch } from './fuzzy-match.js';
+import { classifyMatch, findProductByBarcode } from './fuzzy-match.js';
 import { validateCmgBill } from './cmg-bill-validate.js';
 import { SOFT_MATCH_FLOOR } from '../components/ai/bill-review-shared.js';
 
@@ -15,10 +15,15 @@ export function buildRowFromAi(it, catalog, opts = {}) {
     validationIssues = [],
     validationDetail = null,
   } = opts;
-  const match = classifyMatch(it.model_code, catalog || []);
+  const barcode = String(it.barcode || '').trim();
+  const byBarcode = findProductByBarcode(barcode, catalog || []);
+  const match = byBarcode
+    ? { status: 'auto', product: byBarcode, score: 1, candidates: [] }
+    : classifyMatch(it.model_code, catalog || []);
   return {
     uid: makeRowUid(),
     model_code: it.model_code,
+    barcode: barcode || null,
     quantity: Math.max(0, Math.round(Number(it.quantity) || 0)),
     unit_cost: Math.max(0, Number(it.unit_cost) || 0),
     line_amount: Math.max(0, Number(it.line_amount) || 0),
@@ -60,7 +65,7 @@ export function materializeParsedBill(parsed, catalog) {
 }
 
 /**
- * JSON import materialize ó trust validated import rows when auto-matched strongly.
+ * JSON import materialize ù trust validated import rows when auto-matched strongly.
  * Sets footerConfirmed when footer validation is clean.
  */
 export function materializeJsonBill(parsed, catalog) {

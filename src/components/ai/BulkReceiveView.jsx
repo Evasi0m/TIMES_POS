@@ -987,6 +987,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
       status: 'auto',
       product,
       newProduct: null,
+      matchScore: 1,
       reviewConfirmed: true,
       tiktok_skip: false,
       tiktok_sku: null,
