@@ -24,7 +24,7 @@ import { roundMoney, addVat, vatBreakdown, VAT_RATE_DEFAULT } from './money.js';
  */
 export function buildReceiveItems(rows, hasVat) {
   const vatApplies = hasVat !== false;
-  return (rows || [])
+  const lines = (rows || [])
     .map((r) => {
       const product = r && r.product;
       if (!product) return null;
@@ -47,6 +47,40 @@ export function buildReceiveItems(rows, hasVat) {
       };
     })
     .filter(Boolean);
+
+  // AI scans sometimes emit the same SKU twice; both rows may auto-match
+  // to one product. Merge here so stock is not double-counted.
+  const merged = new Map();
+  for (const line of lines) {
+    const prev = merged.get(line.product_id);
+    if (!prev) {
+      merged.set(line.product_id, { ...line });
+      continue;
+    }
+    if (prev.unit_price !== line.unit_price) {
+      throw new Error(
+        `สินค้า "${line.product_name}" ซ้ำในบิลนี้แต่ทุนต่างกัน — รวมแถวหรือแก้ทุนให้ตรงก่อนบันทึก`
+      );
+    }
+    prev.quantity += line.quantity;
+  }
+  return [...merged.values()];
+}
+
+/**
+ * Detect duplicate resolved products within one bill (before merge).
+ * @returns {{ productId: number, name: string, count: number }[]}
+ */
+export function findDuplicateProductsInBill(rows) {
+  const counts = new Map();
+  for (const r of rows || []) {
+    const pid = r?.product?.id;
+    if (!pid) continue;
+    const prev = counts.get(pid);
+    if (prev) prev.count += 1;
+    else counts.set(pid, { productId: pid, name: r.product.name || '', count: 1 });
+  }
+  return [...counts.values()].filter((x) => x.count > 1);
 }
 
 /**

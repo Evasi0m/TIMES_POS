@@ -102,7 +102,7 @@ export function useRecentReceivesMap() {
 //
 // Non-voided receive_orders only. Empty/blank invoice numbers are skipped
 // (an auto-generated fallback can't be a "duplicate" of anything).
-export async function findExistingCmgInvoices(invoiceNos, supplier = 'CMG') {
+export async function findExistingCmgInvoices(invoiceNos, _supplier = 'CMG') {
   const wanted = [...new Set(
     (invoiceNos || []).map((s) => String(s || '').trim()).filter(Boolean)
   )];
@@ -112,7 +112,6 @@ export async function findExistingCmgInvoices(invoiceNos, supplier = 'CMG') {
     const { data, error } = await sb
       .from('receive_orders')
       .select('id, receive_date, supplier_invoice_no, supplier_name, voided_at')
-      .eq('supplier_name', supplier)
       .is('voided_at', null)
       .in('supplier_invoice_no', wanted);
     if (error) { console.warn('[recent-receives] invoice lookup failed:', error); return found; }

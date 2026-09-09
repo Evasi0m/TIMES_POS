@@ -36,6 +36,19 @@ describe('collectBillAlerts', () => {
     expectThaiText(alerts[0].message);
   });
 
+  it('warns when the same product appears on multiple rows', () => {
+    const bill = {
+      ...baseBill,
+      rows: [
+        { status: 'auto', product: { id: 9, name: 'GA-2100CM-8ADR' }, quantity: 3, unit_cost: 3000, needsReview: false },
+        { status: 'auto', product: { id: 9, name: 'GA-2100CM-8ADR' }, quantity: 3, unit_cost: 3000, needsReview: false },
+      ],
+    };
+    const alerts = collectBillAlerts(bill);
+    expect(alerts.some((a) => a.key === 'dup-product')).toBe(true);
+    expectThaiText(alerts.find((a) => a.key === 'dup-product').message);
+  });
+
   it('flags unresolved rows', () => {
     const bill = {
       ...baseBill,

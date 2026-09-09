@@ -101,6 +101,7 @@ import {
 } from './lib/export-auth.js';
 import { logStockExport, fetchStockExportLogs } from './lib/stock-export-log.js';
 import StockAdjustModal from './components/products/StockAdjustModal.jsx';
+import PosCartSwapSheet from './components/pos/PosCartSwapSheet.jsx';
 import BulkStockAdjustView from './components/products/BulkStockAdjustView.jsx';
 import ProductCatalogCard from './components/products/ProductCatalogCard.jsx';
 import ProductBrandPickerSheet from './components/products/ProductBrandPickerSheet.jsx';
@@ -5029,6 +5030,7 @@ function POSView() {
   const [receiptOrderId, setReceiptOrderId] = useState(null); // shows ReceiptModal after sale
   const searchRef = useRef(null);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [swapLineIdx, setSwapLineIdx] = useState(null);
   const submitLockRef = useRef(false); // prevents double-submit even if React hasn't re-rendered yet
   const netPriceRef = useRef(null);
   const netReceivedRef = useRef(null);
@@ -5167,6 +5169,45 @@ function POSView() {
 
   const updateLine = (idx, patch) => setCart(c => c.map((l,i)=> i===idx?{...l,...patch}:l));
   const removeLine = (idx) => setCart(c => c.filter((_,i)=>i!==idx));
+  const swapCartLineProduct = (idx, product) => {
+    const stock = Number(product?.current_stock) || 0;
+    if (stock <= 0) {
+      toast.push(`"${product?.name || 'สินค้า'}" หมดสต็อก — เลือกรุ่นอื่น`, 'error');
+      return;
+    }
+    setCart((c) => {
+      const line = c[idx];
+      if (!line || !product?.id) return c;
+      const qty = Math.min(line.quantity, stock);
+      const dupIdx = c.findIndex((x, i) => i !== idx && x.product_id === product.id);
+      if (dupIdx >= 0) {
+        const merged = [...c];
+        const cap = Number(product.current_stock) || stock;
+        merged[dupIdx] = {
+          ...merged[dupIdx],
+          quantity: Math.min(merged[dupIdx].quantity + qty, cap),
+          current_stock: cap,
+        };
+        merged.splice(idx, 1);
+        return merged;
+      }
+      const next = [...c];
+      next[idx] = {
+        ...line,
+        product_id: product.id,
+        product_name: product.name,
+        barcode: product.barcode,
+        unit_price: Number(product.retail_price) || 0,
+        cost_price: Number(product.cost_price) || 0,
+        current_stock: stock,
+        quantity: qty,
+        display_unit_price: null,
+      };
+      return next;
+    });
+    setSwapLineIdx(null);
+    toast.push(`เปลี่ยนเป็น ${product.name}`, 'success');
+  };
   // Confirmation wrappers for destructive actions — 50+ users tap by mistake
   // more often, so always require an explicit confirm before discarding work.
   const confirmRemoveLine = async (idx) => {
@@ -5594,6 +5635,13 @@ function POSView() {
                     )}
                   </div>
                   <div className="text-xs text-muted font-mono truncate">{l.barcode||''}</div>
+                  <button
+                    type="button"
+                    className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                    onClick={() => setSwapLineIdx(idx)}
+                  >
+                    <Icon name="refresh" size={11}/> เปลี่ยนรุ่น
+                  </button>
                 </div>
                 {/* Demoted from labeled ruby button → icon-only 32×32, so
                     delete stays one-click but no longer steals attention
@@ -6126,6 +6174,13 @@ function POSView() {
                     )}
                   </div>
                         <div className="text-xs text-muted font-mono truncate">{l.barcode||''}</div>
+                        <button
+                          type="button"
+                          className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                          onClick={() => setSwapLineIdx(idx)}
+                        >
+                          <Icon name="refresh" size={11}/> เปลี่ยนรุ่น
+                        </button>
                       </div>
                       <button className="btn-ruby-premium" onClick={()=>confirmRemoveLine(idx)} aria-label="ลบสินค้านี้">
                         <Icon name="trash" size={13}/>
@@ -6509,6 +6564,13 @@ function POSView() {
         onScan={handleCameraScan}
         mode="continuous"
         title="สแกนสินค้าเข้าตะกร้า"
+      />
+
+      <PosCartSwapSheet
+        open={swapLineIdx != null}
+        line={swapLineIdx != null ? cart[swapLineIdx] : null}
+        onClose={() => setSwapLineIdx(null)}
+        onSwap={(p) => { if (swapLineIdx != null) swapCartLineProduct(swapLineIdx, p); }}
       />
     </>
   );

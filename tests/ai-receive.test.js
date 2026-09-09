@@ -44,11 +44,24 @@ describe('buildReceiveItems', () => {
   it('floors negative qty/cost so the guard fires (no inventing stock)', () => {
     expect(() => buildReceiveItems([row({ quantity: -3 })], true)).toThrow();
   });
+
+  it('merges duplicate product rows so stock is not double-counted', () => {
+    const items = buildReceiveItems([row({ quantity: 3 }), row({ quantity: 3 })], true);
+    expect(items).toHaveLength(1);
+    expect(items[0].quantity).toBe(6);
+  });
+
+  it('throws when duplicate product rows have different unit costs', () => {
+    expect(() => buildReceiveItems([row({ unit_cost: 1000 }), row({ unit_cost: 900 })], true)).toThrow(/ซ้ำ/);
+  });
 });
 
 describe('receiveTotals', () => {
   it('sums gross line totals and breaks out the VAT portion', () => {
-    const items = buildReceiveItems([row(), row({ unit_cost: 500, quantity: 1 })], true);
+    const items = buildReceiveItems([
+      row(),
+      row({ product: { id: 2, name: 'GA-200-1A' }, unit_cost: 500, quantity: 1 }),
+    ], true);
     // lines: 1070*2 + 535*1 = 2140 + 535 = 2675
     const { total, vat } = receiveTotals(items, true);
     expect(total).toBe(2675);

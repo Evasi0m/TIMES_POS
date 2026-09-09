@@ -1,6 +1,7 @@
 // Priority-ordered bill-level alerts for BulkReceiveView BillCard (mobile summary).
 
 import { needsManualReview } from './bill-review-shared.js';
+import { findDuplicateProductsInBill } from '../../lib/ai-receive.js';
 
 function isTikTokLineReady(row) {
   if (!row || row.tiktok_skip) return true;
@@ -68,6 +69,14 @@ export function collectBillAlerts(bill, {
       key: 'dup',
       severity: 'error',
       message: `เลขบิลนี้เคยรับเข้าแล้ว (#${dup.id}${dup.date ? ` · ${new Date(dup.date).toLocaleDateString('th-TH', { day: '2-digit', month: 'short' })}` : ''}) — ตรวจก่อนบันทึกซ้ำ`,
+    });
+  }
+  const dupProducts = findDuplicateProductsInBill(bill.rows.filter((r) => r.product?.id));
+  if (dupProducts.length) {
+    alerts.push({
+      key: 'dup-product',
+      severity: 'warn',
+      message: `สินค้าซ้ำในบิล: ${dupProducts.map((d) => `${d.name} (${d.count} แถว)`).join(', ')} — ระบบจะรวมจำนวนตอนบันทึก`,
     });
   }
   if (isNonCmg) {
