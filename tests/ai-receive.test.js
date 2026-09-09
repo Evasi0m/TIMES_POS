@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildReceiveItems,
+  mergeRpcLineItems,
   receiveTotals,
   grossUnitCost,
   suggestedRetail,
@@ -53,6 +54,31 @@ describe('buildReceiveItems', () => {
 
   it('throws when duplicate product rows have different unit costs', () => {
     expect(() => buildReceiveItems([row({ unit_cost: 1000 }), row({ unit_cost: 900 })], true)).toThrow(/ซ้ำ/);
+  });
+});
+
+describe('mergeRpcLineItems', () => {
+  const line = (over = {}) => ({
+    product_id: 1,
+    product_name: 'GA-100-1A1',
+    quantity: 2,
+    unit: 'เรือน',
+    unit_price: 1070,
+    discount1_value: 0,
+    discount1_type: null,
+    discount2_value: 0,
+    discount2_type: null,
+    ...over,
+  });
+
+  it('merges duplicate product rows for manual receive RPC payload', () => {
+    const merged = mergeRpcLineItems([line(), line({ quantity: 3 })]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].quantity).toBe(5);
+  });
+
+  it('throws when duplicate rows have different unit prices', () => {
+    expect(() => mergeRpcLineItems([line(), line({ unit_price: 1000 })])).toThrow(/ซ้ำ/);
   });
 });
 

@@ -1053,9 +1053,13 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
   // the user resolves both unmatched products AND incomplete numerics.
   const summary = useMemo(() => {
     const actionable = bills.filter((b) => b.is_cmg_bill && b.rows.length > 0);
+    const hasDupInvoice = (b) => {
+      const inv = b.supplier_invoice_no?.trim();
+      return inv && dupInvoices?.get(inv);
+    };
     const blocked = actionable.filter((b) => {
       const s = billStatus(b, tiktokMirrorOn);
-      return s === 'unresolved' || s === 'incomplete' || s === 'tiktok_unresolved' || s === 'needs_review';
+      return s === 'unresolved' || s === 'incomplete' || s === 'tiktok_unresolved' || s === 'needs_review' || hasDupInvoice(b);
     });
     const skip = bills.filter((b) => !b.is_cmg_bill || b.rows.length === 0);
     const saved = bills.filter((b) => b.saveState === 'saved');
@@ -1069,7 +1073,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
       failed: failed.length,
       readyToSubmit: actionable.length > 0 && blocked.length === 0,
     };
-  }, [bills, tiktokMirrorOn]);
+  }, [bills, tiktokMirrorOn, dupInvoices]);
 
   // ─── Sequential submit with partial-success ────────────────────────
   // For each bill that is_cmg_bill && rows.length > 0 && saveState !==
@@ -1120,6 +1124,13 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
         return;
       }
       submitAttempted = true;
+
+      const invoiceNos = targets
+        .map((i) => billsRef.current[i]?.supplier_invoice_no?.trim())
+        .filter(Boolean);
+      const freshDupInvoices = await findExistingCmgInvoices(invoiceNos);
+      setDupInvoices(freshDupInvoices);
+
       setSavingProgress({ done: 0, total: targets.length });
 
       // M6 fix: pre-validate barcodes against the in-memory catalog. If
@@ -1155,7 +1166,9 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
         let okProducts = [];
 
         try {
-        const preflightError = validateBillRowsForSubmit(bill);
+        const inv = bill.supplier_invoice_no?.trim();
+        const dupInvoice = inv ? freshDupInvoices.get(inv) : null;
+        const preflightError = validateBillRowsForSubmit(bill, { dupInvoice });
         if (preflightError) {
           throw new Error(preflightError);
         }

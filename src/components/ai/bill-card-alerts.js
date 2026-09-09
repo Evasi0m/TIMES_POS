@@ -68,7 +68,7 @@ export function collectBillAlerts(bill, {
     alerts.push({
       key: 'dup',
       severity: 'error',
-      message: `เลขบิลนี้เคยรับเข้าแล้ว (#${dup.id}${dup.date ? ` · ${new Date(dup.date).toLocaleDateString('th-TH', { day: '2-digit', month: 'short' })}` : ''}) — ตรวจก่อนบันทึกซ้ำ`,
+      message: `เลขบิลนี้ถูกใช้แล้ว (#${dup.id}${dup.date ? ` · ${new Date(dup.date).toLocaleDateString('th-TH', { day: '2-digit', month: 'short' })}` : ''}) — ไม่สามารถบันทึกซ้ำได้`,
     });
   }
   const dupProducts = findDuplicateProductsInBill(bill.rows.filter((r) => r.product?.id));
@@ -76,7 +76,7 @@ export function collectBillAlerts(bill, {
     alerts.push({
       key: 'dup-product',
       severity: 'warn',
-      message: `สินค้าซ้ำในบิล: ${dupProducts.map((d) => `${d.name} (${d.count} แถว)`).join(', ')} — ระบบจะรวมจำนวนตอนบันทึก`,
+      message: `สินค้าซ้ำในบิล: ${dupProducts.map((d) => `${d.name} (${d.count} แถว)`).join(', ')} — ตรวจแถวซ้ำ (ระบบจะรวมจำนวนให้อัตโนมัติเมื่อบันทึก)`,
     });
   }
   if (isNonCmg) {

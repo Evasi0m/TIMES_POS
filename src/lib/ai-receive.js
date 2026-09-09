@@ -67,6 +67,28 @@ export function buildReceiveItems(rows, hasVat) {
   return [...merged.values()];
 }
 
+/** Merge duplicate product_id rows in an RPC items payload (manual receive). */
+export function mergeRpcLineItems(items) {
+  const merged = new Map();
+  for (const line of items || []) {
+    const pid = line.product_id;
+    if (!pid) continue;
+    const prev = merged.get(pid);
+    if (!prev) {
+      merged.set(pid, { ...line });
+      continue;
+    }
+    if (prev.unit_price !== line.unit_price) {
+      throw new Error(
+        `สินค้า "${line.product_name}" ซ้ำในบิลนี้แต่ราคาต่างกัน — รวมแถวหรือแก้ราคาให้ตรงก่อนบันทึก`
+      );
+    }
+    prev.quantity += line.quantity;
+  }
+  const withoutPid = (items || []).filter((l) => !l.product_id);
+  return [...merged.values(), ...withoutPid];
+}
+
 /**
  * Detect duplicate resolved products within one bill (before merge).
  * @returns {{ productId: number, name: string, count: number }[]}

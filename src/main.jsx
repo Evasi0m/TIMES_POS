@@ -151,7 +151,8 @@ import KindTabs from './components/movement/KindTabs.jsx';
 import SlidingSegment from './components/ui/SlidingSegment.jsx';
 import CostPercentToggle from './components/movement/CostPercentToggle.jsx';
 import MovementItemsPanel from './components/movement/MovementItemsPanel.jsx';
-import { useRecentReceivesMap } from './lib/recent-receives.js';
+import { useRecentReceivesMap, findExistingCmgInvoices } from './lib/recent-receives.js';
+import { mergeRpcLineItems } from './lib/ai-receive.js';
 import SupplierForm from './components/movement/SupplierForm.jsx';
 import SalePickerForReturn from './components/movement/SalePickerForReturn.jsx';
 import VoidStockStatusBadge from './components/sales/VoidStockStatusBadge.jsx';
@@ -10954,6 +10955,18 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
         return;
       }
     }
+    if (kind === 'receive' || kind === 'claim') {
+      const seen = new Set();
+      let hasDupProduct = false;
+      for (const l of items) {
+        if (!l.product_id) continue;
+        if (seen.has(l.product_id)) { hasDupProduct = true; break; }
+        seen.add(l.product_id);
+      }
+      if (hasDupProduct) {
+        toast.push('มีรุ่นซ้ำในบิล — ตรวจแถวซ้ำ (ระบบจะรวมจำนวนให้อัตโนมัติเมื่อบันทึก)', 'warning');
+      }
+    }
     setConfirmOpen(true);
   };
 
@@ -10966,6 +10979,18 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
       kind === 'return' && tiktokCancelMeta?.pos_stock_restored && goodsReturned
     ) ? false : goodsReturned;
     try {
+      if (kind === 'receive') {
+        const inv = supplierInvoiceNo.trim();
+        if (inv) {
+          const found = await findExistingCmgInvoices([inv]);
+          const dup = found.get(inv);
+          if (dup) {
+            toast.push(`เลขบิล ${inv} ถูกใช้แล้ว (รับเข้า #${dup.id}) — ไม่สามารถบันทึกซ้ำได้`, 'error');
+            return;
+          }
+        }
+      }
+
       const totalR = roundMoney(total);
       // Date field name varies by kind; the RPC reads it from the header by the
       // expected key for that kind.
@@ -10991,7 +11016,7 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
       }
 
       // Convert prices from Net (state) to Gross (DB storage)
-      const itemsPayload = items.map(l => {
+      let itemsPayload = items.map(l => {
         const lineVatApplies = (kind === 'receive' || kind === 'claim') && hasVat;
         const grossUnitPrice = lineVatApplies ? roundMoney(Number(l.unit_price) * 1.07) : roundMoney(l.unit_price);
         return {
@@ -11001,6 +11026,9 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
           discount2_value: roundMoney(l.discount2_value||0), discount2_type: l.discount2_type,
         };
       });
+      if (kind === 'receive' || kind === 'claim') {
+        itemsPayload = mergeRpcLineItems(itemsPayload);
+      }
 
       // Atomic: header + items + adjust_stock in one Postgres transaction.
       // See supabase-migrations/002_create_stock_movement_with_items.sql.
