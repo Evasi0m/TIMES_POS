@@ -1,7 +1,11 @@
 // Priority-ordered bill-level alerts for BulkReceiveView BillCard (mobile summary).
 
 import { needsManualReview } from './bill-review-shared.js';
-import { findDuplicateProductsInBill } from '../../lib/ai-receive.js';
+import {
+  findBillRowCostConflicts,
+  findDuplicateProductsInBill,
+  formatBillRowCostConflictError,
+} from '../../lib/ai-receive.js';
 import { isValidCmgInvoiceNo } from '../../lib/cmg-bill-validate.js';
 
 function isTikTokLineReady(row) {
@@ -100,8 +104,16 @@ export function collectBillAlerts(bill, {
       message: `เลขบิลนี้ถูกใช้แล้ว (#${dup.id}${dup.date ? ` · ${new Date(dup.date).toLocaleDateString('th-TH', { day: '2-digit', month: 'short' })}` : ''}) — ไม่สามารถบันทึกซ้ำได้`,
     });
   }
+  const costConflicts = findBillRowCostConflicts(bill.rows);
+  if (costConflicts.length) {
+    alerts.push({
+      key: 'dup-product-cost',
+      severity: 'error',
+      message: formatBillRowCostConflictError(costConflicts),
+    });
+  }
   const dupProducts = findDuplicateProductsInBill(bill.rows.filter((r) => r.product?.id));
-  if (dupProducts.length) {
+  if (dupProducts.length && !costConflicts.length) {
     alerts.push({
       key: 'dup-product',
       severity: 'warn',

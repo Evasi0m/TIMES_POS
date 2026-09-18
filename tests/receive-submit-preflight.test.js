@@ -46,4 +46,26 @@ describe('validateBillRowsForSubmit', () => {
     });
     expect(err).toContain(UNMATCHED_MSG);
   });
+
+  it('allows multiple distinct new products in one bill', () => {
+    expect(validateBillRowsForSubmit({
+      ...baseBill,
+      rows: [
+        { status: 'new', newProduct: { name: 'GR-B300H-5ADR' }, quantity: 2, unit_cost: 6074.77 },
+        { status: 'new', newProduct: { name: 'GMA-P2110B-1ADR' }, quantity: 2, unit_cost: 2803.74 },
+      ],
+    })).toBeNull();
+  });
+
+  it('blocks duplicate new-product rows with different unit costs', () => {
+    const err = validateBillRowsForSubmit({
+      ...baseBill,
+      rows: [
+        { status: 'new', newProduct: { name: 'GR-B300H-5ADR' }, quantity: 2, unit_cost: 6074.77 },
+        { status: 'new', newProduct: { name: 'GR-B300H-5ADR' }, quantity: 1, unit_cost: 6000 },
+      ],
+    });
+    expect(err).toMatch(/GR-B300H-5ADR/);
+    expect(err).toMatch(/แถว/);
+  });
 });

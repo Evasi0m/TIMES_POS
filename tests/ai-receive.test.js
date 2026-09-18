@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildReceiveItems,
+  findBillRowCostConflicts,
+  formatBillRowCostConflictError,
   mergeRpcLineItems,
   receiveTotals,
   grossUnitCost,
@@ -97,6 +99,26 @@ describe('receiveTotals', () => {
   it('reports 0 VAT when hasVat is false', () => {
     const items = buildReceiveItems([row()], false);
     expect(receiveTotals(items, false).vat).toBe(0);
+  });
+});
+
+describe('findBillRowCostConflicts', () => {
+  it('flags two new-product rows with the same name but different costs', () => {
+    const conflicts = findBillRowCostConflicts([
+      { status: 'new', newProduct: { name: 'GR-B300H-5ADR' }, unit_cost: 6074.77, quantity: 2 },
+      { status: 'new', newProduct: { name: 'GR-B300H-5ADR' }, unit_cost: 6000, quantity: 1 },
+    ]);
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0].name).toBe('GR-B300H-5ADR');
+    expect(formatBillRowCostConflictError(conflicts)).toMatch(/แถว 1/);
+  });
+
+  it('allows two different new SKUs in one bill', () => {
+    const conflicts = findBillRowCostConflicts([
+      { status: 'new', newProduct: { name: 'GR-B300H-5ADR' }, unit_cost: 6074.77, quantity: 2 },
+      { status: 'new', newProduct: { name: 'GMA-P2110B-1ADR' }, unit_cost: 2803.74, quantity: 2 },
+    ]);
+    expect(conflicts).toHaveLength(0);
   });
 });
 

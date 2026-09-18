@@ -1,5 +1,5 @@
-import { classifyMatch, findProductByBarcode } from './fuzzy-match.js';
-import { validateCmgBill } from './cmg-bill-validate.js';
+import { classifyMatch, findProductByBarcode, normalizeCode } from './fuzzy-match.js';
+import { validateCmgBill, roundMoney, ROW_TOLERANCE } from './cmg-bill-validate.js';
 import { SOFT_MATCH_FLOOR } from '../components/ai/bill-review-shared.js';
 
 let _rowUidCounter = 0;
@@ -42,18 +42,47 @@ export function buildRowFromAi(it, catalog, opts = {}) {
   };
 }
 
+/** Merge AI duplicate lines (same model_code + same unit cost) into one row. */
+export function mergeDuplicateModelRows(rows) {
+  const out = [];
+  const byCode = new Map();
+  for (const row of rows || []) {
+    const code = normalizeCode(row.model_code);
+    if (!code) {
+      out.push(row);
+      continue;
+    }
+    const prev = byCode.get(code);
+    if (!prev) {
+      byCode.set(code, row);
+      out.push(row);
+      continue;
+    }
+    const sameCost = Math.abs(roundMoney(prev.unit_cost) - roundMoney(row.unit_cost)) <= ROW_TOLERANCE;
+    if (!sameCost) {
+      out.push(row);
+      continue;
+    }
+    prev.quantity = Math.max(0, Math.round(Number(prev.quantity) || 0))
+      + Math.max(0, Math.round(Number(row.quantity) || 0));
+    prev.line_amount = roundMoney(Number(prev.line_amount) + Number(row.line_amount));
+    prev.needsReview = Boolean(prev.needsReview || row.needsReview);
+  }
+  return out;
+}
+
 /** Apply arithmetic validation and build review rows from a parsed bill. */
 export function materializeParsedBill(parsed, catalog) {
   const validation = validateCmgBill(parsed);
   const itemsRaw = Array.isArray(parsed?.items) ? parsed.items : [];
-  const rows = itemsRaw.map((it, j) => {
+  const rows = mergeDuplicateModelRows(itemsRaw.map((it, j) => {
     const rowResult = validation.rows.find((r) => r.index === j);
     return buildRowFromAi(it, catalog, {
       forceReview: Boolean(validation.rowFlags[j]),
       validationIssues: rowResult?.issues || [],
       validationDetail: rowResult?.detail || null,
     });
-  });
+  }));
   return {
     rows,
     validation,

@@ -10,6 +10,7 @@
 // issues VAT invoices); pass `false` for the rare pre-summed bill.
 
 import { roundMoney, addVat, vatBreakdown, VAT_RATE_DEFAULT } from './money.js';
+import { normalizeCode } from './fuzzy-match.js';
 
 /**
  * Build the `p_items` array for `create_stock_movement_with_items`.
@@ -87,6 +88,62 @@ export function mergeRpcLineItems(items) {
   }
   const withoutPid = (items || []).filter((l) => !l.product_id);
   return [...merged.values(), ...withoutPid];
+}
+
+/** Stable merge key for a review row (resolved product or pending new SKU). */
+export function billRowMergeKey(row) {
+  if (row?.product?.id) return `id:${row.product.id}`;
+  if (row?.status === 'new') {
+    const name = String(row.newProduct?.name || '').trim();
+    if (name) return `new:${name}`;
+  }
+  const code = normalizeCode(row?.model_code);
+  if (code && (row?.status === 'auto' || row?.status === 'new')) return `code:${code}`;
+  return null;
+}
+
+/**
+ * Detect duplicate rows that would collide on save with different unit costs.
+ * @returns {{ name: string, detail: string, indices: number[] }[]}
+ */
+export function findBillRowCostConflicts(rows) {
+  const groups = new Map();
+  (rows || []).forEach((r, index) => {
+    const key = billRowMergeKey(r);
+    if (!key) return;
+    const cost = roundMoney(Number(r.unit_cost) || 0);
+    const name = r.product?.name || r.newProduct?.name || r.model_code || `แถว ${index + 1}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push({ index, cost, name });
+  });
+
+  const conflicts = [];
+  for (const entries of groups.values()) {
+    if (entries.length < 2) continue;
+    const costs = new Set(entries.map((e) => e.cost));
+    if (costs.size <= 1) continue;
+    const name = entries[0].name;
+    const detail = entries.map((e) => `แถว ${e.index + 1}: ทุน ${e.cost}`).join(', ');
+    conflicts.push({ name, detail, indices: entries.map((e) => e.index) });
+  }
+  return conflicts;
+}
+
+export function formatBillRowCostConflictError(conflicts) {
+  const first = conflicts[0];
+  if (!first) return '';
+  const suffix = conflicts.length > 1 ? ` (+${conflicts.length - 1} รุ่น)` : '';
+  return `สินค้า "${first.name}" ซ้ำในบิลแต่ทุนต่างกัน (${first.detail})${suffix} — ลบแถวซ้ำหรือแก้ทุนให้ตรงก่อนบันทึก`;
+}
+
+/** Probe product for pre-submit buildReceiveItems (unique key per pending new SKU). */
+export function probeProductForSubmitRow(row) {
+  if (row?.status === 'new' && row.newProduct?.name?.trim()) {
+    const name = row.newProduct.name.trim();
+    return { id: `new:${name}`, name };
+  }
+  if (row?.product?.id) return row.product;
+  return null;
 }
 
 /**

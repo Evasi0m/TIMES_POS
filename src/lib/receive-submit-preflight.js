@@ -1,4 +1,9 @@
-import { buildReceiveItems } from './ai-receive.js';
+import {
+  buildReceiveItems,
+  findBillRowCostConflicts,
+  formatBillRowCostConflictError,
+  probeProductForSubmitRow,
+} from './ai-receive.js';
 import { isValidCmgInvoiceNo } from './cmg-bill-validate.js';
 
 function rowLabel(row) {
@@ -37,15 +42,15 @@ export function validateBillRowsForSubmit(bill, { dupInvoice } = {}) {
   }
   if (issues.length) return issues.join('\n');
 
+  const costConflicts = findBillRowCostConflicts(rows);
+  if (costConflicts.length) {
+    return formatBillRowCostConflictError(costConflicts);
+  }
+
   const lineVatApplies = bill.has_vat !== false;
   const probeRows = rows.map((r) => {
-    if (r.status === 'new' && r.newProduct) {
-      return {
-        ...r,
-        product: { id: 1, name: r.newProduct.name.trim() },
-      };
-    }
-    return r;
+    const product = probeProductForSubmitRow(r);
+    return product ? { ...r, product } : r;
   });
 
   try {
