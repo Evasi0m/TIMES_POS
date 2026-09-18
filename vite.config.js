@@ -6,7 +6,7 @@
 // The single HTML file is deploy-ready: copy to any static host
 // (Cloudflare Pages, Vercel, S3, an SD card on a POS terminal). The SW
 // file goes next to it.
-import { copyFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -96,6 +96,7 @@ export default defineConfig({
         });
       },
       closeBundle() {
+        mkdirSync('dist', { recursive: true });
         writeFileSync(
           join('dist', 'version.json'),
           JSON.stringify(versionPayload(), null, 0),

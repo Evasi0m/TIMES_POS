@@ -1,5 +1,6 @@
 import { classifyMatch, findProductByBarcode, normalizeCode } from './fuzzy-match.js';
-import { validateCmgBill, roundMoney, ROW_TOLERANCE } from './cmg-bill-validate.js';
+import { validateCmgBill, ROW_TOLERANCE } from './cmg-bill-validate.js';
+import { roundMoney } from './money.js';
 import { SOFT_MATCH_FLOOR } from '../components/ai/bill-review-shared.js';
 
 let _rowUidCounter = 0;
