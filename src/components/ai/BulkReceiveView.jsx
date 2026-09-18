@@ -1053,14 +1053,16 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
   // counted as "blocked" too — the submit button stays disabled until
   // the user resolves both unmatched products AND incomplete numerics.
   const summary = useMemo(() => {
-    const actionable = bills.filter((b) => b.is_cmg_bill && b.rows.length > 0);
+    const actionable = bills.filter(
+      (b) => b.is_cmg_bill && b.rows.length > 0 && b.saveState !== 'saved',
+    );
     const hasDupInvoice = (b) => {
       const inv = b.supplier_invoice_no?.trim();
       return inv && dupInvoices?.get(inv);
     };
     const blocked = actionable.filter((b) => {
       const s = billStatus(b, tiktokMirrorOn);
-      return s === 'unresolved' || s === 'incomplete' || s === 'tiktok_unresolved' || s === 'needs_review' || hasDupInvoice(b);
+      return s === 'unresolved' || s === 'incomplete' || s === 'tiktok_unresolved' || s === 'needs_review' || s === 'saving' || hasDupInvoice(b);
     });
     const skip = bills.filter((b) => !b.is_cmg_bill || b.rows.length === 0);
     const saved = bills.filter((b) => b.saveState === 'saved');
@@ -1099,6 +1101,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
     let savedIdsThisPass = [];
     let failedThisPass = [];
     let submitAttempted = false;
+    let targets = [];
     const mirrorResultsAll = [];
     // Keep billsRef in sync inside submitAll — React may batch setBills
     // across awaits, so the finally block must not rely on useEffect alone.
@@ -1114,14 +1117,15 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
       // can't shift them mid-loop. We re-read bills[i] each iteration
       // from billsRef to honour any in-flight UI edits, but the
       // "should I try this one?" filter uses the snapshot.
-      const targets = [];
-      bills.forEach((b, i) => {
+      targets = [];
+      billsRef.current.forEach((b, i) => {
         if (!b.is_cmg_bill || b.rows.length === 0) return;
         if (b.saveState === 'saved') return;
         targets.push(i);
       });
 
       if (targets.length === 0) {
+        toast?.push('ไม่มีบิลที่ต้องบันทึก — บิลอาจถูกบันทึกไปแล้ว หรือไม่มีรายการ', 'error');
         return;
       }
       submitAttempted = true;
@@ -1152,7 +1156,22 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
         // M2 fix: read fresh bill state from the ref instead of
         // abusing setBills as a Promise.
         const bill = billsRef.current[i];
-        if (!bill || bill.saveState === 'saved') continue;
+        if (!bill) {
+          failed.push({
+            index: i,
+            message: 'บิลหายจาก session ระหว่างบันทึก — กดเริ่มรอบใหม่แล้วสแกนใหม่',
+          });
+          continue;
+        }
+        if (bill.saveState === 'saved') {
+          failed.push({
+            index: i,
+            message: bill.savedOrderId
+              ? `บิลนี้บันทึกไปแล้ว (#${bill.savedOrderId})`
+              : 'บิลนี้ถูกทำเครื่องหมายว่าบันทึกแล้ว — กดเริ่มรอบใหม่',
+          });
+          continue;
+        }
 
         // Mark in-flight so the stepper shows a spinner on this bill.
         commitBills((prev) => prev.map((b, j) =>
@@ -1409,17 +1428,28 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
         .filter((b) => b.saveState === 'saved' && b.savedOrderId != null)
         .map((b) => b.savedOrderId);
       const allSavedIds = [...new Set([...refSavedIds, ...savedIdsThisPass])];
-      const allFailed = finalBills
+      const allFailedFromState = finalBills
         .map((b, idx) => (b.saveState === 'failed'
           ? { index: idx, message: b.saveError || 'unknown error' }
           : null))
         .filter(Boolean);
+      const failedByIndex = new Map();
+      for (const f of [...failedThisPass, ...allFailedFromState]) {
+        failedByIndex.set(f.index, f);
+      }
+      let failedOut = [...failedByIndex.values()];
       const allSkipped = finalBills.filter(
         (b) => !b.is_cmg_bill || b.rows.length === 0
       ).length;
+      if (allSavedIds.length === 0 && failedOut.length === 0) {
+        failedOut = [{
+          index: targets[0] ?? 0,
+          message: 'ไม่มีบิลที่บันทึกในรอบนี้ — กดเริ่มรอบใหม่แล้วลองอีกครั้ง',
+        }];
+      }
       setSubmitSummary({
         savedIds: allSavedIds,
-        failed: allFailed,
+        failed: failedOut,
         skipped: allSkipped,
         tiktokMirrorHadFailures: mirrorResultsAll.some((r) => r && r.status === 'failed'),
       });
@@ -2859,7 +2889,8 @@ function DoneSummary({ submitSummary, bills, onRetryFailed, onStartNew, submitti
   const savedCount = Math.max(savedFromSummary, savedFromBills);
   const failedCount = failed.length;
   const skippedCount = bills.filter((b) => !b.is_cmg_bill || b.rows.length === 0).length;
-  const allOk = failedCount === 0;
+  const allOk = failedCount === 0 && savedCount > 0;
+  const nothingSaved = savedCount === 0 && failedCount === 0;
   const tiktokMirrorPartial = submitSummary.tiktokMirrorHadFailures;
 
   return (
@@ -2877,12 +2908,16 @@ function DoneSummary({ submitSummary, bills, onRetryFailed, onStartNew, submitti
           <div className="font-display text-2xl">
             {allOk
               ? `บันทึกสำเร็จทั้ง ${savedCount} บิล`
-              : `บันทึก ${savedCount}/${savedCount + failedCount} บิล`}
+              : nothingSaved
+                ? 'ไม่ได้บันทึกบิลใดเลย'
+                : `บันทึก ${savedCount}/${savedCount + failedCount} บิล`}
           </div>
           <div className="text-sm text-muted-soft mt-1.5">
             {allOk
               ? 'รายการรับเข้าทั้งหมดถูกบันทึกแล้ว'
-              : 'บางบิลบันทึกไม่สำเร็จ — กดลองอีกครั้งหรือเริ่มรอบใหม่'}
+              : nothingSaved
+                ? 'ระบบไม่พบการบันทึก — กดเริ่มรอบใหม่แล้วลองอีกครั้ง'
+                : 'บางบิลบันทึกไม่สำเร็จ — กดลองอีกครั้งหรือเริ่มรอบใหม่'}
             {skippedCount > 0 && (
               <> · ข้าม {skippedCount} บิล (ไม่ใช่ CMG / ไม่มีรายการ)</>
             )}
