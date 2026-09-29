@@ -10,7 +10,30 @@ import {
   customerPriceQuote,
   filterCustomerPriceProducts,
   sortCustomerPriceProducts,
+  customerStockStatus,
 } from '../src/lib/customer-price.js';
+
+describe('customerStockStatus', () => {
+  it('0 or less is out of stock', () => {
+    expect(customerStockStatus(0).id).toBe('out');
+    expect(customerStockStatus(-3).id).toBe('out');
+  });
+  it('at or below the low threshold is low', () => {
+    expect(customerStockStatus(1).id).toBe('low');
+    expect(customerStockStatus(2).id).toBe('low');
+  });
+  it('above the threshold is in stock', () => {
+    expect(customerStockStatus(3).id).toBe('in');
+    expect(customerStockStatus(50).id).toBe('in');
+  });
+  it('honours a custom low threshold', () => {
+    expect(customerStockStatus(4, 5).id).toBe('low');
+    expect(customerStockStatus(6, 5).id).toBe('in');
+  });
+  it('never exposes the raw count in its label', () => {
+    expect(customerStockStatus(99).label).not.toMatch(/99/);
+  });
+});
 
 describe('floorToEnding', () => {
   it('1000+30% raw 1300 floors to 1290', () => {

@@ -203,3 +203,14 @@ export function sortCustomerPriceProducts(list, mode, config, sortProductsFn) {
   });
   return arr;
 }
+
+/**
+ * Customer-facing stock status — never exposes the raw count.
+ * @returns {{ id:'out'|'low'|'in', label:string }}
+ */
+export function customerStockStatus(stock, lowThreshold = 2) {
+  const n = Number(stock) || 0;
+  if (n <= 0) return { id: 'out', label: 'สินค้าหมด' };
+  if (n <= lowThreshold) return { id: 'low', label: 'เหลือน้อย' };
+  return { id: 'in', label: 'มีสินค้า' };
+}

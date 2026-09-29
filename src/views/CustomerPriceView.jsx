@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { sb } from '../lib/supabase-client.js';
 import { searchProducts } from '../lib/product-search.js';
+import { getProductListBundle } from '../lib/product-catalog-cache.js';
 import {
   BRAND_RULES,
   SERIES_RULES,
@@ -14,25 +15,40 @@ import {
 import {
   mergeCustomerPriceConfig,
   customerPriceQuote,
+  customerStockStatus,
   filterCustomerPriceProducts,
   sortCustomerPriceProducts,
 } from '../lib/customer-price.js';
 import { fmtTHB } from '../lib/format.js';
+import { useCountUp } from '../hooks/useCountUp.js';
+import { useIdleReset } from '../hooks/useIdleReset.js';
 import ProductThumb from '../components/ui/ProductThumb.jsx';
 import Icon from '../components/ui/Icon.jsx';
 import ProductBrandPickerSheet from '../components/products/ProductBrandPickerSheet.jsx';
 import ProductFilterSheet from '../components/products/ProductFilterSheet.jsx';
+import CustomerScanSheet from '../components/customer/CustomerScanSheet.jsx';
+import CustomerLanding from '../components/customer/CustomerLanding.jsx';
+import KioskExitDialog from '../components/customer/KioskExitDialog.jsx';
 
 const PAGE = 60;
+const IDLE_MS = 90_000; // reset the board for the next customer
+const KIOSK_PIN_KEY = 'customer_kiosk_pin';
 
 /** Catalog-style Latin digits: "3,690.-" — avoids Taviraj/th-TH numeral distortion. */
 function fmtCatalogPrice(n) {
   const v = Math.round(Number(n) || 0);
   return v.toLocaleString('en-US') + '.-';
 }
+function fmtPlain(n) {
+  return (Math.round(Number(n) || 0)).toLocaleString('en-US');
+}
 
 const isMobileViewport = () =>
   typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches;
+
+const prefersReducedMotion = () =>
+  typeof window !== 'undefined'
+  && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 const DEFAULT_FILTER = {
   query: '',
@@ -44,22 +60,32 @@ const DEFAULT_FILTER = {
   minPrice: 0,
   maxPrice: 0,
   inStockOnly: false,
-  sort: 'newest',
+  sort: 'stock-desc',
 };
 
-function CustomerPriceCard({ product, quote, onOpen }) {
+function StockPill({ stock }) {
+  const st = customerStockStatus(stock);
+  return <span className={'customer-stock-pill customer-stock-pill--' + st.id}>{st.label}</span>;
+}
+
+function CustomerPriceCard({ product, quote, index, onOpen }) {
   const stock = Number(product?.current_stock) || 0;
   const oos = stock <= 0;
+  const style = prefersReducedMotion() || index >= 24
+    ? undefined
+    : { animationDelay: (index * 28) + 'ms' };
   return (
     <button
       type="button"
-      className={'customer-price-card' + (oos ? ' customer-price-card--oos' : '')}
+      className={'customer-price-card customer-price-card--enter' + (oos ? ' customer-price-card--oos' : '')}
+      style={style}
       onClick={() => onOpen(product)}
     >
       <div className="customer-price-card__media">
         {quote.strikeRetail && (
           <span className="customer-price-card__badge">-{quote.discountPct}%</span>
         )}
+        {oos && <span className="customer-price-card__oos-tag">สินค้าหมด</span>}
         <div className="customer-price-card__media-inner">
           <ProductThumb product={product} fill expandable={false} fallback="sku" />
         </div>
@@ -71,28 +97,16 @@ function CustomerPriceCard({ product, quote, onOpen }) {
             {quote.hasSell ? (
               <div className="customer-price-card__sell">{fmtCatalogPrice(quote.sell)}</div>
             ) : (
-              <div className="customer-price-card__na">ยังไม่มีราคาขาย</div>
+              <div className="customer-price-card__na">สอบถามราคา</div>
             )}
             {quote.strikeRetail && (
-              <div className="customer-price-card__retail">ราคาปกติ {fmtCatalogPrice(quote.retail).replace('.-', '')} บาท</div>
+              <div className="customer-price-card__save">ประหยัด ฿{fmtPlain(quote.discountBaht)}</div>
             )}
             {!quote.hasSell && quote.retail > 0 && (
               <div className="customer-price-card__tag">ป้าย {fmtCatalogPrice(quote.retail)}</div>
             )}
           </div>
-          <div
-            className="customer-price-card__stock"
-            aria-label={oos ? 'หมดสต็อก' : `คงเหลือ ${stock}`}
-          >
-            <div
-              className={
-                'stock-gem stock-gem--circle stock-gem--md ' +
-                (oos ? 'stock-gem--out' : 'stock-gem--in')
-              }
-            >
-              <span className="stock-gem__num">{stock}</span>
-            </div>
-          </div>
+          <StockPill stock={stock} />
         </div>
       </div>
     </button>
@@ -101,15 +115,31 @@ function CustomerPriceCard({ product, quote, onOpen }) {
 
 export default function CustomerPriceView({ config }) {
   const priceConfig = config || mergeCustomerPriceConfig(null);
+  const rootRef = useRef(null);
   const [queryInput, setQueryInput] = useState('');
   const [filter, setFilter] = useState(DEFAULT_FILTER);
   const [searchRows, setSearchRows] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [catalogRows, setCatalogRows] = useState([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState(false);
   const [pageSize, setPageSize] = useState(PAGE);
   const [open, setOpen] = useState(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [brandPickerOpen, setBrandPickerOpen] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
+  const [kioskOn, setKioskOn] = useState(false);
+  const [kioskExitOpen, setKioskExitOpen] = useState(false);
 
+  const hasSearch = !!filter.query.trim();
+  const browseActive = !hasSearch && (
+    filter.brand !== 'all' || !!filter.series || !!filter.subType
+    || !!filter.material || !!filter.color
+    || filter.minPrice > 0 || filter.maxPrice > 0 || filter.inStockOnly
+  );
+  const showLanding = !hasSearch && !browseActive;
+
+  // ── Search input → debounced filter.query ──────────────────────────
   useEffect(() => {
     const trimmed = queryInput.trim();
     if (/^\d{8,}$/.test(trimmed)) {
@@ -122,6 +152,7 @@ export default function CustomerPriceView({ config }) {
     return () => clearTimeout(t);
   }, [queryInput]);
 
+  // ── Server search on query ─────────────────────────────────────────
   useEffect(() => {
     const q = filter.query.trim();
     if (!q) {
@@ -129,97 +160,110 @@ export default function CustomerPriceView({ config }) {
       setSearchLoading(false);
       return;
     }
-
     let cancelled = false;
     setSearchLoading(true);
     const t = setTimeout(async () => {
       const { data, error } = await searchProducts(sb, q);
       if (cancelled) return;
-      if (error) {
-        setSearchRows([]);
-      } else {
-        setSearchRows((data || []).map((p) => enrichProduct(p)));
-      }
+      setSearchRows(error ? [] : (data || []).map((p) => enrichProduct(p)));
       setSearchLoading(false);
     }, 200);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
+    return () => { cancelled = true; clearTimeout(t); };
   }, [filter.query]);
+
+  // ── Lazy-load full catalog for zero-typing browse ──────────────────
+  useEffect(() => {
+    if (hasSearch || catalogRows.length || catalogLoading) return;
+    if (!browseActive) return;
+    let cancelled = false;
+    setCatalogLoading(true);
+    setCatalogError(false);
+    (async () => {
+      const { bundle, error } = await getProductListBundle(sb);
+      if (cancelled) return;
+      if (error || !bundle) {
+        setCatalogError(true);
+      } else {
+        const rows = bundle.products.map((p) =>
+          enrichProduct({ ...p, _imageRow: bundle.imageByProductId.get(p.id) || null }));
+        setCatalogRows(rows);
+      }
+      setCatalogLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [browseActive, hasSearch, catalogRows.length, catalogLoading]);
 
   useEffect(() => { setPageSize(PAGE); }, [filter]);
 
-  const hasSearch = !!filter.query.trim();
+  const poolRows = hasSearch ? searchRows : catalogRows;
+  const loading = hasSearch ? searchLoading : (browseActive && catalogLoading);
 
   const filtered = useMemo(() => {
-    if (!hasSearch) return [];
+    if (showLanding) return [];
     const state = { ...filter, query: '' };
-    const base = filterCustomerPriceProducts(
-      searchRows,
-      state,
-      priceConfig,
-      filterProducts,
-    );
-    return sortCustomerPriceProducts(base, filter.sort, priceConfig, sortProducts);
-  }, [hasSearch, searchRows, filter, priceConfig]);
+    const base = filterCustomerPriceProducts(poolRows, state, priceConfig, filterProducts);
+    const sorted = sortCustomerPriceProducts(base, filter.sort, priceConfig, sortProducts);
+    // Out-of-stock always sinks to the bottom, keeping the primary order.
+    const inStock = sorted.filter((p) => (Number(p.current_stock) || 0) > 0);
+    const outStock = sorted.filter((p) => (Number(p.current_stock) || 0) <= 0);
+    return inStock.concat(outStock);
+  }, [showLanding, poolRows, filter, priceConfig]);
 
   const visible = filtered.slice(0, pageSize);
 
+  // ── Facet counts (from the active pool) ────────────────────────────
+  const poolReady = hasSearch ? hasSearch : (browseActive && catalogRows.length > 0);
   const brandCounts = useMemo(() => {
-    if (!hasSearch) return { all: 0 };
-    const c = { all: searchRows.length };
-    searchRows.forEach((p) => { c[p._brand] = (c[p._brand] || 0) + 1; });
+    if (!poolReady) return { all: 0 };
+    const c = { all: poolRows.length };
+    poolRows.forEach((p) => { c[p._brand] = (c[p._brand] || 0) + 1; });
     return c;
-  }, [searchRows, hasSearch]);
+  }, [poolRows, poolReady]);
 
   const seriesCounts = useMemo(() => {
-    if (!hasSearch || filter.brand !== 'casio') return {};
+    if (!poolReady || filter.brand !== 'casio') return {};
     const c = { __total: 0 };
-    searchRows.forEach((p) => {
+    poolRows.forEach((p) => {
       if (p._brand !== 'casio') return;
       c.__total++;
       if (p._series) c[p._series] = (c[p._series] || 0) + 1;
     });
     return c;
-  }, [searchRows, filter.brand, hasSearch]);
+  }, [poolRows, filter.brand, poolReady]);
 
   const subTypeCounts = useMemo(() => {
-    if (!hasSearch || filter.brand !== 'casio' || !filter.series) return {};
+    if (!poolReady || filter.brand !== 'casio' || !filter.series) return {};
     const subs = SERIES_SUBS[filter.series] || [];
     if (!subs.length) return {};
-    const base = searchRows.filter((p) => p._brand === 'casio' && p._series === filter.series);
+    const base = poolRows.filter((p) => p._brand === 'casio' && p._series === filter.series);
     const c = { __total: base.length };
     subs.forEach((s) => { c[s.id] = base.filter((p) => matchSubType(p, s)).length; });
     return c;
-  }, [searchRows, filter.brand, filter.series, hasSearch]);
+  }, [poolRows, filter.brand, filter.series, poolReady]);
 
   const materialCounts = useMemo(() => {
-    if (!hasSearch || filter.brand !== 'casio') return {};
+    if (!poolReady || filter.brand !== 'casio') return {};
     const base = filterCustomerPriceProducts(
-      searchRows,
+      poolRows,
       { ...filter, query: '', material: '', color: '', minPrice: 0, maxPrice: 0 },
-      priceConfig,
-      filterProducts,
+      priceConfig, filterProducts,
     );
     const c = {};
     base.forEach((p) => { if (p._material) c[p._material] = (c[p._material] || 0) + 1; });
     return c;
-  }, [searchRows, filter, priceConfig, hasSearch]);
+  }, [poolRows, filter, priceConfig, poolReady]);
 
   const colorCounts = useMemo(() => {
-    if (!hasSearch || filter.brand !== 'casio') return {};
+    if (!poolReady || filter.brand !== 'casio') return {};
     const base = filterCustomerPriceProducts(
-      searchRows,
+      poolRows,
       { ...filter, query: '', color: '', minPrice: 0, maxPrice: 0 },
-      priceConfig,
-      filterProducts,
+      priceConfig, filterProducts,
     );
     const c = {};
     base.forEach((p) => { if (p._color) c[p._color] = (c[p._color] || 0) + 1; });
     return c;
-  }, [searchRows, filter, priceConfig, hasSearch]);
+  }, [poolRows, filter, priceConfig, poolReady]);
 
   const advancedCount = (filter.material ? 1 : 0) + (filter.color ? 1 : 0)
     + ((filter.minPrice > 0 || filter.maxPrice > 0) ? 1 : 0)
@@ -234,25 +278,26 @@ export default function CustomerPriceView({ config }) {
     || !!filter.material || !!filter.color
     || filter.minPrice > 0 || filter.maxPrice > 0 || filter.inStockOnly;
 
+  const resetAll = useCallback(() => {
+    setQueryInput('');
+    setFilter(DEFAULT_FILTER);
+    setOpen(null);
+    setSheetOpen(false);
+    setBrandPickerOpen(false);
+    setPageSize(PAGE);
+  }, []);
+
   const clearFilters = () => {
     setFilter((f) => ({
-      ...f,
-      brand: 'all',
-      series: '',
-      subType: '',
-      material: '',
-      color: '',
-      minPrice: 0,
-      maxPrice: 0,
-      inStockOnly: false,
+      ...f, brand: 'all', series: '', subType: '', material: '', color: '',
+      minPrice: 0, maxPrice: 0, inStockOnly: false,
     }));
   };
 
-  const setBrand = (b) => {
-    setFilter((f) => ({ ...f, brand: b, series: '', subType: '', material: '', color: '' }));
-  };
+  const setBrand = (b) => setFilter((f) => ({ ...f, brand: b, series: '', subType: '', material: '', color: '' }));
   const setSeries = (s) => setFilter((f) => ({ ...f, series: s, subType: '', material: '', color: '' }));
   const setSubType = (s) => setFilter((f) => ({ ...f, subType: s, material: '', color: '' }));
+  const setPricePreset = (p) => setFilter((f) => ({ ...f, minPrice: p.min, maxPrice: p.max }));
 
   const chipCls = (active) =>
     'px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap inline-flex items-center gap-1 ' +
@@ -262,13 +307,101 @@ export default function CustomerPriceView({ config }) {
     ? 'ทั้งหมด'
     : (BRAND_RULES.find((b) => b.id === filter.brand)?.label || filter.brand);
 
-  const showCasioFacets = filter.brand === 'casio'
-    || searchRows.some((p) => p._brand === 'casio');
-
   const openQuote = open ? customerPriceQuote(open, priceConfig) : null;
 
+  // ── Idle reset (skip while a customer is actively reading a popup) ──
+  useIdleReset(IDLE_MS, () => { if (!open && !scanOpen) resetAll(); }, kioskOn && !open && !scanOpen);
+
+  // ── Infinite scroll sentinel ───────────────────────────────────────
+  const sentinelRef = useRef(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || filtered.length <= visible.length) return undefined;
+    const io = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) setPageSize((n) => n + PAGE);
+    }, { rootMargin: '400px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [filtered.length, visible.length]);
+
+  // ── Popup: Esc to close + body scroll lock ─────────────────────────
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(null); };
+    window.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
+  // ── Popup swipe / arrow navigation across the visible list ─────────
+  const openIndex = open ? filtered.findIndex((p) => p.id === open.id) : -1;
+  const goRel = useCallback((delta) => {
+    if (openIndex < 0) return;
+    const next = filtered[openIndex + delta];
+    if (next) setOpen(next);
+  }, [openIndex, filtered]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'ArrowRight') goRel(1);
+      if (e.key === 'ArrowLeft') goRel(-1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, goRel]);
+
+  const touchX = useRef(null);
+  const onTouchStart = (e) => { touchX.current = e.touches[0].clientX; };
+  const onTouchEnd = (e) => {
+    if (touchX.current == null) return;
+    const dx = e.changedTouches[0].clientX - touchX.current;
+    if (Math.abs(dx) > 60) goRel(dx < 0 ? 1 : -1);
+    touchX.current = null;
+  };
+
+  const animatedSell = useCountUp(openQuote?.hasSell ? openQuote.sell : 0, 420, open?.id);
+
+  // ── Kiosk mode ─────────────────────────────────────────────────────
+  const getKioskPin = () => {
+    try { return localStorage.getItem(KIOSK_PIN_KEY) || ''; } catch { return ''; }
+  };
+  const enterKiosk = () => {
+    let pin = getKioskPin();
+    if (!pin) {
+      const input = window.prompt('ตั้ง PIN 4 หลักสำหรับออกจากโหมดลูกค้า');
+      if (input == null) return;
+      const clean = input.replace(/\D/g, '').slice(0, 8);
+      if (clean.length < 4) { window.alert('PIN ต้องมีอย่างน้อย 4 หลัก'); return; }
+      try { localStorage.setItem(KIOSK_PIN_KEY, clean); } catch { /* ignore */ }
+      pin = clean;
+    }
+    resetAll();
+    setKioskOn(true);
+    try { rootRef.current?.requestFullscreen?.(); } catch { /* ignore */ }
+  };
+  const exitKiosk = () => {
+    setKioskOn(false);
+    setKioskExitOpen(false);
+    try { if (document.fullscreenElement) document.exitFullscreen?.(); } catch { /* ignore */ }
+  };
+
+  const handleScan = (code) => {
+    setScanOpen(false);
+    setQueryInput(code);
+    setFilter((f) => ({ ...f, query: code }));
+  };
+
   return (
-    <div className="px-4 py-4 lg:px-10 lg:py-6 lg:flex lg:flex-col">
+    <div
+      ref={rootRef}
+      className={'customer-price-root px-4 py-4 lg:px-10 lg:py-6 lg:flex lg:flex-col' + (kioskOn ? ' customer-price-root--kiosk' : '')}
+    >
+      {/* Toolbar */}
       <div className="products-toolbar mb-2 flex-shrink-0">
         <div className="products-toolbar__line products-toolbar__line--search">
           <div className="products-search-wrap">
@@ -276,10 +409,7 @@ export default function CustomerPriceView({ config }) {
               <Icon name="search" size={17} strokeWidth={2.25}/>
             </span>
             <input
-              className={
-                'input products-search-input products-search-input--no-camera w-full !h-11 !text-sm' +
-                (queryInput ? ' has-clear' : '')
-              }
+              className={'input products-search-input products-search-input--no-camera w-full !h-11 !text-sm' + (queryInput ? ' has-clear' : '')}
               placeholder="ชื่อรุ่น หรือ บาร์โค้ด"
               value={queryInput}
               onChange={(e) => setQueryInput(e.target.value)}
@@ -301,11 +431,20 @@ export default function CustomerPriceView({ config }) {
           </div>
           <button
             type="button"
+            className="products-toolbar__icon-btn btn-secondary icon-btn-44 !p-0 !w-11 !h-11 flex-shrink-0"
+            onClick={() => setScanOpen(true)}
+            title="สแกนบาร์โค้ด"
+            aria-label="สแกนบาร์โค้ด"
+          >
+            <Icon name="barcode" size={20} strokeWidth={1.75}/>
+          </button>
+          <button
+            type="button"
             className="products-toolbar__filter products-toolbar__icon-btn btn-secondary relative icon-btn-44 !p-0 !w-11 !h-11 flex-shrink-0"
             onClick={() => setSheetOpen(true)}
             title="ตัวกรอง"
             aria-label="ตัวกรอง"
-            disabled={!hasSearch}
+            disabled={showLanding}
           >
             <Icon name="sliders-h" size={20} strokeWidth={1.75}/>
             {advancedCount > 0 && (
@@ -321,10 +460,10 @@ export default function CustomerPriceView({ config }) {
             value={filter.sort}
             onChange={(e) => setFilter((f) => ({ ...f, sort: e.target.value }))}
             aria-label="เรียงลำดับ"
-            disabled={!hasSearch}
+            disabled={showLanding}
           >
+            <option value="stock-desc">จำนวนมาก → น้อย</option>
             <option value="newest">ใหม่ล่าสุด</option>
-            <option value="oldest">เก่าสุด</option>
             <option value="price-asc">ราคา ต่ำ → สูง</option>
             <option value="price-desc">ราคา สูง → ต่ำ</option>
             <option value="name">ชื่อรุ่น A-Z</option>
@@ -334,16 +473,27 @@ export default function CustomerPriceView({ config }) {
             className="products-toolbar__brand btn-secondary !h-11 !px-2.5 !text-sm lg:hidden"
             onClick={() => setBrandPickerOpen(true)}
             aria-label="เลือกแบรนด์"
-            disabled={!hasSearch}
+            disabled={showLanding}
           >
             <Icon name="tag" size={14} className="shrink-0"/>
             <span className="truncate max-w-[5rem]">{brandFilterLabel}</span>
             <Icon name="chevron-d" size={12} className="shrink-0 opacity-70"/>
           </button>
+          <button
+            type="button"
+            className={'btn-secondary !h-11 !px-2.5 !text-sm flex-shrink-0 ' + (kioskOn ? '!bg-primary !text-on-primary' : '')}
+            onClick={() => (kioskOn ? setKioskExitOpen(true) : enterKiosk())}
+            title={kioskOn ? 'ออกจากโหมดลูกค้า' : 'โหมดลูกค้า'}
+            aria-label={kioskOn ? 'ออกจากโหมดลูกค้า' : 'โหมดลูกค้า'}
+          >
+            <Icon name={kioskOn ? 'lock' : 'expand'} size={16} className="shrink-0"/>
+            <span className="hidden sm:inline">{kioskOn ? 'ออก' : 'โหมดลูกค้า'}</span>
+          </button>
         </div>
       </div>
 
-      {hasSearch && (
+      {/* Brand chips (desktop) */}
+      {!showLanding && (
         <div className="hidden lg:flex gap-1.5 mb-2 flex-shrink-0 overflow-x-auto pb-1 scrollbar-thin">
           <button type="button" onClick={() => setBrand('all')} className={chipCls(filter.brand === 'all')}>
             ทั้งหมด <span className="opacity-60 tabular-nums">{brandCounts.all || 0}</span>
@@ -360,7 +510,8 @@ export default function CustomerPriceView({ config }) {
         </div>
       )}
 
-      {hasSearch && filter.brand === 'casio' && (
+      {/* Casio series chips (desktop) */}
+      {!showLanding && filter.brand === 'casio' && (
         <div className="hidden lg:flex gap-1.5 mb-2 flex-shrink-0 overflow-x-auto pb-1 scrollbar-thin">
           <button type="button" onClick={() => setSeries('')} className={chipCls(!filter.series)}>
             ทุก Series <span className="opacity-60 tabular-nums">{seriesCounts.__total || 0}</span>
@@ -377,99 +528,96 @@ export default function CustomerPriceView({ config }) {
         </div>
       )}
 
-      {hasSearch && (filter.material || filter.color || filter.series || filter.subType
+      {/* Active filter chips */}
+      {!showLanding && (filter.material || filter.color || filter.series || filter.subType
         || activePricePreset || filter.minPrice > 0 || filter.maxPrice > 0 || filter.inStockOnly) && (
         <div className="flex flex-wrap gap-1.5 mb-2 items-center flex-shrink-0">
           {activePricePreset && (
-            <button
-              type="button"
-              onClick={() => setFilter((f) => ({ ...f, minPrice: 0, maxPrice: 0 }))}
-              className="px-2.5 py-1 rounded-full text-xs bg-primary/10 text-primary border border-primary/20 inline-flex items-center gap-1.5 hover:bg-primary/20"
-            >
+            <button type="button" onClick={() => setFilter((f) => ({ ...f, minPrice: 0, maxPrice: 0 }))}
+              className="px-2.5 py-1 rounded-full text-xs bg-primary/10 text-primary border border-primary/20 inline-flex items-center gap-1.5 hover:bg-primary/20">
               <Icon name="tag" size={11}/> {activePricePreset.label}
               <Icon name="x" size={11} className="opacity-70"/>
             </button>
           )}
           {!activePricePreset && (filter.minPrice > 0 || filter.maxPrice > 0) && (
-            <button
-              type="button"
-              onClick={() => setFilter((f) => ({ ...f, minPrice: 0, maxPrice: 0 }))}
-              className="px-2.5 py-1 rounded-full text-xs bg-primary/10 text-primary border border-primary/20 inline-flex items-center gap-1.5 hover:bg-primary/20"
-            >
+            <button type="button" onClick={() => setFilter((f) => ({ ...f, minPrice: 0, maxPrice: 0 }))}
+              className="px-2.5 py-1 rounded-full text-xs bg-primary/10 text-primary border border-primary/20 inline-flex items-center gap-1.5 hover:bg-primary/20">
               ราคา {filter.minPrice > 0 ? fmtTHB(filter.minPrice) : '—'} – {filter.maxPrice > 0 ? fmtTHB(filter.maxPrice) : '—'}
               <Icon name="x" size={11} className="opacity-70"/>
             </button>
           )}
           {filter.inStockOnly && (
-            <button
-              type="button"
-              onClick={() => setFilter((f) => ({ ...f, inStockOnly: false }))}
-              className="px-2.5 py-1 rounded-full text-xs bg-primary/10 text-primary border border-primary/20 inline-flex items-center gap-1.5 hover:bg-primary/20"
-            >
+            <button type="button" onClick={() => setFilter((f) => ({ ...f, inStockOnly: false }))}
+              className="px-2.5 py-1 rounded-full text-xs bg-primary/10 text-primary border border-primary/20 inline-flex items-center gap-1.5 hover:bg-primary/20">
               มีสต็อก <Icon name="x" size={11} className="opacity-70"/>
             </button>
           )}
           {filter.series && (
-            <button
-              type="button"
-              onClick={() => setSeries('')}
-              className="px-2.5 py-1 rounded-full text-xs bg-primary/10 text-primary border border-primary/20 inline-flex items-center gap-1.5 hover:bg-primary/20"
-            >
+            <button type="button" onClick={() => setSeries('')}
+              className="px-2.5 py-1 rounded-full text-xs bg-primary/10 text-primary border border-primary/20 inline-flex items-center gap-1.5 hover:bg-primary/20">
               {SERIES_RULES.find((s) => s.id === filter.series)?.label}
               <Icon name="x" size={11} className="opacity-70"/>
             </button>
           )}
           {filter.subType && SERIES_SUBS[filter.series] && (
-            <button
-              type="button"
-              onClick={() => setSubType('')}
-              className="px-2.5 py-1 rounded-full text-xs bg-primary/10 text-primary border border-primary/20 inline-flex items-center gap-1.5 hover:bg-primary/20"
-            >
+            <button type="button" onClick={() => setSubType('')}
+              className="px-2.5 py-1 rounded-full text-xs bg-primary/10 text-primary border border-primary/20 inline-flex items-center gap-1.5 hover:bg-primary/20">
               {SERIES_SUBS[filter.series].find((s) => s.id === filter.subType)?.label}
               <Icon name="x" size={11} className="opacity-70"/>
             </button>
           )}
           {hasAnyFilter && (
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="px-2.5 py-1 rounded-full text-xs text-muted hover:text-ink inline-flex items-center gap-1 underline underline-offset-2"
-            >
+            <button type="button" onClick={clearFilters}
+              className="px-2.5 py-1 rounded-full text-xs text-muted hover:text-ink inline-flex items-center gap-1 underline underline-offset-2">
               <Icon name="x" size={11}/> ล้างตัวกรอง
             </button>
           )}
         </div>
       )}
 
-      {hasSearch && (
+      {/* Result count */}
+      {!showLanding && !loading && (
         <div className="text-xs text-muted mb-2 flex-shrink-0 flex items-center gap-2">
-          <span>
-            พบ <span className="font-medium text-ink tabular-nums">{filtered.length.toLocaleString('th-TH')}</span> รายการ
-          </span>
+          <span>พบ <span className="font-medium text-ink tabular-nums">{filtered.length.toLocaleString('en-US')}</span> รายการ</span>
           {filtered.length > visible.length && (
-            <span className="text-muted-soft">· แสดง {visible.length.toLocaleString('th-TH')}</span>
+            <span className="text-muted-soft">· แสดง {visible.length.toLocaleString('en-US')}</span>
           )}
         </div>
       )}
 
-      {hasSearch && (
+      {/* Landing */}
+      {showLanding && (
+        <CustomerLanding
+          onPickBrand={(b) => setBrand(b)}
+          onPickPrice={(p) => setPricePreset(p)}
+          onScan={() => setScanOpen(true)}
+        />
+      )}
+
+      {/* Grid */}
+      {!showLanding && (
         <div className="card-canvas overflow-hidden flex-1 min-h-0">
           <div className="product-catalog-scroll">
-            {searchLoading ? (
-              <div className="p-4 text-muted text-sm flex items-center gap-2">
-                <span className="spinner"/>กำลังค้นหา...
+            {loading ? (
+              <div className="customer-price-grid">
+                {Array.from({ length: 12 }).map((_, i) => (
+                  <div key={i} className="customer-price-skeleton" />
+                ))}
               </div>
             ) : (
               <div className="customer-price-grid">
                 {filtered.length === 0 && (
                   <div className="product-catalog-empty">
-                    {hasAnyFilter ? 'ไม่พบสินค้าตรงกับตัวกรอง' : 'ไม่พบสินค้า — ลองคำค้นอื่น'}
+                    {catalogError ? 'โหลดสินค้าไม่สำเร็จ — ลองใหม่อีกครั้ง'
+                      : hasAnyFilter ? 'ไม่พบสินค้าตรงกับตัวกรอง'
+                        : 'ไม่พบสินค้า — ลองคำค้นอื่น'}
                   </div>
                 )}
-                {visible.map((p) => (
+                {visible.map((p, i) => (
                   <CustomerPriceCard
                     key={p.id}
                     product={p}
+                    index={i}
                     quote={customerPriceQuote(p, priceConfig)}
                     onOpen={setOpen}
                   />
@@ -477,23 +625,16 @@ export default function CustomerPriceView({ config }) {
               </div>
             )}
             {filtered.length > visible.length && (
-              <div className="pt-2 pb-3 flex justify-center">
-                <button
-                  type="button"
-                  className="btn-secondary !py-2 !text-sm"
-                  onClick={() => setPageSize((n) => n + PAGE)}
-                >
-                  ดูเพิ่ม ({(filtered.length - visible.length).toLocaleString('th-TH')} รายการ)
-                </button>
-              </div>
+              <>
+                <div ref={sentinelRef} className="h-1" aria-hidden="true" />
+                <div className="pt-2 pb-3 flex justify-center">
+                  <button type="button" className="btn-secondary !py-2 !text-sm" onClick={() => setPageSize((n) => n + PAGE)}>
+                    ดูเพิ่ม ({(filtered.length - visible.length).toLocaleString('en-US')} รายการ)
+                  </button>
+                </div>
+              </>
             )}
           </div>
-        </div>
-      )}
-
-      {!hasSearch && !searchLoading && (
-        <div className="py-12 text-center text-sm text-muted">
-          พิมพ์ชื่อรุ่นหรือบาร์โค้ดเพื่อค้นหา
         </div>
       )}
 
@@ -502,7 +643,7 @@ export default function CustomerPriceView({ config }) {
         onClose={() => setBrandPickerOpen(false)}
         filter={filter}
         brandCounts={brandCounts}
-        catalogLoaded={hasSearch}
+        catalogLoaded={poolReady}
         onPick={(b) => { setBrand(b); setBrandPickerOpen(false); }}
       />
 
@@ -513,33 +654,50 @@ export default function CustomerPriceView({ config }) {
         setFilter={setFilter}
         materialCounts={materialCounts}
         colorCounts={colorCounts}
-        showCasioFacets={showCasioFacets}
+        showCasioFacets={filter.brand === 'casio' || poolRows.some((p) => p._brand === 'casio')}
         seriesCounts={seriesCounts}
         subTypeCounts={subTypeCounts}
         setSeries={setSeries}
         setSubType={setSubType}
       />
 
+      <CustomerScanSheet open={scanOpen} onClose={() => setScanOpen(false)} onScan={handleScan} />
+
+      <KioskExitDialog
+        open={kioskExitOpen}
+        expectedPin={getKioskPin() || '0000'}
+        onUnlock={exitKiosk}
+        onClose={() => setKioskExitOpen(false)}
+      />
+
+      {/* Detail popup — bottom sheet on mobile, centered card on desktop */}
       {open && openQuote && (
-        <div
-          className="customer-price-overlay"
-          onClick={() => setOpen(null)}
-          role="presentation"
-        >
+        <div className="customer-price-overlay" onClick={() => setOpen(null)} role="presentation">
           <div
             className="customer-price-overlay__card"
             onClick={(e) => e.stopPropagation()}
+            onTouchStart={onTouchStart}
+            onTouchEnd={onTouchEnd}
             role="dialog"
             aria-label={open.name}
           >
-            <button
-              type="button"
-              className="customer-price-overlay__close"
-              onClick={() => setOpen(null)}
-              aria-label="ปิด"
-            >
+            <button type="button" className="customer-price-overlay__close" onClick={() => setOpen(null)} aria-label="ปิด">
               <Icon name="x" size={18}/>
             </button>
+
+            {openIndex > 0 && (
+              <button type="button" className="customer-price-overlay__nav customer-price-overlay__nav--prev"
+                onClick={() => goRel(-1)} aria-label="ก่อนหน้า">
+                <Icon name="chevron-l" size={22}/>
+              </button>
+            )}
+            {openIndex >= 0 && openIndex < filtered.length - 1 && (
+              <button type="button" className="customer-price-overlay__nav customer-price-overlay__nav--next"
+                onClick={() => goRel(1)} aria-label="ถัดไป">
+                <Icon name="chevron-r" size={22}/>
+              </button>
+            )}
+
             <div className="customer-price-overlay__media">
               {openQuote.strikeRetail && (
                 <span className="customer-price-overlay__badge">-{openQuote.discountPct}%</span>
@@ -550,27 +708,21 @@ export default function CustomerPriceView({ config }) {
             </div>
             <div className="customer-price-overlay__name">{open.name}</div>
             {openQuote.hasSell ? (
-              <div className="customer-price-overlay__sell">{fmtCatalogPrice(openQuote.sell)}</div>
+              <div className="customer-price-overlay__sell">{fmtCatalogPrice(animatedSell)}</div>
             ) : (
-              <div className="customer-price-card__na">ยังไม่มีราคาขาย — รับเข้าก่อนจึงจะคิดจากทุนได้</div>
+              <div className="customer-price-overlay__na">สอบถามราคากับพนักงาน</div>
             )}
             {openQuote.strikeRetail && (
-              <div className="customer-price-overlay__retail">
-                ราคาปกติ {fmtCatalogPrice(openQuote.retail).replace('.-', '')} บาท
-              </div>
+              <div className="customer-price-overlay__retail">ราคาปกติ {fmtPlain(openQuote.retail)} บาท</div>
             )}
             {openQuote.strikeRetail && (
-              <div className="customer-price-overlay__disc">
-                ส่วนลด {fmtCatalogPrice(openQuote.discountBaht).replace('.-', '')} บาท ({openQuote.discountPct}%)
-              </div>
+              <div className="customer-price-overlay__disc">ประหยัด {fmtPlain(openQuote.discountBaht)} บาท ({openQuote.discountPct}%)</div>
             )}
             {!openQuote.hasSell && openQuote.retail > 0 && (
               <div className="text-sm text-muted mt-1">ป้าย {fmtCatalogPrice(openQuote.retail)}</div>
             )}
             <div className="customer-price-overlay__stock">
-              {(Number(open.current_stock) || 0) <= 0
-                ? 'หมดสต็อก'
-                : `คงเหลือ ${Number(open.current_stock) || 0} ชิ้น`}
+              <StockPill stock={open.current_stock} />
             </div>
           </div>
         </div>
