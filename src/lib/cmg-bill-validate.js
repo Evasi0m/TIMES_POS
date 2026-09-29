@@ -165,3 +165,44 @@ export function formatValidationSummary(validation) {
   if (billCount > 0) parts.push(`footer ${billCount} จุด`);
   return `ตรวจเลข — ${parts.join(', ')}`;
 }
+
+/**
+ * Side-by-side footer check for the confirm UI: what the printed footer
+ * says vs what the rows add up to. Only lines the footer actually printed
+ * are returned.
+ *
+ * @returns {{ key: string, label: string, bill: number, rows: number, ok: boolean, money: boolean }[]}
+ */
+export function footerComparison(parsed) {
+  const items = Array.isArray(parsed?.items) ? parsed.items : [];
+  let sumLine = 0;
+  let sumQty = 0;
+  for (const it of items) {
+    const la = Number(it?.line_amount) || 0;
+    if (la > 0) sumLine = roundMoney(sumLine + la);
+    const q = Math.max(0, Math.round(Number(it?.quantity) || 0));
+    sumQty += q;
+  }
+  const subtotal = Number(parsed?.bill_subtotal) || 0;
+  const totalQty = Number(parsed?.total_qty) || 0;
+  const vatAmount = Number(parsed?.vat_amount) || 0;
+  const grand = Number(parsed?.grand_total) || 0;
+  const out = [];
+  if (positiveNumber(totalQty)) {
+    out.push({ key: 'qty', label: 'จำนวนชิ้นรวม', bill: Math.round(totalQty), rows: sumQty, ok: sumQty === Math.round(totalQty), money: false });
+  }
+  if (positiveNumber(subtotal)) {
+    out.push({ key: 'subtotal', label: 'ยอดก่อน VAT', bill: subtotal, rows: sumLine, ok: near(sumLine, subtotal, BILL_TOLERANCE), money: true });
+  }
+  if (positiveNumber(subtotal) && positiveNumber(vatAmount)) {
+    const expected = roundMoney(subtotal * VAT_RATE);
+    out.push({ key: 'vat', label: 'VAT 7%', bill: vatAmount, rows: expected, ok: near(expected, vatAmount, BILL_TOLERANCE), money: true });
+  }
+  if (positiveNumber(subtotal) && positiveNumber(grand)) {
+    const expected = positiveNumber(vatAmount)
+      ? roundMoney(subtotal + vatAmount)
+      : roundMoney(subtotal * (1 + VAT_RATE));
+    out.push({ key: 'grand', label: 'ยอดสุทธิ', bill: grand, rows: expected, ok: near(expected, grand, BILL_TOLERANCE), money: true });
+  }
+  return out;
+}

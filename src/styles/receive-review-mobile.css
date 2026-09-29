@@ -843,3 +843,34 @@
   background: rgb(var(--c-success, 22 163 74) / 0.1);
   border-color: rgb(var(--c-success, 22 163 74) / 0.28);
 }
+
+/* Footer check: printed footer vs current rows, before confirming. */
+.brv-footer-check {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 0.75rem;
+  font-size: 0.8125rem;
+  background: rgb(var(--c-warning, 217 119 6) / 0.08);
+  border: 1px solid rgb(var(--c-warning, 217 119 6) / 0.28);
+}
+.brv-footer-check__title {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-weight: 600;
+  color: rgb(var(--c-warning, 180 83 9));
+}
+.brv-footer-check__table { width: 100%; border-collapse: collapse; }
+.brv-footer-check__table th {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-align: right;
+  color: rgb(var(--c-muted));
+  padding: 0 0.25rem 0.25rem;
+}
+.brv-footer-check__table td { padding: 0.2rem 0.25rem; text-align: right; }
+.brv-footer-check__table td:first-child { text-align: left; color: rgb(var(--c-muted)); }
+.brv-footer-check__table tr.is-bad td { color: rgb(var(--c-error, 220 38 38)); font-weight: 600; }
+.brv-footer-check__table tr.is-bad td:first-child { color: rgb(var(--c-error, 220 38 38)); }
