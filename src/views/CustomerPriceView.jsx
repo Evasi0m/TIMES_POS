@@ -23,6 +23,7 @@ import { fmtTHB } from '../lib/format.js';
 import { useCountUp } from '../hooks/useCountUp.js';
 import { useIdleReset } from '../hooks/useIdleReset.js';
 import { useMountedToggle } from '../lib/use-mounted-toggle.js';
+import { copyText, formatCopyPrice } from '../lib/copy-text.js';
 import ProductThumb from '../components/ui/ProductThumb.jsx';
 import Icon from '../components/ui/Icon.jsx';
 import ProductBrandPickerSheet from '../components/products/ProductBrandPickerSheet.jsx';
@@ -71,6 +72,32 @@ function StockPill({ stock }) {
     <span className={'customer-stock-pill customer-stock-pill--' + st.id}>
       {n > 0 ? `เหลือ ${n}` : st.label}
     </span>
+  );
+}
+
+/** Tap to copy `value`; flashes a small "คัดลอกแล้ว" tick. */
+function CopyTap({ value, className = '', label, children }) {
+  const [done, setDone] = useState(false);
+  const timer = useRef(0);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const onTap = async (e) => {
+    e.stopPropagation();
+    const ok = await copyText(value);
+    if (!ok) return;
+    setDone(true);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setDone(false), 1400);
+  };
+  return (
+    <button
+      type="button"
+      className={'cp-copy ' + className + (done ? ' is-copied' : '')}
+      onClick={onTap}
+      aria-label={'คัดลอก ' + (label || value)}
+    >
+      {children}
+      <span className="cp-copy__toast" aria-live="polite">{done ? 'คัดลอกแล้ว' : ''}</span>
+    </button>
   );
 }
 
@@ -735,22 +762,24 @@ export default function CustomerPriceView({ config }) {
               </div>
 
               <div className="cp-sheet__info">
-                <div className="cp-sheet__name">{shown.name}</div>
+                <div className="cp-sheet__name-row">
+                  <CopyTap className="cp-sheet__name" value={shown.name} label="ชื่อรุ่น">{shown.name}</CopyTap>
+                </div>
 
                 <div className="cp-sheet__price-box">
                   {openQuote.hasSell ? (
                     <>
                       <div className="cp-sheet__price-label">ราคาพิเศษ</div>
-                      <div className="cp-sheet__price">
+                      <CopyTap className="cp-sheet__price" value={formatCopyPrice(openQuote.sell)} label="ราคา">
                         {fmtPlain(open ? animatedSell : openQuote.sell)}<span className="cp-sheet__price-unit">บาท</span>
-                      </div>
+                      </CopyTap>
                     </>
                   ) : (
                     <div className="cp-sheet__ask">สอบถามราคากับพนักงาน</div>
                   )}
                   {openQuote.strikeRetail && (
                     <div className="cp-sheet__compare">
-                      <span className="cp-sheet__retail">ปกติ {fmtPlain(openQuote.retail)} บาท</span>
+                      <CopyTap className="cp-sheet__retail" value={formatCopyPrice(openQuote.retail)} label="ราคาปกติ">ปกติ {fmtPlain(openQuote.retail)} บาท</CopyTap>
                       <span className="cp-sheet__save">ประหยัด {fmtPlain(openQuote.discountBaht)} บาท</span>
                     </div>
                   )}
