@@ -715,20 +715,24 @@ export default function CustomerPriceView({ config }) {
                 <div className="cp-sheet__media-inner">
                   <ProductThumb product={shown} fill expandable showExpandHint={false} fallback="sku" />
                 </div>
-                {openIndex > 0 && (
-                  <button type="button" className="cp-sheet__nav cp-sheet__nav--prev"
-                    onClick={() => goRel(-1)} aria-label="ก่อนหน้า">
-                    <Icon name="chevron-l" size={20}/>
-                  </button>
-                )}
-                {openIndex >= 0 && openIndex < filtered.length - 1 && (
-                  <button type="button" className="cp-sheet__nav cp-sheet__nav--next"
-                    onClick={() => goRel(1)} aria-label="ถัดไป">
-                    <Icon name="chevron-r" size={20}/>
-                  </button>
-                )}
               </div>
-              <div className="cp-sheet__tap-hint">แตะรูปเพื่อดูภาพใหญ่</div>
+
+              <div className="cp-sheet__pager">
+                <button type="button" className="cp-sheet__nav"
+                  onClick={() => goRel(-1)} disabled={openIndex <= 0} aria-label="ก่อนหน้า">
+                  <Icon name="chevron-l" size={20}/>
+                </button>
+                <div className="cp-sheet__pager-mid">
+                  {openIndex >= 0 && (
+                    <span className="cp-sheet__counter">{openIndex + 1} / {filtered.length}</span>
+                  )}
+                  <span className="cp-sheet__tap-hint">แตะรูปเพื่อดูภาพใหญ่</span>
+                </div>
+                <button type="button" className="cp-sheet__nav"
+                  onClick={() => goRel(1)} disabled={openIndex < 0 || openIndex >= filtered.length - 1} aria-label="ถัดไป">
+                  <Icon name="chevron-r" size={20}/>
+                </button>
+              </div>
 
               <div className="cp-sheet__info">
                 <div className="cp-sheet__name">{shown.name}</div>
