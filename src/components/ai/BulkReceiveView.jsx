@@ -2121,6 +2121,19 @@ function ReviewWizard({
     setOverflowOpen(false);
   }, [current?.uid]);
 
+  // [ / ] switch bills — skipped while typing in a field.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (submitting || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (e.key === '[') setCurrentIdx((c) => Math.max(0, c - 1));
+      else if (e.key === ']') setCurrentIdx((c) => Math.min(bills.length - 1, c + 1));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [bills.length, submitting, setCurrentIdx]);
+
   const handleCancel = async () => {
     if (bills.length > 0 && !submitting) {
       if (!(await askConfirm({
@@ -2212,14 +2225,42 @@ function ReviewWizard({
       </div>
 
       <div className="brv-mobile-review__scroll">
-        <div className="hidden lg:block">
-          <Stepper
-            bills={bills}
-            currentIdx={currentIdx}
-            onJump={(i) => setCurrentIdx(i)}
-            mirrorOn={tiktokMirrorOn}
-          />
-        </div>
+        {(bills.length > 1 || mobileNav?.macroStep !== 'work') && (
+          <div className={'brv-stepper-row' + (mobileNav?.macroStep === 'work' ? ' hidden lg:flex' : '')}>
+            {bills.length > 1 && (
+              <button
+                type="button"
+                className="btn-secondary icon-btn-44 !p-0 shrink-0 hidden lg:inline-flex"
+                onClick={() => setCurrentIdx((c) => Math.max(0, c - 1))}
+                disabled={!canPrev || submitting}
+                aria-label="บิลก่อน"
+                title="บิลก่อน  ["
+              >
+                <Icon name="chevron-l" size={16}/>
+              </button>
+            )}
+            <div className="flex-1 min-w-0">
+              <Stepper
+                bills={bills}
+                currentIdx={currentIdx}
+                onJump={(i) => setCurrentIdx(i)}
+                mirrorOn={tiktokMirrorOn}
+              />
+            </div>
+            {bills.length > 1 && (
+              <button
+                type="button"
+                className="btn-secondary icon-btn-44 !p-0 shrink-0 hidden lg:inline-flex"
+                onClick={() => setCurrentIdx((c) => Math.min(bills.length - 1, c + 1))}
+                disabled={!canNext || submitting}
+                aria-label="บิลถัดไป"
+                title="บิลถัดไป  ]"
+              >
+                <Icon name="chevron-r" size={16}/>
+              </button>
+            )}
+          </div>
+        )}
 
         {current && (
           <BillCard
@@ -2261,31 +2302,8 @@ function ReviewWizard({
         />
       )}
 
-      {bills.length > 1 && (
-        <div className="hidden lg:flex items-center justify-between gap-2">
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={() => setCurrentIdx((c) => Math.max(0, c - 1))}
-            disabled={!canPrev || submitting}
-          >
-            <Icon name="chevron-l" size={16}/> บิลก่อน
-          </button>
-          <div className="text-xs text-muted-soft tabular-nums">
-            บิลที่ {currentIdx + 1} / {bills.length}
-          </div>
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={() => setCurrentIdx((c) => Math.min(bills.length - 1, c + 1))}
-            disabled={!canNext || submitting}
-          >
-            บิลถัดไป <Icon name="chevron-r" size={16}/>
-          </button>
-        </div>
-      )}
 
-        <div className="hidden lg:block">
+        <div className="hidden lg:block brv-submit-sticky">
           <SubmitBar
             summary={summary}
             submitting={submitting}
@@ -2477,56 +2495,64 @@ function Stepper({ bills, currentIdx, onJump, mirrorOn = false }) {
 // ─── Sub: current bill card (thumbnail + invoice + review panel) ──────
 function BillCardMobileStrip({
   bill, billNumber, totalBills, itemCount, supplierName,
-  onInvoiceNoChange, onHasVatChange, onRemoveBill, disabled,
+  onInvoiceNoChange, onHasVatChange, disabled, onZoom,
   tiktokMirrorEnabled,
 }) {
   const status = billStatus(bill, tiktokMirrorEnabled);
   const statusLabel = BILL_STATUS_LABELS[status] || status;
   const statusChip = BILL_STATUS_CHIP_CLS[status] || '';
+  const vatOn = bill.has_vat !== false;
 
   return (
     <div className="rrm-bill-strip card-canvas lg:hidden space-y-2.5">
-      <div className="flex items-center gap-2 min-w-0 flex-wrap">
-        <input
-          type="text"
-          className="input font-mono flex-1 min-w-[6.5rem] !h-9 !py-1 !text-sm"
-          value={bill.supplier_invoice_no}
-          onChange={(e) => onInvoiceNoChange(e.target.value)}
-          placeholder="เลขบิล"
-          disabled={disabled}
-          aria-label="เลขบิล"
-        />
-        <span className="rrm-bill-strip__pill tabular-nums">
-          บิล {billNumber}/{totalBills}
-        </span>
-        {itemCount > 0 && (
-          <span className="rrm-bill-strip__pill tabular-nums">{itemCount} รายการ</span>
+      <div className="flex items-center gap-2.5 min-w-0">
+        {bill.previewUrl && (
+          <button
+            type="button"
+            className="rrm-bill-strip__thumb"
+            onClick={() => onZoom?.(bill.previewUrl)}
+            aria-label="ดูรูปบิลแบบขยาย"
+          >
+            <img src={bill.previewUrl} alt={`บิล ${billNumber}`} />
+            <span className="rrm-bill-strip__thumb-zoom" aria-hidden="true">
+              <Icon name="search" size={11}/>
+            </span>
+          </button>
         )}
-        <span className={'rrm-bill-strip__pill tabular-nums ' + statusChip}>{statusLabel}</span>
-        <button
-          type="button"
-          className="rrm-bill-strip__icon-btn shrink-0"
-          onClick={onRemoveBill}
-          disabled={disabled}
-          aria-label={`ลบบิลที่ ${billNumber}`}
-        >
-          <Icon name="trash" size={16}/>
-        </button>
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <input
+            type="text"
+            className="input font-mono w-full !h-9 !py-1 !text-sm"
+            value={bill.supplier_invoice_no}
+            onChange={(e) => onInvoiceNoChange(e.target.value)}
+            placeholder="เลขบิล"
+            disabled={disabled}
+            aria-label="เลขบิล"
+          />
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="rrm-bill-strip__pill tabular-nums">บิล {billNumber}/{totalBills}</span>
+            {itemCount > 0 && (
+              <span className="rrm-bill-strip__pill tabular-nums">{itemCount} รายการ</span>
+            )}
+            <span className={'rrm-bill-strip__pill tabular-nums ' + statusChip}>{statusLabel}</span>
+          </div>
+        </div>
       </div>
       <div className="flex items-center gap-2 min-w-0">
         <span className="rrm-bill-strip__supplier flex-1" title={supplierName || 'CMG'}>
           {supplierName || 'CMG'}
         </span>
-        <label className="rrm-bill-strip__vat shrink-0">
-          <input
-            type="checkbox"
-            className="rounded border-hairline text-primary focus:ring-primary/30 w-3.5 h-3.5 cursor-pointer shrink-0"
-            checked={bill.has_vat !== false}
-            onChange={(e) => onHasVatChange?.(e.target.checked)}
-            disabled={disabled}
-          />
+        <button
+          type="button"
+          role="switch"
+          aria-checked={vatOn}
+          className={'rrm-vat-switch' + (vatOn ? ' is-on' : '')}
+          onClick={() => onHasVatChange?.(!vatOn)}
+          disabled={disabled}
+        >
+          <span className="rrm-vat-switch__track" aria-hidden="true"><span className="rrm-vat-switch__knob"/></span>
           <span className="vat-chip shrink-0">VAT +7%</span>
-        </label>
+        </button>
       </div>
     </div>
   );
@@ -2594,8 +2620,8 @@ function BillCard({
             supplierName={supplierName}
             onInvoiceNoChange={onInvoiceNoChange}
             onHasVatChange={onHasVatChange}
-            onRemoveBill={onRemoveBill}
             disabled={disabled}
+            onZoom={onZoom}
             tiktokMirrorEnabled={tiktokMirrorEnabled}
           />
         )}
