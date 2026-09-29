@@ -6560,3 +6560,13 @@
 .btn-excel-export svg {
   filter: drop-shadow(0 1px 1px rgba(5, 46, 22, 0.40));
 }
+
+/* iOS Safari zooms the page when a focused field's font is under 16px.
+   On touch devices, pin form fields to 16px so tapping never zooms. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
