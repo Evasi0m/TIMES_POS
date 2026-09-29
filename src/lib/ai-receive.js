@@ -49,23 +49,19 @@ export function buildReceiveItems(rows, hasVat) {
     })
     .filter(Boolean);
 
-  // AI scans sometimes emit the same SKU twice; both rows may auto-match
-  // to one product. Merge here so stock is not double-counted.
-  const merged = new Map();
+  // A CMG bill never lists the same product twice. Two rows resolving to
+  // one product means one line was matched to the wrong model — refuse to
+  // save rather than silently summing the quantities.
+  const seen = new Set();
   for (const line of lines) {
-    const prev = merged.get(line.product_id);
-    if (!prev) {
-      merged.set(line.product_id, { ...line });
-      continue;
-    }
-    if (prev.unit_price !== line.unit_price) {
+    if (seen.has(line.product_id)) {
       throw new Error(
-        `สินค้า "${line.product_name}" ซ้ำในบิลนี้แต่ทุนต่างกัน — รวมแถวหรือแก้ทุนให้ตรงก่อนบันทึก`
+        `สินค้า "${line.product_name}" ถูกจับคู่ซ้ำ 2 แถวในบิลนี้ — ในบิลหนึ่งใบไม่มีรุ่นซ้ำ ให้แก้แถวที่จับคู่ผิดเป็นรุ่นที่ถูก`
       );
     }
-    prev.quantity += line.quantity;
+    seen.add(line.product_id);
   }
-  return [...merged.values()];
+  return lines;
 }
 
 /** Merge duplicate product_id rows in an RPC items payload (manual receive). */
@@ -129,6 +125,35 @@ export function findBillRowCostConflicts(rows) {
   return conflicts;
 }
 
+/**
+ * Rows that resolve to the same product (or the same new-product name).
+ * A CMG bill never repeats a model, so every group here is a mis-match.
+ * @returns {{ name: string, indices: number[] }[]}
+ */
+export function findDuplicateProductRows(rows) {
+  const groups = new Map();
+  (rows || []).forEach((r, index) => {
+    let key = null;
+    if (r?.product?.id) key = `id:${r.product.id}`;
+    else if (r?.status === 'new') {
+      const name = String(r.newProduct?.name || '').trim();
+      if (name) key = `new:${name.toUpperCase()}`;
+    }
+    if (!key) return;
+    const name = r.product?.name || r.newProduct?.name || r.model_code || `แถว ${index + 1}`;
+    if (!groups.has(key)) groups.set(key, { name, indices: [] });
+    groups.get(key).indices.push(index);
+  });
+  return [...groups.values()].filter((g) => g.indices.length > 1);
+}
+
+export function formatDuplicateProductError(dups) {
+  const first = dups[0];
+  if (!first) return '';
+  const rowsTxt = first.indices.map((i) => i + 1).join(' และ ');
+  return `แถว ${rowsTxt} จับคู่เป็น "${first.name}" เหมือนกัน — ในบิลหนึ่งใบไม่มีรุ่นซ้ำ แก้แถวที่ผิดให้เป็นรุ่นที่ถูกก่อนบันทึก`;
+}
+
 export function formatBillRowCostConflictError(conflicts) {
   const first = conflicts[0];
   if (!first) return '';
@@ -144,22 +169,6 @@ export function probeProductForSubmitRow(row) {
   }
   if (row?.product?.id) return row.product;
   return null;
-}
-
-/**
- * Detect duplicate resolved products within one bill (before merge).
- * @returns {{ productId: number, name: string, count: number }[]}
- */
-export function findDuplicateProductsInBill(rows) {
-  const counts = new Map();
-  for (const r of rows || []) {
-    const pid = r?.product?.id;
-    if (!pid) continue;
-    const prev = counts.get(pid);
-    if (prev) prev.count += 1;
-    else counts.set(pid, { productId: pid, name: r.product.name || '', count: 1 });
-  }
-  return [...counts.values()].filter((x) => x.count > 1);
 }
 
 /**

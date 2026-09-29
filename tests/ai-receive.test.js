@@ -48,10 +48,8 @@ describe('buildReceiveItems', () => {
     expect(() => buildReceiveItems([row({ quantity: -3 })], true)).toThrow();
   });
 
-  it('merges duplicate product rows so stock is not double-counted', () => {
-    const items = buildReceiveItems([row({ quantity: 3 }), row({ quantity: 3 })], true);
-    expect(items).toHaveLength(1);
-    expect(items[0].quantity).toBe(6);
+  it('refuses two rows matched to the same product (a CMG bill never repeats a model)', () => {
+    expect(() => buildReceiveItems([row({ quantity: 3 }), row({ quantity: 3 })], true)).toThrow(/ซ้ำ/);
   });
 
   it('throws when duplicate product rows have different unit costs', () => {

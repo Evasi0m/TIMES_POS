@@ -3,7 +3,8 @@
 import { needsManualReview } from './bill-review-shared.js';
 import {
   findBillRowCostConflicts,
-  findDuplicateProductsInBill,
+  findDuplicateProductRows,
+  formatDuplicateProductError,
   formatBillRowCostConflictError,
 } from '../../lib/ai-receive.js';
 import { isValidCmgInvoiceNo } from '../../lib/cmg-bill-validate.js';
@@ -112,12 +113,12 @@ export function collectBillAlerts(bill, {
       message: formatBillRowCostConflictError(costConflicts),
     });
   }
-  const dupProducts = findDuplicateProductsInBill(bill.rows.filter((r) => r.product?.id));
+  const dupProducts = findDuplicateProductRows(bill.rows);
   if (dupProducts.length && !costConflicts.length) {
     alerts.push({
       key: 'dup-product',
-      severity: 'warn',
-      message: `สินค้าซ้ำในบิล: ${dupProducts.map((d) => `${d.name} (${d.count} แถว)`).join(', ')} — ตรวจแถวซ้ำ (ระบบจะรวมจำนวนให้อัตโนมัติเมื่อบันทึก)`,
+      severity: 'error',
+      message: formatDuplicateProductError(dupProducts),
     });
   }
   if (isNonCmg) {

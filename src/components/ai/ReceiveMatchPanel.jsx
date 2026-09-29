@@ -1,5 +1,6 @@
 import React, { forwardRef, useCallback, useEffect, useMemo, useState } from 'react';
 import Icon from '../ui/Icon.jsx';
+import QtyOverrideDialog from './QtyOverrideDialog.jsx';
 import ExpandableImageThumb from '../ui/ExpandableImageThumb.jsx';
 import ProductThumb from '../ui/ProductThumb.jsx';
 import { findCandidates } from '../../lib/fuzzy-match.js';
@@ -20,8 +21,19 @@ import {
   getWorkspaceLayoutMode,
   isRowComplete,
   hasRowMathMismatch,
+  isQtyOverrideValid,
   needsManualReview,
 } from './bill-review-shared.js';
+
+
+/** Quantity printed on the bill line: line_amount ÷ unit_cost when it divides cleanly. */
+function billQtyFromLine(row) {
+  const amount = Number(row?.line_amount) || 0;
+  const cost = Number(row?.unit_cost) || 0;
+  if (!(amount > 0) || !(cost > 0)) return null;
+  const q = amount / cost;
+  return Math.abs(q - Math.round(q)) < 0.01 ? Math.round(q) : null;
+}
 
 function CandidateCell({ c, onPick, highlight, dataFirst }) {
   return (
@@ -333,6 +345,7 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
   const [isMobile, setIsMobile] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches,
   );
+  const [overrideOpen, setOverrideOpen] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 1023px)');
@@ -566,13 +579,53 @@ const ReceiveMatchPanel = forwardRef(function ReceiveMatchPanel({
         </div>
       )}
       {hasRowMathMismatch(row) && (
-        <div className="rrm-alert">
-          <Icon name="alert" size={14} className="shrink-0"/>
-          {row.validationDetail || (isJsonBill
-            ? 'qty × ราคา ≠ จำนวนเงินบิล — ตรวจเลขใน JSON'
-            : 'qty × ราคา ≠ จำนวนเงินบิล — ตรวจกับรูป')}
+        <div className="rrm-alert space-y-2">
+          <div className="flex items-start gap-2">
+            <Icon name="alert" size={14} className="shrink-0"/>
+            <span>
+              {row.validationDetail || (isJsonBill
+                ? 'qty × ราคา ≠ จำนวนเงินบิล — ตรวจเลขใน JSON'
+                : 'qty × ราคา ≠ จำนวนเงินบิล — ตรวจกับรูป')}
+            </span>
+          </div>
+          <button
+            type="button"
+            className="btn-secondary text-sm"
+            onClick={() => setOverrideOpen(true)}
+          >
+            <Icon name="lock" size={14}/> บันทึกจำนวนนี้ (ต่างจากบิล)
+          </button>
         </div>
       )}
+      {isQtyOverrideValid(row) && (
+        <div className="rrm-alert rrm-alert--info flex items-start gap-2">
+          <Icon name="check" size={14} className="shrink-0"/>
+          <span>
+            ยืนยันรับจริง {Number(row.quantity) || 0} ชิ้น
+            {row.qtyOverride.billQty != null && <> (บิล {row.qtyOverride.billQty})</>}
+            {' '}· โดย {row.qtyOverride.by}
+          </span>
+        </div>
+      )}
+      <QtyOverrideDialog
+        open={overrideOpen}
+        row={row}
+        billQty={billQtyFromLine(row)}
+        onClose={() => setOverrideOpen(false)}
+        onApproved={({ by, at }) => {
+          setOverrideOpen(false);
+          onUpdate({
+            qtyOverride: {
+              quantity: Number(row.quantity) || 0,
+              unit_cost: Number(row.unit_cost) || 0,
+              billQty: billQtyFromLine(row),
+              by,
+              at,
+            },
+            reviewConfirmed: true,
+          });
+        }}
+      />
       {needsManualReview(row) && (
         <div className="rrm-alert space-y-2">
           <div className="flex items-start gap-2">

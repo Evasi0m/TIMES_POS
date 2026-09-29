@@ -836,3 +836,10 @@
       radial-gradient(circle at 0% 100%, rgb(var(--c-accent-teal) / 0.05), transparent 24%);
   }
 }
+
+/* Approved "differs from bill" override — success tone, not a warning. */
+.rrm-alert.rrm-alert--info {
+  color: rgb(var(--c-success, 22 163 74));
+  background: rgb(var(--c-success, 22 163 74) / 0.1);
+  border-color: rgb(var(--c-success, 22 163 74) / 0.28);
+}
