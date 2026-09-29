@@ -874,3 +874,90 @@
 .brv-footer-check__table td:first-child { text-align: left; color: rgb(var(--c-muted)); }
 .brv-footer-check__table tr.is-bad td { color: rgb(var(--c-error, 220 38 38)); font-weight: 600; }
 .brv-footer-check__table tr.is-bad td:first-child { color: rgb(var(--c-error, 220 38 38)); }
+
+/* ── Review wizard: bill chips row with prev/next (PC) ─────────────── */
+.brv-stepper-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.brv-stepper-row .brv-bill-stepper { margin: 0; }
+
+/* Save bar stays in view while scrolling a long bill (PC). */
+.brv-submit-sticky {
+  position: sticky;
+  bottom: 0.75rem;
+  z-index: 20;
+}
+.brv-submit-sticky > .card-canvas {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  box-shadow: 0 10px 30px -12px rgb(var(--shadow-rgb) / 0.45);
+}
+
+/* ── Mobile bill strip: bill photo thumbnail ───────────────────────── */
+.rrm-bill-strip__thumb {
+  position: relative;
+  flex-shrink: 0;
+  width: 3.75rem;
+  height: 4.75rem;
+  border-radius: 0.625rem;
+  overflow: hidden;
+  border: 1px solid rgb(var(--c-hairline) / 0.6);
+  background: rgb(var(--c-surface-soft));
+  box-shadow: 0 2px 8px -2px rgb(var(--shadow-rgb) / 0.2);
+}
+.rrm-bill-strip__thumb img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.rrm-bill-strip__thumb-zoom {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: rgb(0 0 0 / 0.55);
+}
+.rrm-bill-strip__thumb:active { transform: scale(0.96); }
+
+/* ── VAT switch: 44px touch target ─────────────────────────────────── */
+.rrm-vat-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0 0.25rem 0 0.5rem;
+  margin-left: auto;
+  background: transparent;
+  border: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.rrm-vat-switch:disabled { opacity: 0.5; }
+.rrm-vat-switch__track {
+  position: relative;
+  width: 2.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  background: rgb(var(--c-muted) / 0.3);
+  transition: background 0.18s ease;
+}
+.rrm-vat-switch__knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.rrm-vat-switch.is-on .rrm-vat-switch__track { background: rgb(var(--c-primary)); }
+.rrm-vat-switch.is-on .rrm-vat-switch__knob { transform: translateX(1rem); }
+@media (prefers-reduced-motion: reduce) {
+  .rrm-vat-switch__track, .rrm-vat-switch__knob { transition: none; }
+}
