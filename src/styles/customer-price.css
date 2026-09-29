@@ -702,16 +702,15 @@
   max-width: 320px;
   aspect-ratio: 1;
   margin: 14px auto 0;
-  border-radius: 20px;
-  background: linear-gradient(160deg, #ffffff 0%, #f1ede7 100%);
-  box-shadow:
-    0 1px 0 rgb(255 255 255 / 0.9) inset,
-    0 10px 28px rgb(0 0 0 / 0.12);
+  border-radius: 22px;
+  background: #fff;
+  border: 1px solid rgb(0 0 0 / 0.06);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.07);
   animation: cpImgIn 0.36s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .cp-sheet__media-inner {
   position: absolute;
-  inset: 14px;
+  inset: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -725,10 +724,8 @@
   box-shadow: none !important;
 }
 .cp-sheet__tap-hint {
-  text-align: center;
   font-size: 11px;
   color: rgb(var(--c-muted-soft));
-  margin-top: 8px;
 }
 
 /* Discount badge — ribbon tab hanging off the image corner */
@@ -765,28 +762,47 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Prev / next */
+/* Prev / next pager (below the image, never over it) */
+.cp-sheet__pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  max-width: 320px;
+  margin: 10px auto 0;
+}
+.cp-sheet__pager-mid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+}
+.cp-sheet__counter {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgb(var(--c-ink));
+  font-variant-numeric: tabular-nums;
+}
 .cp-sheet__nav {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 4;
-  width: 38px;
-  height: 38px;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: rgb(var(--c-ink));
-  background: rgb(255 255 255 / 0.82);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  border: 1px solid rgb(0 0 0 / 0.06);
-  box-shadow: 0 4px 12px rgb(0 0 0 / 0.12);
+  color: rgb(var(--c-primary));
+  background: rgb(var(--c-surface-card));
+  border: 1.5px solid rgb(var(--c-primary) / 0.28);
+  box-shadow: 0 3px 10px rgb(0 0 0 / 0.08);
+  transition: transform 0.12s ease, background 0.12s ease, opacity 0.12s ease;
 }
-.cp-sheet__nav--prev { left: -12px; }
-.cp-sheet__nav--next { right: -12px; }
-.cp-sheet__nav:active { transform: translateY(-50%) scale(0.9); }
+.cp-sheet__nav:not(:disabled):active {
+  transform: scale(0.9);
+  background: rgb(var(--c-primary) / 0.1);
+}
+.cp-sheet__nav:disabled { opacity: 0.3; box-shadow: none; }
 
 /* Info block */
 .cp-sheet__info { margin-top: 14px; }
@@ -924,8 +940,6 @@
     background: rgb(var(--c-muted) / 0.35);
   }
   .cp-sheet__media { max-width: 78vw; }
-  .cp-sheet__nav--prev { left: 6px; }
-  .cp-sheet__nav--next { right: 6px; }
 }
 
 @keyframes cpFadeIn  { from { opacity: 0; } to { opacity: 1; } }
@@ -936,11 +950,10 @@
 @keyframes cpSheetDown { from { transform: none; } to { transform: translateY(100%); } }
 @keyframes cpImgIn   { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: none; } }
 
-@media (prefers-color-scheme: dark) {
-  .cp-sheet { border-color: rgb(255 255 255 / 0.08); box-shadow: 0 24px 60px rgb(0 0 0 / 0.5); }
-  .cp-sheet__media { background: linear-gradient(160deg, #2a2724 0%, #1d1b19 100%); }
-  .cp-sheet__nav { background: rgb(40 38 36 / 0.85); border-color: rgb(255 255 255 / 0.08); }
-}
+/* Dark theme follows the app's own switch (data-theme), not the OS setting.
+   The photo tile stays white so product shots on white backgrounds blend. */
+[data-theme="dark"] .cp-sheet { border-color: rgb(255 255 255 / 0.08); box-shadow: 0 24px 60px rgb(0 0 0 / 0.5); }
+[data-theme="dark"] .cp-sheet__media { border-color: rgb(255 255 255 / 0.08); }
 
 @media (prefers-reduced-motion: reduce) {
   .cp-sheet-overlay, .cp-sheet, .cp-sheet__media,
