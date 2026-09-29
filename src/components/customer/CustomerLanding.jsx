@@ -11,8 +11,8 @@ export default function CustomerLanding({ onPickBrand, onPickPrice, onScan }) {
   const brands = BRAND_RULES.filter((b) => b.id !== 'other');
 
   return (
-    <div className="customer-landing">
-      <button type="button" className="customer-landing__scan" onClick={onScan}>
+    <div className="customer-landing glass rounded-3xl">
+      <button type="button" className="customer-landing__scan lg-tile-primary" onClick={onScan}>
         <span className="customer-landing__scan-icon"><Icon name="barcode" size={26} /></span>
         <span className="customer-landing__scan-text">
           <span className="customer-landing__scan-title">สแกนบาร์โค้ดที่กล่อง</span>
@@ -27,7 +27,7 @@ export default function CustomerLanding({ onPickBrand, onPickPrice, onScan }) {
           <button
             key={b.id}
             type="button"
-            className="customer-landing__brand"
+            className="customer-landing__brand lg-tile"
             onClick={() => onPickBrand(b.id)}
           >
             <span className="customer-landing__brand-name">{b.label}</span>
@@ -42,10 +42,10 @@ export default function CustomerLanding({ onPickBrand, onPickPrice, onScan }) {
           <button
             key={p.id}
             type="button"
-            className="customer-landing__price"
+            className="customer-landing__price lg-tile"
             onClick={() => onPickPrice(p)}
           >
-            <Icon name="tag" size={15} className="opacity-60" />
+            <Icon name="price-tag" size={15} className="opacity-60" />
             {p.label}
           </button>
         ))}
