@@ -961,3 +961,46 @@
     animation-duration: 0.01ms !important;
   }
 }
+
+/* ── Tap-to-copy text in the preview ───────────────────────────────── */
+.cp-sheet__name-row { display: flex; justify-content: center; }
+.cp-copy {
+  position: relative;
+  display: inline-block;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  padding: 2px 8px;
+  margin: 0 -8px;
+  border-radius: 10px;
+  cursor: copy;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+.cp-copy:hover { background: rgb(var(--c-primary) / 0.07); }
+.cp-copy:active { transform: scale(0.97); background: rgb(var(--c-primary) / 0.12); }
+.cp-copy.is-copied { background: rgb(var(--c-success, 22 163 74) / 0.12); }
+.cp-copy__toast {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 4px);
+  transform: translate(-50%, 4px);
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+  text-decoration: none;
+  color: #fff;
+  background: rgb(var(--c-success, 22 163 74));
+  padding: 5px 9px;
+  border-radius: 999px;
+  box-shadow: 0 4px 10px rgb(0 0 0 / 0.15);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.cp-copy.is-copied .cp-copy__toast { opacity: 1; transform: translate(-50%, 0); }
+.cp-sheet__price.cp-copy { display: inline-block; }
+.cp-sheet__retail.cp-copy { margin: 0; padding: 2px 6px; }
