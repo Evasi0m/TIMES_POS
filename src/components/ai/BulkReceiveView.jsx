@@ -68,7 +68,7 @@ import {
   msgTraceLines,
   msgWaitingDetail,
 } from './parse-activity-log.js';
-import { enrichTiktokMappingFromCatalog, computeRowSummary, computeBillStatus } from './bill-review-shared.js';
+import { enrichTiktokMappingFromCatalog, computeRowSummary, computeBillStatus, isQtyOverrideValid } from './bill-review-shared.js';
 import { useRecentReceivesMap, findExistingCmgInvoices } from '../../lib/recent-receives.js';
 import { saveDraft, loadDraft, clearDraft, base64ToBlob } from '../../lib/ai-draft.js';
 import { useTikTokMirrorCatalog } from '../../hooks/useTikTokMirrorCatalog.js';
@@ -85,6 +85,17 @@ import {
 import { flushDraftNow, resolveMobileBackAction } from './bulk-receive-mobile-back.js';
 
 const AI_PARSE_CHUNK_SIZE = 1;
+
+/** Audit lines for rows saved with a password-approved qty that differs from the bill. */
+function overrideNotes(rows) {
+  return (rows || [])
+    .filter((r) => isQtyOverrideValid(r))
+    .map((r) => {
+      const name = r.product?.name || r.newProduct?.name || r.model_code || '?';
+      const from = r.qtyOverride.billQty != null ? r.qtyOverride.billQty : '?';
+      return `แก้จำนวนต่างจากบิล: ${name} ${from} → ${r.quantity} (ยืนยันโดย ${r.qtyOverride.by})`;
+    });
+}
 
 function mergeRowPatch(row, patch) {
   const next = { ...row, ...patch };
@@ -1322,9 +1333,12 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
           // enough; we don't expose the suffix in UI anywhere.
           supplier_invoice_no:
             bill.supplier_invoice_no?.trim() || autoInvoiceNo(i + 1),
-          notes: isJsonBill
-            ? `JSON import · batch · ${items.length} รายการ`
-            : `AI scan · batch · ${items.length} รายการ`,
+          notes: [
+            isJsonBill
+              ? `JSON import · batch · ${items.length} รายการ`
+              : `AI scan · batch · ${items.length} รายการ`,
+            ...overrideNotes(bill.rows),
+          ].join('\n'),
         };
 
         const { data: head, error: rpcErr } = await sb.rpc('create_stock_movement_with_items', {

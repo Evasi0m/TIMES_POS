@@ -1,7 +1,7 @@
 // Shared constants/helpers for AI bill review (BillReviewPanel + ReceiveMatchPanel).
 
 import { isValidCmgInvoiceNo, validateRowMath } from '../../lib/cmg-bill-validate.js';
-import { findBillRowCostConflicts } from '../../lib/ai-receive.js';
+import { findBillRowCostConflicts, findDuplicateProductRows } from '../../lib/ai-receive.js';
 import { tiktokSkuImageUrl } from '../../lib/tiktok-mirror-helpers.js';
 import { productImageUrl } from '../../lib/product-classify.js';
 export const STATUS_META = {
@@ -197,7 +197,20 @@ export function isSoftMatch(row) {
   );
 }
 
+/**
+ * True while a password-approved "differs from the printed bill" override
+ * still matches the row's current quantity and cost. Editing either value
+ * again invalidates it automatically.
+ */
+export function isQtyOverrideValid(row) {
+  const o = row?.qtyOverride;
+  if (!o) return false;
+  return Number(o.quantity) === Number(row.quantity)
+    && Number(o.unit_cost) === Number(row.unit_cost);
+}
+
 export function hasRowMathMismatch(row) {
+  if (isQtyOverrideValid(row)) return false;
   return validateRowMath(row).mismatch;
 }
 
@@ -229,6 +242,7 @@ export function computeBillStatus(bill, mirrorOn = false) {
   );
   if (incomplete) return 'incomplete';
   if (findBillRowCostConflicts(bill.rows).length > 0) return 'needs_review';
+  if (findDuplicateProductRows(bill.rows).length > 0) return 'needs_review';
   const footerWarnings = bill.validation?.bill?.warnings?.length || 0;
   if (footerWarnings > 0 && !bill.footerConfirmed) return 'needs_review';
   const flagged = bill.rows.some((r) =>

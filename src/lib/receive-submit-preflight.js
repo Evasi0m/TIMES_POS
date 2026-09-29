@@ -1,6 +1,8 @@
 import {
   buildReceiveItems,
   findBillRowCostConflicts,
+  findDuplicateProductRows,
+  formatDuplicateProductError,
   formatBillRowCostConflictError,
   probeProductForSubmitRow,
 } from './ai-receive.js';
@@ -45,6 +47,11 @@ export function validateBillRowsForSubmit(bill, { dupInvoice } = {}) {
   const costConflicts = findBillRowCostConflicts(rows);
   if (costConflicts.length) {
     return formatBillRowCostConflictError(costConflicts);
+  }
+
+  const dupProducts = findDuplicateProductRows(rows);
+  if (dupProducts.length) {
+    return formatDuplicateProductError(dupProducts);
   }
 
   const lineVatApplies = bill.has_vat !== false;
