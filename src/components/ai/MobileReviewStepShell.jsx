@@ -42,6 +42,15 @@ function UnifiedFooter({
             />
           </div>
         )}
+        {!batchSummary?.readyToSubmit && (batchSummary?.readyCount || 0) > 0 && !submitting && (
+          <button
+            type="button"
+            className="btn-secondary w-full !py-2.5 mb-2"
+            onClick={() => onSubmit?.({ onlyReady: true })}
+          >
+            <Icon name="check" size={15}/> บันทึกเฉพาะที่พร้อม ({batchSummary.readyCount} บิล)
+          </button>
+        )}
         <button
           type="button"
           className="btn-primary w-full !py-3 mrs-footer__save-ready"

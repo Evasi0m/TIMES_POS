@@ -1,6 +1,6 @@
 // Shared constants/helpers for AI bill review (BillReviewPanel + ReceiveMatchPanel).
 
-import { isValidCmgInvoiceNo, validateRowMath } from '../../lib/cmg-bill-validate.js';
+import { isValidCmgInvoiceNo, validateRowMath, validateCmgBill, footerComparison } from '../../lib/cmg-bill-validate.js';
 import { findBillRowCostConflicts, findDuplicateProductRows } from '../../lib/ai-receive.js';
 import { tiktokSkuImageUrl } from '../../lib/tiktok-mirror-helpers.js';
 import { productImageUrl } from '../../lib/product-classify.js';
@@ -224,6 +224,72 @@ function isTikTokLineReady(row) {
   return !!(row.tiktok_sku || row.tiktok_mapping);
 }
 
+// ── Live footer check ─────────────────────────────────────────────────
+// The footer (subtotal / total qty / VAT / grand total) is printed once, but
+// rows change while reviewing. Re-derive against the *current* rows so fixing
+// a misread clears the warning and a bad edit raises it. A row with an
+// approved "differs from bill" override counts at its billed qty, since the
+// printed footer was computed from that number.
+
+const NON_FOOTER_WARNINGS = new Set(['invoice_format_invalid']);
+
+function footerInput(bill) {
+  return {
+    is_cmg_bill: bill.is_cmg_bill,
+    supplier_invoice_no: bill.supplier_invoice_no,
+    bill_subtotal: bill.bill_subtotal,
+    total_qty: bill.total_qty,
+    vat_amount: bill.vat_amount,
+    grand_total: bill.grand_total,
+    items: (bill.rows || []).map((r) => ({
+      quantity: isQtyOverrideValid(r) && r.qtyOverride.billQty != null
+        ? r.qtyOverride.billQty
+        : r.quantity,
+      unit_cost: r.unit_cost,
+      line_amount: r.line_amount,
+    })),
+  };
+}
+
+/** Footer warnings for the bill as it is now (not as the AI first read it). */
+export function liveFooterWarnings(bill) {
+  if (!bill || !bill.validation || !bill.is_cmg_bill || !(bill.rows || []).length) return [];
+  // Bills without footer fields (older drafts / hand-built fixtures) can't be
+  // re-derived — keep the warnings the parser produced.
+  const hasFooterFields = ['bill_subtotal', 'total_qty', 'vat_amount', 'grand_total']
+    .some((k) => bill[k] !== undefined);
+  if (!hasFooterFields) {
+    return (bill.validation.bill?.warnings || []).filter((w) => !NON_FOOTER_WARNINGS.has(w));
+  }
+  return validateCmgBill(footerInput(bill)).bill.warnings
+    .filter((w) => !NON_FOOTER_WARNINGS.has(w));
+}
+
+/** Printed footer vs current rows, for the confirm UI. */
+export function liveFooterComparison(bill) {
+  if (!bill || !bill.validation) return [];
+  return footerComparison(footerInput(bill));
+}
+
+export function footerWarningsSig(warnings) {
+  return [...(warnings || [])].sort().join('|');
+}
+
+/**
+ * A footer confirmation covers the exact set of warnings shown when the user
+ * pressed confirm. If later edits change that set, it must be confirmed again.
+ */
+export function isFooterConfirmed(bill, warnings = liveFooterWarnings(bill)) {
+  if (!warnings.length) return true;
+  if (!bill?.footerConfirmed) return false;
+  const confirmedSig = bill.footerConfirmedSig != null
+    ? bill.footerConfirmedSig
+    // Drafts saved before the signature existed: the confirm covered the
+    // parse-time warnings.
+    : footerWarningsSig((bill.validation?.bill?.warnings || []).filter((w) => !NON_FOOTER_WARNINGS.has(w)));
+  return confirmedSig === footerWarningsSig(warnings);
+}
+
 /** Maps a post-AI bill to a stepper/submit status (shared by desktop + mobile). */
 export function computeBillStatus(bill, mirrorOn = false) {
   if (!bill) return 'empty';
@@ -243,8 +309,7 @@ export function computeBillStatus(bill, mirrorOn = false) {
   if (incomplete) return 'incomplete';
   if (findBillRowCostConflicts(bill.rows).length > 0) return 'needs_review';
   if (findDuplicateProductRows(bill.rows).length > 0) return 'needs_review';
-  const footerWarnings = bill.validation?.bill?.warnings?.length || 0;
-  if (footerWarnings > 0 && !bill.footerConfirmed) return 'needs_review';
+  if (!isFooterConfirmed(bill)) return 'needs_review';
   const flagged = bill.rows.some((r) =>
     (r.status === 'auto' || r.status === 'new') &&
     (needsManualReview(r) || hasRowMathMismatch(r) || isSoftMatch(r))

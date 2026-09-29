@@ -68,7 +68,16 @@ import {
   msgTraceLines,
   msgWaitingDetail,
 } from './parse-activity-log.js';
-import { enrichTiktokMappingFromCatalog, computeRowSummary, computeBillStatus, isQtyOverrideValid } from './bill-review-shared.js';
+import {
+  enrichTiktokMappingFromCatalog,
+  computeRowSummary,
+  computeBillStatus,
+  isQtyOverrideValid,
+  liveFooterWarnings,
+  liveFooterComparison,
+  isFooterConfirmed,
+  footerWarningsSig,
+} from './bill-review-shared.js';
 import { useRecentReceivesMap, findExistingCmgInvoices } from '../../lib/recent-receives.js';
 import { saveDraft, loadDraft, clearDraft, base64ToBlob } from '../../lib/ai-draft.js';
 import { useTikTokMirrorCatalog } from '../../hooks/useTikTokMirrorCatalog.js';
@@ -194,13 +203,27 @@ const STEP_STATUS_META = {
 };
 
 // Returns true if a bill can be submitted (passes H3 guards too).
+/** A bill that still needs fixing before it can be saved. */
+function isBillBlocked(bill, mirrorOn, dupInvoices) {
+  const s = billStatus(bill, mirrorOn);
+  if (s === 'unresolved' || s === 'incomplete' || s === 'tiktok_unresolved'
+    || s === 'needs_review' || s === 'saving') return true;
+  const inv = bill.supplier_invoice_no?.trim();
+  return Boolean(inv && dupInvoices?.get(inv));
+}
+
 function isBillSubmittable(bill, mirrorOn = false) {
   const s = billStatus(bill, mirrorOn);
   return s === 'ready' || s === 'failed';
 }
 
 // ─── Main component ───────────────────────────────────────────────────
-export default function BulkReceiveView({ toast, onPhaseChange }) {
+export default function BulkReceiveView({ toast, onPhaseChange, confirm }) {
+  // App dialog when mounted from main.jsx; window.confirm as a fallback.
+  const askConfirm = useCallback(
+    (opts) => (confirm ? confirm(opts) : Promise.resolve(window.confirm(opts.message || opts.title))),
+    [confirm],
+  );
   const [phase, setPhase] = useState('empty'); // empty | parsing | review | review_paused | done
   // Duplicate-bill guard — same hook as StockMovementForm uses.
   // Loads once on mount; powers the small "พึ่งรับ X วันก่อน" badge on
@@ -929,12 +952,14 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
   }, [bills, handleUploadConfirm]);
 
   // ─── Dismiss error batch (wipe all) vs continue with parsed bills ──
-  const discardErrorBatch = () => {
+  const discardErrorBatch = async () => {
     const parsedCount = bills.filter((b) => b.parseState === 'parsed').length;
     if (parsedCount > 0) {
-      const ok = window.confirm(
-        `มี ${parsedCount} บิลที่อ่านสำเร็จแล้ว — ลบทั้งหมดและเริ่มใหม่?`
-      );
+      const ok = await askConfirm({
+        title: 'ลบบิลทั้งหมดแล้วเริ่มใหม่?',
+        message: `มี ${parsedCount} บิลที่อ่านสำเร็จแล้ว — จะหายทั้งหมด`,
+        okLabel: 'ลบและเริ่มใหม่', cancelLabel: 'ยกเลิก', danger: true,
+      });
       if (!ok) return;
     }
     setError(null);
@@ -1008,7 +1033,11 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
   const setNewProduct = (uid, np) =>
     updateRow(uid, { status: 'new', product: null, newProduct: np, reviewConfirmed: true });
   const confirmBillFooter = () =>
-    patchCurrent((b) => ({ ...b, footerConfirmed: true }));
+    patchCurrent((b) => ({
+      ...b,
+      footerConfirmed: true,
+      footerConfirmedSig: footerWarningsSig(liveFooterWarnings(b)),
+    }));
 
   const handleTiktokRowMatch = useCallback((rowUid, patch) => {
     const row = billsRef.current[currentIdx]?.rows.find((r) => r.uid === rowUid);
@@ -1027,17 +1056,20 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
     patchCurrent((b) => ({ ...b, has_vat: val }));
   // A2: one-tap VAT toggle for the whole batch.
   const setAllVat = (val) =>
-    setBills((prev) => prev.map((b) => ({ ...b, has_vat: val })));
+    setBills((prev) => prev.map((b) => (b.saveState === 'saved' ? b : { ...b, has_vat: val })));
   const removeCurrentBill = () => {
     const idx = currentIdx;
-    let removed = null;
-    setBills((prev) => {
-      removed = prev[idx];
-      const next = prev.filter((_, i) => i !== idx);
-      if (next.length === 0) { setPhase('empty'); setCurrentIdx(0); return []; }
-      setCurrentIdx((c) => Math.min(c, next.length - 1));
-      return next;
-    });
+    const prevBills = billsRef.current;
+    const removed = prevBills[idx] || null;
+    const next = prevBills.filter((_, i) => i !== idx);
+    billsRef.current = next;
+    setBills(next);
+    if (next.length === 0) {
+      setPhase('empty');
+      setCurrentIdx(0);
+    } else {
+      setCurrentIdx(Math.min(idx, next.length - 1));
+    }
     if (removed) {
       // Keep the ObjectURL alive until the undo window closes so the
       // thumbnail survives a restore; revoke only if the user lets it go.
@@ -1067,14 +1099,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
     const actionable = bills.filter(
       (b) => b.is_cmg_bill && b.rows.length > 0 && b.saveState !== 'saved',
     );
-    const hasDupInvoice = (b) => {
-      const inv = b.supplier_invoice_no?.trim();
-      return inv && dupInvoices?.get(inv);
-    };
-    const blocked = actionable.filter((b) => {
-      const s = billStatus(b, tiktokMirrorOn);
-      return s === 'unresolved' || s === 'incomplete' || s === 'tiktok_unresolved' || s === 'needs_review' || s === 'saving' || hasDupInvoice(b);
-    });
+    const blocked = actionable.filter((b) => isBillBlocked(b, tiktokMirrorOn, dupInvoices));
     const skip = bills.filter((b) => !b.is_cmg_bill || b.rows.length === 0);
     const saved = bills.filter((b) => b.saveState === 'saved');
     const failed = bills.filter((b) => b.saveState === 'failed');
@@ -1086,6 +1111,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
       saved: saved.length,
       failed: failed.length,
       readyToSubmit: actionable.length > 0 && blocked.length === 0,
+      readyCount: actionable.length - blocked.length,
     };
   }, [bills, tiktokMirrorOn, dupInvoices]);
 
@@ -1094,7 +1120,10 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
   // 'saved': (1) bulk-insert any new products required, (2) call the
   // create_stock_movement_with_items RPC, (3) record outcome. On
   // failure of any bill we continue to the next.
-  const submitAll = async () => {
+  // opts.onlyReady: save the bills that are ready and leave the rest in review.
+  // Click handlers pass an event here, which has no onlyReady → full save.
+  const submitAll = async (opts) => {
+    const onlyReady = opts?.onlyReady === true;
     if (submitting) return;
     setSubmitting(true);
     setError(null);
@@ -1132,6 +1161,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
       billsRef.current.forEach((b, i) => {
         if (!b.is_cmg_bill || b.rows.length === 0) return;
         if (b.saveState === 'saved') return;
+        if (onlyReady && isBillBlocked(b, tiktokMirrorOn, dupInvoices)) return;
         targets.push(i);
       });
 
@@ -1473,6 +1503,19 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
       }
       setSubmitting(false);
       setSavingProgress(null);
+      const leftToFix = finalBills
+        .map((b, idx) => ({ b, idx }))
+        .filter(({ b }) => b.is_cmg_bill && b.rows.length > 0 && b.saveState !== 'saved' && b.saveState !== 'failed');
+      if (onlyReady && leftToFix.length > 0) {
+        // Partial save: stay in review on the first bill still waiting.
+        setSubmitSummary(null);
+        setCurrentIdx(leftToFix[0].idx);
+        toast?.push(
+          `บันทึกแล้ว ${savedIdsThisPass.length} บิล · เหลือ ${leftToFix.length} บิลรอแก้`,
+          failedOut.length ? 'error' : 'success',
+        );
+        if (savedIdsThisPass.length > 0) refreshRecentReceives?.().catch(() => {});
+      } else {
       setPhase('done');
       clearDraft(); // batch flow is over; in-session retry doesn't need it
       // H4: invalidate the recent-receives map so a subsequent batch
@@ -1482,6 +1525,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
       // re-fetch when retry-failed produced zero new saves.
       if (savedIdsThisPass.length > 0) {
         refreshRecentReceives?.().catch(() => {});
+      }
       }
       }
     }
@@ -1582,6 +1626,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
       {/* PHASE: REVIEW_PAUSED — exit focus mode, keep bills in memory */}
       {phase === 'review_paused' && bills.length > 0 && (
         <ReviewPausedCard
+          askConfirm={askConfirm}
           bills={bills}
           summary={summary}
           tiktokMirrorOn={tiktokMirrorOn}
@@ -1615,6 +1660,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
       {/* PHASE: REVIEW — wizard with stepper + per-bill panel */}
       {phase === 'review' && bills.length > 0 && (
         <ReviewWizard
+          askConfirm={askConfirm}
           bills={bills}
           currentIdx={currentIdx}
           setCurrentIdx={setCurrentIdx}
@@ -1664,6 +1710,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
           bills={bills}
           onRetryFailed={submitAll}
           onStartNew={resetBatch}
+          onEditBill={(i) => { setCurrentIdx(i); setPhase('review'); }}
           submitting={submitting}
         />
       )}
@@ -1701,7 +1748,7 @@ export default function BulkReceiveView({ toast, onPhaseChange }) {
 }
 
 // ─── Sub: paused review (mobile back from list) ───────────────────────
-function ReviewPausedCard({ bills, summary, tiktokMirrorOn, onResume, onDiscard }) {
+function ReviewPausedCard({ bills, summary, tiktokMirrorOn, onResume, onDiscard, askConfirm }) {
   const rowProgress = useMemo(() => {
     let total = 0;
     let done = 0;
@@ -1713,8 +1760,12 @@ function ReviewPausedCard({ bills, summary, tiktokMirrorOn, onResume, onDiscard 
     return { total, done };
   }, [bills, tiktokMirrorOn]);
 
-  const handleDiscard = () => {
-    if (!window.confirm(`ยกเลิก ${bills.length} บิลที่ยังไม่ได้บันทึก?`)) return;
+  const handleDiscard = async () => {
+    if (!(await askConfirm({
+      title: 'ยกเลิกบิลที่ยังไม่ได้บันทึก?',
+      message: `${bills.length} บิลที่ตรวจไว้จะหายทั้งหมด`,
+      okLabel: 'ยกเลิกทั้งหมด', cancelLabel: 'กลับไปตรวจต่อ', danger: true,
+    }))) return;
     onDiscard?.();
   };
 
@@ -2044,6 +2095,7 @@ function ReviewOverflowSheet({
 
 // ─── Sub: review wizard ───────────────────────────────────────────────
 function ReviewWizard({
+  askConfirm,
   bills, currentIdx, setCurrentIdx, products, recentReceivesMap, usage, summary, submitting,
   onUpdateRow, onRemoveRow, onPickCandidate, onSetNewProduct, onConfirmFooter,
   onInvoiceNoChange, onHasVatChange, onRemoveBill, onSubmitAll, onCancel, onPauseReview,
@@ -2069,9 +2121,13 @@ function ReviewWizard({
     setOverflowOpen(false);
   }, [current?.uid]);
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     if (bills.length > 0 && !submitting) {
-      if (!window.confirm(`ยกเลิก ${bills.length} บิลที่ยังไม่ได้บันทึก?`)) return;
+      if (!(await askConfirm({
+        title: 'ยกเลิกบิลที่ยังไม่ได้บันทึก?',
+        message: `${bills.length} บิลที่ตรวจไว้จะหายทั้งหมด`,
+        okLabel: 'ยกเลิกทั้งหมด', cancelLabel: 'กลับไปตรวจต่อ', danger: true,
+      }))) return;
     }
     onCancel();
   };
@@ -2511,8 +2567,12 @@ function BillCard({
 }) {
   const itemCount = bill.rows.length;
   const [alertsOpen, setAlertsOpen] = useState(false);
-  const footerWarningCount = bill.validation?.bill?.warnings?.length || 0;
-  const needsFooterConfirm = footerWarningCount > 0 && !bill.footerConfirmed;
+  const footerWarnings = useMemo(() => liveFooterWarnings(bill), [bill]);
+  const needsFooterConfirm = !isFooterConfirmed(bill, footerWarnings);
+  const footerRows = useMemo(
+    () => (needsFooterConfirm ? liveFooterComparison(bill) : []),
+    [needsFooterConfirm, bill],
+  );
 
   const alerts = useMemo(
     () => collectBillAlerts(bill, { dup, tiktokMirrorEnabled, onZoom }),
@@ -2649,15 +2709,48 @@ function BillCard({
 
         {needsFooterConfirm && (
           <div className="brv-bill-head__alerts">
-            <button
-              type="button"
-              className="brv-bill-alert brv-bill-alert--warn brv-bill-alert--click w-full"
-              onClick={() => onConfirmFooter?.()}
-              disabled={disabled}
-            >
-              <Icon name="alert" size={12}/>
-              ผลรวมบิลไม่ตรง footer ({footerWarningCount} จุด) — กดยืนยันหลังตรวจเลขแล้ว
-            </button>
+            <div className="brv-footer-check">
+              <div className="brv-footer-check__title">
+                <Icon name="alert" size={13}/>
+                {footerWarnings.includes('footer_unverified')
+                  ? 'อ่านยอดท้ายบิลไม่ได้ — เทียบแถวกับรูปบิลก่อนยืนยัน'
+                  : 'ยอดจากรายการไม่ตรงกับท้ายบิล — ตรวจกับรูปบิลก่อนยืนยัน'}
+              </div>
+              {footerRows.length > 0 && (
+                <table className="brv-footer-check__table">
+                  <thead>
+                    <tr><th/><th>ท้ายบิล</th><th>จากรายการ</th></tr>
+                  </thead>
+                  <tbody>
+                    {footerRows.map((f) => (
+                      <tr key={f.key} className={f.ok ? '' : 'is-bad'}>
+                        <td>{f.label}</td>
+                        <td className="tabular-nums">{f.money ? fmtTHB(f.bill) : f.bill}</td>
+                        <td className="tabular-nums">
+                          {f.money ? fmtTHB(f.rows) : f.rows}
+                          {!f.ok && <Icon name="x" size={11} className="ml-1 inline"/>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <div className="flex flex-wrap gap-2">
+                {bill.previewUrl && (
+                  <button type="button" className="btn-secondary !py-1.5 !text-xs" onClick={() => onZoom?.(bill.previewUrl)}>
+                    <Icon name="search" size={12}/> ดูรูปบิล
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn-secondary !py-1.5 !text-xs"
+                  onClick={() => onConfirmFooter?.()}
+                  disabled={disabled}
+                >
+                  <Icon name="check" size={12}/> ตรวจแล้ว ยืนยันยอดนี้
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -2794,6 +2887,15 @@ function SubmitBar({
             <div className="h-full rounded-full glass-tube-fill bg-primary transition-all duration-300" style={{ width: `${pct}%` }}/>
           </div>
         )}
+        {!summary.readyToSubmit && summary.readyCount > 0 && !submitting && (
+          <button
+            type="button"
+            className="btn-secondary w-full !py-2.5"
+            onClick={() => onSubmit({ onlyReady: true })}
+          >
+            <Icon name="check" size={15}/> บันทึกเฉพาะที่พร้อม ({summary.readyCount} บิล)
+          </button>
+        )}
         <button
           type="button"
           className="btn-primary w-full !py-3"
@@ -2878,6 +2980,16 @@ function SubmitBar({
             VAT ทั้งชุด {allVat ? 'เปิด' : 'ปิด'}
           </button>
         )}
+        {!summary.readyToSubmit && summary.readyCount > 0 && !submitting && (
+          <button
+            type="button"
+            className="btn-secondary !text-sm"
+            onClick={() => onSubmit({ onlyReady: true })}
+            title="บิลที่ยังต้องแก้จะรออยู่ในหน้าตรวจ"
+          >
+            <Icon name="check" size={14}/> บันทึกเฉพาะที่พร้อม ({summary.readyCount})
+          </button>
+        )}
         <button
           type="button"
           className="btn-patch-log-action"
@@ -2896,7 +3008,7 @@ function SubmitBar({
 }
 
 // ─── Sub: done summary ────────────────────────────────────────────────
-function DoneSummary({ submitSummary, bills, onRetryFailed, onStartNew, submitting }) {
+function DoneSummary({ submitSummary, bills, onRetryFailed, onStartNew, onEditBill, submitting }) {
   const failed = submitSummary.failed || [];
   const savedFromSummary = submitSummary.savedIds?.length || 0;
   const savedFromBills = bills.filter((b) => b.saveState === 'saved').length;
@@ -2944,13 +3056,33 @@ function DoneSummary({ submitSummary, bills, onRetryFailed, onStartNew, submitti
         {/* Saved bills list */}
         {savedCount > 0 && (
           <div className="w-full max-w-md text-left bg-success/5 border border-success/25 rounded-xl p-3">
-            <div className="text-xs font-medium text-success mb-1.5">บันทึกสำเร็จ</div>
-            <div className="flex flex-wrap gap-1.5">
-              {submitSummary.savedIds.map((id) => (
-                <span key={id} className="font-mono text-xs bg-canvas border hairline rounded px-2 py-0.5">
-                  #{id}
-                </span>
-              ))}
+            <div className="text-xs font-medium text-success mb-2">บันทึกสำเร็จ</div>
+            <div className="space-y-1.5">
+              {bills.map((b, i) => {
+                if (b.saveState !== 'saved') return null;
+                const qty = b.rows.reduce((n, r) => n + (Number(r.quantity) || 0), 0);
+                // Same gross-per-unit math the save path uses.
+                const value = b.rows.reduce(
+                  (n, r) => n + (Number(r.quantity) || 0) * grossUnitCost(r.unit_cost, b.has_vat !== false),
+                  0,
+                );
+                return (
+                  <div key={b.uid} className="flex items-center justify-between gap-2 text-xs bg-canvas border hairline rounded-lg px-2.5 py-1.5">
+                    <div className="min-w-0">
+                      <div className="font-mono font-medium truncate">
+                        {b.supplier_invoice_no?.trim() || `บิลที่ ${i + 1}`}
+                      </div>
+                      <div className="text-muted-soft tabular-nums">
+                        {b.rows.length} รายการ · {qty} ชิ้น
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0 tabular-nums">
+                      <div className="font-semibold">{fmtTHB(value)}</div>
+                      {b.savedOrderId != null && <div className="text-muted-soft text-[10px]">#{b.savedOrderId}</div>}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -2960,9 +3092,21 @@ function DoneSummary({ submitSummary, bills, onRetryFailed, onStartNew, submitti
           <div className="w-full max-w-md text-left bg-error/5 border border-error/25 rounded-xl p-3 space-y-2">
             <div className="text-xs font-medium text-error">บันทึกไม่สำเร็จ ({failedCount})</div>
             {failed.map((f) => (
-              <div key={f.index} className="text-xs">
-                <span className="font-medium">บิลที่ {f.index + 1}:</span>{' '}
-                <span className="text-muted">{f.message}</span>
+              <div key={f.index} className="text-xs flex items-start gap-2">
+                <div className="flex-1 min-w-0">
+                  <span className="font-medium">บิลที่ {f.index + 1}:</span>{' '}
+                  <span className="text-muted whitespace-pre-line">{f.message}</span>
+                </div>
+                {bills[f.index] && onEditBill && (
+                  <button
+                    type="button"
+                    className="btn-secondary !py-1 !px-2 !text-[11px] shrink-0"
+                    onClick={() => onEditBill(f.index)}
+                    disabled={submitting}
+                  >
+                    <Icon name="edit" size={11}/> กลับไปแก้
+                  </button>
+                )}
               </div>
             ))}
           </div>

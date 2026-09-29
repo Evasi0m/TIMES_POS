@@ -1,6 +1,11 @@
 // Priority-ordered bill-level alerts for BulkReceiveView BillCard (mobile summary).
 
-import { needsManualReview } from './bill-review-shared.js';
+import {
+  needsManualReview,
+  hasRowMathMismatch,
+  liveFooterWarnings,
+  isFooterConfirmed,
+} from './bill-review-shared.js';
 import {
   findBillRowCostConflicts,
   findDuplicateProductRows,
@@ -67,12 +72,13 @@ export function collectBillAlerts(bill, {
   const reviewRows = (!isNonCmg && !isEmpty)
     ? bill.rows.filter((r) => needsManualReview(r)).length
     : 0;
-  const billWarnings = bill.validation?.bill?.warnings || [];
+  const billWarnings = liveFooterWarnings(bill);
+  const footerOk = isFooterConfirmed(bill, billWarnings);
   const footerMathWarnings = billWarnings.filter((w) =>
     !['footer_unverified', 'qty_total_mismatch', 'invoice_format_invalid'].includes(w),
   );
   const validationBillWarnings = footerMathWarnings.length;
-  const validationRowIssues = bill.validation?.rows?.length || 0;
+  const validationRowIssues = bill.rows.filter((r) => hasRowMathMismatch(r)).length;
 
   const invNo = bill.supplier_invoice_no?.trim();
   if (!isNonCmg && invNo && !isValidCmgInvoiceNo(invNo)) {
@@ -82,7 +88,7 @@ export function collectBillAlerts(bill, {
       message: `เลขบิล "${invNo}" ไม่ใช่ 10 หลัก — ตรวจกับรูปแล้วแก้เลขบิล`,
     });
   }
-  if (!isNonCmg && !isEmpty && billWarnings.includes('footer_unverified') && !bill.footerConfirmed) {
+  if (!isNonCmg && !isEmpty && billWarnings.includes('footer_unverified') && !footerOk) {
     alerts.push({
       key: 'footer-unverified',
       severity: 'warn',
@@ -90,7 +96,7 @@ export function collectBillAlerts(bill, {
       onClick: !isJson && bill.previewUrl && onZoom ? () => onZoom(bill.previewUrl) : undefined,
     });
   }
-  if (!isNonCmg && !isEmpty && billWarnings.includes('qty_total_mismatch') && !bill.footerConfirmed) {
+  if (!isNonCmg && !isEmpty && billWarnings.includes('qty_total_mismatch') && !footerOk) {
     alerts.push({
       key: 'qty-total',
       severity: 'warn',
@@ -177,7 +183,7 @@ export function collectBillAlerts(bill, {
       });
     }
   }
-  if (validationBillWarnings > 0 && !bill.footerConfirmed) {
+  if (validationBillWarnings > 0 && !footerOk) {
     alerts.push({
       key: 'bill-math',
       severity: 'warn',

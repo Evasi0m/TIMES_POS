@@ -9887,6 +9887,7 @@ function AddProductModal({ open, onClose, onAdded }) {
 ========================================================= */
 function ReceiveView() {
   const toast = useToast();
+  const askConfirm = useConfirm();
   const [tab, setTab] = useState('receive');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [addProductOpen, setAddProductOpen] = useState(false);
@@ -9961,7 +9962,7 @@ function ReceiveView() {
           </p>
         )}
         {tab === 'bulk_receive' ? (
-          <BulkReceiveView key="bulk_receive" toast={toast} onPhaseChange={setBrvPhase} />
+          <BulkReceiveView key="bulk_receive" toast={toast} confirm={askConfirm} onPhaseChange={setBrvPhase} />
         ) : (
           <StockMovementForm key={tab} kind={tab} ref={formRef} />
         )}
