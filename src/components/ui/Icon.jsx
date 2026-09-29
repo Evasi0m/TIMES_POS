@@ -30,6 +30,7 @@ const Icon = ({ name, size = 20, className = '', strokeWidth = 1.75, color }) =>
     case 'cart':         return <svg {...p}><path d="M2 3h2.5l3 12h11l2.5-8H7"/><circle cx="10.5" cy="19.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="17.5" cy="19.5" r="1.5" fill="currentColor" stroke="none"/></svg>;
     case 'watch':        return <svg {...p}><rect x="6" y="5" width="12" height="14" rx="3"/><path d="M9 5V3h6v2M9 19v2h6v-2"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg>;
     case 'box':          return <svg {...p}><rect x="2" y="8" width="20" height="13" rx="1"/><path d="M2 8 4 3h16l2 5"/><path d="M9 13h6"/></svg>;
+    case 'price-tag':    return <svg {...p}><path d="M12 2.5v3.5"/><path d="M5.5 11 12 5.5l6.5 5.5v8a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2z"/><circle cx="12" cy="10.5" r="1.1"/><path d="M9.5 15.2h5M9.5 18h3"/></svg>;
     case 'receipt':      return <svg {...p}><path d="M7 3h10v18l-2.5-1.5L12 21l-2.5-1.5L7 21V3z"/><path d="M10 9h4M10 13h4"/></svg>;
     case 'package':      return <svg {...p}><rect x="3" y="7" width="18" height="13" rx="1"/><path d="M3 12h18"/><path d="M9 7V4M15 7V4"/></svg>;
     case 'package-in':   return <svg {...p}><path d="M12 20V4"/><path d="M5 11l7-7 7 7"/></svg>;

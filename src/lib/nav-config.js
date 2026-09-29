@@ -13,7 +13,7 @@
 export const NAV = [
   { k: 'pos',              label: 'ขาย',         labelLong: 'ขายสินค้า',        icon: 'cart' },
   { k: 'products',         label: 'สินค้า',      labelLong: 'สินค้า',           icon: 'box' },
-  { k: 'customer-price',   label: 'ราคาลูกค้า',  labelLong: 'ราคาลูกค้า',       icon: 'tag' },
+  { k: 'customer-price',   label: 'ราคาลูกค้า',  labelLong: 'ราคาลูกค้า',       icon: 'price-tag' },
   { k: 'sales',            label: 'ประวัติ',     labelLong: 'ประวัติการขาย',    icon: 'receipt' },
   { k: 'receive',   label: 'รับเข้า', labelLong: 'รับสินค้าจากบริษัท', icon: 'arrow-up',  adminOnly: true, ai: true },
   { k: 'return',    label: 'รับคืน',  labelLong: 'รับคืนจากลูกค้า',   icon: 'arrow-down' },
