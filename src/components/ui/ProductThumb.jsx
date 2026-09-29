@@ -36,6 +36,7 @@ export default function ProductThumb({
   expandable = true,
   /** 'brand' = monogram letter (default); 'sku' = one-line product name */
   fallback = 'brand',
+  showExpandHint = true,
 }) {
   const px = SIZES[size] || SIZES.md;
   const boxStyle = fill
@@ -76,6 +77,7 @@ export default function ProductThumb({
         imgClassName="w-full h-full object-contain rounded-[10px]"
         onImageError={() => setBroken(true)}
         expandable={expandable}
+        showExpandHint={showExpandHint}
         placeholder={
           <div className={photoTile} style={boxStyle}>
             <span className="skeleton absolute inset-0 rounded-[10px]" aria-hidden="true"/>
