@@ -20,6 +20,8 @@ export default function ExpandableImageThumb({
   onImageError,
   onImageLoad,
   expandable = true,
+  /** false = tap still opens the lightbox, but no expand icon over the image */
+  showExpandHint = true,
 }) {
   const [open, setOpen] = useState(false);
   const [broken, setBroken] = useState(false);
@@ -98,7 +100,7 @@ export default function ExpandableImageThumb({
           onLoad={() => { setLoaded(true); onImageLoad?.(); }}
           onError={() => { setBroken(true); onImageError?.(); }}
         />
-        {loaded && (
+        {loaded && showExpandHint && (
           <span className="product-img-expand-overlay" aria-hidden="true">
             <Icon name="expand" size={22} strokeWidth={2}/>
           </span>

@@ -22,6 +22,7 @@ import {
 import { fmtTHB } from '../lib/format.js';
 import { useCountUp } from '../hooks/useCountUp.js';
 import { useIdleReset } from '../hooks/useIdleReset.js';
+import { useMountedToggle } from '../lib/use-mounted-toggle.js';
 import ProductThumb from '../components/ui/ProductThumb.jsx';
 import Icon from '../components/ui/Icon.jsx';
 import ProductBrandPickerSheet from '../components/products/ProductBrandPickerSheet.jsx';
@@ -64,8 +65,13 @@ const DEFAULT_FILTER = {
 };
 
 function StockPill({ stock }) {
-  const st = customerStockStatus(stock);
-  return <span className={'customer-stock-pill customer-stock-pill--' + st.id}>{st.label}</span>;
+  const n = Number(stock) || 0;
+  const st = customerStockStatus(n);
+  return (
+    <span className={'customer-stock-pill customer-stock-pill--' + st.id}>
+      {n > 0 ? `เหลือ ${n}` : st.label}
+    </span>
+  );
 }
 
 function CustomerPriceCard({ product, quote, index, onOpen }) {
@@ -307,7 +313,12 @@ export default function CustomerPriceView({ config }) {
     ? 'ทั้งหมด'
     : (BRAND_RULES.find((b) => b.id === filter.brand)?.label || filter.brand);
 
-  const openQuote = open ? customerPriceQuote(open, priceConfig) : null;
+  // Keep the last product mounted while the popup plays its exit animation.
+  const { render: popupRender, closing: popupClosing } = useMountedToggle(!!open, 260);
+  const lastOpenRef = useRef(null);
+  if (open) lastOpenRef.current = open;
+  const shown = open || lastOpenRef.current;
+  const openQuote = shown ? customerPriceQuote(shown, priceConfig) : null;
 
   // ── Idle reset (skip while a customer is actively reading a popup) ──
   useIdleReset(IDLE_MS, () => { if (!open && !scanOpen) resetAll(); }, kioskOn && !open && !scanOpen);
@@ -670,63 +681,94 @@ export default function CustomerPriceView({ config }) {
         onClose={() => setKioskExitOpen(false)}
       />
 
-      {/* Detail popup — bottom sheet on mobile, centered card on desktop */}
-      {open && openQuote && (
-        <div className="customer-price-overlay" onClick={() => setOpen(null)} role="presentation">
+      {/* Detail popup — bottom sheet on phones, centered card on desktop */}
+      {popupRender && shown && openQuote && (() => {
+        const stock = Number(shown.current_stock) || 0;
+        const st = customerStockStatus(stock);
+        return (
           <div
-            className="customer-price-overlay__card"
-            onClick={(e) => e.stopPropagation()}
-            onTouchStart={onTouchStart}
-            onTouchEnd={onTouchEnd}
-            role="dialog"
-            aria-label={open.name}
+            className={'cp-sheet-overlay' + (popupClosing ? ' is-closing' : '')}
+            onClick={() => setOpen(null)}
+            role="presentation"
           >
-            <button type="button" className="customer-price-overlay__close" onClick={() => setOpen(null)} aria-label="ปิด">
-              <Icon name="x" size={18}/>
-            </button>
-
-            {openIndex > 0 && (
-              <button type="button" className="customer-price-overlay__nav customer-price-overlay__nav--prev"
-                onClick={() => goRel(-1)} aria-label="ก่อนหน้า">
-                <Icon name="chevron-l" size={22}/>
+            <div
+              className="cp-sheet"
+              onClick={(e) => e.stopPropagation()}
+              onTouchStart={onTouchStart}
+              onTouchEnd={onTouchEnd}
+              role="dialog"
+              aria-modal="true"
+              aria-label={shown.name}
+            >
+              <div className="cp-sheet__grabber" aria-hidden="true" />
+              <button type="button" className="cp-sheet__close" onClick={() => setOpen(null)} aria-label="ปิด">
+                <Icon name="x" size={18}/>
               </button>
-            )}
-            {openIndex >= 0 && openIndex < filtered.length - 1 && (
-              <button type="button" className="customer-price-overlay__nav customer-price-overlay__nav--next"
-                onClick={() => goRel(1)} aria-label="ถัดไป">
-                <Icon name="chevron-r" size={22}/>
-              </button>
-            )}
 
-            <div className="customer-price-overlay__media">
-              {openQuote.strikeRetail && (
-                <span className="customer-price-overlay__badge">-{openQuote.discountPct}%</span>
-              )}
-              <div className="customer-price-overlay__media-inner">
-                <ProductThumb product={open} fill expandable fallback="sku" />
+              <div className="cp-sheet__media" key={shown.id}>
+                {openQuote.strikeRetail && (
+                  <span className="cp-sheet__badge">
+                    <span className="cp-sheet__badge-label">ลด</span>
+                    <span className="cp-sheet__badge-pct">{openQuote.discountPct}%</span>
+                  </span>
+                )}
+                <div className="cp-sheet__media-inner">
+                  <ProductThumb product={shown} fill expandable showExpandHint={false} fallback="sku" />
+                </div>
+                {openIndex > 0 && (
+                  <button type="button" className="cp-sheet__nav cp-sheet__nav--prev"
+                    onClick={() => goRel(-1)} aria-label="ก่อนหน้า">
+                    <Icon name="chevron-l" size={20}/>
+                  </button>
+                )}
+                {openIndex >= 0 && openIndex < filtered.length - 1 && (
+                  <button type="button" className="cp-sheet__nav cp-sheet__nav--next"
+                    onClick={() => goRel(1)} aria-label="ถัดไป">
+                    <Icon name="chevron-r" size={20}/>
+                  </button>
+                )}
+              </div>
+              <div className="cp-sheet__tap-hint">แตะรูปเพื่อดูภาพใหญ่</div>
+
+              <div className="cp-sheet__info">
+                <div className="cp-sheet__name">{shown.name}</div>
+
+                <div className="cp-sheet__price-box">
+                  {openQuote.hasSell ? (
+                    <>
+                      <div className="cp-sheet__price-label">ราคาพิเศษ</div>
+                      <div className="cp-sheet__price">
+                        {fmtPlain(open ? animatedSell : openQuote.sell)}<span className="cp-sheet__price-unit">บาท</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="cp-sheet__ask">สอบถามราคากับพนักงาน</div>
+                  )}
+                  {openQuote.strikeRetail && (
+                    <div className="cp-sheet__compare">
+                      <span className="cp-sheet__retail">ปกติ {fmtPlain(openQuote.retail)} บาท</span>
+                      <span className="cp-sheet__save">ประหยัด {fmtPlain(openQuote.discountBaht)} บาท</span>
+                    </div>
+                  )}
+                  {!openQuote.hasSell && openQuote.retail > 0 && (
+                    <div className="cp-sheet__compare">
+                      <span className="cp-sheet__tagprice">ราคาป้าย {fmtPlain(openQuote.retail)} บาท</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className={'cp-sheet__stock cp-sheet__stock--' + st.id}>
+                  <span className="cp-sheet__stock-dot" aria-hidden="true" />
+                  <span className="cp-sheet__stock-label">{st.label}</span>
+                  <span className="cp-sheet__stock-count">
+                    {stock > 0 ? <>คงเหลือ <b>{stock}</b> ชิ้น</> : 'รอสินค้าเข้า'}
+                  </span>
+                </div>
               </div>
             </div>
-            <div className="customer-price-overlay__name">{open.name}</div>
-            {openQuote.hasSell ? (
-              <div className="customer-price-overlay__sell">{fmtCatalogPrice(animatedSell)}</div>
-            ) : (
-              <div className="customer-price-overlay__na">สอบถามราคากับพนักงาน</div>
-            )}
-            {openQuote.strikeRetail && (
-              <div className="customer-price-overlay__retail">ราคาปกติ {fmtPlain(openQuote.retail)} บาท</div>
-            )}
-            {openQuote.strikeRetail && (
-              <div className="customer-price-overlay__disc">ประหยัด {fmtPlain(openQuote.discountBaht)} บาท ({openQuote.discountPct}%)</div>
-            )}
-            {!openQuote.hasSell && openQuote.retail > 0 && (
-              <div className="text-sm text-muted mt-1">ป้าย {fmtCatalogPrice(openQuote.retail)}</div>
-            )}
-            <div className="customer-price-overlay__stock">
-              <StockPill stock={open.current_stock} />
-            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
