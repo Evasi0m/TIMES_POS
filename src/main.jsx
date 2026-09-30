@@ -103,6 +103,7 @@ import { logStockExport, fetchStockExportLogs } from './lib/stock-export-log.js'
 import StockAdjustModal from './components/products/StockAdjustModal.jsx';
 import PosCartSwapSheet from './components/pos/PosCartSwapSheet.jsx';
 import Pager from './components/ui/Pager.jsx';
+import ReceiveLinesEditor from './components/movement/ReceiveLinesEditor.jsx';
 import { pageCount } from './lib/pagination.js';
 import BulkStockAdjustView from './components/products/BulkStockAdjustView.jsx';
 import ProductCatalogCard from './components/products/ProductCatalogCard.jsx';
@@ -197,6 +198,7 @@ import {
   formatMirrorToast,
   getTikTokConnectionStatus,
   isTikTokLineReady,
+  mirrorStockAfterManualAdjust,
   mirrorStockToTikTok,
   persistTiktokMatchMapping,
   runReturnMirrorWithFeedback,
@@ -3867,7 +3869,11 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
   const [claimDocOpen, setClaimDocOpen] = useState(false);
   const [issuingClaimDoc, setIssuingClaimDoc] = useState(false);
   const [deletingLineId, setDeletingLineId] = useState(null);
+  const [draftLines, setDraftLines] = useState(null);
   const voidLockRef = useRef(false);
+  // Receive bills: only super admin may edit anything (header + lines).
+  const canEditBill = kind === 'receive' ? isSuperAdmin : isAdmin;
+  const editLines = kind === 'receive' && isSuperAdmin;
 
   const reload = useCallback(async () => {
     if (!orderId) return;
@@ -3891,10 +3897,97 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
 
   const startEdit = () => {
     setDraft({ ...order });
+    if (editLines) {
+      setDraftLines(items.map((it) => ({
+        key: 'ln-' + it.id,
+        id: it.id,
+        product_id: it.product_id,
+        product_name: it.product_name,
+        quantity: it.quantity,
+        unit: it.unit,
+        unit_price: Number(it.unit_price) || 0,
+        discount1_value: it.discount1_value, discount1_type: it.discount1_type,
+        discount2_value: it.discount2_value, discount2_type: it.discount2_type,
+        _origQty: it.quantity,
+        _origPrice: Number(it.unit_price) || 0,
+      })));
+    }
     setEditing(true);
   };
-  const cancelEdit = () => { setEditing(false); setDraft(null); };
+  const cancelEdit = () => { setEditing(false); setDraft(null); setDraftLines(null); };
+
+  // Receive (super admin): header + lines in one server-side transaction,
+  // stock follows, then TikTok gets the new POS stock for changed products.
+  const saveReceiveEdit = async () => {
+    const lines = draftLines || [];
+    const bad = lines.find((l) => !l.product_id || !(Number(l.quantity) > 0) || !(Number(l.unit_price) >= 0) || l.unit_price === '');
+    if (!lines.length) { toast.push('บิลต้องมีอย่างน้อย 1 รายการ — ถ้าจะลบทั้งบิลให้ใช้ยกเลิกบิล', 'error'); return; }
+    if (bad) { toast.push(`ตรวจ "${bad.product_name}" — จำนวนต้องมากกว่า 0 และต้องมีราคา`, 'error'); return; }
+
+    const origByPid = new Map();
+    items.forEach((it) => origByPid.set(it.product_id, (origByPid.get(it.product_id) || 0) + Number(it.quantity || 0)));
+    const newByPid = new Map();
+    lines.forEach((l) => newByPid.set(l.product_id, (newByPid.get(l.product_id) || 0) + Number(l.quantity || 0)));
+    const stockChanges = [...new Set([...origByPid.keys(), ...newByPid.keys()])]
+      .map((pid) => ({ pid, delta: (newByPid.get(pid) || 0) - (origByPid.get(pid) || 0) }))
+      .filter((c) => c.delta !== 0);
+
+    const reason = await askPrompt({
+      title: 'บันทึกการแก้ไขบิล',
+      label: stockChanges.length
+        ? `สต็อกจะถูกปรับ ${stockChanges.length} รุ่น และ sync ไป TikTok — เหตุผล (ไม่บังคับ)`
+        : 'เหตุผล (ไม่บังคับ)',
+      defaultValue: '', multiline: true, okLabel: 'บันทึก',
+    });
+    if (reason === null) return;
+
+    setBusy(true);
+    try {
+      const header = {
+        receive_date: draft.receive_date,
+        supplier_name: draft.supplier_name ?? '',
+        supplier_invoice_no: draft.supplier_invoice_no ?? '',
+        supplier_tax_id: (draft.supplier_tax_id || '').toString().replace(/\D/g, '').slice(0, 13),
+        notes: draft.notes ?? '',
+      };
+      const payloadLines = lines.map((l) => ({
+        ...(l.id ? { id: l.id } : {}),
+        product_id: l.product_id,
+        quantity: Math.round(Number(l.quantity)),
+        unit_price: Number(l.unit_price),
+        unit: l.unit || 'เรือน',
+        discount1_value: Number(l.discount1_value) || 0, discount1_type: l.discount1_type || null,
+        discount2_value: Number(l.discount2_value) || 0, discount2_type: l.discount2_type || null,
+      }));
+      const { data, error } = await sb.rpc('edit_receive_order', {
+        p_id: order.id, p_header: header, p_lines: payloadLines, p_reason: reason || null,
+      });
+      if (error) { toast.push('บันทึกไม่ได้: ' + mapError(error), 'error', { durationMs: 8000 }); return; }
+      if (!data?.changed) {
+        toast.push('ไม่มีอะไรเปลี่ยน', 'info');
+      } else {
+        const n = (data.stock_deltas || []).length;
+        toast.push(n ? `แก้ไขบิลแล้ว · ปรับสต็อก ${n} รุ่น` : 'แก้ไขบิลแล้ว', 'success');
+      }
+      setEditing(false); setDraft(null); setDraftLines(null);
+      await reload();
+      onChanged?.();
+      const changedIds = (data?.stock_deltas || []).map((d) => d.product_id);
+      if (changedIds.length) {
+        try {
+          const res = await mirrorStockAfterManualAdjust({ auditId: order.id, productIds: changedIds, toast });
+          if (res?.skipped && res.reason === 'not_connected') {
+            toast.push('TikTok ยังไม่ได้เชื่อมต่อ — ปรับเฉพาะสต็อกร้าน', 'info');
+          }
+        } catch (e) {
+          toast.push('Sync TikTok ไม่สำเร็จ: ' + mapError(e), 'error', { durationMs: 8000 });
+        }
+      }
+    } finally { setBusy(false); }
+  };
+
   const saveEdit = async () => {
+    if (kind === 'receive') { await saveReceiveEdit(); return; }
     setBusy(true);
     const patch = { notes: draft.notes?.trim() || null };
     patch[meta.dateField] = draft[meta.dateField];
@@ -4068,17 +4161,21 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
             {issuingClaimDoc ? <span className="spinner"/> : <Icon name="receipt" size={16}/>} พิมพ์ใบส่งคืน
           </button>
         )}
-        {order && !isVoided && !editing && isAdmin && (<>
+        {order && !isVoided && !editing && isAdmin && (
           <button className="btn-secondary !text-error hover:!bg-error/10" onClick={voidIt} disabled={busy}>
             <Icon name="trash" size={16}/> ยกเลิกบิลนี้
           </button>
+        )}
+        {order && !isVoided && !editing && canEditBill && (
           <button
             className="btn-secondary" onClick={startEdit} disabled={busy}
-            title="แก้ไขได้เฉพาะข้อมูลส่วนหัว (ไม่รวมรายการสินค้า) — ถ้าต้องแก้รายการ ให้ยกเลิกบิลแล้วทำใหม่"
+            title={editLines
+              ? 'แก้ไขได้ทั้งบิล: ส่วนหัว จำนวน ราคา เพิ่ม/ลบรายการ — สต็อกและ TikTok ปรับตามอัตโนมัติ'
+              : 'แก้ไขได้เฉพาะข้อมูลส่วนหัว (ไม่รวมรายการสินค้า) — ถ้าต้องแก้รายการ ให้ยกเลิกบิลแล้วทำใหม่'}
           >
-            <Icon name="edit" size={16}/> แก้ไข header
+            <Icon name="edit" size={16}/> {editLines ? 'แก้ไขบิล' : 'แก้ไข header'}
           </button>
-        </>)}
+        )}
         {editing && (<>
           <button className="btn-secondary" onClick={cancelEdit} disabled={busy}>ยกเลิก</button>
           <button className="btn-primary" onClick={saveEdit} disabled={busy}>
@@ -4232,21 +4329,37 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
             </div>
           </div>
 
-          {editing && (
+          {editing && !editLines && (
             <div className="text-xs text-muted-soft p-3 bg-surface-soft rounded-md">
               หมายเหตุ: แก้ได้เฉพาะข้อมูลส่วนหัว — ถ้าต้องแก้รายการสินค้า/จำนวน ให้กดยกเลิกบิลนี้แล้วบันทึกใหม่
             </div>
           )}
 
-          {/* Items (read-only) */}
+          {/* Items: editable for super admin on receive bills, else read-only */}
+          {editing && editLines && draftLines ? (
+            <div>
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <div className="text-xs uppercase tracking-wider text-muted">รายการสินค้า ({draftLines.length})</div>
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                  กำลังแก้ไข · สต็อกและ TikTok ปรับตามเมื่อบันทึก
+                </span>
+              </div>
+              <ReceiveLinesEditor
+                lines={draftLines}
+                onChange={setDraftLines}
+                vatRate={Number(order.vat_rate) || 0}
+                disabled={busy}
+              />
+            </div>
+          ) : (
           <div>
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               <div className="text-xs uppercase tracking-wider text-muted">รายการสินค้า ({items.length})</div>
               <span
                 className="text-xs px-1.5 py-0.5 rounded-full bg-muted/15 text-muted-soft font-medium"
-                title={kind==='receive' && isSuperAdmin ? "แก้จำนวน/ราคาไม่ได้ — แต่ super admin ลบรายตัวได้" : "แก้ไขรายการ/จำนวนไม่ได้ — ต้องยกเลิกบิลแล้วทำใหม่"}
+                title={kind==='receive' && isSuperAdmin ? "super admin แก้จำนวน ราคา เพิ่ม/ลบรายการได้ผ่านปุ่มแก้ไขบิล" : "แก้ไขรายการ/จำนวนไม่ได้ — ต้องยกเลิกบิลแล้วทำใหม่"}
               >
-                {kind==='receive' && isSuperAdmin ? 'ลบรายตัวได้ (super admin)' : 'แก้ไขไม่ได้'}
+                {kind==='receive' && isSuperAdmin ? 'กด "แก้ไขบิล" เพื่อแก้จำนวน/ราคา' : 'แก้ไขไม่ได้'}
               </span>
             </div>
             <div className="card-canvas overflow-hidden">
@@ -4276,6 +4389,7 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
               </div>
             </div>
           </div>
+          )}
         </div>
       )}
     </Modal>
