@@ -41,12 +41,12 @@ export default function PosCartSwapSheet({ open, line, onClose, onSwap }) {
     : null;
 
   return (
-    <Modal open={open} onClose={onClose} title="?????????????????" wide>
+    <Modal open={open} onClose={onClose} title="เปลี่ยนรุ่นในตะกร้า" wide>
       {line && (
         <div className="space-y-3">
           <div className="text-sm text-muted leading-relaxed">
-            ??? <span className="font-mono font-semibold text-ink">{line.product_name}</span>
-            {' '}? ??????????????????? (?????????????????????????????)
+            แทน <span className="font-mono font-semibold text-ink">{line.product_name}</span>
+            {' '}ด้วยรุ่นที่เลือก (จำนวนเท่าเดิม แต่ไม่เกินสต็อกของรุ่นใหม่)
           </div>
           <PosProductMatcher
             item={matcherItem}
@@ -62,7 +62,7 @@ export default function PosCartSwapSheet({ open, line, onClose, onSwap }) {
             recommendLimit={6}
           />
           <button type="button" className="btn-secondary w-full !py-2" onClick={onClose}>
-            <Icon name="x" size={14}/> ??????
+            <Icon name="x" size={14}/> ยกเลิก
           </button>
         </div>
       )}

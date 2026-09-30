@@ -102,6 +102,8 @@ import {
 import { logStockExport, fetchStockExportLogs } from './lib/stock-export-log.js';
 import StockAdjustModal from './components/products/StockAdjustModal.jsx';
 import PosCartSwapSheet from './components/pos/PosCartSwapSheet.jsx';
+import Pager from './components/ui/Pager.jsx';
+import { pageCount } from './lib/pagination.js';
 import BulkStockAdjustView from './components/products/BulkStockAdjustView.jsx';
 import ProductCatalogCard from './components/products/ProductCatalogCard.jsx';
 import ProductBrandPickerSheet from './components/products/ProductBrandPickerSheet.jsx';
@@ -6588,6 +6590,8 @@ function POSView() {
 /* =========================================================
    PRODUCTS VIEW
 ========================================================= */
+const PRODUCTS_PAGE = 100;
+
 function ProductsView() {
   const toast = useToast();
   const { shop } = useShop();
@@ -6632,9 +6636,11 @@ function ProductsView() {
     setViewMode(k);
     try { localStorage.setItem('times-pos.products.viewMode', k); } catch { /* private mode */ }
   };
-  // Render only the first N filtered rows; "ดูเพิ่ม" button bumps this. Keeps
-  // initial paint fast even when the brand chip is "ทั้งหมด" (6k items).
-  const [pageSize, setPageSize] = useState(200);
+  // Paged list: PRODUCTS_PAGE rows per page keeps paint fast even when the
+  // brand chip is "ทั้งหมด" (6k items). pageDir drives the slide animation.
+  const [page, setPage] = useState(0);
+  const [pageDir, setPageDir] = useState('next');
+  const pageTopRef = useRef(null);
   // Search input uses a local state so typing stays responsive even when
   // the catalog is large (~6k rows). The debounced effect below pushes the
   // text into `filter.query` after a short idle window so the heavy
@@ -6857,14 +6863,26 @@ function ProductsView() {
     return [];
   }, [browseMode, allRows, searchRows, filter]);
 
-  const visibleRows = useMemo(() => filtered.slice(0, pageSize), [filtered, pageSize]);
+  const pages = pageCount(filtered.length, PRODUCTS_PAGE);
+  const safePage = Math.min(page, pages - 1);
+  const pageStart = safePage * PRODUCTS_PAGE;
+  const visibleRows = useMemo(
+    () => filtered.slice(pageStart, pageStart + PRODUCTS_PAGE),
+    [filtered, pageStart],
+  );
+  const goPage = useCallback((next) => {
+    const target = Math.max(0, Math.min(next, pages - 1));
+    if (target === safePage) return;
+    setPageDir(target > safePage ? 'next' : 'prev');
+    setPage(target);
+    pageTopRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, [pages, safePage]);
   const productsTiktokIds = useMemo(() => visibleRows.map(p => p.id), [visibleRows]);
   const { connected: tiktokBadgeOn, mappingsByProductId: tiktokBadgeByProductId } =
     useTikTokProductMappings(productsTiktokIds);
 
-  // Reset visible page whenever the filter changes — otherwise users would
-  // see "200 of 200" and think the new filter has more matches than it does.
-  useEffect(() => { setPageSize(200); }, [filter]);
+  // Back to page 1 whenever the filter changes.
+  useEffect(() => { setPage(0); setPageDir('next'); }, [filter]);
 
   // ===== Cascading state setters (parent change resets children) =====
   const setBrand = (b) => {
@@ -7248,7 +7266,11 @@ function ProductsView() {
       {/* Result count */}
       <div className="text-xs text-muted mb-2 flex-shrink-0 flex items-center gap-2">
         <span>พบ <span className="font-medium text-ink tabular-nums">{filtered.length.toLocaleString('th-TH')}</span> รายการ</span>
-        {filtered.length > visibleRows.length && <span className="text-muted-soft">· แสดง {visibleRows.length.toLocaleString('th-TH')}</span>}
+        {pages > 1 && (
+          <span className="text-muted-soft tabular-nums">
+            · แสดง {(pageStart + 1).toLocaleString('th-TH')}–{(pageStart + visibleRows.length).toLocaleString('th-TH')} · หน้า {safePage + 1}/{pages}
+          </span>
+        )}
         {hasAnyFilter && filtered.length === 0 && (
           <button type="button" onClick={clearAll} className="ml-auto text-primary hover:underline">ล้างตัวกรอง</button>
         )}
@@ -7264,7 +7286,11 @@ function ProductsView() {
                 {browseMode ? 'กำลังโหลดสินค้า...' : 'กำลังค้นหา...'}
               </div>
             ) : (
-              <div className="product-catalog-grid">
+              <div
+                key={'pg' + safePage}
+                ref={pageTopRef}
+                className={'product-catalog-grid page-anim page-anim--' + pageDir}
+              >
                 {!loading && !searchLoading && filtered.length === 0 && (
                   <div className="product-catalog-empty">
                     {browseMode && hasAnyFilter ? 'ไม่พบสินค้าตรงกับตัวกรอง'
@@ -7285,13 +7311,7 @@ function ProductsView() {
                 ))}
               </div>
             )}
-            {filtered.length > visibleRows.length && (
-              <div className="pt-2 pb-3 flex justify-center">
-                <button type="button" className="btn-secondary !py-2 !text-sm" onClick={()=>setPageSize(n => n + 200)}>
-                  ดูเพิ่ม ({(filtered.length - visibleRows.length).toLocaleString('th-TH')} รายการ)
-                </button>
-              </div>
-            )}
+            <Pager page={safePage} count={pages} onChange={goPage} className="pt-3 pb-4"/>
           </div>
         </div>
       )}
@@ -7316,6 +7336,7 @@ function ProductsView() {
                 : 'พิมพ์ชื่อรุ่นหรือบาร์โค้ดเพื่อค้นหา'}
             </div>
           )}
+          <div key={'pg' + safePage} ref={pageTopRef} className={'page-anim page-anim--' + pageDir}>
           {visibleRows.map(p => {
             const fmtPlain = (n) => roundMoney(n).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
             const stockRowCls = Number(p.current_stock) > 0 ? 'product-row--in-stock' : 'product-row--out-of-stock';
@@ -7351,11 +7372,10 @@ function ProductsView() {
               </div>
             );
           })}
-          {filtered.length > visibleRows.length && (
-            <div className="p-3 border-t hairline flex justify-center">
-              <button type="button" className="btn-secondary !py-2 !text-sm" onClick={()=>setPageSize(n => n + 200)}>
-                ดูเพิ่ม ({(filtered.length - visibleRows.length).toLocaleString('th-TH')} รายการ)
-              </button>
+          </div>
+          {pages > 1 && (
+            <div className="p-3 border-t hairline">
+              <Pager page={safePage} count={pages} onChange={goPage}/>
             </div>
           )}
         </div>
@@ -7374,6 +7394,7 @@ function ProductsView() {
               : 'พิมพ์ชื่อรุ่นหรือบาร์โค้ดเพื่อค้นหา'}
           </div>
         )}
+        <div key={'pg' + safePage} ref={pageTopRef} className={'page-anim page-anim--' + pageDir}>
         {visibleRows.map(p => {
           const stockRowCls = Number(p.current_stock) > 0 ? 'product-row--in-stock' : 'product-row--out-of-stock';
           return (
@@ -7410,13 +7431,8 @@ function ProductsView() {
             </div>
           );
         })}
-        {filtered.length > visibleRows.length && (
-          <div className="pt-2 flex justify-center">
-            <button type="button" className="btn-secondary !py-2 !text-sm" onClick={()=>setPageSize(n => n + 200)}>
-              ดูเพิ่ม ({(filtered.length - visibleRows.length).toLocaleString('th-TH')} รายการ)
-            </button>
-          </div>
-        )}
+        </div>
+        <Pager page={safePage} count={pages} onChange={goPage} className="pt-2"/>
       </div>
       )}
 

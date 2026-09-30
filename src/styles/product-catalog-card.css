@@ -329,3 +329,53 @@
 :root[data-theme="dark"] .product-catalog-card--clickable:hover {
   background: rgb(var(--c-surface-card, 30 30 30) / 0.78);
 }
+
+/* ── Page change: slide in from the direction of travel ─────────────── */
+.page-anim { animation-duration: 0.32s; animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); animation-fill-mode: both; }
+.page-anim--next { animation-name: pageInNext; }
+.page-anim--prev { animation-name: pageInPrev; }
+@keyframes pageInNext { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+@keyframes pageInPrev { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .page-anim { animation: none; } }
+
+/* ── Pager ─────────────────────────────────────────────────────────── */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+.pager__btn {
+  min-width: 2.5rem;
+  height: 2.5rem;
+  padding: 0 0.625rem;
+  border-radius: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgb(var(--c-ink));
+  background: rgb(var(--c-surface-strong) / 0.55);
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  border: 1px solid rgb(var(--c-surface-strong) / 0.7);
+  box-shadow: inset 0 1px 0 var(--rim-top-strong), 0 2px 6px -2px rgb(var(--shadow-rgb) / 0.10);
+  transition: transform 0.16s ease, background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+.pager__btn:not(:disabled):hover { transform: translateY(-1px); border-color: rgb(var(--c-primary) / 0.4); }
+.pager__btn:not(:disabled):active { transform: scale(0.94); }
+.pager__btn:disabled { opacity: 0.35; }
+.pager__btn.is-active {
+  color: #fff;
+  background: linear-gradient(180deg, rgba(209, 132, 103, 0.95), rgba(192, 108, 80, 0.98));
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 4px 12px -2px rgba(204, 120, 92, 0.45);
+}
+.pager__gap { min-width: 1.25rem; text-align: center; color: rgb(var(--c-muted)); }
+:root[data-theme="dark"] .pager__btn:not(.is-active) {
+  background: rgb(var(--c-surface-card) / 0.55);
+  border-color: rgb(var(--c-surface-cream-strong) / 0.45);
+}
+@media (prefers-reduced-motion: reduce) { .pager__btn { transition: none; } }
