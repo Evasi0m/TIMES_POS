@@ -31,7 +31,7 @@ function ProductCatalogCard({
 }) {
   const stock = Number(product?.current_stock) || 0;
   const oos = stock <= 0;
-  const name = product?.name || '�';
+  const name = product?.name || '—';
   const nameCls = nameLengthClass(name);
   const showTikTok = Boolean(showTikTokBadge && tiktokMapping);
 
@@ -58,11 +58,11 @@ function ProductCatalogCard({
         (canEdit ? ' product-catalog-card--clickable' : '') +
         (oos ? ' product-catalog-card--oos' : '')
       }
-      title={canEdit ? `?????: ${name}` : name}
+      title={canEdit ? `แก้ไข: ${name}` : name}
     >
       <div
         className="product-catalog-card__stock"
-        aria-label={oos ? '????????' : `??????? ${stock}`}
+        aria-label={oos ? 'หมดสต็อก' : `คงเหลือ ${stock}`}
       >
         <div
           className={
@@ -97,12 +97,12 @@ function ProductCatalogCard({
           </span>
           {isNew && (
             <span className="product-catalog-card__badges">
-              <span className="new-product-badge shrink-0">????</span>
+              <span className="new-product-badge shrink-0">ใหม่</span>
             </span>
           )}
         </div>
 
-        <div className="product-catalog-card__costs" title="??????????">
+        <div className="product-catalog-card__costs" title="ทุนตั้งต้น">
           <span className="text-ink font-medium">
             {fmtPlain(product?.cost_price)}
           </span>
