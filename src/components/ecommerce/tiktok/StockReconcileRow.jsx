@@ -1,7 +1,7 @@
 // Single row in TikTok ↔ POS stock reconcile table.
 import React from 'react';
 import Icon from '../../ui/Icon.jsx';
-import { diffChipClass, formatDiff } from '../../../lib/tiktok-stock-reconcile-helpers.js';
+import { diffChipClass, formatDiff, reconcileRowKey } from '../../../lib/tiktok-stock-reconcile-helpers.js';
 
 const STATUS_META = {
   ok: { label: 'ตรงกัน', chip: 'tt-reconcile-chip--ok', icon: 'check' },
@@ -55,7 +55,7 @@ export default function StockReconcileRow({
             className="checkbox"
             checked={selected}
             disabled={disabled}
-            onChange={() => onToggle(row.product_id)}
+            onChange={() => onToggle(reconcileRowKey(row))}
             aria-label={`เลือก ${sku}`}
           />
         ) : (

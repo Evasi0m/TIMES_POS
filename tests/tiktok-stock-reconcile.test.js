@@ -59,10 +59,20 @@ describe('isRowApplicable', () => {
 describe('defaultSelectedIds', () => {
   it('selects only applicable mismatched rows', () => {
     const ids = defaultSelectedIds(sampleRows, 'pos');
-    expect(ids.has(2)).toBe(true);
-    expect(ids.has(3)).toBe(true);
-    expect(ids.has(1)).toBe(false);
-    expect(ids.has(4)).toBe(false);
+    expect(ids.has('s1')).toBe(true);
+    expect(ids.has('s2')).toBe(true);
+    expect(ids.has('1')).toBe(false);
+    expect(ids.has('4')).toBe(false);
+  });
+
+  it('keeps two TikTok SKUs on the same POS product selectable apart', () => {
+    const ids = defaultSelectedIds([
+      { product_id: 9, status: 'ok', sync_enabled: true, diff: 5, seller_sku: 'MTP-V300D-1A', tiktok_product_id: 'p', tiktok_sku_id: 'sku-1a' },
+      { product_id: 9, status: 'ok', sync_enabled: true, diff: -1, seller_sku: 'MTP-V300D-1A2', tiktok_product_id: 'p', tiktok_sku_id: 'sku-1a2' },
+    ], 'pos');
+    expect(ids.has('sku-1a')).toBe(true);
+    expect(ids.has('sku-1a2')).toBe(true);
+    expect(ids.size).toBe(2);
   });
 });
 

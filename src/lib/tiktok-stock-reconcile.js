@@ -9,6 +9,7 @@ export {
   filterRows,
   isRowApplicable,
   defaultSelectedIds,
+  reconcileRowKey,
   rowToApplyItem,
   buildApplyPreview,
   diffChipClass,

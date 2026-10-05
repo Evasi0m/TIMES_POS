@@ -9,6 +9,7 @@ import {
   filterRows,
   partitionRows,
   defaultSelectedIds,
+  reconcileRowKey,
   rowToApplyItem,
   buildApplyPreview,
   formatApplyToast,
@@ -97,7 +98,7 @@ export default function TikTokStockReconcile({ toast, setView }) {
   const parts = useMemo(() => partitionRows(rows), [rows]);
 
   const selectedRows = useMemo(
-    () => rows.filter(r => selected.has(r.product_id) && isRowApplicable(r, source)),
+    () => rows.filter(r => selected.has(reconcileRowKey(r)) && isRowApplicable(r, source)),
     [rows, selected, source],
   );
 
@@ -348,9 +349,9 @@ export default function TikTokStockReconcile({ toast, setView }) {
                     <div className="p-8 text-center text-sm text-muted">ไม่มีรายการในตัวกรองนี้</div>
                   ) : filtered.map(row => (
                     <StockReconcileRow
-                      key={row.product_id}
+                      key={reconcileRowKey(row)}
                       row={row}
-                      selected={selected.has(row.product_id)}
+                      selected={selected.has(reconcileRowKey(row))}
                       onToggle={toggleRow}
                       disabled={applying}
                     />

@@ -110,6 +110,7 @@ import ProductCatalogCard from './components/products/ProductCatalogCard.jsx';
 import ProductBrandPickerSheet from './components/products/ProductBrandPickerSheet.jsx';
 import ProductFilterSheet from './components/products/ProductFilterSheet.jsx';
 import StockHistoryPanel from './components/products/StockHistoryPanel.jsx';
+import ProductTikTokMappingPanel from './components/products/ProductTikTokMappingPanel.jsx';
 import { PRODUCT_EDITOR_UI, PRODUCT_COST_HISTORY_UI } from './lib/product-editor-ui.js';
 import Icon from './components/ui/Icon.jsx';
 import Modal from './components/ui/Modal.jsx';
@@ -7961,6 +7962,7 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
   const [stockHistoryReload, setStockHistoryReload] = useState(0);
   const [historyTab, setHistoryTab] = useState('cost');
   const [userEmail, setUserEmail] = useState('');
+  const isAdmin = useIsAdmin();
   const isSuperAdmin = useIsSuperAdmin();
   const barcodeRef = useRef(null);
   const askPrompt = usePrompt();
@@ -8391,6 +8393,10 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
             )}
           </div>
         </div>
+
+        {draft.id && isAdmin && (
+          <ProductTikTokMappingPanel product={draft} toast={tryToast} askConfirm={askConfirm}/>
+        )}
 
         {draft.id && (
           <div className="product-editor__reference">

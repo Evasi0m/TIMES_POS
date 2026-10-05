@@ -48,11 +48,16 @@ export function isRowApplicable(row, source) {
   return row.tiktok_stock != null;
 }
 
+/** Selection key — two TikTok SKUs can share one POS product. */
+export function reconcileRowKey(row) {
+  return String(row?.tiktok_sku_id || row?.product_id || '');
+}
+
 export function defaultSelectedIds(rows, source = 'pos') {
   return new Set(
     partitionRows(rows).mismatched
       .filter(r => isRowApplicable(r, source))
-      .map(r => r.product_id),
+      .map(reconcileRowKey),
   );
 }
 
