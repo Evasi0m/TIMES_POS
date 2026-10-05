@@ -21,7 +21,7 @@ export async function findSameModelProduct(sellerSku, excludeProductId) {
 
 export async function unlinkTikTokMapping(tiktokSkuId, productId) {
   const id = String(tiktokSkuId || '').trim();
-  if (!id) throw new Error('????? TikTok SKU');
+  if (!id) throw new Error('ไม่พบ TikTok SKU');
   const { error } = await sb.from('tiktok_product_mappings').delete().eq('tiktok_sku_id', id);
   if (error) throw error;
   if (productId != null) notifyTiktokMappingChanged(productId);
@@ -29,7 +29,7 @@ export async function unlinkTikTokMapping(tiktokSkuId, productId) {
 
 /** Move this TikTok SKU onto another POS product and mirror both products' stock. */
 export async function reassignTikTokMapping({ mapping, fromProductId, toProduct }) {
-  if (!mapping?.tiktok_sku_id || !toProduct?.id) throw new Error('??????????????????');
+  if (!mapping?.tiktok_sku_id || !toProduct?.id) throw new Error('ข้อมูลจับคู่ไม่ครบ');
   if (Number(fromProductId) === Number(toProduct.id)) {
     return { skipped: true, reason: 'same_product' };
   }

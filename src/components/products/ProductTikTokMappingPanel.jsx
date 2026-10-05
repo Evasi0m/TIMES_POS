@@ -1,4 +1,4 @@
-// TikTok pairing on the product detail editor � unlink, move to another model, push stock.
+// TikTok pairing on the product detail editor — unlink, move to another model, push stock.
 import React, { useEffect, useState } from 'react';
 import { sb } from '../../lib/supabase-client.js';
 import { mapError } from '../../lib/error-map.js';
@@ -15,21 +15,21 @@ import Icon from '../ui/Icon.jsx';
 import Modal from '../ui/Modal.jsx';
 
 function skuLabel(mapping) {
-  return mapping?.seller_sku || mapping?.tiktok_product_name || mapping?.tiktok_sku_id || '�';
+  return mapping?.seller_sku || mapping?.tiktok_product_name || mapping?.tiktok_sku_id || '—';
 }
 
 function mirrorNote(result) {
   if (!result || result.skipped) {
-    if (result?.reason === 'not_connected') return '???????????????? ???????????????? TikTok ?????? (???????????????)';
+    if (result?.reason === 'not_connected') return 'บันทึกจับคู่แล้ว แต่ยังส่งสต็อกไป TikTok ไม่ได้ (ไม่ได้เชื่อมต่อ)';
     if (result?.reason === 'same_product') return '';
-    return '????????????????';
+    return 'บันทึกจับคู่แล้ว';
   }
   const results = result.results || [];
   const ok = results.filter(r => r.status === 'success').length;
   const fail = results.filter(r => r.status === 'failed').length;
-  if (fail) return `?????????? TikTok ???? ${ok} ?????? � ????????? ${fail}`;
-  if (ok) return `?????????????? TikTok ???? ${ok} ??????`;
-  return '????????????????';
+  if (fail) return `ส่งสต็อกไป TikTok แล้ว ${ok} รายการ · ไม่สำเร็จ ${fail}`;
+  if (ok) return `ส่งสต็อกร้านไป TikTok แล้ว ${ok} รายการ`;
+  return 'บันทึกจับคู่แล้ว';
 }
 
 export default function ProductTikTokMappingPanel({ product, toast, askConfirm }) {
@@ -60,7 +60,7 @@ export default function ProductTikTokMappingPanel({ product, toast, askConfirm }
       }));
       setSuggestions(next);
     } catch (e) {
-      toast?.push('?????????? TikTok ??????: ' + mapError(e), 'error');
+      toast?.push('โหลดจับคู่ TikTok ไม่ได้: ' + mapError(e), 'error');
     } finally {
       setLoading(false);
     }
@@ -88,7 +88,7 @@ export default function ProductTikTokMappingPanel({ product, toast, askConfirm }
         });
         if (!cancel) setHits(ranked);
       } catch (e) {
-        if (!cancel) toast?.push('?????????????: ' + mapError(e), 'error');
+        if (!cancel) toast?.push('ค้นรุ่นไม่ได้: ' + mapError(e), 'error');
       } finally {
         if (!cancel) setSearching(false);
       }
@@ -115,9 +115,9 @@ export default function ProductTikTokMappingPanel({ product, toast, askConfirm }
 
   const runReassign = async (mapping, toProduct) => {
     const ok = await askConfirm?.({
-      title: '?????????????????',
-      message: `???? TikTok SKU "${skuLabel(mapping)}" ??? ${product.name} ?? ${toProduct.name} ???????????? ${toProduct.current_stock ?? 0} ?? TikTok`,
-      okLabel: '???????????',
+      title: 'เปลี่ยนรุ่นจับคู่',
+      message: `ย้าย TikTok SKU "${skuLabel(mapping)}" จาก ${product.name} ไป ${toProduct.name} แล้วส่งสต็อก ${toProduct.current_stock ?? 0} ไป TikTok`,
+      okLabel: 'เปลี่ยนรุ่น',
     });
     if (!ok) return;
     setBusyId(mapping.tiktok_sku_id);
@@ -128,11 +128,11 @@ export default function ProductTikTokMappingPanel({ product, toast, askConfirm }
         toProduct,
       });
       const note = mirrorNote(result);
-      toast?.push(note || `???????????? ${toProduct.name} ????`, result?.results?.some(r => r.status === 'failed') ? 'warning' : 'success');
+      toast?.push(note || `ย้ายจับคู่ไป ${toProduct.name} แล้ว`, result?.results?.some(r => r.status === 'failed') ? 'warning' : 'success');
       closeChange();
       await load();
     } catch (e) {
-      toast?.push('????????????????????: ' + mapError(e), 'error');
+      toast?.push('เปลี่ยนรุ่นไม่สำเร็จ: ' + mapError(e), 'error');
     } finally {
       setBusyId(null);
     }
@@ -140,19 +140,19 @@ export default function ProductTikTokMappingPanel({ product, toast, askConfirm }
 
   const runUnlink = async (mapping) => {
     const ok = await askConfirm?.({
-      title: '???????????? TikTok',
-      message: `???????????? SKU "${skuLabel(mapping)}" ??? ${product.name} � ????? TikTok ????????????????????????`,
-      okLabel: '????????????',
+      title: 'ยกเลิกจับคู่ TikTok',
+      message: `ยกเลิกจับคู่ SKU "${skuLabel(mapping)}" กับ ${product.name} — สต็อก TikTok จะไม่ถูกส่งจากรุ่นนี้อีก`,
+      okLabel: 'ยกเลิกจับคู่',
       danger: true,
     });
     if (!ok) return;
     setBusyId(mapping.tiktok_sku_id);
     try {
       await unlinkTikTokMapping(mapping.tiktok_sku_id, productId);
-      toast?.push(`???????????? ${skuLabel(mapping)} ????`, 'success');
+      toast?.push(`ยกเลิกจับคู่ ${skuLabel(mapping)} แล้ว`, 'success');
       await load();
     } catch (e) {
-      toast?.push('?????????????????????: ' + mapError(e), 'error');
+      toast?.push('ยกเลิกจับคู่ไม่สำเร็จ: ' + mapError(e), 'error');
     } finally {
       setBusyId(null);
     }
@@ -163,9 +163,9 @@ export default function ProductTikTokMappingPanel({ product, toast, askConfirm }
     try {
       const result = await pushPosStockToTikTok([productId]);
       const note = mirrorNote(result);
-      toast?.push(note || '????????????', result?.results?.some(r => r.status === 'failed') ? 'warning' : 'success');
+      toast?.push(note || 'ส่งสต็อกแล้ว', result?.results?.some(r => r.status === 'failed') ? 'warning' : 'success');
     } catch (e) {
-      toast?.push('?????????? TikTok ?????????: ' + mapError(e), 'error');
+      toast?.push('ส่งสต็อกไป TikTok ไม่สำเร็จ: ' + mapError(e), 'error');
     } finally {
       setBusyId(null);
     }
@@ -176,20 +176,20 @@ export default function ProductTikTokMappingPanel({ product, toast, askConfirm }
       <div className="flex items-center justify-between gap-2 mb-3">
         <div className="product-editor__section-head mb-0">
           <Icon name="link" size={12} className="text-muted"/>
-          <span className="product-editor__section-label">?????? TikTok</span>
+          <span className="product-editor__section-label">จับคู่ TikTok</span>
         </div>
         {mappings.length > 0 && (
-          <button type="button" className="btn-secondary !px-3 !text-xs" onClick={runPush} disabled={!!busyId}>
+          <button type="button" className="btn-secondary product-editor__tiktok-btn" onClick={runPush} disabled={!!busyId}>
             {busyId === 'push' ? <span className="spinner"/> : <Icon name="refresh" size={14}/>}
-            ?????????????? TikTok
+            ส่งสต็อกร้านไป TikTok
           </button>
         )}
       </div>
 
-      {loading && <div className="text-sm text-muted flex items-center gap-2"><span className="spinner"/> ???????????????�</div>}
+      {loading && <div className="text-sm text-muted flex items-center gap-2"><span className="spinner"/> กำลังโหลดจับคู่…</div>}
 
       {!loading && mappings.length === 0 && (
-        <p className="text-sm text-muted">?????????????????????? TikTok</p>
+        <p className="text-sm text-muted">รุ่นนี้ยังไม่ได้จับคู่ TikTok</p>
       )}
 
       <div className="space-y-2">
@@ -201,30 +201,30 @@ export default function ProductTikTokMappingPanel({ product, toast, askConfirm }
             <div key={m.tiktok_sku_id} className="rounded-lg border hairline-soft bg-surface-soft p-3 space-y-2">
               <div className="min-w-0">
                 <div className="font-mono text-sm font-semibold truncate">{skuLabel(m)}</div>
-                <div className="text-xs text-muted truncate">???????????????? {product.name} � ????? {product.current_stock ?? 0}</div>
+                <div className="text-xs text-muted truncate">ผูกกับรุ่นในร้าน {product.name} · สต็อก {product.current_stock ?? 0}</div>
               </div>
               {wrong && (
                 <div className="text-xs text-error flex items-start gap-1.5">
                   <Icon name="alert" size={13} className="shrink-0 mt-0.5"/>
-                  <span>???? TikTok ????????????? � ??????? TikTok ?????????????????????????????</span>
+                  <span>รหัส TikTok ไม่ตรงรุ่นนี้ — สต็อกบน TikTok จะตามสต็อกของรุ่นที่จับคู่ผิด</span>
                 </div>
               )}
               {suggestion && (
                 <button
                   type="button"
-                  className="btn-secondary !text-xs !px-3"
+                  className="btn-secondary product-editor__tiktok-btn"
                   disabled={!!busyId}
                   onClick={() => runReassign(m, suggestion)}
                 >
-                  ??????????? {suggestion.name} � ????? {suggestion.current_stock ?? 0}
+                  เปลี่ยนเป็น {suggestion.name} · สต็อก {suggestion.current_stock ?? 0}
                 </button>
               )}
               <div className="flex flex-wrap gap-2">
-                <button type="button" className="btn-secondary !text-xs !px-3" disabled={!!busyId} onClick={() => openChange(m)}>
-                  {busy ? <span className="spinner"/> : <Icon name="edit" size={14}/>} ?????????????????
+                <button type="button" className="btn-secondary product-editor__tiktok-btn" disabled={!!busyId} onClick={() => openChange(m)}>
+                  {busy ? <span className="spinner"/> : <Icon name="edit" size={14}/>} เปลี่ยนรุ่นจับคู่
                 </button>
-                <button type="button" className="btn-secondary !text-xs !px-3 !text-error" disabled={!!busyId} onClick={() => runUnlink(m)}>
-                  <Icon name="x" size={14}/> ????????????
+                <button type="button" className="btn-secondary product-editor__tiktok-btn !text-error" disabled={!!busyId} onClick={() => runUnlink(m)}>
+                  <Icon name="x" size={14}/> ยกเลิกจับคู่
                 </button>
               </div>
             </div>
@@ -235,18 +235,18 @@ export default function ProductTikTokMappingPanel({ product, toast, askConfirm }
       <Modal
         open={!!changeTarget}
         onClose={closeChange}
-        title="?????????????????"
+        title="เปลี่ยนรุ่นจับคู่"
         wide
         footer={
           <>
-            <button type="button" className="btn-secondary" onClick={closeChange}>???</button>
+            <button type="button" className="btn-secondary" onClick={closeChange}>ปิด</button>
             <button
               type="button"
               className="btn-ruby-premium"
               disabled={!picked || !!busyId}
               onClick={() => picked && changeTarget && runReassign(changeTarget, picked)}
             >
-              ?????????????????
+              ยืนยันเปลี่ยนรุ่น
             </button>
           </>
         }
@@ -254,16 +254,16 @@ export default function ProductTikTokMappingPanel({ product, toast, askConfirm }
         {changeTarget && (
           <div className="space-y-3">
             <p className="text-sm text-muted">
-              TikTok SKU <span className="font-mono font-semibold text-ink">{skuLabel(changeTarget)}</span> ???????????? {product.name}
+              TikTok SKU <span className="font-mono font-semibold text-ink">{skuLabel(changeTarget)}</span> ตอนนี้ผูกกับ {product.name}
             </p>
             <input
               className="input w-full font-mono"
               value={query}
               onChange={e => { setQuery(e.target.value); setPicked(null); }}
-              placeholder="?????????????????"
-              aria-label="??????????????????"
+              placeholder="ค้นชื่อรุ่นในร้าน"
+              aria-label="ค้นรุ่นที่จะจับคู่"
             />
-            {searching && <div className="text-xs text-muted flex items-center gap-2"><span className="spinner"/> ????????�</div>}
+            {searching && <div className="text-xs text-muted flex items-center gap-2"><span className="spinner"/> กำลังค้น…</div>}
             <div className="max-h-64 overflow-auto space-y-1">
               {hits.map(({ product: hit, match }) => {
                 const same = match.tier === 'exact' || match.tier === 'suffix';
@@ -277,14 +277,14 @@ export default function ProductTikTokMappingPanel({ product, toast, askConfirm }
                   >
                     <div className="font-mono text-sm font-semibold truncate">{hit.name}</div>
                     <div className="text-[11px] text-muted tabular-nums">
-                      ????? {hit.current_stock ?? 0}
-                      {same ? ' � ???????' : ''}
+                      สต็อก {hit.current_stock ?? 0}
+                      {same ? ' · ตรงรุ่น' : ''}
                     </div>
                   </button>
                 );
               })}
               {!searching && query.trim().length >= 2 && hits.length === 0 && (
-                <p className="text-sm text-muted">?????????</p>
+                <p className="text-sm text-muted">ไม่พบรุ่น</p>
               )}
             </div>
           </div>
