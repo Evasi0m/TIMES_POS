@@ -10,15 +10,24 @@ export const SUPABASE_URL  = 'https://pxenybeudcsddsnkduaj.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4ZW55YmV1ZGNzZGRzbmtkdWFqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4NjM1NjMsImV4cCI6MjA5NzQzOTU2M30.llZzz-FYENFgf5ew32S9k5ysTrG5HGAfDb8nW-r0mrg';
 
 const REMEMBER_KEY = 'pos.remember';
-const isRemember = () => localStorage.getItem(REMEMBER_KEY) !== 'false';
+const hasWebStorage = typeof localStorage !== 'undefined' && typeof sessionStorage !== 'undefined';
+const memoryStore = new Map();
+const isRemember = () => {
+  const raw = hasWebStorage ? localStorage.getItem(REMEMBER_KEY) : memoryStore.get(REMEMBER_KEY);
+  return raw !== 'false';
+};
 
-const authStorage = {
+const authStorage = hasWebStorage ? {
   getItem: (k) => localStorage.getItem(k) ?? sessionStorage.getItem(k),
   setItem: (k, v) => {
     if (isRemember()) { localStorage.setItem(k, v); sessionStorage.removeItem(k); }
     else              { sessionStorage.setItem(k, v); localStorage.removeItem(k); }
   },
   removeItem: (k) => { localStorage.removeItem(k); sessionStorage.removeItem(k); },
+} : {
+  getItem: (k) => memoryStore.get(k) ?? null,
+  setItem: (k, v) => { memoryStore.set(k, String(v)); },
+  removeItem: (k) => { memoryStore.delete(k); },
 };
 
 export const sb = createClient(SUPABASE_URL, SUPABASE_ANON, {
