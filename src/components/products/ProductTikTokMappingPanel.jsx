@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { sb } from '../../lib/supabase-client.js';
 import { mapError } from '../../lib/error-map.js';
 import { searchProducts } from '../../lib/product-search.js';
-import { fetchTikTokMappings } from '../../lib/tiktok-inventory-sync.js';
+import { fetchTikTokMappings, subscribeTiktokMappingChanges } from '../../lib/tiktok-inventory-sync.js';
 import { isLikelyWrongTikTokModel, rankPosModelsForTikTokSku } from '../../lib/tiktok-mapping-model.js';
 import {
   findSameModelProduct,
@@ -68,6 +68,18 @@ export default function ProductTikTokMappingPanel({ product, toast, askConfirm }
 
   useEffect(() => {
     load();
+  }, [productId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Same product changed from another page (badge editor, receive, POS) → reload.
+  useEffect(() => {
+    if (!productId) return undefined;
+    let timer = null;
+    const unsub = subscribeTiktokMappingChanges((pid) => {
+      if (Number(pid) !== Number(productId)) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => load(), 250);
+    });
+    return () => { unsub(); clearTimeout(timer); };
   }, [productId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

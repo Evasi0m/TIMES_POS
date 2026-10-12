@@ -77,7 +77,7 @@ function ProductCatalogCard({
       <div className="product-catalog-card__media">
         {showTikTok && (
           <div className="product-catalog-card__tiktok">
-            <TikTokLinkedBadge mapping={tiktokMapping} size={16} />
+            <TikTokLinkedBadge mapping={tiktokMapping} productId={product?.id} size={16} />
           </div>
         )}
         <div className="product-catalog-card__media-inner">

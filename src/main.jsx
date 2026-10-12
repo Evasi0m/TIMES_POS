@@ -118,6 +118,7 @@ import { useMountedToggle } from './lib/use-mounted-toggle.js';
 import TikTokMatchPromptModal from './components/ecommerce/TikTokMatchPromptModal.jsx';
 import TikTokReceiveMatchCard from './components/ecommerce/TikTokReceiveMatchCard.jsx';
 import TikTokLinkedBadge from './components/ecommerce/TikTokLinkedBadge.jsx';
+import TikTokMappingEditorHost from './components/ecommerce/TikTokMappingEditorHost.jsx';
 import ProductThumb from './components/ui/ProductThumb.jsx';
 import { useRealtimeInvalidate, createDebouncedInvalidate } from './lib/use-realtime-invalidate.js';
 import { subscribeTable } from './lib/realtime-bus.js';
@@ -5695,7 +5696,7 @@ function POSView() {
               <div className="font-medium text-ink truncate text-base flex items-center gap-1.5 min-w-0">
                 <span className="truncate">{p.name}</span>
                 {tiktokBadgeOn && tiktokBadgeByProductId[p.id] && (
-                  <TikTokLinkedBadge mapping={tiktokBadgeByProductId[p.id]} />
+                  <TikTokLinkedBadge mapping={tiktokBadgeByProductId[p.id]} productId={p.id} />
                 )}
                 {isNewProduct(p) && <span className="new-product-badge ml-1.5 align-middle shrink-0">ใหม่</span>}
               </div>
@@ -5749,7 +5750,7 @@ function POSView() {
                   <div className="font-medium text-sm truncate flex items-center gap-1.5 min-w-0">
                     <span className="truncate">{l.product_name}</span>
                     {tiktokBadgeOn && tiktokBadgeByProductId[l.product_id] && (
-                      <TikTokLinkedBadge mapping={tiktokBadgeByProductId[l.product_id]} />
+                      <TikTokLinkedBadge mapping={tiktokBadgeByProductId[l.product_id]} productId={l.product_id} />
                     )}
                   </div>
                   <div className="text-xs text-muted font-mono truncate">{l.barcode||''}</div>
@@ -6288,7 +6289,7 @@ function POSView() {
                         <div className="font-medium text-sm truncate flex items-center gap-1.5 min-w-0">
                     <span className="truncate">{l.product_name}</span>
                     {tiktokBadgeOn && tiktokBadgeByProductId[l.product_id] && (
-                      <TikTokLinkedBadge mapping={tiktokBadgeByProductId[l.product_id]} />
+                      <TikTokLinkedBadge mapping={tiktokBadgeByProductId[l.product_id]} productId={l.product_id} />
                     )}
                   </div>
                         <div className="text-xs text-muted font-mono truncate">{l.barcode||''}</div>
@@ -7464,7 +7465,7 @@ function ProductsView() {
                   <span className="truncate inline-flex items-center gap-1.5 min-w-0">
                     {p.name}
                     {tiktokBadgeOn && tiktokBadgeByProductId[p.id] && (
-                      <TikTokLinkedBadge mapping={tiktokBadgeByProductId[p.id]} />
+                      <TikTokLinkedBadge mapping={tiktokBadgeByProductId[p.id]} productId={p.id} />
                     )}
                     {isNewProduct(p) && <span className="new-product-badge ml-1.5 align-middle">ใหม่</span>}
                   </span>
@@ -7521,7 +7522,7 @@ function ProductsView() {
                 <div className="font-semibold truncate text-[15px] flex items-center gap-1.5 min-w-0">
                   <span className="truncate">{p.name}</span>
                   {tiktokBadgeOn && tiktokBadgeByProductId[p.id] && (
-                    <TikTokLinkedBadge mapping={tiktokBadgeByProductId[p.id]} />
+                    <TikTokLinkedBadge mapping={tiktokBadgeByProductId[p.id]} productId={p.id} />
                   )}
                   {isNewProduct(p) && <span className="new-product-badge ml-1.5 align-middle shrink-0">ใหม่</span>}
                 </div>
@@ -11287,7 +11288,7 @@ const StockMovementForm = React.forwardRef(function StockMovementForm({ kind, he
                   <div className="font-medium text-sm flex items-center gap-1.5 min-w-0">
                     <span className="truncate">{p.name}</span>
                     {tiktokMirrorOn && effectiveMappingsByProductId[p.id] && (
-                      <TikTokLinkedBadge mapping={effectiveMappingsByProductId[p.id]} />
+                      <TikTokLinkedBadge mapping={effectiveMappingsByProductId[p.id]} productId={p.id} />
                     )}
                   </div>
                   <div className="text-xs text-muted font-mono truncate">{p.barcode||'—'}</div>
@@ -15372,6 +15373,14 @@ function CustomerPriceViewHost() {
   return <CustomerPriceView config={config} />;
 }
 
+// Mounted once for admin / super_admin so the TikTok badge on every page can
+// open the same pairing editor (needs the toast + confirm providers above it).
+function TikTokMappingEditorMount() {
+  const toast = useToast();
+  const askConfirm = useConfirm();
+  return <TikTokMappingEditorHost toast={toast} askConfirm={askConfirm} />;
+}
+
 function App() {
   const [publicRoute] = useState(() => {
     const p = new URLSearchParams(window.location.search);
@@ -15667,6 +15676,7 @@ function App() {
         {/* User-management modal — only mounts when super_admin opens it.
             The button is gated in Sidebar/MobileTopBar so non-super-admins
             never see the trigger; the gate here is belt-and-braces. */}
+        {(role === 'admin' || role === 'super_admin') && <TikTokMappingEditorMount />}
         {role === 'super_admin' && (
           <UserManagementModal open={userMgmtOpen} onClose={()=>setUserMgmtOpen(false)} />
         )}

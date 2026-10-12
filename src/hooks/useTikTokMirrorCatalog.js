@@ -127,7 +127,15 @@ export function useTikTokMirrorCatalog({ enabled, mirrorEnabled = enabled, lines
     for (const m of mappings) {
       if (m.product_id) patch[m.product_id] = m;
     }
-    setMappingsByProductId(prev => ({ ...prev, ...patch }));
+    // Drop ids that no longer have a mapping (unlinked / moved away) so their
+    // badge disappears instead of showing the old SKU.
+    setMappingsByProductId(prev => {
+      const next = { ...prev, ...patch };
+      for (const id of ids) {
+        if (!patch[id]) delete next[id];
+      }
+      return next;
+    });
     return patch;
   }, []);
 
