@@ -3,7 +3,10 @@ import {
   pickFirstUrl,
   extractProductImageUrl,
   extractSkuImageUrl,
+  resolveListingSkuImageUrl,
+  sameImageUrl,
 } from '../supabase/functions/_shared/tiktok-catalog-images.ts';
+import { catalogCapWarning } from '../src/lib/tiktok-catalog-cap.js';
 import { mappingRowFromTiktokSku } from '../src/lib/tiktok-mirror-helpers.js';
 
 describe('pickFirstUrl', () => {
@@ -68,5 +71,49 @@ describe('mappingRowFromTiktokSku image_url', () => {
       image_url: 'https://cdn.example/sku.jpg',
     }, 42);
     expect(row.image_url).toBe('https://cdn.example/sku.jpg');
+  });
+});
+
+describe('resolveListingSkuImageUrl', () => {
+  const main = 'https://cdn.example/main.jpg';
+  it('uses the SKU photo when it has one', () => {
+    const p = { main_images: [{ urls: [main] }], skus: [{ id: '1', sku_image: 'https://cdn.example/s1.jpg' }, { id: '2' }] };
+    expect(resolveListingSkuImageUrl(p, '1')).toBe('https://cdn.example/s1.jpg');
+  });
+  it('does not lend the main photo to a SKU on a multi-SKU listing', () => {
+    const p = { main_images: [{ urls: [main] }], skus: [{ id: '1' }, { id: '2' }] };
+    expect(resolveListingSkuImageUrl(p, '2')).toBeUndefined();
+    expect(resolveListingSkuImageUrl(p, 'missing')).toBeUndefined();
+  });
+  it('uses the main photo on a single-SKU listing', () => {
+    const p = { main_images: [{ urls: [main] }], skus: [{ id: '1' }] };
+    expect(resolveListingSkuImageUrl(p, '1')).toBe(main);
+  });
+});
+
+describe('sameImageUrl', () => {
+  it('ignores signed query params', () => {
+    expect(sameImageUrl('https://p16.example/a/b.jpeg?t=1&sig=x', 'https://p16.example/a/b.jpeg?t=2&sig=y')).toBe(true);
+  });
+  it('detects a different photo', () => {
+    expect(sameImageUrl('https://p16.example/a/b.jpeg', 'https://p16.example/a/c.jpeg')).toBe(false);
+  });
+  it('is false when either side is missing', () => {
+    expect(sameImageUrl(null, 'https://p16.example/a.jpeg')).toBe(false);
+  });
+});
+
+describe('catalogCapWarning', () => {
+  it('is null well under the cap', () => {
+    expect(catalogCapWarning({ total: 368, max_products: 1000 })).toBeNull();
+  });
+  it('warns near the cap', () => {
+    expect(catalogCapWarning({ total: 850, max_products: 1000 })).toMatch(/ใกล้เพดาน/);
+  });
+  it('warns when the load was cut off', () => {
+    expect(catalogCapWarning({ products: 1000, max_products: 1000, truncated: true })).toMatch(/เกินเพดาน/);
+  });
+  it('is null without stats', () => {
+    expect(catalogCapWarning(null)).toBeNull();
   });
 });

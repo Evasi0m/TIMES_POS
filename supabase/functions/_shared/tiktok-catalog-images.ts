@@ -58,3 +58,37 @@ export function extractSkuImageUrl(
   }
   return productImage;
 }
+
+/**
+ * Image for one SKU of a listing. The listing's main photo is used only when
+ * the listing has a single SKU: on a multi-variant listing (e.g. MTP-V300D
+ * 1A + 1A2) every SKU without its own photo would otherwise get the same
+ * main photo, and the POS shows two models with one picture.
+ */
+export function resolveListingSkuImageUrl(
+  product: Record<string, unknown>,
+  skuId: string,
+): string | undefined {
+  const skus = (product?.skus as Record<string, unknown>[]) || [];
+  const productImage = skus.length <= 1 ? extractProductImageUrl(product) : undefined;
+  const sku = skus.find(s => String(s.id || s.sku_id) === String(skuId));
+  if (sku) return extractSkuImageUrl(sku, productImage);
+  return productImage;
+}
+
+/**
+ * Same picture? TikTok CDN URLs carry signed, expiring query params, so two
+ * fetches of one photo differ after "?". Compare host + path only.
+ */
+export function sameImageUrl(a?: string | null, b?: string | null): boolean {
+  if (!a || !b) return false;
+  const strip = (u: string) => {
+    try {
+      const x = new URL(u);
+      return x.host + x.pathname;
+    } catch {
+      return u.split('?')[0];
+    }
+  };
+  return strip(a) === strip(b);
+}

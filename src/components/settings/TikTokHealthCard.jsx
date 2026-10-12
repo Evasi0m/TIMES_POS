@@ -3,7 +3,13 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { sb } from '../../lib/supabase-client.js';
 import { mapError } from '../../lib/error-map.js';
 import { formatTikTokApiError } from '../../lib/tiktok-mirror-helpers.js';
-import { backfillMissingTikTokProductIds, backfillTikTokProductImages, resetPollutedTikTokImages } from '../../lib/tiktok-inventory-sync.js';
+import {
+  backfillMissingTikTokProductIds,
+  backfillTikTokProductImages,
+  catalogCapWarning,
+  countTikTokCatalog,
+  resetPollutedTikTokImages,
+} from '../../lib/tiktok-inventory-sync.js';
 import Icon from '../ui/Icon.jsx';
 import {
   TikTokGlassShell,
@@ -42,6 +48,7 @@ export default function TikTokHealthCard({ toast }) {
   const [imageBackfilling, setImageBackfilling] = useState(false);
   const [imageResetting, setImageResetting] = useState(false);
   const [error, setError] = useState(null);
+  const [catalog, setCatalog] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -56,6 +63,18 @@ export default function TikTokHealthCard({ toast }) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // TikTok listing count vs the full-catalog load cap (one cheap API call).
+  // Best-effort: a failure just hides the line.
+  useEffect(() => {
+    if (!health?.connected) return undefined;
+    let cancel = false;
+    countTikTokCatalog()
+      .then((c) => { if (!cancel) setCatalog(c); })
+      .catch(() => { if (!cancel) setCatalog(null); });
+    return () => { cancel = true; };
+  }, [health?.connected]);
+  const capWarning = catalogCapWarning(catalog);
 
   const runMappingBackfill = async () => {
     setBackfilling(true);
@@ -85,13 +104,16 @@ export default function TikTokHealthCard({ toast }) {
         `รวม ${result.synced} รายการ`,
         result.from_orders ? `จากออเดอร์ ${result.from_orders}` : null,
         result.from_catalog ? `จาก TikTok catalog ${result.from_catalog}` : null,
+        result.refreshed ? `อัปเดตตาม TikTok ${result.refreshed}` : null,
+        result.cleared ? `ลบรูป listing ที่ใช้แทน ${result.cleared}` : null,
+        result.incomplete ? 'ยังตรวจไม่ครบ กดอีกครั้ง' : null,
         result.skipped ? `ข้าม ${result.skipped}` : null,
         result.no_image ? `ไม่มีรูป ${result.no_image}` : null,
         result.errors ? `ผิดพลาด ${result.errors}` : null,
       ].filter(Boolean);
       toast?.push(
         `ดึงรูป TikTok แล้ว — ${parts.join(' · ')}`,
-        result.synced > 0 ? 'success' : 'warning',
+        (result.synced || result.refreshed || result.cleared) ? 'success' : 'warning',
         { durationMs: 15000 },
       );
     } catch (e) {
@@ -243,7 +265,9 @@ export default function TikTokHealthCard({ toast }) {
         {(health.mappings_missing_product_id > 0 || (health.mappings_total ?? 0) > 0) && (
           <div className="tt-glass__health-toolbar">
             <p className="tt-glass__health-meta">
-              Catalog mirror cap ~{health.catalog_mirror_max_skus ?? 500} SKU/ครั้ง
+              {catalog?.total != null
+                ? `TikTok ${catalog.total.toLocaleString('th-TH')} / ${catalog.max_products} listing`
+                : `โหลด catalog ได้สูงสุด ${catalog?.max_products ?? 1000} listing`}
             </p>
             <div className="tt-glass__health-actions">
               {health.mappings_missing_product_id > 0 && (
@@ -284,6 +308,7 @@ export default function TikTokHealthCard({ toast }) {
           </div>
         )}
 
+        {capWarning && <div className="tt-glass__alert">{capWarning}</div>}
         {lastErr && <div className="tt-glass__alert">{lastErr}</div>}
         {error && <div className="tt-glass__alert">{error}</div>}
 

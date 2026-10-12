@@ -183,6 +183,31 @@ export async function searchTikTokCatalog(query, {
   return filterTikTokSkusByTerm(q, skus, { minScore: 0.55, limit: 50 });
 }
 
+export { catalogCapWarning } from './tiktok-catalog-cap.js';
+
+/** Edge function pages at most this many listings for the full catalog. */
+export const TIKTOK_CATALOG_MAX_PAGES = 20;
+
+/**
+ * Whole active TikTok catalog (empty query), plus how much of it was read.
+ * `catalog.truncated` = the shop has more listings than the page cap, so some
+ * SKUs are missing from search / matching.
+ */
+export async function loadTikTokFullCatalog({ maxPages = TIKTOK_CATALOG_MAX_PAGES } = {}) {
+  const data = await invokeTikTokFunction('tiktok-products-search', {
+    query: '',
+    page_size: 50,
+    max_pages: maxPages,
+  });
+  return { skus: data.skus || [], catalog: data.catalog || null };
+}
+
+/** Cheap listing count (one API call) vs the page cap, for the health card. */
+export async function countTikTokCatalog() {
+  const data = await invokeTikTokFunction('tiktok-products-search', { count_only: true });
+  return data.catalog || null;
+}
+
 export async function fetchPosStocks(productIds) {
   if (!productIds?.length) return {};
   const { data, error } = await sb.from('products')
@@ -426,14 +451,23 @@ export async function backfillTikTokProductImages({ limit = 150 } = {}) {
   if (!catalogData?.ok) {
     throw new Error(catalogData?.error || 'TikTok catalog image backfill failed');
   }
+  // Then re-check every mapped photo against the live TikTok SKU photo:
+  // changed in Seller Center → update; listing-main-photo fallback → drop.
+  const refresh = await invokeTikTokFunction('tiktok-product-image-backfill', { refresh: true });
+  if (!refresh?.ok) {
+    throw new Error(refresh?.error || 'TikTok image refresh failed');
+  }
 
   return {
-    synced: (orderResult.synced || 0) + (catalogData.synced || 0),
+    refreshed: refresh.updated || 0,
+    cleared: refresh.cleared || 0,
+    incomplete: !!refresh.incomplete,
+    synced: (orderResult.synced || 0) + (catalogData.synced || 0) + (refresh.added || 0),
     skipped: orderResult.skipped || 0,
     no_image: catalogData.no_image ?? orderResult.no_image ?? 0,
     from_orders: orderResult.synced || 0,
     from_catalog: catalogData.synced || 0,
-    errors: catalogData.errors || 0,
+    errors: (catalogData.errors || 0) + (refresh.errors || 0),
     checked: catalogData.checked || 0,
   };
 }

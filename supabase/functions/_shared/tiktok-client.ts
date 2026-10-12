@@ -4,6 +4,7 @@ import { createClient, SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import {
   extractProductImageUrl,
   extractSkuImageUrl,
+  resolveListingSkuImageUrl,
 } from './tiktok-catalog-images.ts';
 
 export const AUTH_BASE = 'https://auth.tiktok-shops.com';
@@ -503,8 +504,10 @@ export function flattenProductSkus(products: Record<string, unknown>[]): TikTokS
   for (const p of products) {
     const productId = String(p.id || p.product_id || '');
     const title = String(p.title || p.product_name || '');
-    const productImage = extractProductImageUrl(p);
     const skus = (p.skus as Record<string, unknown>[]) || [];
+    // Main photo only stands in for a SKU on single-SKU listings (see
+    // resolveListingSkuImageUrl).
+    const productImage = skus.length <= 1 ? extractProductImageUrl(p) : undefined;
     for (const sku of skus) {
       const skuId = String(sku.id || sku.sku_id || '');
       if (!skuId || !productId) continue;
@@ -542,6 +545,8 @@ export async function searchTikTokProducts(
     queryVariants?: string[];
     pageSize?: number;
     maxPages?: number;
+    /** Filled on the full-catalog (empty query) path. */
+    stats?: { products: number; pages: number; truncated: boolean; total?: number };
   } = {},
 ): Promise<TikTokSkuInventory[]> {
   const pageSize = Math.min(Math.max(opts.pageSize ?? 50, 1), 50);
@@ -561,8 +566,12 @@ export async function searchTikTokProducts(
     const nextToken = String(
       data?.next_page_token || data?.page_token || '',
     );
+    const products = (data?.products as Record<string, unknown>[]) || [];
+    const total = Number(data?.total_count);
     return {
-      skus: flattenProductSkus((data?.products as Record<string, unknown>[]) || []),
+      skus: flattenProductSkus(products),
+      productCount: products.length,
+      total: Number.isFinite(total) ? total : undefined,
       nextToken: nextToken && nextToken !== pageToken ? nextToken : '',
     };
   };
@@ -619,18 +628,44 @@ export async function searchTikTokProducts(
   const merged: TikTokSkuInventory[] = [];
   const seen = new Set<string>();
   let pageToken = '';
+  let products = 0;
+  let pages = 0;
+  let truncated = false;
+  let total: number | undefined;
   for (let page = 0; page < maxPages; page++) {
-    const { skus, nextToken } = await listPage(baseBody, pageToken);
-    for (const s of skus) {
+    const res = await listPage(baseBody, pageToken);
+    pages++;
+    products += res.productCount;
+    if (res.total != null) total = res.total;
+    for (const s of res.skus) {
       if (!seen.has(s.tiktok_sku_id)) {
         seen.add(s.tiktok_sku_id);
         merged.push(s);
       }
     }
-    if (!nextToken) break;
-    pageToken = nextToken;
+    if (!res.nextToken) break;
+    pageToken = res.nextToken;
+    // Stopped by maxPages with more pages left: catalog is cut off.
+    if (page === maxPages - 1) truncated = true;
   }
+  if (opts.stats) Object.assign(opts.stats, { products, pages, truncated, total });
   return merged;
+}
+
+/** Active listing count from one tiny search page (TikTok returns total_count). */
+export async function countTikTokListings(
+  accessToken: string,
+  shopCipher: string,
+): Promise<number | undefined> {
+  const data = await apiPost(
+    '/product/202502/products/search',
+    { page_size: 1 },
+    accessToken,
+    shopCipher,
+    { status: 'ACTIVATE' },
+  );
+  const total = Number(data?.total_count);
+  return Number.isFinite(total) ? total : undefined;
 }
 
 /** Unwrap product detail payload (API may nest under `product`). */
@@ -655,12 +690,22 @@ export async function fetchTikTokSkuImageUrl(
     accessToken,
     shopCipher,
   );
-  const data = unwrapProductDetail(raw);
-  const productImage = extractProductImageUrl(data);
-  const skus = (data?.skus as Record<string, unknown>[]) || [];
-  const sku = skus.find(s => String(s.id || s.sku_id) === tiktokSkuId);
-  if (sku) return extractSkuImageUrl(sku, productImage);
-  return productImage;
+  return resolveListingSkuImageUrl(unwrapProductDetail(raw), tiktokSkuId);
+}
+
+/** Product detail payload (unwrapped), for callers resolving several SKUs. */
+export async function fetchTikTokProductDetail(
+  accessToken: string,
+  shopCipher: string,
+  tiktokProductId: string,
+): Promise<Record<string, unknown>> {
+  const raw = await apiGet(
+    `/product/202309/products/${tiktokProductId}`,
+    {},
+    accessToken,
+    shopCipher,
+  );
+  return unwrapProductDetail(raw);
 }
 
 /** Read current qty for one SKU (first warehouse in response). */
