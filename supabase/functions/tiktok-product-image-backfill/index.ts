@@ -21,7 +21,8 @@ import {
   sameImageUrl,
 } from '../_shared/tiktok-catalog-images.ts';
 
-// Stay under Supabase's 150 s idle timeout; the next run picks up the rest.
+// Stay under Supabase's 150 s idle timeout. Listings are visited in a random
+// order each run, so if one run is cut off, later runs still reach the rest.
 const REFRESH_BUDGET_MS = 110_000;
 const DETAIL_CONCURRENCY = 4;
 
@@ -38,6 +39,14 @@ async function selectAll<T>(
     if (!data || data.length < 1000) break;
   }
   return out;
+}
+
+function shuffle<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
 }
 
 async function refreshAll(supa: Supa, accessToken: string, shopCipher: string) {
@@ -62,7 +71,7 @@ async function refreshAll(supa: Supa, accessToken: string, shopCipher: string) {
   }
 
   // One product-detail call per listing, shared by all its SKUs.
-  const listingIds = [...new Set(mappings.map(m => String(m.tiktok_product_id)))];
+  const listingIds = shuffle([...new Set(mappings.map(m => String(m.tiktok_product_id)))]);
   const details = new Map<string, Record<string, unknown> | null>();
   let errors = 0;
   let incomplete = false;
