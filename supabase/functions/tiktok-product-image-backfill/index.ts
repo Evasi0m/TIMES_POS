@@ -171,6 +171,30 @@ async function rpcOrThrow(
   return data;
 }
 
+/** Same rule as get_tiktok_mappings_needing_images, scoped to these products. */
+async function mappingsNeedingImagesFor(
+  supa: ReturnType<typeof serviceClient>,
+  productIds: number[],
+) {
+  const { data: maps, error } = await supa.from('tiktok_product_mappings')
+    .select('product_id, tiktok_sku_id, tiktok_product_id, seller_sku')
+    .in('product_id', productIds)
+    .not('tiktok_product_id', 'is', null)
+    .or('sync_enabled.is.null,sync_enabled.eq.true')
+    .order('updated_at', { ascending: false });
+  if (error) throw new Error(`mappings: ${error.message}`);
+  const { data: imgs, error: imgErr } = await supa.from('product_images')
+    .select('product_id, image_url, status, is_manual_override')
+    .in('product_id', productIds);
+  if (imgErr) throw new Error(`product_images: ${imgErr.message}`);
+  const covered = new Set(
+    (imgs || [])
+      .filter(r => r.is_manual_override || (r.status === 'found' && (r.image_url || '').trim()))
+      .map(r => Number(r.product_id)),
+  );
+  return (maps || []).filter(m => !covered.has(Number(m.product_id)));
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
 
@@ -205,18 +229,22 @@ Deno.serve(async (req) => {
       });
     }
 
-    let mappings = (await rpcOrThrow(supa, 'get_tiktok_mappings_needing_images', {
-      p_limit: productIds?.length ? Math.max(productIds.length, limit) : limit,
-    })) as Array<{
+    type MappingRow = {
       product_id: number;
       tiktok_sku_id: string;
       tiktok_product_id: string;
       seller_sku?: string;
-    }>;
-
+    };
+    let mappings: MappingRow[];
     if (productIds?.length) {
-      const idSet = new Set(productIds);
-      mappings = (mappings || []).filter(m => idSet.has(Number(m.product_id)));
+      // Filter by the requested products in the DB. The RPC orders every
+      // mapping missing a photo shop-wide and applies its limit first, so
+      // newer unrelated rows could push the requested ones out.
+      mappings = await mappingsNeedingImagesFor(supa, productIds);
+    } else {
+      mappings = (await rpcOrThrow(supa, 'get_tiktok_mappings_needing_images', {
+        p_limit: limit,
+      })) as MappingRow[];
     }
 
     let synced = 0;
