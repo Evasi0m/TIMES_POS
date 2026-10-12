@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { sb } from '../../lib/supabase-client.js';
 import { mapError } from '../../lib/error-map.js';
 import { formatTikTokApiError } from '../../lib/tiktok-mirror-helpers.js';
-import { backfillMissingTikTokProductIds, backfillTikTokProductImages } from '../../lib/tiktok-inventory-sync.js';
+import { backfillMissingTikTokProductIds, backfillTikTokProductImages, resetPollutedTikTokImages } from '../../lib/tiktok-inventory-sync.js';
 import Icon from '../ui/Icon.jsx';
 import {
   TikTokGlassShell,
@@ -40,6 +40,7 @@ export default function TikTokHealthCard({ toast }) {
   const [loading, setLoading] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
   const [imageBackfilling, setImageBackfilling] = useState(false);
+  const [imageResetting, setImageResetting] = useState(false);
   const [error, setError] = useState(null);
 
   const load = useCallback(async () => {
@@ -99,6 +100,29 @@ export default function TikTokHealthCard({ toast }) {
       toast?.push(msg, 'error', { durationMs: 15000 });
     } finally {
       setImageBackfilling(false);
+    }
+  };
+
+  const runImageReset = async () => {
+    setImageResetting(true);
+    try {
+      toast?.push('กำลังล้างรูป TikTok ที่ผิดรุ่น…', 'info', { durationMs: 30000 });
+      const r = await resetPollutedTikTokImages();
+      setError(null);
+      const total = r.substitution + r.orphan;
+      toast?.push(
+        total
+          ? `ล้างรูปผิดแล้ว ${total} รุ่น (จากออเดอร์ส่งแทน ${r.substitution} · ยกเลิกจับคู่แล้ว ${r.orphan}) · ดึงรูปใหม่ ${r.refetched}`
+          : 'ไม่พบรูป TikTok ที่ผิดรุ่น',
+        total ? 'success' : 'info',
+        { durationMs: 15000 },
+      );
+    } catch (e) {
+      const msg = 'ล้างรูปผิดไม่สำเร็จ: ' + formatTikTokApiError(mapError(e));
+      setError(msg);
+      toast?.push(msg, 'error', { durationMs: 15000 });
+    } finally {
+      setImageResetting(false);
     }
   };
 
@@ -227,7 +251,7 @@ export default function TikTokHealthCard({ toast }) {
                   variant="coral"
                   className="tt-glass__btn--lg"
                   onClick={runMappingBackfill}
-                  disabled={backfilling || imageBackfilling}
+                  disabled={backfilling || imageBackfilling || imageResetting}
                 >
                   {backfilling ? <span className="spinner"/> : <Icon name="refresh" size={14}/>}
                   ซ่อม mapping ({health.mappings_missing_product_id})
@@ -238,10 +262,22 @@ export default function TikTokHealthCard({ toast }) {
                   variant="outline"
                   className="tt-glass__btn--lg"
                   onClick={runImageBackfill}
-                  disabled={backfilling || imageBackfilling}
+                  disabled={backfilling || imageBackfilling || imageResetting}
                 >
                   {imageBackfilling ? <span className="spinner"/> : <Icon name="image" size={14}/>}
                   ดึงรูป SKU
+                </TikTokGlassBtn>
+              )}
+              {(health.mappings_total ?? 0) > 0 && (
+                <TikTokGlassBtn
+                  variant="outline"
+                  className="tt-glass__btn--lg"
+                  onClick={runImageReset}
+                  disabled={backfilling || imageBackfilling || imageResetting}
+                  title="ลบรูปที่ติดมาจากออเดอร์ส่งแทนรุ่น หรือจาก SKU ที่ยกเลิกจับคู่แล้ว แล้วดึงรูปที่ถูกใหม่"
+                >
+                  {imageResetting ? <span className="spinner"/> : <Icon name="refresh" size={14}/>}
+                  ล้างรูปผิดรุ่น
                 </TikTokGlassBtn>
               )}
             </div>

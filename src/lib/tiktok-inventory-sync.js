@@ -438,6 +438,28 @@ export async function backfillTikTokProductImages({ limit = 150 } = {}) {
   };
 }
 
+/**
+ * One-off cleanup of wrong TikTok photos: removes photos copied from a
+ * substituted order line ("ส่งจริงคนละรุ่น") or left on a product whose SKU
+ * was unlinked, then re-fetches the real SKU photo for products still mapped.
+ */
+export async function resetPollutedTikTokImages() {
+  const { data, error } = await sb.rpc('reset_polluted_tiktok_images');
+  if (error) throw error;
+  const result = data || { substitution: 0, orphan: 0, refetch_product_ids: [] };
+  const ids = result.refetch_product_ids || [];
+  let refetched = 0;
+  if (ids.length) {
+    const sync = await syncTikTokProductImages({ productIds: ids, limit: ids.length });
+    refetched = sync?.synced || 0;
+  }
+  return {
+    substitution: result.substitution || 0,
+    orphan: result.orphan || 0,
+    refetched,
+  };
+}
+
 /** Re-sync sale mirror for a bill after mapping backfill (e.g. bill #127254). */
 export async function resyncSaleMirrorBill({ saleOrderId, productIds, toast = null }) {
   return runSaleMirrorWithFeedback({
