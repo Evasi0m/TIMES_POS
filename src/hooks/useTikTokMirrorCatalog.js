@@ -5,7 +5,8 @@ import { filterTikTokSkusByTerm } from '../lib/tiktok-receive-match.js';
 import {
   fetchPosStocks,
   fetchTikTokMappings,
-  searchTikTokCatalog,
+  catalogCapWarning,
+  loadTikTokFullCatalog,
   subscribeTiktokMappingChanges,
 } from '../lib/tiktok-inventory-sync.js';
 
@@ -16,10 +17,9 @@ import {
 // server search never finds models on later pages. An empty query, by contrast,
 // pages the whole catalog — so we load it all and filter in the browser.
 //
-// NOTE: the edge function caps at 10 pages × 50 = 500 products. The shop has
-// ~368 today; if the catalog ever exceeds 500 products, raise the cap in
-// supabase/functions/tiktok-products-search + tiktok-client and redeploy.
-const CATALOG_MAX_PAGES = 10;
+// NOTE: the edge function caps at TIKTOK_CATALOG_MAX_PAGES × 50 listings
+// (1000). When the shop goes past it, loadError carries a warning so the cut
+// is visible instead of silently missing SKUs.
 
 function productIdsFromLines(lines) {
   return [...new Set((lines || []).map(l => l.product_id).filter(Boolean))];
@@ -56,12 +56,15 @@ export function useTikTokMirrorCatalog({ enabled, mirrorEnabled = enabled, lines
     setCatalogLoading(true);
     setLoadError(null);
     try {
-      const full = await searchTikTokCatalog('', { maxPages: CATALOG_MAX_PAGES });
+      const { skus: full, catalog: stats } = await loadTikTokFullCatalog();
       if (reqId !== catalogReqIdRef.current) return;
       catalogRef.current = full;
       setCatalog(full);
       if (!full.length) {
         setLoadError('ไม่พบสินค้าใน TikTok Shop — ตรวจการเชื่อมต่อ / scope Product');
+      } else {
+        const capWarn = catalogCapWarning(stats);
+        if (capWarn) setLoadError(capWarn);
       }
     } catch (e) {
       if (reqId === catalogReqIdRef.current) {
