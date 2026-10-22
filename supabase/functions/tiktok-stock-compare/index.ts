@@ -29,7 +29,7 @@ async function requireSuperAdmin(req: Request): Promise<Response | null> {
     global: { headers: { Authorization: auth } },
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const { data, error } = await userClient.rpc('is_super_admin');
+  const { data, error } = await userClient.rpc('has_perm', { p_perm: 'ecommerce.stock_reconcile' });
   if (error) {
     return new Response(JSON.stringify({ ok: false, error: 'auth_check_failed: ' + error.message }), {
       status: 500,

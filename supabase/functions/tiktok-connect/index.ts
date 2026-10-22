@@ -31,9 +31,9 @@ Deno.serve(async (req) => {
     });
   }
 
-  const { data: isAdmin, error: adminErr } = await userClient.rpc('is_admin');
-  if (adminErr || !isAdmin) {
-    return new Response(JSON.stringify({ error: 'Admin only' }), {
+  const { data: allowed, error: permErr } = await userClient.rpc('has_perm', { p_perm: 'settings.tiktok' });
+  if (permErr || allowed !== true) {
+    return new Response(JSON.stringify({ error: 'ไม่มีสิทธิ์เชื่อมต่อ TikTok (settings.tiktok)' }), {
       status: 403,
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });

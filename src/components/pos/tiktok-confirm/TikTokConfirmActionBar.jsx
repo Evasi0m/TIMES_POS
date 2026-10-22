@@ -2,6 +2,7 @@ import React from 'react';
 import Icon from '../../ui/Icon.jsx';
 import DeferNetButton from '../DeferNetButton.jsx';
 import { TTC_COPY } from './copy.js';
+import { useCan } from '../../../lib/perm-context.js';
 
 function NetReceivedCard({ showNet, deferNet, setDeferNet, net, setNet, saving }) {
   return (
@@ -89,9 +90,11 @@ export default function TikTokConfirmActionBar({
   resolutionBlocked,
   onConfirm,
 }) {
+  // Viewers without pos.tiktok_confirm see the queue but can't confirm.
+  const allowed = useCan('pos.tiktok_confirm');
   const reviewReady = allMatched && viewMode === 'review';
   const showNet = reviewReady && !stockBlocked && !resolutionBlocked;
-  const canConfirm = showNet && netOk && !saving;
+  const canConfirm = allowed && showNet && netOk && !saving;
 
   const blocked = reviewReady && (stockBlocked || resolutionBlocked);
 
@@ -124,7 +127,7 @@ export default function TikTokConfirmActionBar({
         disabled={!canConfirm}
       >
         {saving ? <span className="spinner"/> : <Icon name="check" size={18}/>}
-        {blocked ? TTC_COPY.actionFixFirst : TTC_COPY.actionConfirmSale}
+        {!allowed ? 'ไม่มีสิทธิ์ยืนยันออเดอร์ (ดูอย่างเดียว)' : blocked ? TTC_COPY.actionFixFirst : TTC_COPY.actionConfirmSale}
       </button>
     </div>
   );

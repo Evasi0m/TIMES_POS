@@ -1,7 +1,7 @@
 // Open the shared "จับคู่ TikTok" editor from any page.
 //
 // The editor host (TikTokMappingEditorHost) is mounted once in the App shell,
-// only for admin / super_admin. Badges call openTikTokMappingEditor(); when no
+// only for users with products.tiktok_mapping. Badges call openTikTokMappingEditor(); when no
 // host is registered (visitor) the badge stays a plain, non-clickable mark.
 
 let opener = null;

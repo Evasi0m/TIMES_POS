@@ -13,6 +13,7 @@ import {
   defaultSubstitutionMeta,
 } from './helpers.js';
 import { TTC_COPY } from './copy.js';
+import { useCan } from '../../../lib/perm-context.js';
 
 export default function TikTokOrderConfirmPane({
   order,
@@ -38,6 +39,7 @@ export default function TikTokOrderConfirmPane({
 }) {
   const [activeItemId, setActiveItemId] = useState(null);
   const [viewMode, setViewMode] = useState('match');
+  const canSaveMatch = useCan('pos.tiktok_confirm');
   const [matchConfirmBusy, setMatchConfirmBusy] = useState(null);
 
   const items = order?.items || [];
@@ -131,6 +133,7 @@ export default function TikTokOrderConfirmPane({
   };
 
   const handleConfirmMatch = async (itemId) => {
+    if (!canSaveMatch) { toast?.('ไม่มีสิทธิ์จับคู่ / ยืนยันออเดอร์ TikTok', 'error'); return; }
     const item = items.find(it => it.id === itemId);
     const pick = picks[itemId];
     if (!item || !pick?.id || matchConfirmBusy === itemId) return;

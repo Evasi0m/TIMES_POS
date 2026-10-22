@@ -113,9 +113,9 @@ Deno.serve(async (req) => {
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
-  const { data: isAdmin } = await userClient.rpc('is_admin');
-  if (!isAdmin) {
-    return new Response(JSON.stringify({ error: 'Admin only' }), {
+  const { data: allowed } = await userClient.rpc('has_perm', { p_perm: 'ecommerce.ship' });
+  if (allowed !== true) {
+    return new Response(JSON.stringify({ error: 'ไม่มีสิทธิ์จัดส่ง (ecommerce.ship)' }), {
       status: 403,
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });

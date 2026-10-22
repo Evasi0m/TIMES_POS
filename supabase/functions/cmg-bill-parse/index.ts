@@ -339,9 +339,9 @@ Deno.serve(async (req: Request) => {
   if (userErr || !userRes?.user) return j(401, { error: 'invalid JWT' });
   const userId = userRes.user.id;
 
-  const { data: isAdminData, error: isAdminErr } = await userClient.rpc('is_admin');
-  if (isAdminErr) return j(500, { error: 'admin check failed: ' + isAdminErr.message });
-  if (!isAdminData) return j(403, { error: 'admin only' });
+  const { data: allowed, error: permErr } = await userClient.rpc('has_perm', { p_perm: 'receive.create' });
+  if (permErr) return j(500, { error: 'permission check failed: ' + permErr.message });
+  if (allowed !== true) return j(403, { error: 'ไม่มีสิทธิ์รับสินค้า (receive.create)' });
 
   // Master switch still lives in shop_secrets (per-shop setting, not
   // per-key) — this lets an admin disable the feature entirely without

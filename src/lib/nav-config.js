@@ -1,47 +1,37 @@
-// App navigation config + role-based visibility filter.
+// App navigation config + permission-based visibility.
 //
-// Visibility model (3-tier):
-//   super_admin → sees everything, all nav items enabled
-//   admin       → sees everything, all nav items enabled (DB also allows it)
-//   visitor     → sees nav items except E-Commerce (hidden); only `products`
-//                 and `customer-price` are clickable — the rest render disabled
+// Each item needs one `view.*` permission (see ./permissions.js):
+//   - with it      → shown and clickable
+//   - without it   → shown greyed out with a lock, so people know the page
+//                    exists (E-Commerce is hidden instead: `hideWithoutPerm`)
 //
-// `adminOnly` views (receive, dashboard) expose cost/profit data and
-// supplier pricing — the DB also enforces this via RLS. The client filter
-// here is just to keep the UI clean; never trust it alone for security.
+// The DB enforces the same permissions (has_perm in RPCs / RLS); this filter
+// only keeps the UI tidy — never rely on it alone for security.
+import { can } from './permissions.js';
 
 export const NAV = [
-  { k: 'pos',              label: 'ขาย',         labelLong: 'ขายสินค้า',        icon: 'cart' },
-  { k: 'products',         label: 'สินค้า',      labelLong: 'สินค้า',           icon: 'box' },
-  { k: 'customer-price',   label: 'ราคาลูกค้า',  labelLong: 'ราคาลูกค้า',       icon: 'price-tag' },
-  { k: 'sales',            label: 'ประวัติ',     labelLong: 'ประวัติการขาย',    icon: 'receipt' },
-  { k: 'receive',   label: 'รับเข้า', labelLong: 'รับสินค้าจากบริษัท', icon: 'arrow-up',  adminOnly: true, ai: true },
-  { k: 'return',    label: 'รับคืน',  labelLong: 'รับคืนจากลูกค้า',   icon: 'arrow-down' },
-  { k: 'dashboard', label: 'ภาพรวม',  labelLong: 'แดชบอร์ด',         icon: 'dashboard', adminOnly: true },
-  { k: 'ecommerce', label: 'E-Comm',  labelLong: 'E-Commerce',       icon: 'shop-bag',  adminOnly: true },
-  // P&L was previously a top-level nav entry; it now lives as a tab
-  // inside OverviewView ("กำไรขาดทุน") so admins manage all reporting
-  // from a single page.
+  { k: 'pos',            label: 'ขาย',         labelLong: 'ขายสินค้า',        icon: 'cart',      perm: 'view.pos' },
+  { k: 'products',       label: 'สินค้า',      labelLong: 'สินค้า',           icon: 'box',       perm: 'view.products' },
+  { k: 'customer-price', label: 'ราคาลูกค้า',  labelLong: 'ราคาลูกค้า',       icon: 'price-tag', perm: 'view.customer_price' },
+  { k: 'sales',          label: 'ประวัติ',     labelLong: 'ประวัติการขาย',    icon: 'receipt',   perm: 'view.sales' },
+  { k: 'receive',        label: 'รับเข้า',     labelLong: 'รับสินค้าจากบริษัท', icon: 'arrow-up', perm: 'view.receive', ai: true },
+  { k: 'return',         label: 'รับคืน',      labelLong: 'รับคืนจากลูกค้า',   icon: 'arrow-down', perm: 'view.return' },
+  { k: 'dashboard',      label: 'ภาพรวม',      labelLong: 'แดชบอร์ด',         icon: 'dashboard', perm: 'view.dashboard' },
+  { k: 'ecommerce',      label: 'E-Comm',      labelLong: 'E-Commerce',       icon: 'shop-bag',  perm: 'view.ecommerce', hideWithoutPerm: true },
+  // P&L lives as a tab inside OverviewView ("กำไรขาดทุน").
 ];
 
-// The single view a visitor is allowed to navigate to. Used both by the
-// nav-disable logic below and by the App shell to redirect any other
-// view back to safety.
-export const VISITOR_VIEW = 'products';
-export const VISITOR_VIEWS = ['products', 'customer-price'];
+/** True when the user may open this nav item. */
+export const canNavigate = (perms, item) => can(perms, item?.perm);
 
-// True if role can navigate to this nav item.
-// - admin/super_admin: every item allowed (DB enforces deeper)
-// - visitor: products + customer-price (floor lookup, no cost shown);
-//   adminOnly items (receive, dashboard) show locked; E-Commerce is hidden.
-export const canNavigate = (role, item) => {
-  if (role === 'super_admin' || role === 'admin') return true;
-  if (item.adminOnly) return false;
-  return VISITOR_VIEWS.includes(item.k);
-};
+/** Items left out of the menu entirely (not just locked). */
+export const isNavHidden = (perms, item) => Boolean(item?.hideWithoutPerm) && !canNavigate(perms, item);
 
-// Returns the nav items the given role should *see* in the sidebar.
-export const navForRole = (role) => {
-  if (role === 'visitor') return NAV.filter(it => it.k !== 'ecommerce');
-  return NAV.filter((it) => !it.adminOnly || role === 'admin' || role === 'super_admin');
-};
+/** Items to render in the sidebar / tab bar (locked ones included). */
+export const navForRole = (perms) => NAV.filter(it => !isNavHidden(perms, it));
+
+/** First page the user may open — where login lands and where a blocked view redirects. */
+export function landingView(perms) {
+  const first = NAV.find(it => canNavigate(perms, it));
+  return first ? first.k : 'products';
+}

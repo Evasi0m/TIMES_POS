@@ -1,6 +1,7 @@
 // TikTok integration health panel — liquid glass UI (stock page only).
 import React, { useCallback, useEffect, useState } from 'react';
 import { sb } from '../../lib/supabase-client.js';
+import { useCan } from '../../lib/perm-context.js';
 import { mapError } from '../../lib/error-map.js';
 import { formatTikTokApiError } from '../../lib/tiktok-mirror-helpers.js';
 import {
@@ -47,6 +48,7 @@ export default function TikTokHealthCard({ toast }) {
   const [backfilling, setBackfilling] = useState(false);
   const [imageBackfilling, setImageBackfilling] = useState(false);
   const [imageResetting, setImageResetting] = useState(false);
+  const canRepair = useCan('settings.tiktok');
   const [error, setError] = useState(null);
   const [catalog, setCatalog] = useState(null);
 
@@ -269,6 +271,7 @@ export default function TikTokHealthCard({ toast }) {
                 ? `TikTok ${catalog.total.toLocaleString('th-TH')} / ${catalog.max_products} listing`
                 : `โหลด catalog ได้สูงสุด ${catalog?.max_products ?? 1000} listing`}
             </p>
+            {canRepair && (
             <div className="tt-glass__health-actions">
               {health.mappings_missing_product_id > 0 && (
                 <TikTokGlassBtn
@@ -305,6 +308,7 @@ export default function TikTokHealthCard({ toast }) {
                 </TikTokGlassBtn>
               )}
             </div>
+            )}
           </div>
         )}
 

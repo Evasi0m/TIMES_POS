@@ -54,7 +54,9 @@ import {
   classifyBrand, classifySeries, parseCasioModel, enrichProduct,
   matchSubType, getEffectivePrice, filterProducts, sortProducts,
 } from './lib/product-classify.js';
-import { NAV, navForRole, canNavigate, VISITOR_VIEW, VISITOR_VIEWS } from './lib/nav-config.js';
+import { navForRole, canNavigate, landingView } from './lib/nav-config.js';
+import { ROLE_META, effectivePermissions, can as canPerm } from './lib/permissions.js';
+import { PermProvider, usePerms, useCan } from './lib/perm-context.js';
 import {
   ECOMMERCE_DEFAULT_VIEW,
   ECOMMERCE_PLATFORMS,
@@ -119,6 +121,7 @@ import TikTokMatchPromptModal from './components/ecommerce/TikTokMatchPromptModa
 import TikTokReceiveMatchCard from './components/ecommerce/TikTokReceiveMatchCard.jsx';
 import TikTokLinkedBadge from './components/ecommerce/TikTokLinkedBadge.jsx';
 import TikTokMappingEditorHost from './components/ecommerce/TikTokMappingEditorHost.jsx';
+import RolePermissionsEditor from './components/settings/RolePermissionsEditor.jsx';
 import ProductThumb from './components/ui/ProductThumb.jsx';
 import { useRealtimeInvalidate, createDebouncedInvalidate } from './lib/use-realtime-invalidate.js';
 import { subscribeTable } from './lib/realtime-bus.js';
@@ -576,8 +579,11 @@ function ToastProvider({ children }) {
     // Stage 2: unmount once exit animation has played out.
     setTimeout(() => setList(l => l.filter(t => t.id !== id)), visibleMs + 350);
   }, []);
+  // Stable value: consumers put `toast` in effect deps, and a fresh object on
+  // every toast re-ran those effects (reloads, tab resets, retry loops).
+  const value = useMemo(() => ({ push }), [push]);
   return (
-    <ToastCtx.Provider value={{ push }}>
+    <ToastCtx.Provider value={value}>
       {children}
       <div className="fixed bottom-20 lg:bottom-6 right-4 lg:right-6 z-[120] space-y-3 max-w-[calc(100vw-32px)] pointer-events-none">
         {list.map(t => (
@@ -1562,11 +1568,13 @@ function SystemDiagnosticsSection({ toast }) {
 function AppSettingsModal({ open, onClose, onSidebarStartChange }) {
   const toast = useToast();
   const { shop, refreshShop } = useShop();
-  const role = useRole();
-  // admin-or-above can edit shop info; only super_admin can edit
-  // Telegram + paylater. Cheaper than two more useRole() calls below.
-  const isAdmin = role === 'admin' || role === 'super_admin';
-  const isSuperAdmin = role === 'super_admin';
+  // Each settings tab has its own permission (settings.*).
+  const { can } = usePerms();
+  const canShop = can('settings.shop');
+  const canPaylater = can('settings.paylater');
+  const canCustomerPrice = can('settings.customer_price');
+  const canAnySettings = can('settings.shop|settings.paylater|settings.customer_price|settings.ai|settings.telegram');
+  const isOwner = useRole() === 'super_admin';
   const [draft, setDraft] = useState(null);
   const [busy, setBusy] = useState(false);
   // Tab nav state — replaces the older accordion-of-collapsibles.
@@ -1595,7 +1603,7 @@ function AppSettingsModal({ open, onClose, onSidebarStartChange }) {
   // Persist the paylater draft to shop_settings.paylater_config. Called
   // *after* the PIN modal confirms — never bypassed.
   const savePaylaterConfig = async () => {
-    if (!isAdmin || !paylaterDraft) return;
+    if (!canPaylater || !paylaterDraft) return;
     setPaylaterBusy(true);
     const { error } = await sb.from('shop_settings').update({
       paylater_config: paylaterDraft,
@@ -1618,7 +1626,7 @@ function AppSettingsModal({ open, onClose, onSidebarStartChange }) {
   };
 
   const saveCustomerPriceConfig = async () => {
-    if (!isSuperAdmin || !customerPriceDraft) return;
+    if (!canCustomerPrice || !customerPriceDraft) return;
     setCustomerPriceBusy(true);
     const payload = mergeCustomerPriceConfig(customerPriceDraft);
     const { error } = await sb.from('shop_settings').update({
@@ -1638,7 +1646,7 @@ function AppSettingsModal({ open, onClose, onSidebarStartChange }) {
   const set = (k, v) => setDraft(d => ({ ...d, [k]: v }));
 
   const save = async () => {
-    if (!isAdmin || !draft) return;
+    if (!canShop || !draft) return;
     setBusy(true);
     const { error } = await sb.from('shop_settings').update({
       shop_name:      (draft.shop_name||'').trim() || 'TIMES',
@@ -1656,28 +1664,25 @@ function AppSettingsModal({ open, onClose, onSidebarStartChange }) {
     onClose();
   };
 
-  // Tab definitions. Visibility rules:
-  //   adminOnly      → hidden for visitor (they can't edit anything anyway)
-  //   superAdminOnly → visible for admin BUT disabled (greyed, click no-op),
-  //                    fully interactive for super_admin only
+  // Tab definitions. `perm` = the settings.* key needed to open the tab.
+  // Someone with no settings permission only sees `display`; someone with
+  // some sees every tab, the ones they can't open greyed out.
   // Order here = display order.
   const TABS = [
-    { id: 'display',  label: 'การแสดงผล',  shortLabel: 'แสดงผล', icon: 'edit',       adminOnly: false },
-    { id: 'shop',     label: 'ข้อมูลร้าน',  shortLabel: 'ร้าน',   icon: 'store',      adminOnly: true  },
-    { id: 'telegram', label: 'Telegram',     shortLabel: 'TG',     icon: 'bell',       adminOnly: true, superAdminOnly: true },
-    { id: 'ai',       label: 'AI',           shortLabel: 'AI',     icon: 'scan',       adminOnly: true, superAdminOnly: true },
-    { id: 'paylater', label: 'สูตรคำนวณ',    shortLabel: 'สูตร',   icon: 'calculator', adminOnly: true, superAdminOnly: true },
-    { id: 'customer-price', label: 'ราคาลูกค้า', shortLabel: 'ราคา', icon: 'tag', adminOnly: true, superAdminOnly: true },
+    { id: 'display',  label: 'การแสดงผล',  shortLabel: 'แสดงผล', icon: 'edit' },
+    { id: 'shop',     label: 'ข้อมูลร้าน',  shortLabel: 'ร้าน',   icon: 'store',      perm: 'settings.shop' },
+    { id: 'telegram', label: 'Telegram',     shortLabel: 'TG',     icon: 'bell',       perm: 'settings.telegram' },
+    { id: 'ai',       label: 'AI',           shortLabel: 'AI',     icon: 'scan',       perm: 'settings.ai' },
+    { id: 'paylater', label: 'สูตรคำนวณ',    shortLabel: 'สูตร',   icon: 'calculator', perm: 'settings.paylater' },
+    { id: 'customer-price', label: 'ราคาลูกค้า', shortLabel: 'ราคา', icon: 'tag', perm: 'settings.customer_price' },
   ];
-  // Visitor: only `display`. admin+: every tab (but superAdminOnly ones are
-  // disabled at click time for admin — see below).
-  const visibleTabs = TABS.filter(t => isAdmin || !t.adminOnly);
+  const visibleTabs = TABS.filter(t => !t.perm || canAnySettings);
   // True when the given tab is shown but the current user can't enter it.
-  const isTabDisabled = (t) => t.superAdminOnly && !isSuperAdmin;
+  const isTabDisabled = (t) => Boolean(t.perm) && !can(t.perm);
   // Footer "บันทึก" is only meaningful on the shop-info tab. Other tabs
   // either save live (display) or own their own save UX (telegram has a
   // built-in button, paylater goes through the PIN modal).
-  const showFooterSave = isAdmin && activeTab === 'shop';
+  const showFooterSave = canShop && activeTab === 'shop';
 
   return (
     <Modal open={open} onClose={onClose} wide title="การตั้งค่า"
@@ -1763,7 +1768,7 @@ function AppSettingsModal({ open, onClose, onSidebarStartChange }) {
                   <SidebarStartPickerInline onModeChange={onSidebarStartChange} />
                 </div>
               </div>
-              {isSuperAdmin && (
+              {isOwner && (
                 <div className="border-t hairline-soft pt-4">
                   <SystemDiagnosticsSection toast={toast}/>
                 </div>
@@ -1772,7 +1777,7 @@ function AppSettingsModal({ open, onClose, onSidebarStartChange }) {
           )}
 
           {/* ── Tab: ข้อมูลร้าน ── */}
-          {activeTab === 'shop' && isAdmin && draft && (
+          {activeTab === 'shop' && canShop && draft && (
             <div className="space-y-4 fade-in">
               <div className="text-xs text-muted-soft bg-surface-soft rounded-lg px-3.5 py-2.5 border hairline mb-2">
                 ข้อมูลส่วนนี้จะถูกใช้เพื่อพิมพ์บนใบเสร็จรับเงิน และจัดพิมพ์ลงบนเอกสารใบกำกับภาษีอย่างเป็นทางการ
@@ -1811,20 +1816,20 @@ function AppSettingsModal({ open, onClose, onSidebarStartChange }) {
           )}
 
           {/* ── Tab: AI ── */}
-          {activeTab === 'telegram' && isSuperAdmin && (
+          {activeTab === 'telegram' && can('settings.telegram') && (
             <div className="fade-in">
               <TelegramSettings toast={toast} />
             </div>
           )}
 
-          {activeTab === 'ai' && isAdmin && (
+          {activeTab === 'ai' && can('settings.ai') && (
             <div className="fade-in">
               <AISettings toast={toast} />
             </div>
           )}
 
           {/* ── Tab: สูตรคำนวณ paylater/COD ── */}
-          {activeTab === 'paylater' && isAdmin && paylaterDraft && (
+          {activeTab === 'paylater' && canPaylater && paylaterDraft && (
             <div className="fade-in">
               <PaylaterFormulaSection
                 draft={paylaterDraft}
@@ -1836,7 +1841,7 @@ function AppSettingsModal({ open, onClose, onSidebarStartChange }) {
             </div>
           )}
 
-          {activeTab === 'customer-price' && isSuperAdmin && customerPriceDraft && (
+          {activeTab === 'customer-price' && canCustomerPrice && customerPriceDraft && (
             <div className="fade-in">
               <CustomerPriceSettings
                 draft={customerPriceDraft}
@@ -1952,14 +1957,10 @@ function SidebarStartPickerInline({ onModeChange }) {
    only mounted from the App shell when role === 'super_admin',
    but every action still goes through that server-side gate.
 ========================================================= */
-const ROLE_OPTIONS = [
-  { id: 'super_admin', label: 'Super Admin', tone: 'text-warning',
-    hint: 'เข้าถึงทุกอย่าง + จัดการผู้ใช้' },
-  { id: 'admin',       label: 'Admin',       tone: 'text-primary',
-    hint: 'เข้าถึงทุกอย่าง ยกเว้นการตั้งค่าผู้ใช้/Telegram/สูตรคำนวณ + รายการผิดพลาด' },
-  { id: 'visitor',     label: 'Visitor',     tone: 'text-muted-soft',
-    hint: 'ดูสินค้าได้อย่างเดียว — แก้ไขอะไรไม่ได้' },
-];
+// Role list for the create form / role dropdown. What each role may do is
+// edited in the "สิทธิ์ตามบทบาท" tab (RolePermissionsEditor).
+const ROLE_OPTIONS = ['super_admin', 'admin', 'staff', 'visitor']
+  .map(id => ({ id, ...ROLE_META[id] }));
 const ROLE_LABEL = Object.fromEntries(ROLE_OPTIONS.map(r => [r.id, r.label]));
 
 // Thin wrapper around the `admin-users` edge function. Returns the
@@ -2038,10 +2039,12 @@ function UserManagementModal({ open, onClose }) {
   // Auto-load on open; clear when closed so reopening reflects any
   // out-of-band changes (e.g. another super_admin tweaking roles).
   useEffect(() => {
+    if (open) setActiveSection('users');
+  }, [open]);
+  useEffect(() => {
     if (open) {
       load();
       loadExportLogs();
-      setActiveSection('users');
     } else {
       setUsers([]);
       setExportLogs([]);
@@ -2183,9 +2186,23 @@ function UserManagementModal({ open, onClose }) {
         >
           <Icon name="download" size={14}/> ประวัติ Export สต็อก
         </button>
+        <button
+          type="button"
+          className={'px-3 py-2 text-sm font-medium rounded-t-lg border-b-2 transition inline-flex items-center gap-1.5 ' +
+            (activeSection === 'roles'
+              ? 'border-primary text-ink'
+              : 'border-transparent text-muted hover:text-ink')}
+          onClick={() => setActiveSection('roles')}
+        >
+          <Icon name="lock" size={14}/> สิทธิ์ตามบทบาท
+        </button>
       </div>
 
-      {activeSection === 'exports' ? (
+      {activeSection === 'roles' && (
+        <RolePermissionsEditor toast={toast} askConfirm={askConfirm}/>
+      )}
+
+      {activeSection === 'roles' ? null : activeSection === 'exports' ? (
         <>
           <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
             <div className="text-sm text-muted">
@@ -2274,7 +2291,7 @@ function UserManagementModal({ open, onClose }) {
           </div>
           <div>
             <label className="text-xs uppercase tracking-wider text-muted">สิทธิ์เริ่มต้น</label>
-            <div className="grid sm:grid-cols-3 gap-2 mt-1.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-1.5">
               {ROLE_OPTIONS.map(opt => {
                 const active = draft.role === opt.id;
                 return (
@@ -2396,7 +2413,7 @@ function UserManagementModal({ open, onClose }) {
       </div>
 
       <div className="mt-4 text-[11px] text-muted-soft leading-relaxed">
-        <strong>หมายเหตุ:</strong> การเปลี่ยนสิทธิ์จะมีผลครั้งถัดไปที่ผู้ใช้คนนั้น refresh / sign in ใหม่
+        <strong>หมายเหตุ:</strong> การเปลี่ยน role ของผู้ใช้จะมีผลครั้งถัดไปที่ผู้ใช้คนนั้น sign in ใหม่ · ส่วนสิทธิ์ของแต่ละ role แก้ได้ในแท็บ "สิทธิ์ตามบทบาท"
       </div>
         </>
       )}
@@ -3856,8 +3873,7 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
   const toast = useToast();
   const askConfirm = useConfirm();
   const askPrompt = usePrompt();
-  const isAdmin = useIsAdmin();
-  const isSuperAdmin = useIsSuperAdmin();
+  const { can } = usePerms();
   const [order, setOrder] = useState(null);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -3873,9 +3889,14 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
   const [deletingLineId, setDeletingLineId] = useState(null);
   const [draftLines, setDraftLines] = useState(null);
   const voidLockRef = useRef(false);
-  // Receive bills: only super admin may edit anything (header + lines).
-  const canEditBill = kind === 'receive' ? isSuperAdmin : isAdmin;
-  const editLines = kind === 'receive' && isSuperAdmin;
+  // Receive bills: full edit (header + lines) needs receive.edit; claim and
+  // return bills only allow a header edit.
+  const canFullReceiveEdit = kind === 'receive' && can('receive.edit');
+  const canEditBill = kind === 'receive' ? canFullReceiveEdit
+    : kind === 'claim' ? can('receive.claim_edit')
+    : can('return.edit');
+  const editLines = canFullReceiveEdit;
+  const canVoid = can(kind === 'return' ? 'return.void' : 'receive.void');
 
   const reload = useCallback(async () => {
     if (!orderId) return;
@@ -4063,7 +4084,7 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
   // เปิดเอกสารซื้อ A4 — ถ้ายังไม่มีเลขเอกสารและเป็น admin ให้ออกเลขก่อน
   const openPurchaseDoc = async () => {
     if (!order) return;
-    if (!order.purchase_doc_no && isAdmin) {
+    if (!order.purchase_doc_no && can('receive.docs')) {
       setIssuingDoc(true);
       const { data, error } = await sb.rpc('issue_purchase_doc_for_receive', { p_receive_id: order.id });
       setIssuingDoc(false);
@@ -4077,7 +4098,7 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
   // เปิดใบลดหนี้ A4 (return) — ออกเลขใบลดหนี้ก่อนถ้ายังไม่มี (admin)
   const openCreditNote = async () => {
     if (!order) return;
-    if (!order.credit_note_no && isAdmin) {
+    if (!order.credit_note_no && can('return.credit_note')) {
       setIssuingCN(true);
       const { data, error } = await sb.rpc('issue_credit_note_for_return', { p_return_id: order.id });
       setIssuingCN(false);
@@ -4091,7 +4112,7 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
   // เปิดใบส่งคืนสินค้า A4 (claim) — ออกเลขเอกสารก่อนถ้ายังไม่มี (admin)
   const openClaimDoc = async () => {
     if (!order) return;
-    if (!order.claim_doc_no && isAdmin) {
+    if (!order.claim_doc_no && can('receive.docs')) {
       setIssuingClaimDoc(true);
       const { data, error } = await sb.rpc('issue_claim_doc_for_claim', { p_claim_id: order.id });
       setIssuingClaimDoc(false);
@@ -4163,7 +4184,7 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
             {issuingClaimDoc ? <span className="spinner"/> : <Icon name="receipt" size={16}/>} พิมพ์ใบส่งคืน
           </button>
         )}
-        {order && !isVoided && !editing && isAdmin && (
+        {order && !isVoided && !editing && canVoid && (
           <button className="btn-secondary !text-error hover:!bg-error/10" onClick={voidIt} disabled={busy}>
             <Icon name="trash" size={16}/> ยกเลิกบิลนี้
           </button>
@@ -4359,14 +4380,14 @@ function MovementDetailModal({ kind, orderId, onClose, onChanged }) {
               <div className="text-xs uppercase tracking-wider text-muted">รายการสินค้า ({items.length})</div>
               <span
                 className="text-xs px-1.5 py-0.5 rounded-full bg-muted/15 text-muted-soft font-medium"
-                title={kind==='receive' && isSuperAdmin ? "super admin แก้จำนวน ราคา เพิ่ม/ลบรายการได้ผ่านปุ่มแก้ไขบิล" : "แก้ไขรายการ/จำนวนไม่ได้ — ต้องยกเลิกบิลแล้วทำใหม่"}
+                title={canFullReceiveEdit ? "แก้จำนวน ราคา เพิ่ม/ลบรายการได้ผ่านปุ่มแก้ไขบิล" : "แก้ไขรายการ/จำนวนไม่ได้ — ต้องยกเลิกบิลแล้วทำใหม่"}
               >
-                {kind==='receive' && isSuperAdmin ? 'กด "แก้ไขบิล" เพื่อแก้จำนวน/ราคา' : 'แก้ไขไม่ได้'}
+                {canFullReceiveEdit ? 'กด "แก้ไขบิล" เพื่อแก้จำนวน/ราคา' : 'แก้ไขไม่ได้'}
               </span>
             </div>
             <div className="card-canvas overflow-hidden">
               {items.map(it => {
-                const canDeleteLine = kind==='receive' && isSuperAdmin && !isVoided && !editing;
+                const canDeleteLine = canFullReceiveEdit && !isVoided && !editing;
                 return (
                 <div key={it.id} className="px-4 py-2.5 border-b hairline last:border-0 flex items-center gap-3">
                   <div className="min-w-0 flex-1">
@@ -4484,7 +4505,7 @@ function LoginScreen() {
 ========================================================= */
 const getUserRole = (session) => {
   const r = session?.user?.app_metadata?.app_role;
-  if (r === 'super_admin' || r === 'admin' || r === 'visitor') return r;
+  if (r === 'super_admin' || r === 'admin' || r === 'staff' || r === 'visitor') return r;
   // Legacy 'cashier' rows are migrated to 'visitor' in migration 014,
   // but defend against any session that still carries it.
   if (r === 'cashier') return 'visitor';
@@ -4493,16 +4514,8 @@ const getUserRole = (session) => {
 
 const RoleCtx = React.createContext('visitor');
 const useRole = () => React.useContext(RoleCtx);
-// "Admin-or-above" — the gate that matches the DB's `is_admin()` helper.
-// Use this everywhere an action requires admin DB write permission;
-// super_admin inherits it.
-const useIsAdmin = () => {
-  const r = useRole();
-  return r === 'admin' || r === 'super_admin';
-};
-// Strict super-admin gate. Use ONLY for user-management UI and for
-// hiding settings tabs that even regular admins shouldn't see.
-const useIsSuperAdmin = () => useRole() === 'super_admin';
+// Fine-grained gates: usePerms() / useCan() from ./lib/perm-context.js.
+// useRole() is only for the fixed super-admin areas (users, permissions).
 
 // Nav config + role filter — extracted to ./lib/nav-config.js
 
@@ -4514,8 +4527,9 @@ const CLAIM_REASONS = ["ชำรุดจากโรงงาน", "ส่ง�
 ========================================================= */
 function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagement, onSidebarMouseEnter, onSidebarMouseLeave, onSidebarFocus, onSidebarBlur }) {
   const role = useRole();
+  const { perms } = usePerms();
   const isSuperAdmin = role === 'super_admin';
-  const items = navForRole(role);
+  const items = navForRole(perms);
   const pendingTiktokCount = usePendingTikTokOrderCount();
   const [ecomExpanded, setEcomExpanded] = useState(() => isEcommerceView(view));
 
@@ -4549,12 +4563,8 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
   }, [loadTodaySalesCount]);
   useRealtimeInvalidate(sb, ['sale_orders'], loadTodaySalesCount);
   // Short, human-readable role tag for the email footer line.
-  const roleTag = role === 'super_admin' ? 'super admin'
-                : role === 'admin'       ? 'admin'
-                : 'visitor';
-  const roleColour = role === 'super_admin' ? 'text-gold-premium'
-                   : role === 'admin'       ? 'text-primary'
-                   : 'text-muted-soft';
+  const roleTag = ROLE_META[role]?.label ?? role;
+  const roleColour = role === 'super_admin' ? 'text-gold-premium' : (ROLE_META[role]?.tone ?? 'text-muted-soft');
   return (
     <aside
       className="sidebar hidden lg:flex flex-col"
@@ -4600,7 +4610,7 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
       </div>
       <nav className="p-3 flex-1 overflow-y-auto" aria-label="เมนูหลัก">
         {items.map(it => {
-          const allowed = canNavigate(role, it);
+          const allowed = canNavigate(perms, it);
 
           if (it.k === 'ecommerce') {
             const ecomActive = isEcommerceView(view);
@@ -4678,7 +4688,7 @@ function Sidebar({ view, setView, userEmail, onOpenSettings, onOpenUserManagemen
               <span className="sidebar-expand-only flex-1">
                 {it.labelLong}
                 {it.ai && <span className="ai-tab-badge ml-1.5 align-middle">AI</span>}
-                {it.k === 'sales' && allowed && (role === 'admin' || role === 'super_admin') && todaySalesCount > 0 && (
+                {it.k === 'sales' && allowed && todaySalesCount > 0 && (
                   <span
                     className="nav-count-badge ml-1.5 align-middle"
                     title={`วันนี้ขายไปแล้ว ${todaySalesCount} บิล`}
@@ -4725,10 +4735,10 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
   const [updateLogClosing, setUpdateLogClosing] = useState(false);
   const toast = useToast();
   const role = useRole();
-  const isAdminPlus = role === 'admin' || role === 'super_admin';
+  const { can } = usePerms();
   const isSuperAdmin = role === 'super_admin';
-  const roleTag = role === 'super_admin' ? 'super admin' : role === 'admin' ? 'admin' : 'visitor';
-  const roleColour = role === 'super_admin' ? 'text-gold-premium' : role === 'admin' ? 'text-primary' : 'text-muted-soft';
+  const roleTag = ROLE_META[role]?.label ?? role;
+  const roleColour = role === 'super_admin' ? 'text-gold-premium' : (ROLE_META[role]?.tone ?? 'text-muted-soft');
   const drawerActive = view === 'dashboard' || view === 'return' || isEcommerceView(view);
   const { render: drawerRender, closing: drawerClosing } = useMountedToggle(openMenu, 220);
 
@@ -4752,12 +4762,8 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
           <div className="text-sm text-muted mobile-topbar__title" title={title}>{title}</div>
         </div>
         <div className="mobile-topbar__actions">
-          {isAdminPlus && (
-            <>
-              {view === 'pos' && <TikTokPosBadges toast={toast.push} />}
-              <PendingNetBell toast={toast.push} size={40} placement="header" />
-            </>
-          )}
+          {view === 'pos' && can('view.pos') && <TikTokPosBadges toast={toast.push} />}
+          {can('view.sales') && <PendingNetBell toast={toast.push} size={40} placement="header" />}
           <button
             type="button"
             className="btn-ghost icon-btn-44 !p-0 mobile-menu-btn"
@@ -4778,8 +4784,7 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
             <button className="btn-ghost !p-2" onClick={()=>setOpenMenu(false)} aria-label="ปิดเมนู"><Icon name="x" size={20}/></button>
           </div>
           <div className="p-4 space-y-5 overflow-y-auto max-h-[calc(100vh-4rem)]">
-            {isAdminPlus && (
-              <>
+            {can('view.return') && (
                 <div>
                   <div className="text-xs uppercase tracking-wider text-muted mb-2">รับคืน</div>
                   <div className="mobile-drawer-nav">
@@ -4796,6 +4801,8 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
                     </button>
                   </div>
                 </div>
+            )}
+            {can('view.dashboard') && (
                 <div>
                   <div className="text-xs uppercase tracking-wider text-muted mb-2">รายงาน</div>
                   <div className="mobile-drawer-nav">
@@ -4812,6 +4819,8 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
                     </button>
                   </div>
                 </div>
+            )}
+            {can('view.ecommerce') && (
                 <div>
                   <div className="text-xs uppercase tracking-wider text-muted mb-2">E-Commerce</div>
                   <div className="mobile-drawer-nav">
@@ -4833,7 +4842,6 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
                     ))}
                   </div>
                 </div>
-              </>
             )}
             <div>
               <div className="text-xs uppercase tracking-wider text-muted mb-2">ระบบ</div>
@@ -4884,11 +4892,11 @@ function MobileTopBar({ title, userEmail, onLogout, onOpenSettings, onOpenUserMa
 // - FAB doubles as an offline-queue indicator: a red badge with the pending
 //   sale count appears whenever `onQueueChange` reports >0 queued items.
 function MobileTabBar({ view, setView }) {
-  const role = useRole();
-  const all = navForRole(role);
+  const { perms } = usePerms();
+  const all = navForRole(perms);
   const posItem = all.find(it => it.k === 'pos');
   const others  = all.filter(it => it.k !== 'pos' && it.k !== 'dashboard' && it.k !== 'pnl' && it.k !== 'ecommerce' && it.k !== 'return');
-  const visibleOthers = others.filter(it => canNavigate(role, it));
+  const visibleOthers = others.filter(it => canNavigate(perms, it));
   const leftCount = Math.floor(visibleOthers.length / 2);
   const left  = visibleOthers.slice(0, leftCount);
   const right = visibleOthers.slice(leftCount);
@@ -4907,11 +4915,11 @@ function MobileTabBar({ view, setView }) {
     if (!error) setTodaySalesCount(count ?? 0);
   }, []);
   useEffect(() => {
-    if (role !== 'admin' && role !== 'super_admin') return;
+    if (!canNavigate(perms, { perm: 'view.sales' })) return;
     loadTodaySalesCount();
     const t = setInterval(loadTodaySalesCount, 60_000);
     return () => clearInterval(t);
-  }, [loadTodaySalesCount, role]);
+  }, [loadTodaySalesCount, perms]);
   useRealtimeInvalidate(sb, ['sale_orders'], loadTodaySalesCount);
 
   useEffect(() => {
@@ -4920,7 +4928,7 @@ function MobileTabBar({ view, setView }) {
   }, []);
 
   const renderTab = (it) => {
-    const allowed = canNavigate(role, it);
+    const allowed = canNavigate(perms, it);
     if (!allowed) return null;
     const salesBadge = it.k === 'sales' && todaySalesCount > 0;
     return (
@@ -4945,7 +4953,7 @@ function MobileTabBar({ view, setView }) {
     );
   };
 
-  const posAllowed = posItem ? canNavigate(role, posItem) : false;
+  const posAllowed = posItem ? canNavigate(perms, posItem) : false;
 
   return (
     <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 mobile-tabbar-wrap" role="navigation" aria-label="หลัก">
@@ -5093,6 +5101,8 @@ function POSView() {
   const toast = useToast();
   const askConfirm = useConfirm();
   const { shop } = useShop();
+  // View-only staff can browse the POS but not ring up a bill (pos.sell).
+  const canSell = useCan('pos.sell');
   // Live formula config for the "คำนวณอัตโนมัติ" button (COD only).
   // Falls back to DEFAULT_PAYLATER_CONFIG when the shop hasn't customised
   // it. useMemo so the merged object is stable across renders and the
@@ -5437,7 +5447,7 @@ function POSView() {
     || !requiresNetReceived(channel, payment)
     || (netReceived !== "" && Number(netReceived) > 0);
   const buyerNameOk    = !taxInvoice || !!buyer.name.trim();
-  const canSubmit = !submitting && cart.length > 0 && netPriceFilled && netReceivedOk && buyerNameOk;
+  const canSubmit = canSell && !submitting && cart.length > 0 && netPriceFilled && netReceivedOk && buyerNameOk;
 
   // Per-field error flags — only show after the user attempted to submit.
   const netPriceErr     = showErrors && !netPriceFilled;
@@ -5487,6 +5497,7 @@ function POSView() {
 
   const submit = async ({ skipTikTokOverlapGuard = false } = {}) => {
     if (submitLockRef.current) return; // hard guard against double-submit
+    if (!canSell) { toast.push("ไม่มีสิทธิ์ขายสินค้า — ขอให้ Super Admin เปิดสิทธิ์ 'ขายสินค้า'", "error"); return; }
     if (!cart.length) { toast.push("ไม่มีสินค้าในตะกร้า", "error"); return; }
     if (!netPriceFilled) { toast.push("กรุณากรอก 'ราคาที่ลูกค้าจ่าย'", "error"); return; }
     if (taxInvoice && !fullBuyerValid(buyer)) { toast.push("ใบกำกับภาษีเต็มรูปต้องมี ชื่อ + เลขผู้เสียภาษี (10-13 หลัก) + ที่อยู่ผู้ซื้อ", 'error'); return; }
@@ -6125,7 +6136,7 @@ function POSView() {
               so we can flag missing fields and scroll the user to them. */}
           <div onClick={!canSubmit ? flagMissing : undefined}>
             <button className="btn-primary w-full !py-3 !text-base" disabled={!canSubmit} onClick={submit}>
-              {submitting? 'กำลังบันทึก...' : `ชำระเงิน ${fmtTHB(grand)}`}
+              {!canSell ? 'ไม่มีสิทธิ์ขาย (ดูอย่างเดียว)' : submitting? 'กำลังบันทึก...' : `ชำระเงิน ${fmtTHB(grand)}`}
             </button>
           </div>
           {/* Missing-field chips — only after a failed submit attempt, so we
@@ -6582,7 +6593,7 @@ function POSView() {
               </div>
               <div onClick={!canSubmit ? flagMissing : undefined}>
                 <button className="btn-primary w-full !py-3 !text-base" disabled={!canSubmit} onClick={submit}>
-                  {submitting? 'กำลังบันทึก...' : `ชำระเงิน ${fmtTHB(grand)}`}
+                  {!canSell ? 'ไม่มีสิทธิ์ขาย (ดูอย่างเดียว)' : submitting? 'กำลังบันทึก...' : `ชำระเงิน ${fmtTHB(grand)}`}
                 </button>
               </div>
               {/* Mobile mirror of the desktop missing-field chip list — same data,
@@ -6711,13 +6722,13 @@ const PRODUCTS_PAGE = 100;
 function ProductsView() {
   const toast = useToast();
   const { shop } = useShop();
-  // Visitors can browse / filter / search the catalog but cannot open the
-  // editor. We hand a no-op opener to the row-click handlers so the rows
-  // still look interactive (hover, etc.) yet do nothing on click. Edit
-  // buttons elsewhere are gated by the same flag.
-  const role = useRole();
-  const isSuperAdmin = role === 'super_admin';
-  const canEdit = role === 'admin' || role === 'super_admin';
+  // Without products.edit the catalog is browse-only: rows don't open the
+  // editor. Cost columns need products.view_cost; stock tools their own key.
+  const { can } = usePerms();
+  const canEdit = can('products.edit');
+  const canSeeCost = can('products.view_cost');
+  const canBulkAdjust = can('products.stock_adjust');
+  const canExport = can('products.export');
   // Search-first (Tier B): server search by default; full ~6k catalog loads only
   // for chip browse, advanced filter sheet, or export (shared session cache).
   const [allRows, setAllRows] = useState([]);
@@ -6796,11 +6807,11 @@ function ProductsView() {
   }, [queryInput]);
 
   useEffect(() => {
-    if (!isSuperAdmin) return;
+    if (!canBulkAdjust) return;
     sb.auth.getSession().then(({ data }) => {
       setBulkAdjustUserEmail(data.session?.user?.email || '');
     });
-  }, [isSuperAdmin]);
+  }, [canBulkAdjust]);
 
   const loadTaxonomy = useCallback(async () => {
     const [b, c] = await Promise.all([
@@ -7240,6 +7251,7 @@ function ProductsView() {
               { k: 'list', label: 'รายการ', shortLabel: 'รายการ', icon: 'layout-list' },
             ]}
           />
+          {canExport && (
           <button
             type="button"
             className="products-toolbar__export products-toolbar__icon-btn btn-secondary icon-btn-44 !p-0 !w-11 !h-11 flex-shrink-0"
@@ -7249,12 +7261,13 @@ function ProductsView() {
           >
             <Icon name="csv-export" size={20} strokeWidth={1.75}/>
           </button>
-          {isSuperAdmin && (
+          )}
+          {canBulkAdjust && (
             <button
               type="button"
               className="products-toolbar__bulk-adjust btn-secondary !h-11 !px-2.5 !text-sm whitespace-nowrap flex-shrink-0 inline-flex items-center gap-1.5"
               onClick={() => setBulkAdjustOpen(true)}
-              title="ปรับสต็อกหลายรายการ (Super Admin)"
+              title="ปรับสต็อกหลายรายการ"
             >
               <Icon name="bulk-adjust" size={16} className="shrink-0"/>
               <span className="hidden sm:inline">ปรับสต็อกกลุ่ม</span>
@@ -7419,6 +7432,7 @@ function ProductsView() {
                     key={p.id}
                     product={p}
                     canEdit={canEdit}
+                    showCost={canSeeCost}
                     onOpen={openEditor}
                     showTikTokBadge={tiktokBadgeOn}
                     tiktokMapping={tiktokBadgeByProductId[p.id] || null}
@@ -7438,7 +7452,7 @@ function ProductsView() {
         <div className="grid grid-cols-12 px-4 py-3 text-xs uppercase tracking-wider text-muted border-b hairline bg-surface-soft flex-shrink-0">
           <div className="col-span-3">ชื่อรุ่น</div>
           <div className="col-span-2">บาร์โค้ด</div>
-          <div className="col-span-2 text-right" title="ทุนตั้งต้น (catalog)">ทุนตั้งต้น</div>
+          <div className="col-span-2 text-right" title="ทุนตั้งต้น (catalog)">{canSeeCost ? 'ทุนตั้งต้น' : ''}</div>
           <div className="col-span-3 text-center">ราคาป้าย</div>
           <div className="col-span-2 text-center">คงเหลือ</div>
         </div>
@@ -7471,7 +7485,7 @@ function ProductsView() {
                   </span>
                 </div>
                 <div className="col-span-2 font-mono text-sm text-muted truncate">{p.barcode||'—'}</div>
-                <div className="col-span-2 text-right tabular-nums font-medium text-ink">{fmtPlain(p.cost_price)}</div>
+                <div className="col-span-2 text-right tabular-nums font-medium text-ink">{canSeeCost ? fmtPlain(p.cost_price) : ''}</div>
                 <div className="col-span-3 flex justify-center">
                   <div className="price-gem">
                     <span className="price-gem__num">{fmtPlain(p.retail_price)}</span>
@@ -7528,8 +7542,10 @@ function ProductsView() {
                 </div>
                 <div className="flex items-baseline gap-2 mt-1.5 min-w-0 text-sm">
                   <span className="tabular-nums text-primary truncate">ป้าย {roundMoney(p.retail_price).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                  {canSeeCost && (<>
                   <span className="text-muted-soft leading-none">|</span>
                   <span className="tabular-nums truncate text-ink font-medium">ต้นทุน {roundMoney(p.cost_price).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                  </>)}
                 </div>
                 {p.barcode && (
                   <div className="flex items-center gap-1 mt-1 text-[11px] text-muted-soft font-mono" title={p.barcode}>
@@ -7963,8 +7979,10 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
   const [stockHistoryReload, setStockHistoryReload] = useState(0);
   const [historyTab, setHistoryTab] = useState('cost');
   const [userEmail, setUserEmail] = useState('');
-  const isAdmin = useIsAdmin();
-  const isSuperAdmin = useIsSuperAdmin();
+  const { can } = usePerms();
+  const canDelete = can('products.delete');
+  const canAdjustStock = can('products.stock_adjust');
+  const canTikTokMapping = can('products.tiktok_mapping');
   const barcodeRef = useRef(null);
   const askPrompt = usePrompt();
   const askConfirm = useConfirm();
@@ -8144,7 +8162,7 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
     <>
     <Modal open={!!editing} onClose={onClose} extraWide title={draft.id ? UI.modalTitleEdit : UI.modalTitleCreate}
       footer={<>
-        {draft.id && isSuperAdmin && (
+        {draft.id && canDelete && (
           <button className="btn-secondary !text-error hover:!bg-error/10 lg:mr-auto" onClick={handleDelete} disabled={deleting || saving}>
             {deleting ? <span className="spinner"/> : <Icon name="trash" size={16}/>} {UI.delete}
           </button>
@@ -8359,7 +8377,7 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
                   </div>
                   <div className="product-editor__stock-cell">
                     <label className="product-editor__field-label">{UI.fieldStock}</label>
-                    {isSuperAdmin ? (
+                    {canAdjustStock ? (
                       <div className="product-editor__stock-actions">
                         <div className="product-editor__stock-value">
                           <span className="product-editor__stock-num">{draft.current_stock||0}</span>
@@ -8388,14 +8406,14 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
                 )}
                 <div className="product-editor__hint">
                   <Icon name="info" size={13} className="shrink-0"/>
-                  <span>{isSuperAdmin ? UI.stockHintAdmin : UI.stockHintUser}</span>
+                  <span>{canAdjustStock ? UI.stockHintAdmin : UI.stockHintUser}</span>
                 </div>
               </div>
             )}
           </div>
         </div>
 
-        {draft.id && isAdmin && (
+        {draft.id && canTikTokMapping && (
           <ProductTikTokMappingPanel product={draft} toast={tryToast} askConfirm={askConfirm}/>
         )}
 
@@ -8474,7 +8492,12 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
 function SalesView({ onGoPOS }) {
   const toast = useToast();
   const askPrompt = usePrompt();
-  const isAdmin = useIsAdmin();
+  const { can } = usePerms();
+  const canSeeProfit = can('products.view_cost');
+  const canVoidSale = can('sales.void');
+  const canEditSale = can('sales.edit');
+  const canTaxInvoice = can('sales.tax_invoice');
+  const canNetReceived = can('sales.net_received');
   const [range, setRange] = useState({ from: todayISO(), to: todayISO() });
   const from = range.from, to = range.to;
   const [reprintId, setReprintId] = useState(null);
@@ -9186,7 +9209,7 @@ function SalesView({ onGoPOS }) {
       </div>
       {/* Summary cards — revenue (cream) + profit (Tiffany blue) split
           50/50 on sm+. Mobile: date + filter toggle sit below cards. */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:gap-4 mb-4">
+      <div className={"grid grid-cols-1 gap-3 lg:gap-4 mb-4 " + (canSeeProfit ? "sm:grid-cols-2" : "")}>
         {/* Revenue (cream) */}
         <div className="card-cream p-4 lg:p-5">
           <div className="text-xs uppercase tracking-wider text-muted">รวมทั้งหมด</div>
@@ -9200,6 +9223,7 @@ function SalesView({ onGoPOS }) {
             recipe family as card-cream, just shifted into the teal hue).
             White text for contrast; no glossy gradient/sheen so it reads
             as a calm sibling to the cream revenue card, not a billboard. */}
+        {canSeeProfit && (
         <div className="card-teal p-4 lg:p-5 rounded-2xl">
           <div className="text-xs uppercase tracking-wider text-white/70">รวมกำไร</div>
           <div className={"font-display text-3xl lg:text-4xl mt-1 tabular-nums " + (totalProfit >= 0 ? "text-white" : "text-[#ffd0d0]")}>
@@ -9212,6 +9236,7 @@ function SalesView({ onGoPOS }) {
             หลังหัก VAT {totalProfitAfterVat >= 0 ? '+' : '−'}{fmtTHB(Math.abs(totalProfitAfterVat))}
           </div>
         </div>
+        )}
       </div>
 
       {/* Tablet/desktop: keep date range and export action on one compact row. */}
@@ -9314,6 +9339,7 @@ function SalesView({ onGoPOS }) {
               <div className="col-span-2 text-center">ช่องทาง</div>
               <div className="col-span-1 text-center">ชำระ</div>
               <div className="col-span-2 text-center">ยอดสุทธิ</div>
+              {!canSeeProfit ? <div className="col-span-2"/> : (
               <button
                 type="button"
                 className={"col-span-2 text-center justify-self-center inline-flex items-center justify-center gap-1 hover:text-primary transition " + (profitSort !== "none" ? "text-primary" : "")}
@@ -9324,6 +9350,7 @@ function SalesView({ onGoPOS }) {
                 {profitSort === "asc" && <Icon name="arrow-up" size={12}/>}
                 {profitSort === "desc" && <Icon name="arrow-down" size={12}/>}
               </button>
+              )}
             </div>
             {/* Rows */}
             {g.list.map(o => {
@@ -9357,7 +9384,7 @@ function SalesView({ onGoPOS }) {
                   )}
                 </div>
                 <div className={"col-span-2 flex flex-col justify-center items-center text-center tabular-nums font-medium min-h-[34px] " + (o.status==='voided' ? 'text-muted-soft line-through' : sm && sm.profit >= 0 ? 'text-ink' : 'text-error')}>
-                  {sm == null ? <span className="text-muted-soft">—</span> : (
+                  {!canSeeProfit ? null : sm == null ? <span className="text-muted-soft">—</span> : (
                     <>
                       <div>{(sm.profit >= 0 ? '+' : '') + fmtMoney(sm.profit)}</div>
                       <div className="text-[11px] font-normal text-muted-soft">หลัง VAT {(sm.profit/1.07 >= 0 ? '+' : '') + fmtMoney(sm.profit/1.07)}</div>
@@ -9425,7 +9452,7 @@ function SalesView({ onGoPOS }) {
                     {ECOMMERCE_CHANNELS.has(o.channel) && o.net_received != null && (
                       <div className="text-xs text-muted-soft mt-0.5 tabular-nums">ได้รับ {fmtMoney(o.net_received)}</div>
                     )}
-                    {isAdmin && sm && o.status !== 'voided' && (
+                    {canSeeProfit && sm && o.status !== 'voided' && (
                       <div
                         className={"text-xs tabular-nums mt-1 inline-flex items-center gap-0.5 " + (sm.profit >= 0 ? 'text-success' : 'text-error')}
                         title={`กำไรหลัง VAT ${sm.profit/1.07 >= 0 ? '+' : ''}${fmtMoney(sm.profit/1.07)}`}
@@ -9464,21 +9491,23 @@ function SalesView({ onGoPOS }) {
             </div>
           </>) : (<>
             <div className="hidden lg:flex flex-wrap gap-2 justify-end w-full">
-              {detail?.order.status==='active' && isAdmin && (<>
+              {detail?.order.status==='active' && canVoidSale && (
                 <button className="btn-secondary btn-danger-modal whitespace-nowrap flex-shrink-0" onClick={voidSale} disabled={voiding}>
                   <Icon name="trash" size={16}/>{voiding?'กำลังยกเลิก...':'ยกเลิกบิล'}
                 </button>
+              )}
+              {detail?.order.status==='active' && canEditSale && (
                 <button className="btn-print-blue whitespace-nowrap flex-shrink-0" onClick={startEditBill}
                   title="แก้ไขจำนวน / ช่องทาง / วิธีชำระ — ทุกการแก้ไขถูกบันทึกใน audit log">
                   <Icon name="edit" size={16}/> แก้ไขบิล
                 </button>
-              </>)}
+              )}
               {detail && (
                 <button className="btn-print-receipt whitespace-nowrap flex-shrink-0" onClick={()=>{ setReprintVariant(undefined); setReprintId(detail.order.id); }}>
                   <Icon name="receipt" size={16}/> พิมพ์ใบเสร็จ
                 </button>
               )}
-              {detail && isAdmin && detail.order.status!=='voided' && (
+              {detail && canTaxInvoice && detail.order.status!=='voided' && (
                 <button className="btn-print-gold whitespace-nowrap flex-shrink-0" onClick={openIssueInvoice}
                   title="ออก/อัปเดตข้อมูลผู้ซื้อ แล้วพิมพ์ใบกำกับภาษีแบบเต็มรูป (A4)">
                   <Icon name="receipt" size={16}/> ใบกำกับเต็มรูป
@@ -9490,11 +9519,13 @@ function SalesView({ onGoPOS }) {
               onClose={()=>setDetail(null)}
               actions={[
                 ...(detail ? [{ id: 'print', icon: 'receipt', label: 'พิมพ์ใบเสร็จ', onClick: () => { setReprintVariant(undefined); setReprintId(detail.order.id); } }] : []),
-                ...(detail?.order.status === 'active' && isAdmin ? [
+                ...(detail?.order.status === 'active' && canEditSale ? [
                   { id: 'edit', icon: 'edit', label: 'แก้ไขบิล', onClick: startEditBill },
+                ] : []),
+                ...(detail?.order.status === 'active' && canVoidSale ? [
                   { id: 'void', icon: 'trash', label: voiding ? 'กำลังยกเลิก...' : 'ยกเลิกบิล', onClick: voidSale, variant: 'danger', disabled: voiding },
                 ] : []),
-                ...(detail && isAdmin && detail.order.status !== 'voided' ? [
+                ...(detail && canTaxInvoice && detail.order.status !== 'voided' ? [
                   { id: 'a4', icon: 'file', label: 'ใบกำกับเต็มรูป', onClick: openIssueInvoice },
                 ] : []),
               ]}
@@ -9729,7 +9760,7 @@ function SalesView({ onGoPOS }) {
                               ? <span className="text-error text-sm font-sans">— รอใส่ราคา —</span>
                               : <span className="text-muted-soft text-sm font-sans">— ยังไม่ได้กรอก —</span>}
                         </span>
-                        {isAdmin && detail.order.status==='active' && (
+                        {canNetReceived && detail.order.status==='active' && (
                           <button className="btn-secondary !py-1.5 !px-2.5 !text-xs" onClick={()=>{ setNetDraft(detail.order.net_received != null ? String(detail.order.net_received) : ""); setEditNet(true); }}>
                             <Icon name="edit" size={12}/> แก้ไข
                           </button>
@@ -10022,9 +10053,24 @@ function AddProductModal({ open, onClose, onAdded }) {
 /* =========================================================
    STOCK VIEW (Receive + Return tabs)
 ========================================================= */
+// Shown in place of a create form when the user may only look at history.
+function ViewOnlyNotice({ what }) {
+  return (
+    <div className="card-canvas p-5 text-sm text-muted flex items-start gap-3">
+      <Icon name="lock" size={18} className="shrink-0 mt-0.5"/>
+      <div>
+        <div className="font-medium text-ink">ดูได้อย่างเดียว</div>
+        <div className="mt-0.5">ไม่มีสิทธิ์{what} — กด "ดูประวัติ" เพื่อดูบิลย้อนหลัง หรือขอให้ Super Admin เปิดสิทธิ์</div>
+      </div>
+    </div>
+  );
+}
+
 function ReceiveView() {
   const toast = useToast();
   const askConfirm = useConfirm();
+  const { can } = usePerms();
+  const canCreate = can('receive.create');
   const [tab, setTab] = useState('receive');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [addProductOpen, setAddProductOpen] = useState(false);
@@ -10055,6 +10101,7 @@ function ReceiveView() {
           (which is ~48px tall due to its inner padding). Icon bumped
           to 22px so it fills the larger tap area and reads clearly
           without a text label. Desktop reverts to icon + text. */}
+      {can('products.edit|receive.create') && (
       <button
         className="btn-add-product !py-2 !text-sm icon-btn-44 !w-12 !h-12 lg:!w-auto lg:!h-10 whitespace-nowrap flex-shrink-0"
         onClick={()=>setAddProductOpen(true)}
@@ -10063,6 +10110,7 @@ function ReceiveView() {
         <Icon name="plus" size={22} className="lg:!w-[18px] lg:!h-[18px]"/>
         <span className="hidden lg:inline lg:ml-1">เพิ่มรุ่นสินค้า</span>
       </button>
+      )}
       <button
         className="btn-secondary !py-2 !text-sm icon-btn-44 !w-12 !h-12 lg:!w-auto lg:!h-10 whitespace-nowrap flex-shrink-0"
         onClick={()=>setHistoryOpen(true)}
@@ -10098,7 +10146,9 @@ function ReceiveView() {
             {tabs.find(t=>t.k===tab).hint}
           </p>
         )}
-        {tab === 'bulk_receive' ? (
+        {!canCreate ? (
+          <ViewOnlyNotice what={tab === 'claim' ? 'ส่งเคลมคืนบริษัท' : 'รับสินค้าเข้า'}/>
+        ) : tab === 'bulk_receive' ? (
           <BulkReceiveView key="bulk_receive" toast={toast} confirm={askConfirm} onPhaseChange={setBrvPhase} />
         ) : (
           <StockMovementForm key={tab} kind={tab} ref={formRef} />
@@ -10119,6 +10169,7 @@ function ReceiveView() {
 }
 function ReturnView()  {
   const [historyOpen, setHistoryOpen] = useState(false);
+  const canCreate = useCan('return.create');
   // Same pattern as ReceiveView's ActionButtons: icon-only on mobile,
   // icon + text on desktop. Keeps the iPhone header from wrapping.
   const HistoryBtn = (
@@ -10151,7 +10202,7 @@ function ReturnView()  {
         {/* On mobile, dock the history button inline with the form's
             search row via the `headerAction` prop instead of giving it
             its own row. Desktop keeps the button in the page header. */}
-        <StockMovementForm kind="return"/>
+        {canCreate ? <StockMovementForm kind="return"/> : <ViewOnlyNotice what="รับคืนจากลูกค้า"/>}
         <MovementHistoryModal open={historyOpen} onClose={()=>setHistoryOpen(false)} kind="return"/>
       </div>
     </div>
@@ -12733,6 +12784,7 @@ function fmtThaiYearMonth(yyyymm) {
 function ShopExpensesModal({ open, onClose, initialMonth, onChanged }) {
   const toast = useToast();
   const askConfirm = useConfirm();
+  const canEditExpenses = useCan('dashboard.expenses');
   const [month, setMonth] = useState(initialMonth);            // 'YYYY-MM'
   const [draft, setDraft] = useState({});                      // category -> {id?, amount, base_salary, commission_pct}
   const [others, setOthers] = useState([]);                    // [{id?, label, amount, sort_order}]
@@ -12821,6 +12873,7 @@ function ShopExpensesModal({ open, onClose, initialMonth, onChanged }) {
   }, [draft, others, monthSales]);
 
   async function save() {
+    if (!canEditExpenses) { toast.push('ไม่มีสิทธิ์แก้ค่าใช้จ่ายร้าน', 'error'); return; }
     setSaving(true);
     try {
       const periodMonth = `${month}-01`;
@@ -12890,6 +12943,7 @@ function ShopExpensesModal({ open, onClose, initialMonth, onChanged }) {
 
   // Apply current category's value to every month that has any shop_expenses record (plus current month).
   async function applyToAllMonths(categoryKey) {
+    if (!canEditExpenses) { toast.push('ไม่มีสิทธิ์แก้ค่าใช้จ่ายร้าน', 'error'); return; }
     const c = EXPENSE_CAT_MAP[categoryKey];
     const d = draft[categoryKey];
     if (!d) { toast.push('กรอกค่าก่อนกดปุ่มนี้', 'error'); return; }
@@ -12951,10 +13005,12 @@ function ShopExpensesModal({ open, onClose, initialMonth, onChanged }) {
           <span className="text-muted">รวมเดือนนี้:</span>{' '}
           <span className="font-display text-xl tabular-nums">{fmtTHB(monthTotal)}</span>
         </div>
-        <button className="btn-secondary" onClick={onClose} disabled={saving}>ยกเลิก</button>
+        <button className="btn-secondary" onClick={onClose} disabled={saving}>{canEditExpenses ? 'ยกเลิก' : 'ปิด'}</button>
+        {canEditExpenses && (
         <button className="btn-primary" onClick={save} disabled={saving || loading}>
           {saving ? 'กำลังบันทึก…' : <><Icon name="check" size={16}/>บันทึก</>}
         </button>
+        )}
       </>}>
       <div className="space-y-3">
         {/* Month selector */}
@@ -13096,7 +13152,7 @@ function ExpenseRow({ category, value, onChange, monthSales, onApplyAll, disable
 ========================================================= */
 function OverviewView() {
   const today = todayISO();
-  const isSuperAdmin = useIsSuperAdmin();
+  const canAnomalies = useCan('dashboard.anomalies');
   const [dateRange, setDateRange] = useState({ from: today, to: today });
   // VAT tab uses a separate range because its sensible default is
   // "this month so far" (matches the typical ภ.พ.30 filing window) vs
@@ -13127,7 +13183,7 @@ function OverviewView() {
     { k: 'vat',       label: 'VAT', icon: 'receipt',
       kicker: 'VAT (ภ.พ.30)',  title: 'ภาษีมูลค่าเพิ่ม (ภ.พ.30)' },
     { k: 'anomalies', label: 'รายการผิดพลาด', icon: 'alert',
-      kicker: 'Anomalies',     title: 'รายการผิดพลาด', superAdminOnly: true },
+      kicker: 'Anomalies',     title: 'รายการผิดพลาด', perm: 'dashboard.anomalies' },
   ];
   const activeTab = TABS.find((t) => t.k === tab) ?? TABS[0];
 
@@ -13135,8 +13191,8 @@ function OverviewView() {
   // (browser back, role flip), redirect them to dashboard rather than
   // showing a tab they don't have access to.
   useEffect(() => {
-    if (tab === 'anomalies' && !isSuperAdmin) setTab('dashboard');
-  }, [tab, isSuperAdmin]);
+    if (tab === 'anomalies' && !canAnomalies) setTab('dashboard');
+  }, [tab, canAnomalies]);
 
   const segmentProps = {
     tabs: TABS,
@@ -13144,7 +13200,7 @@ function OverviewView() {
     onChange: setTab,
     Icon,
     ariaLabel: 'มุมมองภาพรวม',
-    isTabDisabled: (t) => Boolean(t.superAdminOnly && !isSuperAdmin),
+    isTabDisabled: (t) => Boolean(t.perm && !canAnomalies),
   };
 
   return (
@@ -15351,7 +15407,6 @@ function OfflineBanner() {
 ========================================================= */
 function ECommerceViewHost({ view, setView }) {
   const toast = useToast();
-  const role = useRole();
   return (
     <ECommerceView
       view={view}
@@ -15359,7 +15414,6 @@ function ECommerceViewHost({ view, setView }) {
       toast={toast}
       DatePicker={DatePicker}
       todayISO={todayISO}
-      isSuperAdmin={role === 'super_admin'}
     />
   );
 }
@@ -15478,7 +15532,40 @@ function App() {
     syncServerClock(sb).catch(() => {});
   }, [session?.access_token, mfaState]);
 
-  const role = getUserRole(session);
+  const jwtRole = getUserRole(session);
+
+  // Per-role permissions from the DB (migration 086). Until loaded — or if
+  // the migration isn't applied yet — the role's built-in defaults apply,
+  // which match what each role could do before roles became editable.
+  const [serverPerms, setServerPerms] = useState(null);
+  const loadPerms = useCallback(async () => {
+    const { data, error } = await sb.rpc('get_my_permissions');
+    if (error) { setServerPerms(null); return; }
+    setServerPerms(data || null);
+  }, []);
+  useEffect(() => {
+    if (!session || mfaState !== 'ok') { setServerPerms(null); return undefined; }
+    loadPerms();
+    // Pick up changes the super admin makes without a re-login.
+    const onFocus = () => { if (document.visibilityState !== 'hidden') loadPerms(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    const t = setInterval(loadPerms, 5 * 60 * 1000);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+      clearInterval(t);
+    };
+  }, [session?.access_token, mfaState, loadPerms]);
+  const role = serverPerms?.role || jwtRole;
+  const perms = React.useMemo(
+    () => effectivePermissions(role, serverPerms?.all ? null : serverPerms?.permissions ?? null),
+    [role, serverPerms],
+  );
+  const permValue = React.useMemo(
+    () => ({ role, perms, loaded: !!serverPerms }),
+    [role, perms, serverPerms],
+  );
 
   // Decide MFA gate state every time the session (or our manual tick)
   // changes. Order matters: aal2 wins, then "have factor → must challenge",
@@ -15506,26 +15593,19 @@ function App() {
     return () => { cancelled = true; };
   }, [session?.access_token, mfaTick]);
 
-  // Defensive: if the current view isn't allowed for this role (visitor on
-  // a non-products / non-customer-price view, role flip during a session,
-  // etc.) redirect:
-  //   visitor  → products (or stay on customer-price)
-  //   admin+   → pos      (sensible default landing)
+  // Defensive: if the current view isn't allowed by the user's permissions
+  // (first load, permissions changed mid-session, …) redirect to the first
+  // page they may open.
   useEffect(() => {
     if (!session) return;
-    if (role === 'visitor') return;
-    if (view === 'ecommerce') setView(ECOMMERCE_DEFAULT_VIEW);
-  }, [view, session, role]);
+    if (view === 'ecommerce' && canPerm(perms, 'view.ecommerce')) setView(ECOMMERCE_DEFAULT_VIEW);
+  }, [view, session, perms]);
 
   useEffect(() => {
     if (!session) return;
-    if (role === 'visitor') {
-      if (!VISITOR_VIEWS.includes(view)) setView(VISITOR_VIEW);
-      return;
-    }
-    const allowed = routableViews(role, navForRole(role));
-    if (!allowed.includes(view)) setView('pos');
-  }, [session, role, view]);
+    const allowed = routableViews(null, navForRole(perms).filter(it => canNavigate(perms, it)));
+    if (!allowed.includes(view)) setView(landingView(perms));
+  }, [session, perms, view]);
 
   // Global UX: auto-select content on focus for numeric/decimal inputs so the
   // user doesn't have to manually delete the placeholder "0" or previous value
@@ -15602,6 +15682,7 @@ function App() {
     <ToastProvider>
       <DialogProvider>
       <RoleCtx.Provider value={role}>
+      <PermProvider value={permValue}>
       <ShopProvider>
         <AppUpdateGate />
         <OfflineBanner />
@@ -15640,7 +15721,7 @@ function App() {
             )}
             <div className="relative">
               {/* Products keep-alive: hide without unmounting so catalog UI state persists. */}
-              {productsKeptAlive && (
+              {productsKeptAlive && canPerm(perms, 'view.products') && (
                 <div
                   className={view === 'products' ? 'view-fade' : ''}
                   hidden={view !== 'products'}
@@ -15651,15 +15732,14 @@ function App() {
               )}
               {view !== 'products' && (
                 <div key={view} className="view-fade">
-                  {view==='pos' && <POSView />}
-                  {view==='customer-price' && <CustomerPriceViewHost />}
-                  {view==='sales' && <SalesView onGoPOS={()=>setView('pos')} />}
-                  {/* admin-or-above gate matches DB-side is_admin() — super_admin
-                      inherits everything an admin can do. */}
-                  {view==='receive'   && (role==='admin' || role==='super_admin') && <ReceiveView />}
-                  {view==='return' && <ReturnView />}
-                  {view==='dashboard' && (role==='admin' || role==='super_admin') && <OverviewView />}
-                  {isEcommerceView(view) && (role==='admin' || role==='super_admin') && (
+                  {/* Each page needs its view.* permission (DB enforces the actions). */}
+                  {view==='pos' && canPerm(perms, 'view.pos') && <POSView />}
+                  {view==='customer-price' && canPerm(perms, 'view.customer_price') && <CustomerPriceViewHost />}
+                  {view==='sales' && canPerm(perms, 'view.sales') && <SalesView onGoPOS={()=>setView('pos')} />}
+                  {view==='receive' && canPerm(perms, 'view.receive') && <ReceiveView />}
+                  {view==='return' && canPerm(perms, 'view.return') && <ReturnView />}
+                  {view==='dashboard' && canPerm(perms, 'view.dashboard') && <OverviewView />}
+                  {isEcommerceView(view) && canPerm(perms, 'view.ecommerce') && (
                     <ECommerceViewHost view={view} setView={setView} />
                   )}
                 </div>
@@ -15676,11 +15756,12 @@ function App() {
         {/* User-management modal — only mounts when super_admin opens it.
             The button is gated in Sidebar/MobileTopBar so non-super-admins
             never see the trigger; the gate here is belt-and-braces. */}
-        {(role === 'admin' || role === 'super_admin') && <TikTokMappingEditorMount />}
+        {canPerm(perms, 'products.tiktok_mapping') && <TikTokMappingEditorMount />}
         {role === 'super_admin' && (
           <UserManagementModal open={userMgmtOpen} onClose={()=>setUserMgmtOpen(false)} />
         )}
       </ShopProvider>
+      </PermProvider>
       </RoleCtx.Provider>
       </DialogProvider>
     </ToastProvider>

@@ -3,6 +3,7 @@ import Icon from '../../ui/Icon.jsx';
 import TikTokOrderCard from './TikTokOrderCard.jsx';
 import TikTokListPagination from './TikTokListPagination.jsx';
 import { TikTokGlassSection, TikTokGlassBtn, TikTokGlassShell } from './glass/index.js';
+import { useCan } from '../../../lib/perm-context.js';
 
 function OrderSkeleton({ n = 5 }) {
   return (
@@ -54,6 +55,7 @@ export default function TikTokOrderList({
   orderSearch = '',
   voidStockStatus = {},
 }) {
+  const canSync = useCan('ecommerce.sync');
   const [pageSize, setPageSize] = useState(20);
   const [page, setPage] = useState(1);
 
@@ -89,6 +91,7 @@ export default function TikTokOrderList({
               ? 'ยังไม่มีออเดอร์ "ที่จะจัดส่ง" — ระบบกำลังดึงจาก TikTok อัตโนมัติ'
               : 'ยังไม่มีออเดอร์ในแท็บนี้ — รอซิงค์จาก TikTok หรือกดปุ่มด้านล่าง'}
           </div>
+          {canSync && (
           <TikTokGlassBtn variant="coral" className="tt-glass__btn--lg" onClick={onSyncOrders} disabled={syncing}>
             {syncing
               ? <span className="text-sm font-semibold tabular-nums">{syncPct}%</span>
@@ -97,6 +100,7 @@ export default function TikTokOrderList({
                 : <Icon name="refresh" size={16}/>}
             อัปเดตข้อมูลจาก TikTok
           </TikTokGlassBtn>
+          )}
           <p className="text-xs text-muted-soft mt-4 max-w-md mx-auto leading-relaxed">
             ซิงค์อัตโนมัติทุก {livePollSec} วินาที + cron ทุก 5 นาที —
             ครั้งแรกอาจใช้เวลาสักครู่ถ้ามีออเดอร์จำนวนมาก (ดึงทีละ ~60 รายการ)

@@ -16,6 +16,7 @@ import {
   getValidAccessToken,
   serviceClient,
 } from '../_shared/tiktok-client.ts';
+import { callerHasPerm } from '../_shared/perm.ts';
 import {
   resolveListingSkuImageUrl,
   sameImageUrl,
@@ -161,7 +162,7 @@ async function callerMayRefresh(req: Request): Promise<boolean> {
     Deno.env.get('SUPABASE_ANON_KEY')!,
     { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false } },
   );
-  const { data, error } = await userClient.rpc('is_admin');
+  const { data, error } = await userClient.rpc('has_perm', { p_perm: 'settings.tiktok|settings.ai' });
   return !error && data === true;
 }
 
@@ -244,6 +245,19 @@ Deno.serve(async (req) => {
       tiktok_product_id: string;
       seller_sku?: string;
     };
+    // Default mode runs after a SKU is paired or moved, from receive, the
+    // TikTok confirm queue or the pairing editor.
+    const perm = await callerHasPerm(
+      req,
+      'settings.tiktok|settings.ai|products.tiktok_mapping|ecommerce.matching|receive.create|pos.tiktok_confirm',
+    );
+    if (!perm.ok) {
+      return new Response(JSON.stringify({ ok: false, error: perm.error }), {
+        status: 200,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+      });
+    }
+
     let mappings: MappingRow[];
     if (productIds?.length) {
       // Filter by the requested products in the DB. The RPC orders every

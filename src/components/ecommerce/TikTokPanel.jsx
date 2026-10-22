@@ -1,6 +1,7 @@
 // TikTok Shop — orders, SKU images, shipping labels, tax invoices.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { sb } from '../../lib/supabase-client.js';
+import { usePerms } from '../../lib/perm-context.js';
 import { mapError } from '../../lib/error-map.js';
 import { fullBuyerValid } from '../../lib/tax-buyer.js';
 import { formatPollToast } from '../../lib/tiktok-poll-sync.js';
@@ -115,7 +116,8 @@ function canShipOrder(o) {
   return NEEDS_RTS.has(normStatus(o.tiktok_order_status));
 }
 
-export default function TikTokPanel({ toast, section = 'orders', onSyncChange, isSuperAdmin = false, setView }) {
+export default function TikTokPanel({ toast, section = 'orders', onSyncChange, setView }) {
+  const { can } = usePerms();
   const [orders, setOrders] = useState([]);
   const [itemsByOrder, setItemsByOrder] = useState({});
   const [imageByProduct, setImageByProduct] = useState({});
@@ -495,7 +497,7 @@ export default function TikTokPanel({ toast, section = 'orders', onSyncChange, i
               onPrintLabel={printOneLabel}
               onPrintPackingSlip={printOneLabel}
               onSyncOrders={syncOrders}
-              onReturnGoods={handleReturnGoods}
+              onReturnGoods={can('pos.tiktok_resolve') ? handleReturnGoods : undefined}
               voidStockStatus={voidStockStatus}
             />
           </section>
@@ -527,7 +529,7 @@ export default function TikTokPanel({ toast, section = 'orders', onSyncChange, i
         </section>
       )}
 
-      {section === 'matching' && isSuperAdmin && (
+      {section === 'matching' && can('ecommerce.matching') && (
         <section className="tt-glass__group" aria-label="TikTok matching queue">
           <div className="tt-glass__group-heading">
             <h2 className="tt-glass__group-title">Matching Queue</h2>
@@ -537,7 +539,7 @@ export default function TikTokPanel({ toast, section = 'orders', onSyncChange, i
         </section>
       )}
 
-      {section === 'stock' && isSuperAdmin && (
+      {section === 'stock' && can('ecommerce.stock_reconcile') && (
         <section className="tt-glass__group" aria-label="TikTok stock control">
           <div className="tt-glass__group-heading">
             <h2 className="tt-glass__group-title">Stock Control</h2>

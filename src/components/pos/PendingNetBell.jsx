@@ -5,6 +5,7 @@ import { excludePendingTikTok } from '../../lib/ecommerce-channels.js';
 import Icon from '../ui/Icon.jsx';
 import ProductThumb from '../ui/ProductThumb.jsx';
 import { versionedImageUrl } from '../../lib/product-classify.js';
+import { useCan } from '../../lib/perm-context.js';
 
 /**
  * Notification bell for e-commerce sales rung up with "ใส่ทีหลัง" — i.e. bills
@@ -45,6 +46,9 @@ export default function PendingNetBell({
   floatClassName = 'top-[30px] right-[40px]',
   className = '',
 }) {
+  // Seeing the pending list is fine for viewers; filling the amount needs
+  // sales.net_received (the sale_orders RLS update policy checks it too).
+  const canFill = useCan('sales.net_received');
   const [bills, setBills]     = useState([]);
   const [open, setOpen]       = useState(false);
   const [entry, setEntry]     = useState(null); // bill currently being filled
@@ -133,9 +137,13 @@ export default function PendingNetBell({
   const iconSize  = Math.round(size * 0.5);
   const badgeSize = Math.max(18, Math.round(size * 0.46));
 
-  const openEntry = (bill) => { setEntry(bill); setAmount(''); };
+  const openEntry = (bill) => {
+    if (!canFill) { toast?.('ไม่มีสิทธิ์ใส่ยอดเงินที่ได้รับ — ดูได้อย่างเดียว', 'info'); return; }
+    setEntry(bill); setAmount('');
+  };
 
   const save = async () => {
+    if (!canFill) return;
     const value = Number(amount);
     if (!amount || !(value > 0)) { toast?.('กรุณากรอกจำนวนเงินที่ถูกต้อง', 'error'); return; }
     setSaving(true);

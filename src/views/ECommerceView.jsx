@@ -6,12 +6,15 @@ import ComingSoonPanel from '../components/ecommerce/ComingSoonPanel.jsx';
 import TikTokSyncOverlay from '../components/ui/TikTokSyncOverlay.jsx';
 import {
   parseEcommerceView,
-  tiktokSectionsForRole,
+  tiktokSectionsFor,
+  TIKTOK_SECTIONS,
 } from '../lib/ecommerce-nav.js';
+import { usePerms } from '../lib/perm-context.js';
 import { TikTokGlassTabs } from '../components/ecommerce/tiktok/glass/index.js';
 
-function TikTokSectionNav({ view, setView, disabled, isSuperAdmin }) {
-  const sections = tiktokSectionsForRole(isSuperAdmin);
+function TikTokSectionNav({ view, setView, disabled }) {
+  const { can } = usePerms();
+  const sections = tiktokSectionsFor(can);
   const tabs = sections.map((s) => ({ key: s.view, label: s.label }));
   return (
     <TikTokGlassTabs
@@ -25,8 +28,11 @@ function TikTokSectionNav({ view, setView, disabled, isSuperAdmin }) {
   );
 }
 
-export default function ECommerceView({ view, setView, toast, isSuperAdmin = false }) {
+export default function ECommerceView({ view, setView, toast }) {
   const { platform, section } = parseEcommerceView(view);
+  const { can } = usePerms();
+  const sectionPerm = TIKTOK_SECTIONS.find(s => s.k === section)?.perm;
+  const sectionAllowed = !sectionPerm || can(sectionPerm);
   const [pageSync, setPageSync] = useState({ visible: false, pct: 0, phase: 'in' });
   const [syncTop, setSyncTop] = useState(0);
   const fadeTimerRef = useRef(null);
@@ -87,10 +93,10 @@ export default function ECommerceView({ view, setView, toast, isSuperAdmin = fal
   }, [setView]);
 
   useEffect(() => {
-    if (platform === 'tiktok' && (section === 'matching' || section === 'stock') && !isSuperAdmin) {
+    if (platform === 'tiktok' && !sectionAllowed) {
       setView('ecommerce-tiktok-orders');
     }
-  }, [platform, section, isSuperAdmin, setView]);
+  }, [platform, sectionAllowed, setView]);
 
   const pageBlocked = pageSync.visible;
   const syncOverlayStyle = { '--ttc-sync-top': `${syncTop}px` };
@@ -116,15 +122,14 @@ export default function ECommerceView({ view, setView, toast, isSuperAdmin = fal
           <div className={pageBlocked ? 'pointer-events-none select-none' : ''}>
             <div className="px-4 lg:px-10 pt-5 lg:pt-6">
               <div className="tt-glass">
-                <TikTokSectionNav view={view} setView={setView} disabled={pageBlocked} isSuperAdmin={isSuperAdmin}/>
+                <TikTokSectionNav view={view} setView={setView} disabled={pageBlocked}/>
               </div>
             </div>
 
             <div className="px-4 lg:px-10 pt-4 lg:pt-5 pb-8">
               <TikTokPanel
                 toast={toast}
-                section={section}
-                isSuperAdmin={isSuperAdmin}
+                section={sectionAllowed ? section : 'orders'}
                 setView={setView}
                 onSyncChange={handleSyncChange}
               />

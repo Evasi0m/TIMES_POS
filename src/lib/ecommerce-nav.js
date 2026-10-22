@@ -6,17 +6,18 @@ export const ECOMMERCE_PLATFORMS = [
   { k: 'lazada', label: 'Lazada', brand: 'lazada', defaultView: 'ecommerce-lazada' },
 ];
 
+// `perm` = permission key needed for the tab (see ./permissions.js).
 export const TIKTOK_SECTIONS = [
-  { k: 'orders',   label: 'ออเดอร์ & Label',    view: 'ecommerce-tiktok-orders' },
-  { k: 'invoices', label: 'ใบกำกับภาษี',         view: 'ecommerce-tiktok-invoices' },
-  { k: 'returns',  label: 'คืนเงิน/คืนสินค้า',   view: 'ecommerce-tiktok-returns' },
-  { k: 'matching', label: 'จับคู่สินค้า',        view: 'ecommerce-tiktok-matching', superAdminOnly: true },
-  { k: 'stock',    label: 'เช็คสต็อก',          view: 'ecommerce-tiktok-stock', superAdminOnly: true },
+  { k: 'orders',   label: 'ออเดอร์ & Label',    view: 'ecommerce-tiktok-orders',   perm: 'view.ecommerce' },
+  { k: 'invoices', label: 'ใบกำกับภาษี',         view: 'ecommerce-tiktok-invoices', perm: 'ecommerce.invoices' },
+  { k: 'returns',  label: 'คืนเงิน/คืนสินค้า',   view: 'ecommerce-tiktok-returns',  perm: 'ecommerce.returns' },
+  { k: 'matching', label: 'จับคู่สินค้า',        view: 'ecommerce-tiktok-matching', perm: 'ecommerce.matching' },
+  { k: 'stock',    label: 'เช็คสต็อก',          view: 'ecommerce-tiktok-stock',    perm: 'ecommerce.stock_reconcile' },
 ];
 
-/** TikTok sub-tabs visible for the current role. */
-export function tiktokSectionsForRole(isSuperAdmin) {
-  return TIKTOK_SECTIONS.filter(s => !s.superAdminOnly || isSuperAdmin);
+/** TikTok sub-tabs the user may open. `can(key)` from usePerms(). */
+export function tiktokSectionsFor(can) {
+  return TIKTOK_SECTIONS.filter(s => can(s.perm));
 }
 
 export const ECOMMERCE_VIEWS = [

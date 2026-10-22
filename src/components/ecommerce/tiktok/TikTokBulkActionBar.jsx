@@ -1,6 +1,7 @@
 import React from 'react';
 import Icon from '../../ui/Icon.jsx';
 import { TikTokGlassBtn } from './glass/index.js';
+import { useCan } from '../../../lib/perm-context.js';
 
 export default function TikTokBulkActionBar({
   selectedCount,
@@ -9,7 +10,8 @@ export default function TikTokBulkActionBar({
   labelBusy,
   shipBusy,
 }) {
-  if (!selectedCount) return null;
+  const canShip = useCan('ecommerce.ship');
+  if (!selectedCount || !canShip) return null;
   return (
     <div className="tt-glass__sticky-bar flex flex-wrap items-center gap-3">
       <span className="tt-glass__sticky-bar__label">
