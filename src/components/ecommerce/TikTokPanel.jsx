@@ -183,7 +183,9 @@ export default function TikTokPanel({ toast, section = 'orders', onSyncChange, s
   const reloadQuiet = useCallback(() => load({ quiet: true }), [load]);
 
   const { pullFromTikTok, pullBusy } = useTikTokLiveSync({
-    enabled: section === 'orders',
+    // Viewers without sync rights rely on the 5-min cron import instead
+    // (tiktok-poll-orders refuses them).
+    enabled: section === 'orders' && can('ecommerce.sync|pos.tiktok_confirm'),
     onReload: reloadQuiet,
     onPulled: () => setLastSyncedAt(new Date()),
   });

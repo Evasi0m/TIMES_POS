@@ -2,6 +2,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { serviceClient } from '../_shared/tiktok-client.ts';
 import { importTikTokOrder } from '../_shared/tiktok-order-import.ts';
+import { callerHasPerm } from '../_shared/perm.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -10,6 +11,17 @@ const CORS = {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
+
+  // Manual single-order import.
+  {
+    const perm = await callerHasPerm(req, 'ecommerce.sync|pos.tiktok_confirm');
+    if (!perm.ok) {
+      return new Response(JSON.stringify({ ok: false, error: perm.error }), {
+        status: perm.status,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+      });
+    }
+  }
 
   let body: { tiktok_order_id?: string };
   try {

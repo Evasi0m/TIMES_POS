@@ -7,6 +7,7 @@ import {
   importTikTokOrder,
   type ImportResult,
 } from '../_shared/tiktok-order-import.ts';
+import { callerHasPerm } from '../_shared/perm.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -19,6 +20,17 @@ const MAX_PER_RUN = 60;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
+
+  // Sync from the admin orders page, live sync, or the POS confirm queue; cron passes with its service-role JWT.
+  {
+    const perm = await callerHasPerm(req, 'ecommerce.sync|pos.tiktok_confirm');
+    if (!perm.ok) {
+      return new Response(JSON.stringify({ ok: false, error: perm.error }), {
+        status: perm.status,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+      });
+    }
+  }
 
   const supa = serviceClient();
   const results: unknown[] = [];
