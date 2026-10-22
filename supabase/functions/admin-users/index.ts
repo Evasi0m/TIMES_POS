@@ -15,7 +15,7 @@
 //   { "action":"set_mfa_required", "user_id":..., "required": bool} → toggle "force MFA" flag
 //   { "action":"reset_mfa", "user_id":... }                        → unenroll all TOTP factors (user re-enrolls on next login)
 //
-// Allowed roles: 'super_admin', 'admin', 'visitor'.
+// Allowed roles: 'super_admin', 'admin', 'staff', 'visitor'.
 //
 // verify_jwt = true at deploy time. We additionally check that the
 // caller's app_role === 'super_admin' before processing any action.
@@ -32,7 +32,7 @@ const CORS = {
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-const ALLOWED_ROLES = new Set(['super_admin', 'admin', 'visitor']);
+const ALLOWED_ROLES = new Set(['super_admin', 'admin', 'staff', 'visitor']);
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -67,7 +67,7 @@ Deno.serve(async (req: Request) => {
     global: { headers: { Authorization: auth } },
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const { data: rpc, error: rpcErr } = await userClient.rpc('is_super_admin');
+  const { data: rpc, error: rpcErr } = await userClient.rpc('is_owner');
   if (rpcErr) return json({ ok: false, error: 'auth_check_failed: ' + rpcErr.message }, 500);
   if (rpc !== true) return json({ ok: false, error: 'forbidden' }, 403);
 

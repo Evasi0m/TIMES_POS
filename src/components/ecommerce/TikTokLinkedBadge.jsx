@@ -9,7 +9,7 @@ import {
 
 /**
  * TikTok Shop mark — product already linked in tiktok_product_mappings.
- * For admin / super_admin it is tappable and opens the shared pairing editor
+ * With products.tiktok_mapping it is tappable and opens the shared pairing editor
  * (เปลี่ยนรุ่นจับคู่ / ยกเลิกจับคู่). It often sits inside a clickable row
  * (POS search result, product card), so it stops the click from bubbling and
  * is a span, not a nested <button>.

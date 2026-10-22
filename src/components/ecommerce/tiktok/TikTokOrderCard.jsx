@@ -14,6 +14,7 @@ import TikTokStatusBadge from './TikTokStatusBadge.jsx';
 import { TikTokGlassBtn, TikTokGlassLineItem } from './glass/index.js';
 import { fmtTHB } from '../../../lib/format.js';
 import MobileIconButton from '../../ui/mobile/MobileIconButton.jsx';
+import { useCan } from '../../../lib/perm-context.js';
 
 function SkuThumb({ url, alt }) {
   return (
@@ -243,6 +244,9 @@ function ActiveOrderActions({
   const [moreOpen, setMoreOpen] = useState(false);
   const { render: sheetRender, closing: sheetClosing } = useMountedToggle(moreOpen, 220);
   const labelDisabled = labelBusy === order.id || order.tiktok_shipping_type === 'SELLER';
+  // Ship and label printing need ecommerce.ship (the edge functions check it too).
+  const allowed = useCan('ecommerce.ship');
+  if (!allowed) return null;
 
   return (
     <>

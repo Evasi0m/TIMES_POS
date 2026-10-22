@@ -1,6 +1,7 @@
 // TikTok Shop OAuth strip — refined liquid glass (orders page).
 import React, { useCallback, useEffect, useState } from 'react';
 import { sb } from '../../lib/supabase-client.js';
+import { useCan } from '../../lib/perm-context.js';
 import { mapError } from '../../lib/error-map.js';
 import Icon from '../ui/Icon.jsx';
 import {
@@ -31,6 +32,7 @@ export default function TikTokSettings({
   pullBusy,
   compact = false,
 }) {
+  const canConnect = useCan('settings.tiktok');
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
@@ -138,6 +140,7 @@ export default function TikTokSettings({
                 )}
               </>
             )}
+{canConnect && (
             <TikTokGlassBtn
               variant="coral"
               className="tt-glass__compact-action"
@@ -147,6 +150,7 @@ export default function TikTokSettings({
               {connecting ? <span className="spinner"/> : <Icon name="link" size={14}/>}
               {connected ? 'เชื่อมต่อใหม่' : 'เชื่อมต่อ'}
             </TikTokGlassBtn>
+            )}
           </div>
         </div>
         {lastErr && (
@@ -168,10 +172,12 @@ export default function TikTokSettings({
         actions={(
           <>
             <TikTokGlassBadge tone={tone}>{statusLabel}</TikTokGlassBadge>
+            {canConnect && (
             <TikTokGlassBtn variant="coral" onClick={connect} disabled={connecting}>
               {connecting ? <span className="spinner"/> : <Icon name="link" size={14}/>}
               {connected ? 'เชื่อมต่อใหม่' : 'เชื่อมต่อ'}
             </TikTokGlassBtn>
+            )}
           </>
         )}
       />

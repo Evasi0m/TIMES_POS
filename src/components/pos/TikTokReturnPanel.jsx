@@ -14,6 +14,7 @@ import { runReturnMirrorWithFeedback, logMirrorBackgroundError } from '../../lib
 import TikTokReturnModal from './tiktok-return/TikTokReturnModal.jsx';
 import { SORT_OLDEST } from './tiktok-confirm/helpers.js';
 import { TTR_COPY } from './tiktok-return/copy.js';
+import { useCan } from '../../lib/perm-context.js';
 
 export default function TikTokReturnPanel({ toast }) {
   const [orders, setOrders] = useState([]);
@@ -110,7 +111,8 @@ export default function TikTokReturnPanel({ toast }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [open, activeId, saving, closeAll]);
 
-  const canConfirm = goodsReturned === true || goodsReturned === false;
+  const canResolve = useCan('pos.tiktok_resolve');
+  const canConfirm = canResolve && (goodsReturned === true || goodsReturned === false);
 
   const handleConfirm = async () => {
     if (!activeOrder || !canConfirm || saving) return;

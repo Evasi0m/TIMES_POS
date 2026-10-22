@@ -87,6 +87,12 @@ CI runs `lint`, `format:check`, `test`, `build` on every PR — see
   `useRealtimeInvalidate(sb, [tables], reload)` from
   `src/lib/use-realtime-invalidate.js` instead of patching state by hand
   — the loader is the source of truth, debounced 300 ms.
+- **Permissions, not role names.** Gate UI with `useCan('key')` /
+  `usePerms()` from `src/lib/perm-context.js`; keys live in
+  `src/lib/permissions.js` and the DB checks the same keys with
+  `has_perm()` (migration 086 — see `supabase-migrations/README.md` for the
+  rule about re-running `apply_perm_guards()`). Only user / permission
+  management stays fixed to `super_admin`.
 - **Sensitive settings.** Bot tokens / future webhook secrets live in
   `public.shop_secrets` (admin-only RLS) — not in `shop_settings`, which
   every authenticated user reads.

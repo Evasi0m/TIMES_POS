@@ -16,6 +16,7 @@
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { callerHasPerm } from '../_shared/perm.ts';
 import {
   bangkokDate,
   bangkokDayOfMonth,
@@ -264,6 +265,17 @@ Deno.serve(async (req: Request) => {
   if (body.test && !body.action) body.action = 'test';
   if (body.preview && !body.action) { body.action = 'preview'; body.kind = body.kind || 'daily'; }
 
+  // Who may call: the stock-adjust alert follows whoever adjusted stock;
+  // everything else (send, preview, webhook, cron tick) is Telegram admin.
+  // The cron's service-role JWT passes has_perm.
+  {
+    const need = body.action === 'alert' && body.kind === 'stock_adjust'
+      ? 'products.stock_adjust'
+      : 'settings.telegram';
+    const perm = await callerHasPerm(req, need);
+    if (!perm.ok) return json({ ok: false, error: perm.error }, perm.status);
+  }
+
   // Read shop_secrets (single row, id=1)
   const { data: secret, error: secErr } = await supa
     .from('shop_secrets').select('*').eq('id', 1).maybeSingle();
@@ -315,19 +327,8 @@ Deno.serve(async (req: Request) => {
     return json({ ok: true, ...(await dispatchCron(supa, secret)) });
   }
 
-  // ── Stock adjust alert (super admin) ────────────────────────────────
+  // ── Stock adjust alert (products.stock_adjust, checked above) ────────────────────────────────
   if (body.action === 'alert' && body.kind === 'stock_adjust') {
-    const auth = req.headers.get('Authorization') ?? '';
-    if (!auth.toLowerCase().startsWith('bearer ')) {
-      return json({ ok: false, error: 'missing_authorization' }, 401);
-    }
-    const userClient = createClient(SUPABASE_URL, SERVICE_ROLE, {
-      global: { headers: { Authorization: auth } },
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data: isSuper, error: authErr } = await userClient.rpc('is_super_admin');
-    if (authErr) return json({ ok: false, error: 'auth_check_failed: ' + authErr.message }, 500);
-    if (isSuper !== true) return json({ ok: false, error: 'forbidden' }, 403);
 
     if (secret?.stock_adjust_notify_enabled === false) {
       return json({ ok: true, skipped: true, reason: 'disabled' });

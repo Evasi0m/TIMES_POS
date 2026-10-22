@@ -28,6 +28,25 @@ Recommended order: lowest number first.
 - Test stock-in / claim / return flow.
 - Re-run `003_rls_audit.sql` and confirm every public table has `rowsecurity = true` and at least one policy.
 
+## Permissions (086+) — read before writing a migration
+
+Since `086_role_permissions.sql`, what a user may do comes from
+`public.role_permissions` (edited in the app: การตั้งค่า user → สิทธิ์ตามบทบาท)
+and is checked by `public.has_perm('key')`. Keys mirror `src/lib/permissions.js`.
+
+- **Every RPC the app calls is guarded by a wrapper.** The real body lives in
+  `<name>__impl`; `<name>` checks the permission listed in
+  `public.rpc_perm_guards` and then calls it.
+- **If your migration does `CREATE OR REPLACE` on one of those functions, it
+  replaces the wrapper and the guard is gone.** End the migration with
+  `SELECT public.apply_perm_guards();` — it wraps your new body again.
+- **A new RPC the app calls** needs a row in `public.rpc_perm_guards`
+  (`fn_name`, `perm`) plus `SELECT public.apply_perm_guard('<name>');`.
+- **New table the app writes directly** needs RLS using
+  `(SELECT public.has_perm('…'))`, not `is_admin()`.
+- Check: `SELECT * FROM public.perm_guard_status WHERE NOT guarded OR unguarded_body;`
+  should return no rows.
+
 ## Naming conventions
 
 - All RPC functions are `SECURITY DEFINER` so they run with the function-owner's permissions, but they explicitly check `auth.uid() IS NOT NULL` before doing any work — anonymous calls fail.

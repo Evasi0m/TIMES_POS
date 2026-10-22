@@ -257,9 +257,9 @@ Deno.serve(async (req: Request) => {
   const { data: userRes, error: userErr } = await userClient.auth.getUser();
   if (userErr || !userRes?.user) return j(401, { error: 'invalid JWT' });
 
-  const { data: isAdminData, error: isAdminErr } = await userClient.rpc('is_admin');
-  if (isAdminErr) return j(500, { error: 'admin check failed: ' + isAdminErr.message });
-  if (!isAdminData) return j(403, { error: 'admin only' });
+  const { data: allowed, error: permErr } = await userClient.rpc('has_perm', { p_perm: 'settings.ai|products.edit' });
+  if (permErr) return j(500, { error: 'permission check failed: ' + permErr.message });
+  if (allowed !== true) return j(403, { error: 'ไม่มีสิทธิ์ดึงรูปสินค้า (settings.ai)' });
 
   let body: {
     limit?: number; brands?: string[]; productIds?: number[];

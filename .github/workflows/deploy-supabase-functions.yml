@@ -49,6 +49,9 @@ on:
           - telegram-webhook
           - daily-telegram-summary
           - all-telegram
+          - admin-users
+          - cmg-bill-parse
+          - product-image-backfill
 
 jobs:
   deploy:

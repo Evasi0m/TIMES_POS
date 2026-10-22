@@ -7,6 +7,7 @@ import {
   serviceClient,
   updateTikTokInventoryMirror,
 } from '../_shared/tiktok-client.ts';
+import { callerHasPerm } from '../_shared/perm.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -70,6 +71,17 @@ async function rpcOrThrow(
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
+
+  // Runs after any stock change (sale, receive, return, adjust…); server callers pass with the service-role JWT.
+  {
+    const perm = await callerHasPerm(req, 'pos.sell|pos.tiktok_confirm|pos.tiktok_resolve|sales.edit|sales.void|receive.create|receive.void|receive.edit|return.create|return.void|products.stock_adjust|products.tiktok_mapping|ecommerce.stock_reconcile|settings.tiktok');
+    if (!perm.ok) {
+      return new Response(JSON.stringify({ ok: false, error: perm.error }), {
+        status: perm.status,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+      });
+    }
+  }
 
   const supa = serviceClient();
   const results: Record<string, unknown>[] = [];

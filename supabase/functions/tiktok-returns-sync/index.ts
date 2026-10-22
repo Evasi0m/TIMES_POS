@@ -1,6 +1,7 @@
 // TikTok Return & Refund sync — pulls returns and upserts to tiktok_return_orders.
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { apiPost, getValidAccessToken, serviceClient } from '../_shared/tiktok-client.ts';
+import { callerHasPerm } from '../_shared/perm.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -62,6 +63,17 @@ async function searchReturns(
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
+
+  // Returns desk sync; cron and tiktok-webhook pass with the service-role JWT.
+  {
+    const perm = await callerHasPerm(req, 'ecommerce.returns|ecommerce.sync|pos.tiktok_resolve');
+    if (!perm.ok) {
+      return new Response(JSON.stringify({ ok: false, error: perm.error }), {
+        status: perm.status,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+      });
+    }
+  }
 
   const supa = serviceClient();
   let hours = 168;

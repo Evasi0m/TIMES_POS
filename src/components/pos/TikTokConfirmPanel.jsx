@@ -26,7 +26,9 @@ import {
 } from '../../lib/tiktok-inventory-sync.js';
 import { logMirrorBackgroundError } from '../../lib/tiktok-mirror-helpers.js';
 import { isGenericTikTokSku } from './tiktok-confirm/helpers.js';
+import { useCan } from '../../lib/perm-context.js';
 export default function TikTokConfirmPanel({ toast, onConfirmed }) {
+  const canConfirmOrder = useCan('pos.tiktok_confirm');
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -243,6 +245,7 @@ export default function TikTokConfirmPanel({ toast, onConfirmed }) {
   const netOk = deferNet || (net !== '' && Number(net) > 0);
 
   const confirm = async () => {
+    if (!canConfirmOrder) { toast?.('ไม่มีสิทธิ์ยืนยันออเดอร์ TikTok', 'error'); return; }
     if (!activeOrder || !allMatched || !netOk) return;
     const value = deferNet ? null : Number(net);
     if (!deferNet && !(value > 0)) { toast?.('กรอกเงินที่ร้านได้รับให้ถูกต้อง', 'error'); return; }

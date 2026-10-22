@@ -24,6 +24,7 @@ function fmtPlain(n) {
 function ProductCatalogCard({
   product,
   canEdit = false,
+  showCost = true,
   onOpen,
   tiktokMapping = null,
   showTikTokBadge = false,
@@ -102,10 +103,12 @@ function ProductCatalogCard({
           )}
         </div>
 
-        <div className="product-catalog-card__costs" title="ทุนตั้งต้น">
-          <span className="text-ink font-medium">
-            {fmtPlain(product?.cost_price)}
-          </span>
+        <div className="product-catalog-card__costs" title={showCost ? 'ทุนตั้งต้น' : undefined}>
+          {showCost && (
+            <span className="text-ink font-medium">
+              {fmtPlain(product?.cost_price)}
+            </span>
+          )}
         </div>
 
         <div className="product-catalog-card__price">

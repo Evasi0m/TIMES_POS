@@ -1,6 +1,7 @@
 import React from 'react';
 import Icon from '../../ui/Icon.jsx';
 import { TikTokGlassBtn } from './glass/index.js';
+import { useCan } from '../../../lib/perm-context.js';
 
 export default function TikTokOrdersToolbar({
   singleId,
@@ -22,6 +23,8 @@ export default function TikTokOrdersToolbar({
   selectedCount,
   activeFilteredCount,
 }) {
+  const canSync = useCan('ecommerce.sync');
+  const canShip = useCan('ecommerce.ship');
   return (
     <div className="tt-glass__toolbar-surface" aria-label="เครื่องมือออเดอร์">
       <div className="tt-glass__toolbar-surface-head">
@@ -32,6 +35,7 @@ export default function TikTokOrdersToolbar({
       </div>
       <div className="tt-glass__toolbar">
         <div className="tt-glass__toolbar-row tt-glass__toolbar-row--stack">
+          {canSync && (
           <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch gap-2 flex-1 min-w-0">
             <input
               type="text"
@@ -51,6 +55,7 @@ export default function TikTokOrdersToolbar({
               ดึงรายตัว
             </TikTokGlassBtn>
           </div>
+          )}
           <div className="tt-glass__toolbar-actions">
             <TikTokGlassBtn
               variant="outline"
@@ -61,6 +66,7 @@ export default function TikTokOrdersToolbar({
               {loading && !syncing ? <span className="spinner"/> : <Icon name="refresh" size={16}/>}
               รีเฟรช
             </TikTokGlassBtn>
+            {canSync && (
             <TikTokGlassBtn
               variant="coral"
               className="tt-glass__btn--lg"
@@ -74,6 +80,7 @@ export default function TikTokOrdersToolbar({
                   : <Icon name="refresh" size={16}/>}
               อัปเดตข้อมูล TikTok
             </TikTokGlassBtn>
+            )}
           </div>
         </div>
 
@@ -90,6 +97,7 @@ export default function TikTokOrdersToolbar({
           </div>
         </div>
 
+        {canShip && (
         <div className="tt-glass__toolbar-divider flex flex-col sm:flex-row sm:flex-wrap gap-2">
           <TikTokGlassBtn
             variant="coral"
@@ -115,6 +123,7 @@ export default function TikTokOrdersToolbar({
               : `เลือกจากรายการด้านล่าง · มี ${activeFilteredCount} ออเดอร์ที่เลือกได้`}
           </p>
         </div>
+        )}
       </div>
     </div>
   );
