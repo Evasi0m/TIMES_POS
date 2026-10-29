@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useId, useMemo } from 'react';
+import { tickSvg, MOODS } from './tickLogo.js';
 
 /**
  * AnimatedLogo — TICK mascot logo with 5 moods and 3 animation modes.
@@ -10,25 +11,21 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
  *                   breathing glow at rest, click → random mood for 2s (with smooth morph back).
  *   "static"      → Just renders one mood with no animation.
  *
- * All 5 SVGs live in /logo/ (public folder) so they're served as-is by Vite.
+ * Art comes from tickLogo.js; public/logo/TICK-*.svg are exports of the same art.
  */
 
-const MOODS = ['happy', 'love', 'wink', 'wow', 'sleep'];
-const MOOD_SRCS = Object.fromEntries(
-  MOODS.map(m => [m, `logo/TICK-${m}.svg`])
-);
-
-// Preload all mood images so crossfade doesn't flash white
-function usePreloadImages() {
-  const loaded = useRef(false);
-  useEffect(() => {
-    if (loaded.current) return;
-    loaded.current = true;
-    MOODS.forEach(m => {
-      const img = new Image();
-      img.src = MOOD_SRCS[m];
-    });
-  }, []);
+// Inline SVG layers (one per mood) — crisp at any size, no image requests.
+function Layer({ mood, size, className, label }) {
+  const uid = useId().replace(/:/g, '');
+  const html = useMemo(() => tickSvg({ size, mood, id: `${uid}${mood}` }), [size, mood, uid]);
+  return (
+    <span
+      className={className}
+      role="img"
+      aria-label={label}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
 }
 
 export default function AnimatedLogo({
@@ -37,8 +34,6 @@ export default function AnimatedLogo({
   className = '',
   defaultMood = 'happy',
 }) {
-  usePreloadImages();
-
   if (mode === 'cycle')       return <CycleLogo size={size} className={className} />;
   if (mode === 'interactive') return <InteractiveLogo size={size} className={className} defaultMood={defaultMood} />;
   return <StaticLogo size={size} className={className} mood={defaultMood} />;
@@ -47,13 +42,9 @@ export default function AnimatedLogo({
 /* ── Static: single mood, no animation ── */
 function StaticLogo({ size, className, mood }) {
   return (
-    <img
-      src={MOOD_SRCS[mood] || MOOD_SRCS.happy}
-      alt="TIMES logo"
-      className={`animated-logo ${className}`}
-      style={{ width: size, height: size, objectFit: 'contain' }}
-      draggable={false}
-    />
+    <span className={`animated-logo animated-logo-container ${className}`} style={{ width: size, height: size }}>
+      <Layer mood={MOODS.includes(mood) ? mood : 'happy'} size={size} className="animated-logo-layer" label="TIMES logo" />
+    </span>
   );
 }
 
@@ -90,13 +81,7 @@ function CycleLogo({ size, className }) {
         }
 
         return (
-          <img
-            key={m}
-            src={MOOD_SRCS[m]}
-            alt={`TIMES logo — ${m}`}
-            className={layerClass}
-            draggable={false}
-          />
+          <Layer key={m} mood={m} size={size} className={layerClass} label={`TIMES logo — ${m}`} />
         );
       })}
     </div>
@@ -158,13 +143,7 @@ function InteractiveLogo({ size, className, defaultMood }) {
         }
 
         return (
-          <img
-            key={m}
-            src={MOOD_SRCS[m]}
-            alt={`TIMES logo — ${m}`}
-            className={layerClass}
-            draggable={false}
-          />
+          <Layer key={m} mood={m} size={size} className={layerClass} label={`TIMES logo — ${m}`} />
         );
       })}
     </div>

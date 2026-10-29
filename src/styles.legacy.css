@@ -5419,3 +5419,11 @@
     .bar-grow   { transform: scaleY(1) !important; }
     .bar-grow-x { transform: scaleX(1) !important; }
   }
+
+/* TICK inline-SVG details: blink + sleepy z's */
+.animated-logo-layer svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.animated-logo .eyes-open { transform-box: fill-box; transform-origin: center; animation: tick-blink 4.6s infinite; }
+.animated-logo .zz { animation: tick-zz 2.4s ease-in-out infinite; }
+@keyframes tick-blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
+@keyframes tick-zz { 0% { opacity: 0; transform: translate(0, 10px); } 40% { opacity: 1; } 100% { opacity: 0; transform: translate(14px, -22px); } }
+@media (prefers-reduced-motion: reduce) { .animated-logo .eyes-open, .animated-logo .zz { animation: none; } }
