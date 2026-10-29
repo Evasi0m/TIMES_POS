@@ -15,9 +15,9 @@ import { tickSvg, MOODS } from './tickLogo.js';
  */
 
 // Inline SVG layers (one per mood) — crisp at any size, no image requests.
-function Layer({ mood, size, className, label }) {
+function Layer({ mood, size, theme, className, label }) {
   const uid = useId().replace(/:/g, '');
-  const html = useMemo(() => tickSvg({ size, mood, id: `${uid}${mood}` }), [size, mood, uid]);
+  const html = useMemo(() => tickSvg({ size, mood, theme, id: `${uid}${mood}` }), [size, mood, theme, uid]);
   return (
     <span
       className={className}
@@ -33,23 +33,24 @@ export default function AnimatedLogo({
   mode = 'static',
   className = '',
   defaultMood = 'happy',
+  theme = 'orange',
 }) {
-  if (mode === 'cycle')       return <CycleLogo size={size} className={className} />;
-  if (mode === 'interactive') return <InteractiveLogo size={size} className={className} defaultMood={defaultMood} />;
-  return <StaticLogo size={size} className={className} mood={defaultMood} />;
+  if (mode === 'cycle')       return <CycleLogo size={size} theme={theme} className={className} />;
+  if (mode === 'interactive') return <InteractiveLogo size={size} theme={theme} className={className} defaultMood={defaultMood} />;
+  return <StaticLogo size={size} theme={theme} className={className} mood={defaultMood} />;
 }
 
 /* ── Static: single mood, no animation ── */
-function StaticLogo({ size, className, mood }) {
+function StaticLogo({ size, theme, className, mood }) {
   return (
     <span className={`animated-logo animated-logo-container ${className}`} style={{ width: size, height: size }}>
-      <Layer mood={MOODS.includes(mood) ? mood : 'happy'} size={size} className="animated-logo-layer" label="TIMES logo" />
+      <Layer theme={theme} mood={MOODS.includes(mood) ? mood : 'happy'} size={size} className="animated-logo-layer" label="TIMES logo" />
     </span>
   );
 }
 
 /* ── Cycle: rotates moods with stable-rendered spring crossfade ── */
-function CycleLogo({ size, className }) {
+function CycleLogo({ size, theme, className }) {
   const [idx, setIdx] = useState(0);
   const [prevIdx, setPrevIdx] = useState(null);
 
@@ -81,7 +82,7 @@ function CycleLogo({ size, className }) {
         }
 
         return (
-          <Layer key={m} mood={m} size={size} className={layerClass} label={`TIMES logo — ${m}`} />
+          <Layer key={m} theme={theme} mood={m} size={size} className={layerClass} label={`TIMES logo — ${m}`} />
         );
       })}
     </div>
@@ -89,7 +90,7 @@ function CycleLogo({ size, className }) {
 }
 
 /* ── Interactive: hover wiggle, breathing glow, click → random mood with smooth morph ── */
-function InteractiveLogo({ size, className, defaultMood }) {
+function InteractiveLogo({ size, theme, className, defaultMood }) {
   const [mood, setMood] = useState(defaultMood);
   const [prevMood, setPrevMood] = useState(null);
   const [bouncing, setBouncing] = useState(false);
@@ -143,7 +144,7 @@ function InteractiveLogo({ size, className, defaultMood }) {
         }
 
         return (
-          <Layer key={m} mood={m} size={size} className={layerClass} label={`TIMES logo — ${m}`} />
+          <Layer key={m} theme={theme} mood={m} size={size} className={layerClass} label={`TIMES logo — ${m}`} />
         );
       })}
     </div>
