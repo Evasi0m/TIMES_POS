@@ -82,7 +82,7 @@ export function validateCmgBill(parsed: ParsedBill | null | undefined): Validati
         rows.push({
           index,
           issues,
-          detail: `${qty} × ${unitCost} ? ${lineAmount} (expected ${expected})`,
+          detail: `${qty} x ${unitCost} != ${lineAmount} (expected ${expected})`,
         });
       }
     }
