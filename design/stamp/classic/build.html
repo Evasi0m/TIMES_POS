@@ -1,0 +1,47 @@
+<!doctype html><meta charset="utf-8"><title>stamp build</title>
+<body style="margin:0;background:#eee"><div id="out"></div>
+<script>
+// Lays out text along circles one grapheme cluster at a time (keeps Thai vowels/tone
+// marks attached), measured with the real font, and emits a mm-scaled SVG.
+const C = 20, F = "Sarabun";
+const cv = document.createElement('canvas').getContext('2d');
+function arc(text, { r, size, weight = 700, spacing = 0, bottom = false }) {
+  cv.font = `${weight} ${size * 10}px ${F}`;
+  const cl = [...new Intl.Segmenter('th', { granularity: 'grapheme' }).segment(text)].map(s => s.segment);
+  const w = cl.map(c => cv.measureText(c).width / 10 + spacing);
+  const total = w.reduce((a, b) => a + b, 0) - spacing;
+  let s = -total / 2, out = '';
+  cl.forEach((c, k) => {
+    const mid = s + (w[k] - spacing) / 2; s += w[k];
+    const a = mid / r;                       // radians from 12 or 6 o'clock
+    const deg = a * 180 / Math.PI;
+    const x = C + r * Math.sin(a), y = C + (bottom ? 1 : -1) * r * Math.cos(a);
+    out += `<text transform="translate(${x.toFixed(3)} ${y.toFixed(3)}) rotate(${(bottom ? -deg : deg).toFixed(2)})" text-anchor="middle">${c}</text>`;
+  });
+  return `<g font-family="${F}, 'TH Sarabun New'" font-weight="${weight}" font-size="${size}">${out}</g>`;
+}
+const MARK = `<g fill="none" stroke="#000">
+  <rect x="436" y="226" width="40" height="68" rx="13" stroke-width="20"/>
+  <path d="M125.8 110.2Q164 72 218.0 72.0L294.0 72.0Q348 72 386.2 110.2L405.8 129.8Q444 168 444.0 222.0L444.0 298.0Q444 352 405.8 390.2L386.2 409.8Q348 448 294.0 448.0L218.0 448.0Q164 448 125.8 409.8L106.2 390.2Q68 352 68.0 298.0L68.0 222.0Q68 168 106.2 129.8Z" fill="#fff" stroke-width="24"/>
+  <path d="M151.7 131.7Q181.4 102 223.4 102.0L288.6 102.0Q330.6 102 360.3 131.7L384.3 155.7Q414 185.4 414.0 227.4L414.0 292.6Q414 334.6 384.3 364.3L360.3 388.3Q330.6 418 288.6 418.0L223.4 418.0Q181.4 418 151.7 388.3L127.7 364.3Q98 334.6 98.0 292.6L98.0 227.4Q98 185.4 127.7 155.7Z" stroke-width="8"/></g>
+  <ellipse cx="197" cy="256" rx="38" ry="47" fill="#000"/>
+  <path d="M187 232l4 11 11 4-11 4-4 11-4-11-11-4 11-4z" fill="#fff"/>
+  <circle cx="209" cy="271" r="6" fill="#fff"/><ellipse cx="307" cy="256" rx="38" ry="47" fill="#000"/>
+  <path d="M297 232l4 11 11 4-11 4-4 11-4-11-11-4 11-4z" fill="#fff"/>
+  <circle cx="319" cy="271" r="6" fill="#fff"/>`;
+async function build(mark = MARK) {
+  await document.fonts.load(`700 40px ${F}`);
+  const star = (x) => `<path transform="translate(${x} ${C}) scale(.85)" d="M0-1.3l.38.83.92.1-.68.62.19.9L0 .69l-.81.46.19-.9-.68-.62.92-.1z"/>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="40mm" height="40mm" viewBox="0 0 40 40">
+<title>ตรายางบริษัท ไทมส์สโตร์ จำกัด</title>
+<g fill="#000">
+<circle cx="20" cy="20" r="19.3" fill="none" stroke="#000" stroke-width=".8"/>
+<circle cx="20" cy="20" r="18.15" fill="none" stroke="#000" stroke-width=".25"/>
+<circle cx="20" cy="20" r="11.4" fill="none" stroke="#000" stroke-width=".35"/>
+${arc('บริษัท ไทมส์สโตร์ จำกัด', { r: 13.6, size: 3.9, spacing: .08 })}
+${arc('TIMES STORE CO., LTD.', { r: 16.6, size: 2.9, spacing: .22, bottom: true })}
+${star(C - 14.9)}${star(C + 14.9)}
+<g transform="translate(${C - 7.9} ${C - 8.2}) scale(${15.8 / 512})">${mark}</g>
+</g></svg>`;
+}
+</script>
