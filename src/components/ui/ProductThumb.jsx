@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import Icon from './Icon.jsx';
 import ExpandableImageThumb from './ExpandableImageThumb.jsx';
-import { productImageUrl, classifyBrand } from '../../lib/product-classify.js';
+import { productImageUrl, productBackupImageUrl, classifyBrand } from '../../lib/product-classify.js';
 
 /**
  * Product thumbnail with a graceful brand-monogram fallback.
  *
  * Real image → <img object-contain> on a soft rounded tile. Brand product CDNs
  * (casio.com, albawatches.com, …) sometimes 404 or hotlink-block, so an
- * `onError` flips the broken image to the same placeholder a no-image product
+ * `onError` first swaps to the spreadsheet link for the model (backup when a
+ * TikTok photo fails), then flips to the same placeholder a no-image product
  * gets. ~99.95% of the catalog has no image yet, so the placeholder is the
  * common case and is meant to look intentional, not "missing".
  *
@@ -42,12 +43,15 @@ export default function ProductThumb({
   const boxStyle = fill
     ? { width: '100%', height: '100%', aspectRatio: '1' }
     : { width: px, height: px };
-  const url = product?._imageUrl ?? productImageUrl(product);
-  const [broken, setBroken] = useState(false);
+  const primary = product?._imageUrl ?? productImageUrl(product);
+  const backup = productBackupImageUrl(product);
+  const sources = [primary, backup !== primary ? backup : null].filter(Boolean);
+  const [failed, setFailed] = useState(0);
+  const url = sources[failed] || null;
 
   // A fresh url (e.g. search results re-rendering the same slot) should clear a
   // previous load failure so the new image re-shows its skeleton.
-  useEffect(() => { setBroken(false); }, [url]);
+  useEffect(() => { setFailed(0); }, [primary, backup]);
 
   // Photo tile — solid bg + hairline border (avoid ring-* at rounded corners).
   const photoTile =
@@ -67,15 +71,16 @@ export default function ProductThumb({
     "before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-1/2 " +
     'before:bg-gradient-to-b before:from-white/20 before:to-transparent before:rounded-t-[10px]';
 
-  if (url && !broken) {
+  if (url) {
     return (
       <ExpandableImageThumb
+        key={url}
         src={url}
         alt={product?.name || ''}
         className={photoTile}
         style={boxStyle}
         imgClassName="w-full h-full object-contain rounded-[10px]"
-        onImageError={() => setBroken(true)}
+        onImageError={() => setFailed(n => n + 1)}
         expandable={expandable}
         showExpandHint={showExpandHint}
         placeholder={

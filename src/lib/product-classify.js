@@ -24,6 +24,8 @@
 // before broad ones. CASIO ALWAYS comes last among the named brands because
 // its prefixes overlap with other brands' single-letter prefixes.
 // ────────────────────────────────────────────────────────────────────────
+import { fallbackImageUrl } from './product-image-fallback.js';
+
 export const BRAND_RULES = [
   // Seiko: starts with S + one of N/R/K/S/U/X/Y/W/E/D/P + letter|digit. Excludes "SHE" (Casio Sheen).
   { id: 'seiko',   label: 'Seiko',   test: m => /^S[NRKSUXYWEDP][A-Z0-9]/i.test(m) && !/^SHE/i.test(m) },
@@ -166,7 +168,16 @@ export function productImageUrl(p) {
   if (row && row.status === 'found' && row.image_url) {
     return versionedImageUrl(row.image_url, row.updated_at);
   }
-  return null;
+  // Not matched to TikTok (no photo row) → spreadsheet link for this model.
+  return productBackupImageUrl(p);
+}
+
+/**
+ * Spreadsheet link for this product's model. Primary photo when the product is
+ * not matched to TikTok; backup when the TikTok photo fails to load.
+ */
+export function productBackupImageUrl(p) {
+  return fallbackImageUrl(p?.model_code) || fallbackImageUrl(p?.name);
 }
 
 /**
