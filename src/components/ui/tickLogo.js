@@ -8,11 +8,15 @@ export const MOODS = ['happy', 'love', 'wink', 'wow', 'sleep'];
 
 export const THEMES = ['orange', 'white', 'black'];
 
+// Pink hearts; orange overrides with dark hearts (pink vanishes on orange).
+const HEART = ['#ff4d6d', '#c8002e'];
+
 // Colour sets per body finish. Eyes flip to light on the black body.
 const PALETTES = {
   orange: { body: ['#ff7d27', '#ee4e00', '#d62200'], shade: '#8e1400', edge: '#7a1500', rimEnd: '#ffb37a',
     crown: ['#c83400', '#ff8a40', '#f05a10', '#b02800'], eye: ['#3a1206', '#180502', '#0a0201'], eyeEdge: '#000',
-    glow: '#ff7a3a', spark: '#fff', dot: '#e1fbff', lid: '#1a0602', zz: '#fff', hi: .62 },
+    glow: '#ff7a3a', spark: '#fff', dot: '#e1fbff', lid: '#1a0602', zz: '#fff', hi: .62,
+    heart: ['#3a1206', '#0a0201'] },
   white:  { body: ['#ffffff', '#f3f1ee', '#d9d4ce'], shade: '#6b6158', edge: '#8a8078', rimEnd: '#ffffff',
     crown: ['#bdb6af', '#ffffff', '#e8e4df', '#a9a199'], eye: ['#3a3633', '#1a1816', '#0b0a09'], eyeEdge: '#000',
     glow: '#9b918a', spark: '#fff', dot: '#e1fbff', lid: '#1a1816', zz: '#8a8078', hi: .9 },
@@ -86,7 +90,7 @@ export function tickSvg({ size = 160, mood = 'happy', theme = 'orange', anim = f
       <stop offset="0" stop-color="${T.eye[0]}"/><stop offset=".7" stop-color="${T.eye[1]}"/><stop offset="1" stop-color="${T.eye[2]}"/>
     </radialGradient>
     <linearGradient id="lv${u}" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ff4d6d"/><stop offset="1" stop-color="#c8002e"/>
+      <stop offset="0" stop-color="${(T.heart || HEART)[0]}"/><stop offset="1" stop-color="${(T.heart || HEART)[1]}"/>
     </linearGradient>
     <radialGradient id="sp${u}"><stop offset="0" stop-color="#fff" stop-opacity=".28"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
     <linearGradient id="bv${u}" x1="0" y1="0" x2="1" y2="1">

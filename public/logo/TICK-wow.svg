@@ -19,7 +19,7 @@
       <stop offset="0" stop-color="#3a1206"/><stop offset=".7" stop-color="#180502"/><stop offset="1" stop-color="#0a0201"/>
     </radialGradient>
     <linearGradient id="lvorangewow" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ff4d6d"/><stop offset="1" stop-color="#c8002e"/>
+      <stop offset="0" stop-color="#3a1206"/><stop offset="1" stop-color="#0a0201"/>
     </linearGradient>
     <radialGradient id="sporangewow"><stop offset="0" stop-color="#fff" stop-opacity=".28"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
     <linearGradient id="bvorangewow" x1="0" y1="0" x2="1" y2="1">
