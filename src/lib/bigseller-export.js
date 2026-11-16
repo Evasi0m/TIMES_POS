@@ -179,6 +179,27 @@ export function aggregateBySku(netMap, resolved, productsById = new Map()) {
   return { stockIn: stockIn.sort(bySkuName), stockOut: stockOut.sort(bySkuName), unresolved };
 }
 
+/**
+ * stock_reconcile lines in this batch, per product — shown for a manual check
+ * before import (a reconcile caused by a TikTok order BigSeller already
+ * deducted would otherwise be counted twice).
+ * @returns {Array<{product_id, name, sku, qty}>}
+ */
+export function reconcileLines(movements, resolved = new Map(), productsById = new Map()) {
+  const byProduct = new Map();
+  for (const m of movements) {
+    if (m.reason !== 'stock_reconcile') continue;
+    const pid = Number(m.product_id);
+    byProduct.set(pid, (byProduct.get(pid) || 0) + Number(m.qty_delta || 0));
+  }
+  return [...byProduct].filter(([, qty]) => qty).map(([pid, qty]) => ({
+    product_id: pid,
+    name: productsById.get(pid)?.name || `#${pid}`,
+    sku: resolved.get(pid)?.sku || null,
+    qty,
+  }));
+}
+
 /** Rows (array of arrays) for one Stock-In sheet, header first. */
 export function buildStockInAoa(rows) {
   return [STOCK_IN_HEADERS, ...rows.map(r => [r.sku, '', r.qty, r.unit_cost ?? '', '', '', ''])];

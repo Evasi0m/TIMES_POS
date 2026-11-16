@@ -11,8 +11,10 @@
 -- Which movements count (channel filter, SKU resolution, netting) is decided
 -- in the app: src/lib/bigseller-export.js. The RPCs only fetch and record.
 --
--- Permission: 'products.bigseller_export' (admin on by default, super admin
--- always). Guards registered in rpc_perm_guards → apply_perm_guards() (086).
+-- Super admin only. The RPCs and RLS check 'products.bigseller_export', a key
+-- no role is granted (it is not offered in the permissions screen), so only
+-- super admin — who always passes has_perm — gets through. Guards registered
+-- in rpc_perm_guards → apply_perm_guards() (086).
 --
 -- Idempotent.
 
@@ -237,10 +239,11 @@ GRANT EXECUTE ON FUNCTION public.bigseller_record_batch(bigint, bigint, jsonb, j
 -- ====================================================================
 -- 4. Permission key + guards
 -- ====================================================================
+-- Super admin only: make sure no editable role carries the key.
 UPDATE public.role_permissions
-   SET permissions = permissions || '{"products.bigseller_export": true}'::jsonb,
+   SET permissions = permissions - 'products.bigseller_export',
        updated_at  = now()
- WHERE role = 'admin' AND NOT (permissions ? 'products.bigseller_export');
+ WHERE permissions ? 'products.bigseller_export';
 
 INSERT INTO public.rpc_perm_guards (fn_name, perm, arg_name, arg_perms) VALUES
   ('bigseller_replace_skus',       'products.bigseller_export', NULL, NULL),

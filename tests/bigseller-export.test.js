@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   movementDecision, resolveMerchantSku, resolveSkuMap, netByProduct, aggregateBySku,
-  buildStockInAoa, buildStockOutAoa, chunkRows, exportFilename, parseSkuSheet,
+  buildStockInAoa, buildStockOutAoa, chunkRows, exportFilename, parseSkuSheet, reconcileLines,
   STOCK_IN_HEADERS, STOCK_OUT_HEADERS,
 } from '../src/lib/bigseller-export.js';
 
@@ -112,5 +112,19 @@ describe('parseSkuSheet', () => {
   });
   it('falls back to column A without a header', () => {
     expect(parseSkuSheet([['A-1'], ['B-2']])).toEqual(['A-1', 'B-2']);
+  });
+});
+
+describe('reconcileLines', () => {
+  it('lists net stock_reconcile qty per product with its SKU', () => {
+    const moves = [
+      { product_id: 1, qty_delta: -2, reason: 'stock_reconcile' },
+      { product_id: 1, qty_delta: 1, reason: 'stock_reconcile' },
+      { product_id: 2, qty_delta: 3, reason: 'stock_reconcile' },
+      { product_id: 2, qty_delta: -3, reason: 'stock_reconcile' },
+      { product_id: 3, qty_delta: 5, reason: 'receive' },
+    ];
+    const lines = reconcileLines(moves, new Map([[1, { sku: 'W-1' }]]), new Map([[1, { name: 'W-1DR' }]]));
+    expect(lines).toEqual([{ product_id: 1, name: 'W-1DR', sku: 'W-1', qty: -1 }]);
   });
 });

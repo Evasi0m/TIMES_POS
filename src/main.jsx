@@ -6725,12 +6725,13 @@ function ProductsView() {
   const { shop } = useShop();
   // Without products.edit the catalog is browse-only: rows don't open the
   // editor. Cost columns need products.view_cost; stock tools their own key.
-  const { can } = usePerms();
+  const { can, role } = usePerms();
   const canEdit = can('products.edit');
   const canSeeCost = can('products.view_cost');
   const canBulkAdjust = can('products.stock_adjust');
   const canExport = can('products.export');
-  const canBigSeller = can('products.bigseller_export');
+  // BigSeller export is super admin only (not a grantable permission; migration 088).
+  const canBigSeller = role === 'super_admin';
   // Search-first (Tier B): server search by default; full ~6k catalog loads only
   // for chip browse, advanced filter sheet, or export (shared session cache).
   const [allRows, setAllRows] = useState([]);

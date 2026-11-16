@@ -6,7 +6,7 @@ import { sb } from '../../lib/supabase-client.js';
 import { fetchAll, fetchAllFromTable } from '../../lib/sb-paginate.js';
 import { fetchTikTokMappings } from '../../lib/tiktok-inventory-sync.js';
 import {
-  movementDecision, netByProduct, resolveSkuMap, aggregateBySku,
+  movementDecision, netByProduct, resolveSkuMap, aggregateBySku, reconcileLines,
   buildStockInAoa, buildStockOutAoa, chunkRows, exportFilename, parseSkuSheet, SHEET_NAME,
 } from '../../lib/bigseller-export.js';
 
@@ -43,17 +43,15 @@ function downloadSheets(kind, rows, date) {
 }
 
 const fmtDate = d => new Date(d).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
-const toLocalInput = d => {
-  const p = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
-};
+// Warehouse stock was set equal to POS at this moment; only changes after it go to BigSeller.
+const WAREHOUSE_SYNCED_AT = '2026-11-16T14:15';
 
 export default function BigSellerExportModal({ open, onClose, toast }) {
   const [state, setState] = useState(null);          // {last_to_movement_id, max_movement_id}
   const [skuCount, setSkuCount] = useState(null);
   const [merchantSkus, setMerchantSkus] = useState([]);
   const [batches, setBatches] = useState([]);
-  const [startAt, setStartAt] = useState(() => toLocalInput(new Date()));
+  const [startAt, setStartAt] = useState(WAREHOUSE_SYNCED_AT);
   const [preview, setPreview] = useState(null);
   const [manual, setManual] = useState({});           // product_id → typed SKU
   const [busy, setBusy] = useState('');
@@ -124,6 +122,7 @@ export default function BigSellerExportModal({ open, onClose, toast }) {
         from, to, moveCount: moves.length,
         exported: moves.filter(m => movementDecision(m) === 'export').length,
         unknown, stockIn, stockOut, toSave,
+        reconcile: reconcileLines(moves, resolved, productsById),
         unresolved: unresolved.map(u => ({ ...u, ...info.get(u.product_id), net: u.net })),
       });
     } catch (e) {
@@ -259,7 +258,7 @@ export default function BigSellerExportModal({ open, onClose, toast }) {
                 <div className="font-medium">ครั้งแรก: เริ่มนับการเปลี่ยนแปลงสต็อกตั้งแต่</div>
                 <input type="datetime-local" className="input w-full" value={startAt}
                   onChange={e => { setStartAt(e.target.value); setPreview(null); }}/>
-                <div className="text-muted">ค่าเริ่มต้นคือตอนนี้ (ไม่ export ของเก่า) — คลังถูกตั้งให้เท่ากับ POS แล้ววันที่ 16 พ.ย. 2569</div>
+                <div className="text-muted">ค่าเริ่มต้น = เวลาที่ตั้งสต็อกคลัง BigSeller ให้เท่ากับ POS (16 พ.ย. 2569 ≈ 14:15) — รายการก่อนหน้านั้นไม่ส่ง</div>
               </>
             ) : (
               <div>รอบนี้: การเปลี่ยนแปลงหลัง movement #{state.last_to_movement_id} ถึง #{state.max_movement_id}</div>
@@ -282,6 +281,18 @@ export default function BigSellerExportModal({ open, onClose, toast }) {
             <div className="text-muted">
               movement #{preview.from + 1}–#{preview.to} · {preview.moveCount} รายการ, นับ {preview.exported} (ข้ามออเดอร์ TikTok / Shopee / Lazada ที่ BigSeller ตัดเอง)
             </div>
+            {preview.reconcile.length > 0 && (
+              <div className="rounded-lg bg-warning/10 px-3 py-2 space-y-1">
+                <div className="font-medium text-warning">ตรวจแถว reconcile ก่อน import ({preview.reconcile.length})</div>
+                <div className="text-muted text-xs">ถ้าเกิดจากออเดอร์ TikTok ที่ BigSeller ตัดไปแล้ว ให้ลบแถวนั้นออกจากไฟล์ก่อน import</div>
+                {preview.reconcile.map(r => (
+                  <div key={r.product_id} className="flex justify-between gap-2">
+                    <span className="truncate">{r.name}{r.sku && r.sku !== r.name ? <span className="text-muted"> → {r.sku}</span> : null}</span>
+                    <span className="tabular-nums">{r.qty > 0 ? '+' : ''}{r.qty}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             {preview.unresolved.length > 0 && (
               <div className="space-y-2">
                 <div className="font-medium text-warning">สินค้าที่ยังไม่รู้ SKU — จะไม่ถูก export จนกว่าจะเลือก</div>
