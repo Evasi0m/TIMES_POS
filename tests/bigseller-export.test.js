@@ -51,16 +51,39 @@ describe('resolveMerchantSku', () => {
 });
 
 describe('resolveSkuMap', () => {
-  const productsById = new Map([[1, { name: 'W-221H-1AVDF' }], [2, { name: 'ZZ-1' }], [3, { name: 'W-221H-1AVDF' }]]);
+  const productsById = new Map([
+    [1, { name: 'W-221H-1AVDF' }], [2, { name: 'ZZ-1' }], [3, { name: 'W-221H-1AVDF' }],
+    [4, { name: 'ถ่าน CR2032' }], [5, { name: 'GA-100-1A1DR' }], [6, { name: 'X-1' }],
+  ]);
+  const merchantSkus = ['W-221H-1A', 'MY-SKU'];
   it('keeps manual picks, saves new auto picks, lists unresolved', () => {
-    const savedMap = new Map([[3, { merchant_sku: 'MY-SKU', source: 'manual' }]]);
+    const savedMap = new Map([[3, { merchant_sku: 'my-sku', source: 'manual' }]]);
     const { resolved, toSave, unresolved } = resolveSkuMap([1, 2, 3], {
-      productsById, tiktokByProduct: new Map(), merchantSkus: ['W-221H-1A'], savedMap,
+      productsById, tiktokByProduct: new Map(), merchantSkus, savedMap,
     });
     expect(resolved.get(1)).toEqual({ sku: 'W-221H-1A', source: 'prefix' });
     expect(resolved.get(3)).toEqual({ sku: 'MY-SKU', source: 'manual' });
     expect(toSave).toEqual([{ product_id: 1, merchant_sku: 'W-221H-1A', source: 'prefix' }]);
     expect(unresolved.map(u => u.product_id)).toEqual([2]);
+  });
+  it('skips products marked ไม่ส่ง BigSeller', () => {
+    const savedMap = new Map([[4, { merchant_sku: null, source: 'skip' }]]);
+    const r = resolveSkuMap([4], { productsById, tiktokByProduct: new Map(), merchantSkus, savedMap });
+    expect(r.skipped).toEqual([{ product_id: 4, name: 'ถ่าน CR2032' }]);
+    expect(r.unresolved).toEqual([]);
+    expect(r.resolved.size).toBe(0);
+  });
+  it('rejects SKUs missing from the BigSeller list (TikTok or manual)', () => {
+    const savedMap = new Map([[6, { merchant_sku: 'TYPO-1', source: 'manual' }]]);
+    const r = resolveSkuMap([5, 6], {
+      productsById, tiktokByProduct: new Map([[5, ['GA-100-1A1']]]), merchantSkus, savedMap,
+    });
+    expect(r.resolved.size).toBe(0);
+    expect(r.toSave).toEqual([]);
+    expect(r.unresolved).toEqual([
+      { product_id: 5, name: 'GA-100-1A1DR', problem: 'not_in_bigseller', candidates: ['GA-100-1A1'] },
+      { product_id: 6, name: 'X-1', problem: 'not_in_bigseller', candidates: ['TYPO-1'] },
+    ]);
   });
 });
 
@@ -87,6 +110,7 @@ describe('netByProduct + aggregateBySku', () => {
     expect(stockIn).toEqual([{ sku: 'W-221H-1A', qty: 4, unit_cost: 125 }]);
     expect(stockOut).toEqual([{ sku: 'GA-100-1A1', qty: 3 }]);
     expect(unresolved).toEqual([{ product_id: 4, name: 'NO-SKU', net: 2 }]);
+    expect(aggregateBySku(net, resolved, products, new Set([4])).unresolved).toEqual([]);
   });
 });
 

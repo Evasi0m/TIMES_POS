@@ -114,9 +114,10 @@ export default function BigSellerExportModal({ open, onClose, toast }) {
         const k = Number(m.product_id);
         tiktokByProduct.set(k, [...(tiktokByProduct.get(k) || []), m.seller_sku]);
       }
-      const { resolved, toSave, unresolved: unresolvedInfo } =
+      const { resolved, toSave, unresolved: unresolvedInfo, skipped } =
         resolveSkuMap(ids, { productsById, tiktokByProduct, merchantSkus, savedMap });
-      const { stockIn, stockOut, unresolved } = aggregateBySku(net, resolved, productsById);
+      const skipIds = new Set(skipped.map(x => x.product_id));
+      const { stockIn, stockOut, unresolved } = aggregateBySku(net, resolved, productsById, skipIds);
       const info = new Map(unresolvedInfo.map(u => [u.product_id, u]));
       setPreview({
         from, to, moveCount: moves.length,
@@ -124,6 +125,7 @@ export default function BigSellerExportModal({ open, onClose, toast }) {
         unknown, stockIn, stockOut, toSave,
         reconcile: reconcileLines(moves, resolved, productsById),
         unresolved: unresolved.map(u => ({ ...u, ...info.get(u.product_id), net: u.net })),
+        skipped: skipped.map(x => ({ ...x, net: net.get(x.product_id) })),
       });
     } catch (e) {
       setErr(e.message || String(e));
@@ -132,16 +134,32 @@ export default function BigSellerExportModal({ open, onClose, toast }) {
     }
   }, [startAt, merchantSkus]);
 
-  const saveManual = async (productId) => {
-    const sku = String(manual[productId] || '').trim();
-    if (!sku) return;
+  const saveChoice = async (row, okMsg) => {
     setBusy('manual'); setErr('');
-    const { error } = await sb.rpc('bigseller_set_sku_map', {
-      p_rows: [{ product_id: productId, merchant_sku: sku, source: 'manual' }],
-    });
+    const { error } = await sb.rpc('bigseller_set_sku_map', { p_rows: [row] });
     setBusy('');
     if (error) { setErr(error.message); return; }
-    toast?.push('บันทึก SKU แล้ว', 'success');
+    toast?.push(okMsg, 'success');
+    compute();
+  };
+
+  const saveManual = (productId, fallback) => {
+    const typed = String(manual[productId] ?? fallback ?? '').trim();
+    if (!typed) return;
+    // Only SKUs that exist in the uploaded BigSeller list (case-insensitive).
+    const sku = merchantSkus.find(s => s.toUpperCase() === typed.toUpperCase());
+    if (!sku) { setErr(`ไม่มี SKU "${typed}" ในรายการ BigSeller — เลือกจากรายการ หรืออัปโหลดรายการ SKU ใหม่`); return; }
+    saveChoice({ product_id: productId, merchant_sku: sku, source: 'manual' }, 'บันทึก SKU แล้ว');
+  };
+
+  const skipProduct = (productId) =>
+    saveChoice({ product_id: productId, source: 'skip' }, 'ตั้งเป็น "ไม่ส่ง BigSeller" แล้ว');
+
+  const unskipProduct = async (productId) => {
+    setBusy('manual'); setErr('');
+    const { error } = await sb.rpc('bigseller_clear_sku_map', { p_product_id: productId });
+    setBusy('');
+    if (error) { setErr(error.message); return; }
     compute();
   };
 
@@ -302,14 +320,31 @@ export default function BigSellerExportModal({ open, onClose, toast }) {
                       <div className="truncate">{u.name} <span className="text-muted">({u.net > 0 ? '+' : ''}{u.net})</span></div>
                       {u.problem === 'conflict' && <div className="text-muted text-xs">TikTok ผูกหลาย SKU: {u.candidates?.join(', ')}</div>}
                       {u.problem === 'ambiguous' && <div className="text-muted text-xs">ตรงหลาย SKU: {u.candidates?.join(', ')}</div>}
+                      {u.problem === 'not_in_bigseller' && <div className="text-muted text-xs">SKU {u.candidates?.[0]} ไม่มีใน BigSeller</div>}
                     </div>
                     <input className="input w-40" list={skuListId} placeholder="Merchant SKU"
-                      value={manual[u.product_id] ?? (u.candidates?.[0] || '')}
+                      value={manual[u.product_id] ?? (u.problem === 'not_in_bigseller' ? '' : (u.candidates?.[0] || ''))}
                       onChange={e => setManual(m => ({ ...m, [u.product_id]: e.target.value }))}/>
-                    <button type="button" className="btn-secondary" disabled={!!busy} onClick={() => saveManual(u.product_id)}>บันทึก</button>
+                    <button type="button" className="btn-secondary" disabled={!!busy}
+                      onClick={() => saveManual(u.product_id, u.problem === 'not_in_bigseller' ? '' : u.candidates?.[0])}>บันทึก</button>
+                    <button type="button" className="btn-secondary whitespace-nowrap" disabled={!!busy}
+                      title="สินค้านี้ไม่มีใน BigSeller — ไม่ต้องส่งอีก" onClick={() => skipProduct(u.product_id)}>ไม่ส่ง BigSeller</button>
                   </div>
                 ))}
               </div>
+            )}
+            {preview.skipped.length > 0 && (
+              <details className="text-muted">
+                <summary className="cursor-pointer">ไม่ส่ง BigSeller ({preview.skipped.length})</summary>
+                <div className="mt-1 space-y-1">
+                  {preview.skipped.map(x => (
+                    <div key={x.product_id} className="flex items-center justify-between gap-2">
+                      <span className="truncate">{x.name} <span>({x.net > 0 ? '+' : ''}{x.net})</span></span>
+                      <button type="button" className="btn-secondary !h-8" disabled={!!busy} onClick={() => unskipProduct(x.product_id)}>เลิกข้าม</button>
+                    </div>
+                  ))}
+                </div>
+              </details>
             )}
           </section>
         )}

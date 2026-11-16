@@ -97,37 +97,56 @@ export function resolveMerchantSku(product, tiktokSkus = [], merchantSkus = []) 
 
 /**
  * Resolve every product in `productIds`.
- * Saved map wins (manual, then earlier auto picks); otherwise resolve fresh.
+ * Saved 'skip' → not sent to BigSeller. Saved 'manual' wins; otherwise resolve
+ * fresh (TikTok, then prefix), falling back to an earlier saved pick.
+ * Every SKU must exist in the uploaded BigSeller list (`merchantSkus`) — one
+ * that doesn't (e.g. a TikTok seller_sku BigSeller lacks, or a typo) is
+ * reported as 'not_in_bigseller' instead of being exported.
  * @param {number[]} productIds
  * @param {{productsById: Map, tiktokByProduct: Map<number,string[]>, merchantSkus: string[], savedMap: Map<number,{merchant_sku, source}>}} ctx
- * @returns {{resolved: Map<number,{sku, source}>, toSave: Array<{product_id, merchant_sku, source}>, unresolved: Array<{product_id, name, problem, candidates?}>}}
+ * @returns {{resolved: Map<number,{sku, source}>, toSave: Array<{product_id, merchant_sku, source}>, unresolved: Array<{product_id, name, problem, candidates?}>, skipped: Array<{product_id, name}>}}
  */
 export function resolveSkuMap(productIds, { productsById, tiktokByProduct, merchantSkus, savedMap }) {
   const resolved = new Map();
   const toSave = [];
   const unresolved = [];
+  const skipped = [];
+  const known = new Map(merchantSkus.map(s => [upper(s), clean(s)]));
   for (const pid of productIds) {
     const saved = savedMap?.get(pid);
     const product = productsById.get(pid);
+    const name = product?.name || `#${pid}`;
     const tt = tiktokByProduct?.get(pid) || [];
-    // Manual choices stick. An auto pick is redone if TikTok now says otherwise.
-    if (saved && saved.source === 'manual') {
-      resolved.set(pid, { sku: saved.merchant_sku, source: 'manual' });
-      continue;
-    }
-    const r = resolveMerchantSku(product, tt, merchantSkus);
-    if (r.sku) {
-      resolved.set(pid, { sku: r.sku, source: r.source });
-      if (!saved || saved.merchant_sku !== r.sku || saved.source !== r.source) {
-        toSave.push({ product_id: pid, merchant_sku: r.sku, source: r.source });
-      }
-    } else if (saved) {
-      resolved.set(pid, { sku: saved.merchant_sku, source: saved.source });
+    if (saved?.source === 'skip') { skipped.push({ product_id: pid, name }); continue; }
+
+    let pick = null;
+    let problem = null;
+    let candidates;
+    if (saved?.source === 'manual') {
+      pick = { sku: saved.merchant_sku, source: 'manual' };
     } else {
-      unresolved.push({ product_id: pid, name: product?.name || `#${pid}`, problem: r.problem, candidates: r.candidates });
+      const r = resolveMerchantSku(product, tt, merchantSkus);
+      if (r.sku) pick = { sku: r.sku, source: r.source };
+      else if (saved) pick = { sku: saved.merchant_sku, source: saved.source };
+      else { problem = r.problem; candidates = r.candidates; }
+    }
+
+    if (pick) {
+      const canonical = known.get(upper(pick.sku));
+      if (!canonical) {
+        unresolved.push({ product_id: pid, name, problem: 'not_in_bigseller', candidates: [pick.sku] });
+        continue;
+      }
+      pick = { ...pick, sku: canonical };
+      resolved.set(pid, pick);
+      if (pick.source !== 'manual' && (!saved || saved.merchant_sku !== pick.sku || saved.source !== pick.source)) {
+        toSave.push({ product_id: pid, merchant_sku: pick.sku, source: pick.source });
+      }
+    } else {
+      unresolved.push({ product_id: pid, name, problem, candidates });
     }
   }
-  return { resolved, toSave, unresolved };
+  return { resolved, toSave, unresolved, skipped };
 }
 
 /** Net qty per product over exportable movements. */
@@ -147,12 +166,13 @@ export function netByProduct(movements) {
  * @param {Map<number, number>} netMap   product_id → net qty
  * @param {Map<number, {sku}>} resolved
  * @param {Map<number, {cost_price?, name?}>} productsById
+ * @param {Set<number>} skipIds   products marked "ไม่ส่ง BigSeller"
  */
-export function aggregateBySku(netMap, resolved, productsById = new Map()) {
+export function aggregateBySku(netMap, resolved, productsById = new Map(), skipIds = new Set()) {
   const bySku = new Map();   // key: upper sku → {sku, qty, costSum, costQty}
   const unresolved = [];
   for (const [pid, qty] of netMap) {
-    if (!qty) continue;
+    if (!qty || skipIds.has(pid)) continue;
     const r = resolved.get(pid);
     if (!r?.sku) {
       unresolved.push({ product_id: pid, name: productsById.get(pid)?.name || `#${pid}`, net: qty });
