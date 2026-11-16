@@ -19,11 +19,22 @@ const MIGRATION = readFileSync(
   'utf8',
 );
 
-/** The jsonb literal seeded for one role in migration 086. */
+/** Keys later migrations add with `permissions || '{...}'::jsonb … WHERE role = 'x'`. */
+const LATER_GRANTS = readdirSync(new URL('../supabase-migrations/', import.meta.url))
+  .filter(f => /^\d{3}_.*\.sql$/.test(f) && f > '086')
+  .sort()
+  .map(f => readFileSync(new URL(`../supabase-migrations/${f}`, import.meta.url), 'utf8'));
+
+/** The jsonb literal seeded for one role in migration 086, plus later grants. */
 function seededPerms(role) {
   const m = MIGRATION.match(new RegExp(`\\('${role}', '(\\{[\\s\\S]*?\\})'::jsonb\\)`));
   if (!m) throw new Error(`no seed for ${role}`);
-  return JSON.parse(m[1]);
+  const perms = JSON.parse(m[1]);
+  const grant = /permissions \|\| '(\{[^']*\})'::jsonb[\s\S]*?WHERE role = '(\w+)'/g;
+  for (const src of LATER_GRANTS) {
+    for (const g of src.matchAll(grant)) if (g[2] === role) Object.assign(perms, JSON.parse(g[1]));
+  }
+  return perms;
 }
 
 /** Split 'a.b|c.d' and keep only key-shaped tokens (doc examples like 'a|b' are skipped). */

@@ -103,6 +103,7 @@ import {
 } from './lib/export-auth.js';
 import { logStockExport, fetchStockExportLogs } from './lib/stock-export-log.js';
 import StockAdjustModal from './components/products/StockAdjustModal.jsx';
+import BigSellerExportModal from './components/products/BigSellerExportModal.jsx';
 import PosCartSwapSheet from './components/pos/PosCartSwapSheet.jsx';
 import Pager from './components/ui/Pager.jsx';
 import ReceiveLinesEditor from './components/movement/ReceiveLinesEditor.jsx';
@@ -6724,11 +6725,13 @@ function ProductsView() {
   const { shop } = useShop();
   // Without products.edit the catalog is browse-only: rows don't open the
   // editor. Cost columns need products.view_cost; stock tools their own key.
-  const { can } = usePerms();
+  const { can, role } = usePerms();
   const canEdit = can('products.edit');
   const canSeeCost = can('products.view_cost');
   const canBulkAdjust = can('products.stock_adjust');
   const canExport = can('products.export');
+  // BigSeller export is super admin only (not a grantable permission; migration 088).
+  const canBigSeller = role === 'super_admin';
   // Search-first (Tier B): server search by default; full ~6k catalog loads only
   // for chip browse, advanced filter sheet, or export (shared session cache).
   const [allRows, setAllRows] = useState([]);
@@ -6745,6 +6748,7 @@ function ProductsView() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [exportAuthOpen, setExportAuthOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [bigSellerOpen, setBigSellerOpen] = useState(false);
   const [exportScope, setExportScope] = useState('all');
   const [exportUserEmail, setExportUserEmail] = useState('');
   const [exportUserName, setExportUserName] = useState('');
@@ -7262,6 +7266,17 @@ function ProductsView() {
             <Icon name="csv-export" size={20} strokeWidth={1.75}/>
           </button>
           )}
+          {canBigSeller && (
+            <button
+              type="button"
+              className="products-toolbar__bigseller btn-secondary !h-11 !px-2.5 !text-sm whitespace-nowrap flex-shrink-0 inline-flex items-center gap-1.5"
+              onClick={() => setBigSellerOpen(true)}
+              title="Export ไป BigSeller"
+            >
+              <Icon name="download" size={16} className="shrink-0"/>
+              <span className="hidden sm:inline">Export ไป BigSeller</span>
+            </button>
+          )}
           {canBulkAdjust && (
             <button
               type="button"
@@ -7621,6 +7636,12 @@ function ProductsView() {
         products={allRows}
         shopName={shop?.shop_name}
         exporter={{ email: exportUserEmail, name: exportUserName }}
+        toast={toast}
+      />
+
+      <BigSellerExportModal
+        open={bigSellerOpen}
+        onClose={() => setBigSellerOpen(false)}
         toast={toast}
       />
 
