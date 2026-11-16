@@ -73,6 +73,7 @@ export const PERMISSION_GROUPS = [
       { key: 'products.delete',         label: 'ลบสินค้า' },
       { key: 'products.stock_adjust',   label: 'ปรับสต็อกเอง' },
       { key: 'products.export',         label: 'ดาวน์โหลด CSV สต็อก' },
+      { key: 'products.bigseller_export', label: 'Export สต็อกไป BigSeller', hint: 'ไฟล์ Stock-In / Stock-Out + รายการ SKU' },
       { key: 'products.tiktok_mapping', label: 'เปลี่ยน / ยกเลิกจับคู่ TikTok' },
     ],
   },
