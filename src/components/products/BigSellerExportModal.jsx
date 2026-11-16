@@ -340,7 +340,9 @@ export default function BigSellerExportModal({ open, onClose, toast }) {
                   {preview.skipped.map(x => (
                     <div key={x.product_id} className="flex items-center justify-between gap-2">
                       <span className="truncate">{x.name} <span>({x.net > 0 ? '+' : ''}{x.net})</span></span>
-                      <button type="button" className="btn-secondary !h-8" disabled={!!busy} onClick={() => unskipProduct(x.product_id)}>เลิกข้าม</button>
+                      {x.retired
+                        ? <span className="text-xs">ชื่อมี "ผิด / ไม่ใช้"</span>
+                        : <button type="button" className="btn-secondary !h-8" disabled={!!busy} onClick={() => unskipProduct(x.product_id)}>เลิกข้าม</button>}
                     </div>
                   ))}
                 </div>

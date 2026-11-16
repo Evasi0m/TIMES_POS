@@ -60,6 +60,14 @@ export function isExportableMovement(m) {
 }
 
 const clean = s => String(s ?? '').trim();
+
+/** What may follow a Merchant SKU in a POS name: letters only, up to 4. */
+const PREFIX_TAIL_RE = /^[A-Z]{0,4}$/;
+
+/** POS products renamed as wrong / retired, e.g. "LTP-V002D-4BUDF(ผิดไม่ใช้)". */
+export function isRetiredProductName(name) {
+  return /ผิด|ไม่ใช้/.test(String(name || ''));
+}
 const upper = s => clean(s).toUpperCase();
 
 /**
@@ -80,13 +88,16 @@ export function resolveMerchantSku(product, tiktokSkus = [], merchantSkus = []) 
     return { sku: null, source: null, problem: 'conflict', candidates: tt };
   }
 
-  const name = upper(product?.name);
+  const name = upper(product?.name).replace(/\s+/g, '');
   if (!name) return { sku: null, source: null, problem: 'none' };
   let best = [];
   let bestLen = 0;
   for (const s of merchantSkus) {
-    const u = upper(s);
+    const u = upper(s).replace(/\s+/g, '');
     if (!u || !name.startsWith(u)) continue;
+    // Only a distributor tail (DF, VDF, UDF, DR, JF …) may follow the SKU.
+    // "F-91WS-7A3DF" must not match "F-91WS-7" (tail "A3DF" is another model).
+    if (!PREFIX_TAIL_RE.test(name.slice(u.length))) continue;
     if (u.length > bestLen) { best = [clean(s)]; bestLen = u.length; }
     else if (u.length === bestLen) best.push(clean(s));
   }
@@ -117,6 +128,7 @@ export function resolveSkuMap(productIds, { productsById, tiktokByProduct, merch
     const product = productsById.get(pid);
     const name = product?.name || `#${pid}`;
     const tt = tiktokByProduct?.get(pid) || [];
+    if (isRetiredProductName(product?.name)) { skipped.push({ product_id: pid, name, retired: true }); continue; }
     if (saved?.source === 'skip') { skipped.push({ product_id: pid, name }); continue; }
 
     let pick = null;
@@ -127,7 +139,8 @@ export function resolveSkuMap(productIds, { productsById, tiktokByProduct, merch
     } else {
       const r = resolveMerchantSku(product, tt, merchantSkus);
       if (r.sku) pick = { sku: r.sku, source: r.source };
-      else if (saved) pick = { sku: saved.merchant_sku, source: saved.source };
+      // An old prefix pick is not trusted (earlier prefix rule was looser).
+      else if (saved && saved.source !== 'prefix') pick = { sku: saved.merchant_sku, source: saved.source };
       else { problem = r.problem; candidates = r.candidates; }
     }
 

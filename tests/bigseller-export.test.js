@@ -152,3 +152,27 @@ describe('reconcileLines', () => {
     expect(lines).toEqual([{ product_id: 1, name: 'W-1DR', sku: 'W-1', qty: -1 }]);
   });
 });
+
+describe('prefix match guard + retired products', () => {
+  const skus = ['F-91WS-7', 'F-91WS-7A2', 'LTP-V002D-4B'];
+  it('only lets a short letter tail follow the SKU', () => {
+    expect(resolveMerchantSku({ name: 'F-91WS-7DF' }, [], skus)).toEqual({ sku: 'F-91WS-7', source: 'prefix' });
+    expect(resolveMerchantSku({ name: 'F-91WS-7A2DF' }, [], skus)).toEqual({ sku: 'F-91WS-7A2', source: 'prefix' });
+    expect(resolveMerchantSku({ name: 'F-91WS-7A3DF' }, [], skus).problem).toBe('none');
+  });
+  it('does not reuse an old prefix pick that the rule now rejects', () => {
+    const r = resolveSkuMap([1], {
+      productsById: new Map([[1, { name: 'F-91WS-7A3DF' }]]), tiktokByProduct: new Map(), merchantSkus: skus,
+      savedMap: new Map([[1, { merchant_sku: 'F-91WS-7', source: 'prefix' }]]),
+    });
+    expect(r.resolved.size).toBe(0);
+    expect(r.unresolved[0].problem).toBe('none');
+  });
+  it('skips products named ผิด / ไม่ใช้', () => {
+    const r = resolveSkuMap([2], {
+      productsById: new Map([[2, { name: 'LTP-V002D-4BUDF(ผิดไม่ใช้)' }]]), tiktokByProduct: new Map(), merchantSkus: skus, savedMap: new Map(),
+    });
+    expect(r.skipped).toEqual([{ product_id: 2, name: 'LTP-V002D-4BUDF(ผิดไม่ใช้)', retired: true }]);
+    expect(r.resolved.size).toBe(0);
+  });
+});
