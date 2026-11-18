@@ -297,12 +297,12 @@ export default function BigSellerExportModal({ open, onClose, toast }) {
               <div className="rounded-lg bg-surface-soft p-2"><div className={'text-lg font-semibold ' + (preview.unresolved.length ? 'text-warning' : '')}>{preview.unresolved.length}</div><div className="text-muted">หา SKU ไม่เจอ</div></div>
             </div>
             <div className="text-muted">
-              movement #{preview.from + 1}–#{preview.to} · {preview.moveCount} รายการ, นับ {preview.exported} (ข้ามออเดอร์ TikTok / Shopee / Lazada ที่ BigSeller ตัดเอง)
+              movement #{preview.from + 1}–#{preview.to} · {preview.moveCount} รายการ, นับ {preview.exported} (รวมออเดอร์ทุกช่องทาง: หน้าร้าน, TikTok, Shopee, Lazada)
             </div>
             {preview.reconcile.length > 0 && (
               <div className="rounded-lg bg-warning/10 px-3 py-2 space-y-1">
                 <div className="font-medium text-warning">ตรวจแถว reconcile ก่อน import ({preview.reconcile.length})</div>
-                <div className="text-muted text-xs">ถ้าเกิดจากออเดอร์ TikTok ที่ BigSeller ตัดไปแล้ว ให้ลบแถวนั้นออกจากไฟล์ก่อน import</div>
+                <div className="text-muted text-xs">ถ้าซ้ำกับการขายที่อยู่ในรอบนี้แล้ว ให้ลบแถวนั้นออกจากไฟล์ก่อน import</div>
                 {preview.reconcile.map(r => (
                   <div key={r.product_id} className="flex justify-between gap-2">
                     <span className="truncate">{r.name}{r.sku && r.sku !== r.name ? <span className="text-muted"> → {r.sku}</span> : null}</span>

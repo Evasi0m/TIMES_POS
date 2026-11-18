@@ -12,15 +12,15 @@ describe('movementDecision', () => {
       expect(movementDecision({ reason, channel: 'tiktok' })).toBe('export');
     }
   });
-  it('exports order moves only for channels BigSeller cannot see', () => {
+  it('exports order moves for every channel, online included', () => {
     for (const reason of ['sale', 'sale_void', 'sale_edit', 'return_in', 'return_void']) {
       expect(movementDecision({ reason, channel: 'store' })).toBe('export');
       expect(movementDecision({ reason, channel: 'facebook' })).toBe('export');
       expect(movementDecision({ reason, channel: 'web' })).toBe('export');
       expect(movementDecision({ reason, channel: null })).toBe('export');
-      expect(movementDecision({ reason, channel: 'tiktok' })).toBe('skip');
-      expect(movementDecision({ reason, channel: 'Shopee' })).toBe('skip');
-      expect(movementDecision({ reason, channel: 'lazada' })).toBe('skip');
+      expect(movementDecision({ reason, channel: 'tiktok' })).toBe('export');
+      expect(movementDecision({ reason, channel: 'Shopee' })).toBe('export');
+      expect(movementDecision({ reason, channel: 'lazada' })).toBe('export');
     }
   });
   it('skips initial and flags unknown reasons', () => {
@@ -91,7 +91,7 @@ describe('netByProduct + aggregateBySku', () => {
   const movements = [
     { product_id: 1, qty_delta: 5, reason: 'receive' },
     { product_id: 1, qty_delta: -2, reason: 'sale', channel: 'store' },
-    { product_id: 1, qty_delta: -1, reason: 'sale', channel: 'tiktok' },   // skipped
+    { product_id: 2, qty_delta: -1, reason: 'sale', channel: 'shopee' },   // online sale exported
     { product_id: 2, qty_delta: -3, reason: 'sale', channel: null },
     { product_id: 3, qty_delta: 4, reason: 'receive' },
     { product_id: 3, qty_delta: -4, reason: 'manual_adjust' },            // nets to 0
@@ -108,7 +108,7 @@ describe('netByProduct + aggregateBySku', () => {
     const products = new Map([[1, { cost_price: 100 }], [5, { cost_price: 200 }], [4, { name: 'NO-SKU' }]]);
     const { stockIn, stockOut, unresolved } = aggregateBySku(net, resolved, products);
     expect(stockIn).toEqual([{ sku: 'W-221H-1A', qty: 4, unit_cost: 125 }]);
-    expect(stockOut).toEqual([{ sku: 'GA-100-1A1', qty: 3 }]);
+    expect(stockOut).toEqual([{ sku: 'GA-100-1A1', qty: 4 }]);
     expect(unresolved).toEqual([{ product_id: 4, name: 'NO-SKU', net: 2 }]);
     expect(aggregateBySku(net, resolved, products, new Set([4])).unresolved).toEqual([]);
   });

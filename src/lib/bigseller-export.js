@@ -1,10 +1,12 @@
 // BigSeller stock export — pure logic (no React, no Supabase).
 //
-// POS is the real stock number. BigSeller (warehouse TIMES STOCK) already
-// deducts its own online orders (TikTok / Shopee / Lazada), so POS exports
-// only the changes BigSeller cannot see, as Manual Stock-In / Stock-Out files.
+// POS is the real stock number. BigSeller (warehouse TIMES STOCK) deducts
+// stock only when an order is confirmed inside BigSeller, and the shop ships
+// outside BigSeller, so BigSeller never deducts online orders by itself.
+// POS therefore exports every stock change from every channel (store,
+// TikTok, Shopee, Lazada, ...) as Manual Stock-In / Stock-Out files.
 //
-//   1. filter movements by reason + channel   (isExportableMovement)
+//   1. filter movements by reason             (isExportableMovement)
 //   2. product → Merchant SKU                 (resolveMerchantSku / resolveSkuMap)
 //   3. net per Merchant SKU                   (aggregateBySku)
 //   4. Excel rows in BigSeller's template     (buildStockInAoa / buildStockOutAoa)
@@ -16,13 +18,11 @@ export const ALWAYS_EXPORT_REASONS = new Set([
   'receive', 'receive_void', 'receive_edit',
   'manual_adjust', 'supplier_claim', 'supplier_claim_void', 'stock_reconcile',
 ]);
-/** Order-linked reasons: exported only for channels BigSeller can't see. */
+/** Order-linked reasons: exported for every channel, online included. */
 export const CHANNEL_REASONS = new Set([
   'sale', 'sale_void', 'sale_edit', 'return_in', 'return_void',
 ]);
 export const NEVER_EXPORT_REASONS = new Set(['initial']);
-/** Channels whose orders BigSeller already deducts by itself. */
-export const BIGSELLER_OWN_CHANNELS = new Set(['tiktok', 'shopee', 'lazada']);
 
 /** BigSeller allows at most this many data rows per import file. */
 export const MAX_ROWS_PER_FILE = 2000;
@@ -48,10 +48,7 @@ export function movementDecision(m) {
   const reason = m?.reason;
   if (ALWAYS_EXPORT_REASONS.has(reason)) return 'export';
   if (NEVER_EXPORT_REASONS.has(reason)) return 'skip';
-  if (CHANNEL_REASONS.has(reason)) {
-    const ch = m.channel == null ? null : String(m.channel).trim().toLowerCase();
-    return ch && BIGSELLER_OWN_CHANNELS.has(ch) ? 'skip' : 'export';
-  }
+  if (CHANNEL_REASONS.has(reason)) return 'export';
   return 'unknown';
 }
 
@@ -214,8 +211,8 @@ export function aggregateBySku(netMap, resolved, productsById = new Map(), skipI
 
 /**
  * stock_reconcile lines in this batch, per product — shown for a manual check
- * before import (a reconcile caused by a TikTok order BigSeller already
- * deducted would otherwise be counted twice).
+ * before import (a reconcile that duplicates a sale already in the batch
+ * would otherwise be counted twice).
  * @returns {Array<{product_id, name, sku, qty}>}
  */
 export function reconcileLines(movements, resolved = new Map(), productsById = new Map()) {
