@@ -131,6 +131,7 @@ export function buildSalesHistoryExportRows(
       วันที่: bangkokDateKey(order.sale_date),
       เวลา: fmtTimeBangkok(order.sale_date),
       Platform: channelLabels[order.channel] || order.channel || 'หน้าร้าน',
+      เลขคำสั่งซื้อแพลตฟอร์ม: order.platform_order_no || '',
       สถานะ: STATUS_LABELS[order.status] || order.status || '',
       วิธีชำระ: paymentLabels[order.payment_method] || order.payment_method || '',
       รายการสินค้า: productDetails,

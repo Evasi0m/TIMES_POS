@@ -23,6 +23,7 @@ import { sb } from '../lib/supabase-client.js';
 import { fetchAll } from '../lib/sb-paginate.js';
 import { getProductListBundle } from '../lib/product-catalog-cache.js';
 import { ECOMMERCE_CHANNELS, excludePendingTikTok } from '../lib/ecommerce-channels.js';
+import { platformFeeSummary } from '../lib/platform-fees.js';
 import { fmtTHB, fmtPct, fmtNum } from '../lib/format.js';
 import Icon from '../components/ui/Icon.jsx';
 import MobileDataCard from '../components/ui/mobile/MobileDataCard.jsx';
@@ -553,6 +554,50 @@ function downloadCsv(filename, rows) {
 }
 
 /* =========================================================
+   Platform fee table
+========================================================= */
+function PlatformFeeTable({ rows }) {
+  if (!rows?.length) {
+    return <div className="text-sm text-muted py-4">ยังไม่มีบิลออนไลน์ใน 90 วันล่าสุด</div>;
+  }
+  const money = (v) => Math.round(v).toLocaleString('th-TH');
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm tabular-nums">
+        <thead>
+          <tr className="text-xs text-muted text-right">
+            <th className="text-left font-medium py-2">ช่องทาง</th>
+            <th className="font-medium py-2">บิล</th>
+            <th className="font-medium py-2">ยอดเต็ม</th>
+            <th className="font-medium py-2">ได้รับจริง</th>
+            <th className="font-medium py-2">ค่าธรรมเนียม</th>
+            <th className="font-medium py-2">%</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.channel} className="border-t hairline text-right">
+              <td className="text-left py-2 font-medium">
+                <span className="inline-block w-2.5 h-2.5 rounded-full mr-2 align-middle" style={{ background: CHANNEL_COLOR[r.channel] || 'rgb(var(--c-muted))' }} />
+                {CHANNEL_LABEL[r.channel] || r.channel}
+                {r.missingNet > 0 && (
+                  <div className="text-[11px] text-error font-normal">ยังไม่กรอกยอดได้รับ {r.missingNet} บิล (ไม่นับรวม)</div>
+                )}
+              </td>
+              <td className="py-2">{r.orders}</td>
+              <td className="py-2">{money(r.gross)}</td>
+              <td className="py-2">{money(r.net)}</td>
+              <td className="py-2">{money(r.fee)}</td>
+              <td className="py-2 font-medium">{r.feePct == null ? '—' : r.feePct.toFixed(1) + '%'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/* =========================================================
    Main view
 ========================================================= */
 export default function InsightsView({ embedded = false } = {}) {
@@ -561,6 +606,7 @@ export default function InsightsView({ embedded = false } = {}) {
   const [weeklyTrend, setWeeklyTrend] = useState([]);
   const [heatmap, setHeatmap] = useState(null);
   const [channelMix, setChannelMix] = useState([]);
+  const [feeSummary, setFeeSummary] = useState([]);
   const [deadStock, setDeadStock] = useState(null);
   const [reorder, setReorder] = useState(null);
   const [topMovers, setTopMovers] = useState([]);
@@ -578,6 +624,7 @@ export default function InsightsView({ embedded = false } = {}) {
       setWeeklyTrend(c.weeklyTrend);
       setHeatmap(c.heatmap);
       setChannelMix(c.channelMix);
+      setFeeSummary(c.feeSummary || []);
       setReorder(c.reorder);
       setAllSalesForAnalytics(c.allSalesForAnalytics);
       setTopMovers(c.topMovers);
@@ -695,6 +742,8 @@ export default function InsightsView({ embedded = false } = {}) {
       }
       const mixArr = Array.from(monthly.values()).sort((a, b) => a.month.localeCompare(b.month));
       setChannelMix(mixArr);
+      const fees = platformFeeSummary(rows.filter((o) => new Date(o.sale_date).getTime() >= start90));
+      setFeeSummary(fees);
 
       // === Velocity + reorder ===
       const recentItems = items.filter((it) => {
@@ -796,6 +845,7 @@ export default function InsightsView({ embedded = false } = {}) {
         weeklyTrend: weeklyBuckets(tradeRows, { weeks: 13, now }),
         heatmap: buildHeatmap(tradeRows.filter((r) => new Date(r.sale_date).getTime() >= start90)),
         channelMix: mixArr,
+        feeSummary: fees,
         reorder: reorderRows,
         allSalesForAnalytics: { products: products || [], lastSoldMap },
         topMovers: topM,
@@ -866,6 +916,10 @@ export default function InsightsView({ embedded = false } = {}) {
 
       <Section title="สัดส่วนช่องทางการขาย" subtitle="12 เดือนล่าสุด">
         <ChannelMix data={channelMix} />
+      </Section>
+
+      <Section title="ค่าธรรมเนียมแพลตฟอร์ม" subtitle="90 วันล่าสุด · ยอดเต็ม − เงินที่ร้านได้รับ">
+        <PlatformFeeTable rows={feeSummary} />
       </Section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5">

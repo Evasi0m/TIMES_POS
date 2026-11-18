@@ -79,6 +79,7 @@ import { mergeCustomerPriceConfig } from './lib/customer-price.js';
 import { bahtText } from './lib/baht-text.js';
 import { fullBuyerValid } from './lib/tax-buyer.js';
 import { ECOMMERCE_CHANNELS, excludePendingTikTok, isApiImportedOrder } from './lib/ecommerce-channels.js';
+import { normalizePlatformOrderNo, findDuplicatePlatformOrder, matchesPlatformOrderNo } from './lib/platform-order.js';
 import { findPendingTikTokOverlap, formatOverlapWarning } from './lib/tiktok-checkout-guard.js';
 import {
   vatFromGross,
@@ -5137,6 +5138,9 @@ function POSView() {
   // Money the shop actually receives from the platform (e-commerce only).
   // Empty string = not entered yet; gets fallback to grand_total in P&L.
   const [netReceived, setNetReceived] = useState("");
+  // Marketplace order number (Shopee/Lazada/Thaimart/TikTok manual) — used to
+  // reconcile against the platform payout report and block double-keying.
+  const [platformOrderNo, setPlatformOrderNo] = useState("");
   // "ใส่ทีหลัง" — defer net_received. When on, the e-commerce sale is saved with
   // net_received_pending = true and net_received left empty (filled later via the
   // notification bell). Auto-cleared when the channel is no longer e-commerce.
@@ -5549,6 +5553,7 @@ function POSView() {
           : null,
         // "ใส่ทีหลัง" — e-commerce sale awaiting the real net_received.
         net_received_pending: ECOMMERCE_CHANNELS.has(channel) && deferNet,
+        platform_order_no: ECOMMERCE_CHANNELS.has(channel) ? normalizePlatformOrderNo(platformOrderNo) : null,
       };
       const itemsPayload = cart.map(l => ({
         product_id: l.product_id, product_name: l.product_name,
@@ -5588,6 +5593,13 @@ function POSView() {
       //
       // Atomic: header + items + adjust_stock all in one Postgres transaction.
       // See supabase-migrations/001_create_sale_order_with_items.sql.
+      if (headerPayload.platform_order_no) {
+        const dup = await findDuplicatePlatformOrder(sb, channel, headerPayload.platform_order_no);
+        if (dup) {
+          toast.push(`เลขคำสั่งซื้อ ${headerPayload.platform_order_no} ถูกบันทึกแล้วในบิล #${dup.id} — ห้ามคีย์ซ้ำ`, 'error');
+          return;
+        }
+      }
       const { data: order, error: e1 } = await sb.rpc('create_sale_order_with_items', rpcArgs);
       if (e1) {
         // Network failure mid-call → fall back to the offline queue rather
@@ -5613,7 +5625,7 @@ function POSView() {
         }).catch((e) => logMirrorBackgroundError('checkout-sale', e));
       }
 
-      setCart([]); setNetPrice(""); setNetReceived(""); setDeferNet(false);
+      setCart([]); setNetPrice(""); setNetReceived(""); setDeferNet(false); setPlatformOrderNo("");
       setChannel("store"); setPayment("transfer"); setCartOpen(false);
       setNotes(""); setShowNotes(false);
       setTiktokOverlap(null);
@@ -5983,6 +5995,21 @@ function POSView() {
           </div>
         </div>
 
+        {ECOMMERCE_CHANNELS.has(channel) && (
+          <div className="mb-2.5 fade-in">
+            <label className="text-xs uppercase tracking-wider text-muted inline-flex items-center gap-1.5 font-medium mb-1">
+              เลขคำสั่งซื้อ {CHANNEL_LABELS[channel] || channel}
+              <span className="text-muted-soft font-normal normal-case tracking-normal">(กันคีย์ซ้ำ · ใช้กระทบยอดโอน)</span>
+            </label>
+            <input
+              className="input !py-2 !text-sm"
+              placeholder="เช่น 2611180001234"
+              value={platformOrderNo}
+              onChange={e=>setPlatformOrderNo(e.target.value)}
+              autoComplete="off"
+            />
+          </div>
+        )}
         {ECOMMERCE_CHANNELS.has(channel) && (
           // Strong red mini-card — the cashier MUST notice this field
           // because wrong values silently break the profit calc. Red
@@ -6479,6 +6506,21 @@ function POSView() {
                     )}
                   </div>
 
+                  {ECOMMERCE_CHANNELS.has(channel) && (
+                    <div className="mb-3 fade-in">
+            <label className="text-xs uppercase tracking-wider text-muted inline-flex items-center gap-1.5 font-medium mb-1">
+              เลขคำสั่งซื้อ {CHANNEL_LABELS[channel] || channel}
+              <span className="text-muted-soft font-normal normal-case tracking-normal">(กันคีย์ซ้ำ · ใช้กระทบยอดโอน)</span>
+            </label>
+            <input
+              className="input !py-2 !text-sm"
+              placeholder="เช่น 2611180001234"
+              value={platformOrderNo}
+              onChange={e=>setPlatformOrderNo(e.target.value)}
+              autoComplete="off"
+            />
+          </div>
+                  )}
                   {ECOMMERCE_CHANNELS.has(channel) && (
                     <div className={"rounded-xl p-3 mb-3 bg-primary/5 border border-primary/15 fade-in " + (netReceivedErr ? "field-error-glow" : "")}>
                       <div className="flex items-center justify-between gap-2">
@@ -8566,6 +8608,9 @@ function SalesView({ onGoPOS }) {
   };
   const [voiding, setVoiding] = useState(false);
   const [editNet, setEditNet] = useState(false); // toggles inline net_received editor
+  const [editOrderNo, setEditOrderNo] = useState(false);
+  const [orderNoDraft, setOrderNoDraft] = useState("");
+  const [savingOrderNo, setSavingOrderNo] = useState(false);
   const [netDraft, setNetDraft] = useState("");
   const [savingNet, setSavingNet] = useState(false);
   // Bill-edit mode (admin-only): lets us correct cashier mistakes on
@@ -8673,6 +8718,7 @@ function SalesView({ onGoPOS }) {
     if (!q) return orders;
     return orders.filter(o => {
       if (String(o.id).toLowerCase().includes(q)) return true;
+      if (matchesPlatformOrderNo(o, q)) return true;
       const names = orderSummary[o.id]?.allProductNames;
       if (names && names.some(n => n.includes(q))) return true;
       return false;
@@ -8737,7 +8783,7 @@ function SalesView({ onGoPOS }) {
       const o = payload?.old;
       if (!n?.id || payload.eventType !== 'UPDATE') return false;
       const ignore = new Set([
-        'net_received', 'net_received_pending', 'status', 'updated_at',
+        'net_received', 'net_received_pending', 'platform_order_no', 'status', 'updated_at',
         'has_edits', 'has_substitution', 'grand_total', 'subtotal',
         'total_after_discount', 'vat_amount', 'tax_invoice_no',
         'buyer_name', 'buyer_tax_id', 'buyer_address', 'buyer_branch',
@@ -8802,6 +8848,7 @@ function SalesView({ onGoPOS }) {
     setEditDraft(null);
     setHistoryOpen(false);
     setEditNet(false);
+    setEditOrderNo(false);
     setNetDraft(order.net_received != null ? String(order.net_received) : "");
     if (order.status === 'voided' && !voidStockStatus[order.id]) {
       try {
@@ -8951,6 +8998,32 @@ function SalesView({ onGoPOS }) {
     } catch (e) {
       toast.push("บันทึกไม่ได้: " + mapError(e), 'error');
     } finally { setSavingNet(false); }
+  };
+
+  const savePlatformOrderNo = async () => {
+    if (!detail) return;
+    const value = normalizePlatformOrderNo(orderNoDraft);
+    setSavingOrderNo(true);
+    try {
+      if (value) {
+        const dup = await findDuplicatePlatformOrder(sb, detail.order.channel, value, detail.order.id);
+        if (dup) {
+          toast.push(`เลขคำสั่งซื้อนี้อยู่ในบิล #${dup.id} แล้ว`, 'error');
+          return;
+        }
+      }
+      const { error } = await sb.from('sale_orders')
+        .update({ platform_order_no: value }).eq('id', detail.order.id);
+      if (error) throw error;
+      const partial = { platform_order_no: value };
+      patchOrderInCache(detail.order.id, partial, { filterKey });
+      setDetail(d => d ? { ...d, order: { ...d.order, ...partial } } : d);
+      setOrders(list => list.map(o => o.id === detail.order.id ? { ...o, ...partial } : o));
+      toast.push(value ? `บันทึกเลขคำสั่งซื้อ ${value}` : 'ลบเลขคำสั่งซื้อแล้ว', 'success');
+      setEditOrderNo(false);
+    } catch (e) {
+      toast.push("บันทึกไม่ได้: " + mapError(e), 'error');
+    } finally { setSavingOrderNo(false); }
   };
 
   const voidSale = async () => {
@@ -9401,6 +9474,9 @@ function SalesView({ onGoPOS }) {
                   {ECOMMERCE_CHANNELS.has(o.channel) && o.net_received != null && (
                     <div className="text-xs text-muted-soft">ได้รับ {fmtMoney(o.net_received)}</div>
                   )}
+                  {o.platform_order_no && (
+                    <div className="text-[11px] text-muted-soft truncate max-w-full" title="เลขคำสั่งซื้อแพลตฟอร์ม">{o.platform_order_no}</div>
+                  )}
                   {o.net_received_pending && o.status!=='voided' && (
                     <div className="text-xs text-error font-medium">รอใส่ราคา</div>
                   )}
@@ -9473,6 +9549,9 @@ function SalesView({ onGoPOS }) {
                     <div className={"font-display text-lg leading-none tabular-nums " + (o.status==='voided'?'line-through':'')}>{fmtMoney(o.grand_total)}</div>
                     {ECOMMERCE_CHANNELS.has(o.channel) && o.net_received != null && (
                       <div className="text-xs text-muted-soft mt-0.5 tabular-nums">ได้รับ {fmtMoney(o.net_received)}</div>
+                    )}
+                    {o.platform_order_no && (
+                      <div className="text-[11px] text-muted-soft mt-0.5">{o.platform_order_no}</div>
                     )}
                     {canSeeProfit && sm && o.status !== 'voided' && (
                       <div
@@ -9766,6 +9845,37 @@ function SalesView({ onGoPOS }) {
                   </span>
                 </div>
               </div>
+              {ECOMMERCE_CHANNELS.has(detail.order.channel) && (
+                <div className="mt-3 pt-3 border-t hairline">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm">
+                      <div className="text-muted text-xs uppercase tracking-wider">เลขคำสั่งซื้อ {CHANNEL_LABELS[detail.order.channel] || detail.order.channel}</div>
+                      <div className="text-xs text-muted-soft">ใช้กระทบยอดเงินโอนจากแพลตฟอร์ม</div>
+                    </div>
+                    {!editOrderNo ? (
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-sm tabular-nums truncate">
+                          {detail.order.platform_order_no || <span className="text-muted-soft">— ยังไม่ได้กรอก —</span>}
+                        </span>
+                        {canNetReceived && detail.order.status==='active' && (
+                          <button className="btn-secondary !py-1.5 !px-2.5 !text-xs flex-shrink-0" onClick={()=>{ setOrderNoDraft(detail.order.platform_order_no || ""); setEditOrderNo(true); }}>
+                            <Icon name="edit" size={12}/> แก้ไข
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <input autoFocus className="input !h-9 !w-44 !rounded-lg !py-1 !text-sm"
+                          value={orderNoDraft} onChange={e=>setOrderNoDraft(e.target.value)} />
+                        <button className="btn-primary !py-1.5 !px-3 !text-xs" onClick={savePlatformOrderNo} disabled={savingOrderNo}>
+                          {savingOrderNo ? '...' : 'บันทึก'}
+                        </button>
+                        <button className="btn-secondary !py-1.5 !px-2.5 !text-xs" onClick={()=>setEditOrderNo(false)} disabled={savingOrderNo}>ยกเลิก</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
               {ECOMMERCE_CHANNELS.has(editMode && editDraft ? editDraft.channel : detail.order.channel) && (
                 <div className="mt-3 pt-3 border-t hairline">
                   <div className="flex items-center justify-between gap-2">
