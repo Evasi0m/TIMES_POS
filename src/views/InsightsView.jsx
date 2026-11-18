@@ -33,12 +33,13 @@ import { reorderSuggestion } from '../lib/analytics/forecast.js';
 import { weeklyBuckets, momCompare } from '../lib/analytics/trend.js';
 import { deadStockReport } from '../lib/analytics/dead-stock.js';
 
-const CHANNEL_LABEL = { store: 'หน้าร้าน', tiktok: 'TikTok', shopee: 'Shopee', lazada: 'Lazada', facebook: 'Facebook' };
+const CHANNEL_LABEL = { store: 'หน้าร้าน', tiktok: 'TikTok', shopee: 'Shopee', lazada: 'Lazada', thaimart: 'Thaimart', facebook: 'Facebook' };
 const CHANNEL_COLOR = {
   store: 'rgb(var(--c-body-strong))',
   tiktok: 'rgb(var(--c-primary))',
   shopee: 'rgb(var(--c-accent-amber))',
   lazada: 'rgb(var(--c-accent-teal))',
+  thaimart: '#c96a86',
   facebook: 'rgb(var(--c-muted))',
 };
 const CHART_GRID = 'rgb(var(--c-hairline) / 0.55)';
@@ -677,7 +678,7 @@ export default function InsightsView({ embedded = false } = {}) {
 
       // === Channel mix (12 months) ===
       const start12 = now - 365 * MS_PER_DAY;
-      const channels = ['store', 'tiktok', 'shopee', 'lazada', 'facebook'];
+      const channels = ['store', 'tiktok', 'shopee', 'lazada', 'thaimart', 'facebook'];
       const monthly = new Map();
       for (const o of rows) {
         const t = new Date(o.sale_date).getTime();

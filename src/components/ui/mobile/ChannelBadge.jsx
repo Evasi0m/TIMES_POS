@@ -10,7 +10,7 @@ import {
 
 function brandForKey(key) {
   if (key === 'tiktok' || key === 'tiktok_api') return 'tiktok';
-  if (key === 'shopee' || key === 'lazada') return key;
+  if (key === 'shopee' || key === 'lazada' || key === 'thaimart') return key;
   return null;
 }
 

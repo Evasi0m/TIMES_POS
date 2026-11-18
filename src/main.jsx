@@ -328,6 +328,7 @@ const CHANNELS = [
   { v: "tiktok",   label: "TikTok" },
   { v: "shopee",   label: "Shopee" },
   { v: "lazada",   label: "Lazada" },
+  { v: "thaimart", label: "Thaimart" },
   { v: "facebook", label: "Facebook" },
 ];
 const PAYMENTS = [
@@ -340,7 +341,7 @@ const PAYMENTS = [
 // channels with no installment integration). Filtered out of the dropdown
 // and auto-reset if the cashier switches to one of these channels while
 // 'paylater' is already selected.
-const PAYLATER_BLOCKED_CHANNELS = new Set(["store", "facebook"]);
+const PAYLATER_BLOCKED_CHANNELS = new Set(["store", "facebook", "thaimart"]);
 // ECOMMERCE_CHANNELS — see lib/ecommerce-channels.js (POS manual checkout channels)
 // Payments on e-commerce channels where the cashier is required to enter
 // the platform-deducted "net received" total before checkout. Pay-later
@@ -2640,7 +2641,7 @@ function TOTPChallengeModal({ open, onSuccess, onCancel }) {
    RECEIPT — 100mm thermal sticker layout
 ========================================================= */
 // 'cash' kept for legacy bills that haven't been migrated; the dropdown no longer offers it.
-const CHANNEL_LABELS = { store: 'หน้าร้าน', tiktok: 'TikTok', shopee: 'Shopee', lazada: 'Lazada', facebook: 'Facebook' };
+const CHANNEL_LABELS = { store: 'หน้าร้าน', tiktok: 'TikTok', shopee: 'Shopee', lazada: 'Lazada', thaimart: 'Thaimart', facebook: 'Facebook' };
 
 function Receipt({ order, items, shop, variant = 'receipt' }) {
   // 'abbr'        → ใบกำกับภาษีอย่างย่อ (ม.86/6) — default print for walk-in
@@ -12057,6 +12058,7 @@ function DonutChart({
     tiktok: 'url(#grad-tiktok)',
     shopee: 'url(#grad-shopee)',
     lazada: 'url(#grad-lazada)',
+    thaimart: 'url(#grad-thaimart)',
     facebook: 'url(#grad-facebook)',
     store: 'url(#grad-store)',
   };
@@ -12078,6 +12080,10 @@ function DonutChart({
         <linearGradient id="grad-lazada" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stopColor="#b8afff" />
           <stop offset="100%" stopColor="#8d83cf" />
+        </linearGradient>
+        <linearGradient id="grad-thaimart" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#f2a3b8" />
+          <stop offset="100%" stopColor="#c96a86" />
         </linearGradient>
         <linearGradient id="grad-facebook" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stopColor="#a1cbf6" />
@@ -12541,6 +12547,7 @@ function DashboardView({ embedded = false, dateRange: dateRangeProp, onDateRange
     tiktok:   '#dc7355',
     shopee:   '#d9a24f',
     lazada:   '#8d83cf',
+    thaimart: '#c96a86',
     facebook: '#79a7cf',
   };
   const donutSlices = channelSorted.map(c => ({
@@ -12688,6 +12695,7 @@ function DashboardView({ embedded = false, dateRange: dateRangeProp, onDateRange
                                   c.v === 'tiktok' ? 'rgba(220, 115, 85, 0.35)' :
                                   c.v === 'shopee' ? 'rgba(217, 162, 79, 0.35)' :
                                   c.v === 'lazada' ? 'rgba(141, 131, 207, 0.35)' :
+                                  c.v === 'thaimart' ? 'rgba(201, 106, 134, 0.35)' :
                                   c.v === 'facebook' ? 'rgba(121, 167, 207, 0.35)' : 'rgba(255,255,255,0.15)';
                     return (
                       <div 

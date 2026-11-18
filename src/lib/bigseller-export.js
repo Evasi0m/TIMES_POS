@@ -22,7 +22,7 @@ export const CHANNEL_REASONS = new Set([
 ]);
 export const NEVER_EXPORT_REASONS = new Set(['initial']);
 /** Channels whose orders BigSeller already deducts by itself. */
-export const BIGSELLER_OWN_CHANNELS = new Set(['tiktok', 'shopee', 'lazada']);
+export const BIGSELLER_OWN_CHANNELS = new Set(['tiktok', 'shopee', 'lazada', 'thaimart']);
 
 /** BigSeller allows at most this many data rows per import file. */
 export const MAX_ROWS_PER_FILE = 2000;
