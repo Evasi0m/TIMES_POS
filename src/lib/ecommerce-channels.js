@@ -16,7 +16,7 @@
 export const TIKTOK_POS_GOLIVE = '2026-06-07T06:00:00.000Z';
 
 /** Channels where the cashier may ring up a sale manually at POS. */
-export const ECOMMERCE_CHANNELS = new Set(['tiktok', 'shopee', 'lazada']);
+export const ECOMMERCE_CHANNELS = new Set(['tiktok', 'shopee', 'lazada', 'thaimart']);
 
 /** True when the row is a TikTok API sync (any generation). */
 export function isTikTokApiOrder(row) {

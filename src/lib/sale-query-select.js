@@ -3,7 +3,7 @@
 /** List rows + detail modal header (order header comes from list, not refetched). */
 export const SALE_ORDER_LIST_SELECT =
   'id, sale_date, status, channel, payment_method, grand_total, subtotal, ' +
-  'net_received, net_received_pending, discount_type, discount_value, total_after_discount, ' +
+  'net_received, net_received_pending, platform_order_no, discount_type, discount_value, total_after_discount, ' +
   'vat_rate, vat_amount, void_reason, voided_at, has_substitution, has_edits, ' +
   'tiktok_order_id, tiktok_resolution_kind, stock_resolution, ' +
   'created_by_email, notes, tax_invoice_no, buyer_name, buyer_tax_id, buyer_address, buyer_branch';

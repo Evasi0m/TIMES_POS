@@ -5,6 +5,7 @@ export const CHANNEL_LABELS = {
   tiktok: 'TikTok',
   shopee: 'Shopee',
   lazada: 'Lazada',
+  thaimart: 'Thaimart',
   facebook: 'Facebook',
 };
 
@@ -74,6 +75,12 @@ export function channelBadgeStyle(ch) {
       border: '1px solid rgba(254,44,85,0.42)',
       color: '#ffffff',
       boxShadow: '0 1px 0 rgba(255,255,255,0.14) inset, 0 -1px 0 rgba(254,44,85,0.22) inset, 0 4px 14px -4px rgba(254,44,85,0.28)',
+    },
+    thaimart: {
+      background: 'radial-gradient(circle at 14% 8%, rgba(201,106,134,0.18), transparent 34%), radial-gradient(circle at 90% 18%, rgba(242,163,184,0.16), transparent 32%), radial-gradient(circle at 50% 105%, rgba(252,228,236,0.50), transparent 44%), linear-gradient(135deg, rgba(248,187,208,0.92), rgba(240,152,178,0.78))',
+      border: '1px solid rgba(201,106,134,0.35)',
+      color: '#880e4f',
+      boxShadow: '0 1px 0 rgba(255,255,255,0.85) inset, 0 -1px 0 rgba(201,106,134,0.10) inset, 0 4px 14px -4px rgba(20,20,19,0.08)',
     },
     facebook: {
       background: 'radial-gradient(circle at 14% 8%, rgba(33,150,243,0.18), transparent 34%), radial-gradient(circle at 90% 18%, rgba(100,181,246,0.16), transparent 32%), radial-gradient(circle at 50% 105%, rgba(227,242,253,0.50), transparent 44%), linear-gradient(135deg, rgba(187,222,251,0.92), rgba(144,202,249,0.78))',
