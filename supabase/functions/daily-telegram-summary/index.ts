@@ -39,10 +39,10 @@ const CORS = {
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-const ECOMMERCE_CHANNELS = new Set(['tiktok', 'shopee', 'lazada']);
+const ECOMMERCE_CHANNELS = new Set(['tiktok', 'shopee', 'lazada', 'thaimart']);
 const CHANNEL_LABEL: Record<string, string> = {
   store: 'หน้าร้าน', tiktok: 'TikTok', shopee: 'Shopee',
-  lazada: 'Lazada', facebook: 'Facebook',
+  lazada: 'Lazada', thaimart: 'Thaimart', facebook: 'Facebook',
 };
 const TH_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
                    'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];

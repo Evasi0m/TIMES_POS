@@ -10,7 +10,7 @@
 //  CONSTANTS
 // ─────────────────────────────────────────────────────────────────────────
 
-export const ECOMMERCE_CHANNELS = new Set(['tiktok', 'shopee', 'lazada']);
+export const ECOMMERCE_CHANNELS = new Set(['tiktok', 'shopee', 'lazada', 'thaimart']);
 
 /**
  * Mirror src/lib/ecommerce-channels.js `excludePendingTikTok` — hide TikTok API
@@ -26,6 +26,7 @@ export const CHANNEL_LABEL: Record<string, string> = {
   tiktok: 'TikTok',
   shopee: 'Shopee',
   lazada: 'Lazada',
+  thaimart: 'Thaimart',
   facebook: 'Facebook',
 };
 
