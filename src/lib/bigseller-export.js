@@ -277,3 +277,68 @@ export function parseSkuSheet(aoa) {
   }
   return out;
 }
+
+// ── Carry-forward + catch-up (migration 092) ─────────────────────────────
+
+/** Batches recorded before this moment skipped online-channel sales/returns. */
+export const LEGACY_ONLINE_SKIP_BEFORE = '2026-11-18T09:37:48Z';
+const LEGACY_ONLINE_CHANNELS = new Set(['tiktok', 'shopee', 'lazada']);
+
+/** Add `{product_id, net}` items (a batch's unresolved list) into a net map. */
+export function addNets(netMap, items = []) {
+  const out = new Map(netMap);
+  for (const u of items || []) {
+    const pid = Number(u?.product_id);
+    const n = Number(u?.net) || 0;
+    if (!pid || !n) continue;
+    out.set(pid, (out.get(pid) || 0) + n);
+  }
+  return out;
+}
+
+/**
+ * Movements that past batches never sent to BigSeller.
+ *   • not covered by any normal batch range (from, to]   → gap (e.g. a cursor reset)
+ *   • covered by a batch recorded before LEGACY_ONLINE_SKIP_BEFORE, and an
+ *     online-channel sale/return (the old rule skipped those)
+ * Only movements inside [first batch from, last batch to] are considered.
+ * @param {Array} movements  rows from bigseller_export_movements
+ * @param {Array<{id, kind?, from_movement_id, to_movement_id, created_at}>} batches
+ * @returns {{lost: Array, gap: number, legacy: number}}
+ */
+export function findLostMovements(movements, batches, { legacyBefore = LEGACY_ONLINE_SKIP_BEFORE } = {}) {
+  const normal = (batches || []).filter(b => (b.kind || 'normal') === 'normal');
+  if (!normal.length) return { lost: [], gap: 0, legacy: 0 };
+  const lo = Math.min(...normal.map(b => Number(b.from_movement_id)));
+  const hi = Math.max(...normal.map(b => Number(b.to_movement_id)));
+  const cutoff = new Date(legacyBefore).getTime();
+  const lost = [];
+  let gap = 0;
+  let legacy = 0;
+  for (const m of movements || []) {
+    const id = Number(m.id);
+    if (!(id > lo && id <= hi)) continue;
+    const b = normal.find(x => id > Number(x.from_movement_id) && id <= Number(x.to_movement_id));
+    if (!b) { lost.push(m); gap += 1; continue; }
+    const ch = m.channel == null ? null : String(m.channel).trim().toLowerCase();
+    if (new Date(b.created_at).getTime() < cutoff && CHANNEL_REASONS.has(m.reason) && LEGACY_ONLINE_CHANNELS.has(ch)) {
+      lost.push(m); legacy += 1;
+    }
+  }
+  return { lost, gap, legacy };
+}
+
+/**
+ * Unresolved lists that no later batch re-tried: every normal batch except the
+ * latest one (the next normal export carries that) and those already carried.
+ */
+export function uncarriedUnresolved(batches) {
+  const normal = (batches || []).filter(b => (b.kind || 'normal') === 'normal')
+    .sort((a, b) => Number(a.id) - Number(b.id));
+  if (normal.length < 2) return [];
+  const carried = new Set(normal.map(b => b.carried_from).filter(x => x != null).map(Number));
+  const latest = Number(normal[normal.length - 1].id);
+  return normal
+    .filter(b => Number(b.id) !== latest && !carried.has(Number(b.id)))
+    .flatMap(b => b.unresolved || []);
+}
