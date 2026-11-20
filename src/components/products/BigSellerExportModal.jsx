@@ -7,6 +7,7 @@ import { fetchAll, fetchAllFromTable } from '../../lib/sb-paginate.js';
 import { fetchTikTokMappings } from '../../lib/tiktok-inventory-sync.js';
 import {
   movementDecision, netByProduct, resolveSkuMap, aggregateBySku, reconcileLines,
+  addNets, findLostMovements, uncarriedUnresolved,
   buildStockInAoa, buildStockOutAoa, chunkRows, exportFilename, parseSkuSheet, SHEET_NAME,
 } from '../../lib/bigseller-export.js';
 
@@ -65,7 +66,7 @@ export default function BigSellerExportModal({ open, onClose, toast }) {
       sb.rpc('bigseller_export_state'),
       fetchAllFromTable(sb, 'bigseller_skus', { select: 'merchant_sku', orderColumn: 'merchant_sku', ascending: true }),
       sb.from('bigseller_export_batches')
-        .select('id, created_at, created_by_email, from_movement_id, to_movement_id, in_rows, out_rows, unresolved_count, filename_in, filename_out')
+        .select('id, kind, created_at, created_by_email, from_movement_id, to_movement_id, in_rows, out_rows, unresolved_count, filename_in, filename_out')
         .order('id', { ascending: false }).limit(10),
     ]);
     const e = e1 || skus.error || e3;
@@ -82,6 +83,41 @@ export default function BigSellerExportModal({ open, onClose, toast }) {
     load();
   }, [open, load]);
 
+  // Shared: movements (+ extra {product_id, net} items) → preview object.
+  const buildPreview = useCallback(async (moves, extraItems, meta) => {
+    const unknown = [...new Set(moves.filter(m => movementDecision(m) === 'unknown').map(m => m.reason))];
+    const net = addNets(netByProduct(moves), extraItems);
+    const ids = [...net.keys()].filter(id => net.get(id));
+    const [products, saved, mappings] = await Promise.all([
+      selectIn('products', 'id, name, cost_price', 'id', ids),
+      selectIn('bigseller_sku_map', 'product_id, merchant_sku, source', 'product_id', ids),
+      ids.length ? fetchTikTokMappings(ids) : [],
+    ]);
+    const productsById = new Map(products.map(p => [Number(p.id), p]));
+    const savedMap = new Map(saved.map(r => [Number(r.product_id), r]));
+    const tiktokByProduct = new Map();
+    for (const m of mappings) {
+      if (!m.product_id || !m.seller_sku) continue;
+      const k = Number(m.product_id);
+      tiktokByProduct.set(k, [...(tiktokByProduct.get(k) || []), m.seller_sku]);
+    }
+    const { resolved, toSave, unresolved: unresolvedInfo, skipped } =
+      resolveSkuMap(ids, { productsById, tiktokByProduct, merchantSkus, savedMap });
+    const skipIds = new Set(skipped.map(x => x.product_id));
+    const { stockIn, stockOut, unresolved } = aggregateBySku(net, resolved, productsById, skipIds);
+    const info = new Map(unresolvedInfo.map(u => [u.product_id, u]));
+    return {
+      ...meta,
+      moveCount: moves.length,
+      exported: moves.filter(m => movementDecision(m) === 'export').length,
+      carriedCount: (extraItems || []).length,
+      unknown, stockIn, stockOut, toSave,
+      reconcile: reconcileLines(moves, resolved, productsById),
+      unresolved: unresolved.map(u => ({ ...u, ...info.get(u.product_id), net: u.net })),
+      skipped: skipped.map(x => ({ ...x, net: net.get(x.product_id) })),
+    };
+  }, [merchantSkus]);
+
   const compute = useCallback(async () => {
     setBusy('compute'); setErr('');
     try {
@@ -97,42 +133,49 @@ export default function BigSellerExportModal({ open, onClose, toast }) {
       const { data: moves, error: me } = await fetchAll((a, b) =>
         sb.rpc('bigseller_export_movements', { p_from: from, p_to: to }).range(a, b));
       if (me) throw me;
-
-      const unknown = [...new Set(moves.filter(m => movementDecision(m) === 'unknown').map(m => m.reason))];
-      const net = netByProduct(moves);
-      const ids = [...net.keys()].filter(id => net.get(id));
-      const [products, saved, mappings] = await Promise.all([
-        selectIn('products', 'id, name, cost_price', 'id', ids),
-        selectIn('bigseller_sku_map', 'product_id, merchant_sku, source', 'product_id', ids),
-        ids.length ? fetchTikTokMappings(ids) : [],
-      ]);
-      const productsById = new Map(products.map(p => [Number(p.id), p]));
-      const savedMap = new Map(saved.map(r => [Number(r.product_id), r]));
-      const tiktokByProduct = new Map();
-      for (const m of mappings) {
-        if (!m.product_id || !m.seller_sku) continue;
-        const k = Number(m.product_id);
-        tiktokByProduct.set(k, [...(tiktokByProduct.get(k) || []), m.seller_sku]);
+      // Carry forward: products the previous batch could not send are retried
+      // here, so a missing SKU delays a change instead of losing it.
+      let carried = [];
+      const carriedFrom = st.last_batch_id ?? null;
+      if (carriedFrom != null) {
+        const { data: lb, error: le } = await sb.from('bigseller_export_batches')
+          .select('unresolved').eq('id', carriedFrom).single();
+        if (le) throw le;
+        carried = lb?.unresolved || [];
       }
-      const { resolved, toSave, unresolved: unresolvedInfo, skipped } =
-        resolveSkuMap(ids, { productsById, tiktokByProduct, merchantSkus, savedMap });
-      const skipIds = new Set(skipped.map(x => x.product_id));
-      const { stockIn, stockOut, unresolved } = aggregateBySku(net, resolved, productsById, skipIds);
-      const info = new Map(unresolvedInfo.map(u => [u.product_id, u]));
-      setPreview({
-        from, to, moveCount: moves.length,
-        exported: moves.filter(m => movementDecision(m) === 'export').length,
-        unknown, stockIn, stockOut, toSave,
-        reconcile: reconcileLines(moves, resolved, productsById),
-        unresolved: unresolved.map(u => ({ ...u, ...info.get(u.product_id), net: u.net })),
-        skipped: skipped.map(x => ({ ...x, net: net.get(x.product_id) })),
-      });
+      setPreview(await buildPreview(moves, carried, { mode: 'normal', from, to, carriedFrom }));
     } catch (e) {
       setErr(e.message || String(e));
     } finally {
       setBusy('');
     }
-  }, [startAt, merchantSkus]);
+  }, [startAt, buildPreview]);
+
+  // One-off: everything earlier batches never sent (migration 092).
+  const computeCatchup = useCallback(async () => {
+    setBusy('compute'); setErr('');
+    try {
+      const { data: all, error: be } = await sb.from('bigseller_export_batches')
+        .select('id, kind, created_at, from_movement_id, to_movement_id, unresolved, carried_from')
+        .order('id', { ascending: true });
+      if (be) throw be;
+      const normal = (all || []).filter(b => (b.kind || 'normal') === 'normal');
+      if (!normal.length) throw new Error('ยังไม่มีรอบ export');
+      const from = Math.min(...normal.map(b => Number(b.from_movement_id)));
+      const to = Math.max(...normal.map(b => Number(b.to_movement_id)));
+      const { data: moves, error: me } = await fetchAll((a, b) =>
+        sb.rpc('bigseller_export_movements', { p_from: from, p_to: to }).range(a, b));
+      if (me) throw me;
+      const { lost, gap, legacy } = findLostMovements(moves, normal);
+      const extra = uncarriedUnresolved(normal);
+      const p = await buildPreview(lost, extra, { mode: 'catchup', from, to, gap, legacy });
+      setPreview(p);
+    } catch (e) {
+      setErr(e.message || String(e));
+    } finally {
+      setBusy('');
+    }
+  }, [buildPreview]);
 
   const saveChoice = async (row, okMsg) => {
     setBusy('manual'); setErr('');
@@ -140,7 +183,7 @@ export default function BigSellerExportModal({ open, onClose, toast }) {
     setBusy('');
     if (error) { setErr(error.message); return; }
     toast?.push(okMsg, 'success');
-    compute();
+    (preview?.mode === 'catchup' ? computeCatchup : compute)();
   };
 
   const saveManual = (productId, fallback) => {
@@ -160,7 +203,7 @@ export default function BigSellerExportModal({ open, onClose, toast }) {
     const { error } = await sb.rpc('bigseller_clear_sku_map', { p_product_id: productId });
     setBusy('');
     if (error) { setErr(error.message); return; }
-    compute();
+    (preview?.mode === 'catchup' ? computeCatchup : compute)();
   };
 
   const doExport = async () => {
@@ -175,7 +218,9 @@ export default function BigSellerExportModal({ open, onClose, toast }) {
       const inNames = preview.stockIn.length ? chunkRows(preview.stockIn).map((_, i, a) => exportFilename('in', now, null, i + 1, a.length)) : [];
       const outNames = preview.stockOut.length ? chunkRows(preview.stockOut).map((_, i, a) => exportFilename('out', now, null, i + 1, a.length)) : [];
       // Record first: if someone else exported this range meanwhile, nothing downloads.
-      const { error } = await sb.rpc('bigseller_record_batch', {
+      const isCatchup = preview.mode === 'catchup';
+      const { error } = await sb.rpc(isCatchup ? 'bigseller_record_catchup' : 'bigseller_record_batch', {
+        ...(isCatchup ? {} : { p_carried_from: preview.carriedFrom ?? null }),
         p_from: preview.from,
         p_to: preview.to,
         p_rows_in: preview.stockIn,
@@ -243,7 +288,7 @@ export default function BigSellerExportModal({ open, onClose, toast }) {
             </button>
           ) : (
             <button type="button" className="btn-primary" disabled={!!busy || preview.unknown.length > 0} onClick={doExport}>
-              {busy === 'export' ? 'กำลังบันทึก…' : 'ดาวน์โหลด + บันทึกรอบ'}
+              {busy === 'export' ? 'กำลังบันทึก…' : preview.mode === 'catchup' ? 'ดาวน์โหลด + บันทึกรอบเก็บตก' : 'ดาวน์โหลด + บันทึกรอบ'}
             </button>
           )}
         </div>
@@ -284,8 +329,29 @@ export default function BigSellerExportModal({ open, onClose, toast }) {
           </section>
         )}
 
+        {state && !firstRun && !state.catchup_done && !preview && (
+          <section className="rounded-lg border border-warning/40 bg-warning/10 p-3 space-y-2">
+            <div className="font-medium text-warning">มีรายการตกหล่นจากรอบเก่า</div>
+            <div className="text-muted">
+              ยอดขายออนไลน์ในรอบก่อน 18 พ.ย. 16:37, ช่วงที่ถูกรีเซ็ต (ไม่มีรอบไหนครอบ) และสินค้าที่เคยหา SKU ไม่เจอ
+              — ทำรอบ "เก็บตก" ครั้งเดียว แล้ว import ไฟล์เข้า BigSeller
+            </div>
+            <button type="button" className="btn-secondary" disabled={!!busy || !skuCount} onClick={computeCatchup}>
+              {busy === 'compute' ? 'กำลังคำนวณ…' : 'คำนวณรายการเก็บตก'}
+            </button>
+          </section>
+        )}
+
         {preview && (
           <section className="rounded-lg border border-hairline p-3 space-y-3">
+            {preview.mode === 'catchup' && (
+              <div className="rounded-lg bg-warning/10 px-3 py-2">
+                <div className="font-medium text-warning">รอบเก็บตก (ทำได้ครั้งเดียว)</div>
+                <div className="text-muted text-xs">
+                  ช่วงที่ไม่มีรอบครอบ {preview.gap} รายการ · ยอดขายออนไลน์ที่รอบเก่าข้าม {preview.legacy} รายการ · สินค้าที่เคยหา SKU ไม่เจอ {preview.carriedCount} รายการ
+                </div>
+              </div>
+            )}
             {preview.unknown.length > 0 && (
               <div className="rounded-lg bg-error/10 text-error px-3 py-2">
                 พบเหตุผลสต็อกที่ไม่รู้จัก: {preview.unknown.join(', ')} — export ไม่ได้จนกว่าจะเพิ่มกฎ
@@ -299,6 +365,9 @@ export default function BigSellerExportModal({ open, onClose, toast }) {
             <div className="text-muted">
               movement #{preview.from + 1}–#{preview.to} · {preview.moveCount} รายการ, นับ {preview.exported} (รวมออเดอร์ทุกช่องทาง: หน้าร้าน, TikTok, Shopee, Lazada)
             </div>
+            {preview.mode !== 'catchup' && preview.carriedCount > 0 && (
+              <div className="text-muted">รวมสินค้าที่รอบก่อนหา SKU ไม่เจอ {preview.carriedCount} รายการ (ลองส่งใหม่รอบนี้)</div>
+            )}
             {preview.reconcile.length > 0 && (
               <div className="rounded-lg bg-warning/10 px-3 py-2 space-y-1">
                 <div className="font-medium text-warning">ตรวจแถว reconcile ก่อน import ({preview.reconcile.length})</div>
@@ -357,7 +426,7 @@ export default function BigSellerExportModal({ open, onClose, toast }) {
             {batches.map(b => (
               <div key={b.id} className="flex items-center justify-between gap-2 border-b border-hairline py-1.5">
                 <div className="min-w-0">
-                  <div>{fmtDate(b.created_at)} <span className="text-muted">· #{b.from_movement_id + 1}–#{b.to_movement_id}</span></div>
+                  <div>{b.kind === 'catchup' && <span className="text-warning font-medium">เก็บตก · </span>}{fmtDate(b.created_at)} <span className="text-muted">· #{b.from_movement_id + 1}–#{b.to_movement_id}</span></div>
                   <div className="text-muted text-xs">In {b.in_rows} · Out {b.out_rows}{b.unresolved_count ? ` · ไม่รู้ SKU ${b.unresolved_count}` : ''}{b.created_by_email ? ` · ${b.created_by_email}` : ''}</div>
                 </div>
                 <button type="button" className="btn-secondary !h-9" disabled={!!busy || (!b.in_rows && !b.out_rows)} onClick={() => redownload(b.id)}>
