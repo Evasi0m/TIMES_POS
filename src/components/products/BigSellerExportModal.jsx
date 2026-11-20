@@ -156,7 +156,7 @@ export default function BigSellerExportModal({ open, onClose, toast }) {
     setBusy('compute'); setErr('');
     try {
       const { data: all, error: be } = await sb.from('bigseller_export_batches')
-        .select('id, kind, created_at, from_movement_id, to_movement_id, unresolved, carried_from')
+        .select('id, kind, created_at, created_by_email, filename_in, from_movement_id, to_movement_id, unresolved, carried_from')
         .order('id', { ascending: true });
       if (be) throw be;
       const normal = (all || []).filter(b => (b.kind || 'normal') === 'normal');
@@ -333,8 +333,8 @@ export default function BigSellerExportModal({ open, onClose, toast }) {
           <section className="rounded-lg border border-warning/40 bg-warning/10 p-3 space-y-2">
             <div className="font-medium text-warning">มีรายการตกหล่นจากรอบเก่า</div>
             <div className="text-muted">
-              ยอดขายออนไลน์ในรอบก่อน 18 พ.ย. 16:37, ช่วงที่ถูกรีเซ็ต (ไม่มีรอบไหนครอบ) และสินค้าที่เคยหา SKU ไม่เจอ
-              — ทำรอบ "เก็บตก" ครั้งเดียว แล้ว import ไฟล์เข้า BigSeller
+              สินค้าที่เคยหา SKU ไม่เจอ และช่วงที่ไม่มีรอบไหนครอบ — นับเฉพาะหลังจุดรีเซ็ตคลังล่าสุด
+              (ก่อนหน้านั้นคลัง BigSeller ถูกตั้งให้เท่ากับ POS แล้ว) — ทำรอบ "เก็บตก" ครั้งเดียว แล้ว import ไฟล์เข้า BigSeller
             </div>
             <button type="button" className="btn-secondary" disabled={!!busy || !skuCount} onClick={computeCatchup}>
               {busy === 'compute' ? 'กำลังคำนวณ…' : 'คำนวณรายการเก็บตก'}

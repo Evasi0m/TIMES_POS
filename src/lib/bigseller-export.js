@@ -309,7 +309,10 @@ export function addNets(netMap, items = []) {
 export function findLostMovements(movements, batches, { legacyBefore = LEGACY_ONLINE_SKIP_BEFORE } = {}) {
   const normal = (batches || []).filter(b => (b.kind || 'normal') === 'normal');
   if (!normal.length) return { lost: [], gap: 0, legacy: 0 };
-  const lo = Math.min(...normal.map(b => Number(b.from_movement_id)));
+  // A reset marker means the BigSeller warehouse was set equal to POS at its
+  // to_movement_id — nothing at or before it may be sent again.
+  const resetAt = Math.max(-Infinity, ...normal.filter(isResetMarker).map(b => Number(b.to_movement_id)));
+  const lo = Math.max(resetAt, Math.min(...normal.map(b => Number(b.from_movement_id))));
   const hi = Math.max(...normal.map(b => Number(b.to_movement_id)));
   const cutoff = new Date(legacyBefore).getTime();
   const lost = [];
@@ -328,6 +331,11 @@ export function findLostMovements(movements, batches, { legacyBefore = LEGACY_ON
   return { lost, gap, legacy };
 }
 
+/** Manual "warehouse reset to POS" marker batch (e.g. reset-2026-11-18). */
+export function isResetMarker(b) {
+  return /^reset-/i.test(String(b?.created_by_email || '')) || /^RESET marker/i.test(String(b?.filename_in || ''));
+}
+
 /**
  * Unresolved lists that no later batch re-tried: every normal batch except the
  * latest one (the next normal export carries that) and those already carried.
@@ -338,7 +346,9 @@ export function uncarriedUnresolved(batches) {
   if (normal.length < 2) return [];
   const carried = new Set(normal.map(b => b.carried_from).filter(x => x != null).map(Number));
   const latest = Number(normal[normal.length - 1].id);
+  // Batches up to the last reset marker are covered by the warehouse reset.
+  const lastReset = Math.max(-Infinity, ...normal.filter(isResetMarker).map(b => Number(b.id)));
   return normal
-    .filter(b => Number(b.id) !== latest && !carried.has(Number(b.id)))
+    .filter(b => Number(b.id) > lastReset && Number(b.id) !== latest && !carried.has(Number(b.id)))
     .flatMap(b => b.unresolved || []);
 }
