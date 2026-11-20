@@ -44,6 +44,21 @@ describe('uncarriedUnresolved', () => {
   });
 });
 
+describe('reset marker', () => {
+  const withMarker = batches.map(b => (b.id === 3 ? { ...b, created_by_email: 'reset-2026-11-18' } : b));
+  it('drops everything at or before the reset point', () => {
+    const moves = [mv(17473, 'sale', 'shopee'), mv(17515, 'sale', 'tiktok'), mv(17606, 'sale', 'tiktok')];
+    const { lost, gap, legacy } = findLostMovements(moves, withMarker);
+    expect(lost).toEqual([]);
+    expect(gap + legacy).toBe(0);
+  });
+  it('keeps only unresolved from batches after the reset', () => {
+    const extra = [{ id: 2, unresolved: [{ product_id: 7, net: -1 }] }];
+    const bs = withMarker.map(b => (b.id === 2 ? { ...b, ...extra[0] } : b));
+    expect(uncarriedUnresolved(bs)).toEqual([{ product_id: 9, net: -1 }]);
+  });
+});
+
 describe('addNets', () => {
   it('merges items into a net map', () => {
     const out = addNets(new Map([[1, -1]]), [{ product_id: 1, net: -2 }, { product_id: 2, net: 3 }, { product_id: 3, net: 0 }]);
