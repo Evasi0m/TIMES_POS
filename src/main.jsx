@@ -105,6 +105,8 @@ import {
 import { logStockExport, fetchStockExportLogs } from './lib/stock-export-log.js';
 import StockAdjustModal from './components/products/StockAdjustModal.jsx';
 import BigSellerExportModal from './components/products/BigSellerExportModal.jsx';
+import MergeProductsModal from './components/products/MergeProductsModal.jsx';
+import { findSimilarToName } from './lib/product-duplicates.js';
 import PosCartSwapSheet from './components/pos/PosCartSwapSheet.jsx';
 import Pager from './components/ui/Pager.jsx';
 import ReceiveLinesEditor from './components/movement/ReceiveLinesEditor.jsx';
@@ -6792,6 +6794,7 @@ function ProductsView() {
   const [exportAuthOpen, setExportAuthOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [bigSellerOpen, setBigSellerOpen] = useState(false);
+  const [mergeOpen, setMergeOpen] = useState(false);
   const [exportScope, setExportScope] = useState('all');
   const [exportUserEmail, setExportUserEmail] = useState('');
   const [exportUserName, setExportUserName] = useState('');
@@ -7320,6 +7323,17 @@ function ProductsView() {
               <span className="hidden sm:inline">Export ไป BigSeller</span>
             </button>
           )}
+          {canBigSeller && (
+            <button
+              type="button"
+              className="products-toolbar__merge btn-secondary !h-11 !px-2.5 !text-sm whitespace-nowrap flex-shrink-0 inline-flex items-center gap-1.5"
+              onClick={() => setMergeOpen(true)}
+              title="รวมสินค้าซ้ำ"
+            >
+              <Icon name="link" size={16} className="shrink-0"/>
+              <span className="hidden sm:inline">รวมสินค้าซ้ำ</span>
+            </button>
+          )}
           {canBulkAdjust && (
             <button
               type="button"
@@ -7686,6 +7700,13 @@ function ProductsView() {
         open={bigSellerOpen}
         onClose={() => setBigSellerOpen(false)}
         toast={toast}
+      />
+
+      <MergeProductsModal
+        open={mergeOpen}
+        onClose={() => setMergeOpen(false)}
+        toast={toast}
+        onMerged={() => { invalidateProductCatalogCache(); setCatalogLoaded(false); loadProducts({ force: true }); }}
       />
 
       <ProductFilterSheet
@@ -8151,6 +8172,28 @@ function ProductEditor({ editing, onClose, onSave, onDeleted, brands, categories
       if (nDup && nDup.length) {
         tryToast.push(`ชื่อรุ่น "${name}" ซ้ำกับสินค้าที่มีอยู่ (barcode: ${nDup[0].barcode || '—'})`, 'error');
         return;
+      }
+
+      // 3) New product only: warn about near-identical model names
+      //    (e.g. AQ-240E-7A2 vs AQ-240B-7A2DF) — usually the same watch keyed twice.
+      if (!draft.id) {
+        const prefix = name.replace(/\s+/g, '').slice(0, 4).replace(/[%_\\]/g, '');
+        if (prefix.length >= 3) {
+          const { data: near, error: sErr } = await sb.from('products')
+            .select('id, name, current_stock').ilike('name', `${prefix}%`).limit(500);
+          if (sErr) throw sErr;
+          const similar = findSimilarToName(name, near || []).slice(0, 6);
+          if (similar.length) {
+            const list = similar.map(s => `• ${s.product.name} (สต็อก ${s.product.current_stock})`).join('\n');
+            const ok = await askConfirm({
+              title: 'มีรุ่นที่ชื่อคล้ายกันอยู่แล้ว',
+              message: `${list}\n\nถ้าเป็นรุ่นเดียวกัน ให้ใช้สินค้าที่มีอยู่แทน — เพิ่มใหม่จะทำให้สต็อกแยกเป็น 2 ตัว\nรุ่นต่างสี (เช่น -2A กับ -3A) เพิ่มได้ตามปกติ`,
+              okLabel: 'เป็นคนละรุ่น เพิ่มใหม่',
+              cancelLabel: 'ยกเลิก',
+            });
+            if (!ok) return;
+          }
+        }
       }
 
       await onSave(draft);
